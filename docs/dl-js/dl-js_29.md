@@ -1,4 +1,4 @@
-## B.3\. TensorFlow.js 中的内存管理：`tf.dispose()`和`tf.tidy()`
+## 第二十二章：B.3\. TensorFlow.js 中的内存管理：`tf.dispose()`和`tf.tidy()`
 
 在 TensorFlow.js 中，如果你直接处理张量对象，你需要对它们执行内存管理。特别是在创建和使用张量后，张量需要被释放，否则它将继续占用分配给它的内存。如果未释放的张量数量过多或者总大小过大，它们最终将导致浏览器标签页耗尽 WebGL 内存或导致 Node.js 进程耗尽系统或 GPU 内存（取决于是否使用 tfjs-node 的 CPU 或 GPU 版本）。TensorFlow.js 不会自动对用户创建的张量进行垃圾回收。[[5]](#app02fn5) 这是因为 JavaScript 不支持对象终结。TensorFlow.js 提供了两个内存管理函数：`tf.dispose()`和`tf.tidy()`。
 

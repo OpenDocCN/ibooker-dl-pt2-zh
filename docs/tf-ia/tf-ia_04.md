@@ -1,4 +1,4 @@
-# 3 Keras 和 TensorFlow 2 中的数据检索
+# 第三章：Keras 和 TensorFlow 2 中的数据检索
 
 本章涵盖的内容
 

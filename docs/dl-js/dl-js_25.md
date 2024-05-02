@@ -1,4 +1,4 @@
-## A.2\. 在 Windows 上安装 tfjs-node-gpu
+## 第十九章：A.2\. 在 Windows 上安装 tfjs-node-gpu
 
 1.  确保您的 Windows 符合 CUDA Toolkit 的系统要求。某些 Windows 版本和 32 位机器架构不受 CUDA Toolkit 的支持。有关更多详情，请参阅 [`docs.nvidia.com/cuda/cuda-installation-guide-microsoft-windows/index.html#system-requirements`](https://docs.nvidia.com/cuda/cuda-installation-guide-microsoft-windows/index.html#system-requirements)。
 

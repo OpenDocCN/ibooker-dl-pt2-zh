@@ -1,4 +1,4 @@
-# 6 PyTorch 核心：Autograd、优化器和实用工具
+# 第六章：PyTorch 核心：Autograd、优化器和实用工具
 
 本章涵盖内容如下
 

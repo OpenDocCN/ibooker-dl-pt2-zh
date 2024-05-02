@@ -1,4 +1,4 @@
-## A.1\. 在 Linux 上安装 tfjs-node-gpu
+## 第十八章：A.1\. 在 Linux 上安装 tfjs-node-gpu
 
 1.  我们假设你已经在系统上安装了 Node.js 和 npm，并且 node 和 npm 的路径已包含在你的系统路径中。如果没有，请查看 [`nodejs.org/en/download/`](https://nodejs.org/en/download/) 获取可下载的安装程序。
 

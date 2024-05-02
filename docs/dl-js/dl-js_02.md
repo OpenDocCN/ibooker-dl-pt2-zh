@@ -1,4 +1,4 @@
-## 致谢
+## 第一章：致谢
 
 本书的整体结构要感谢 François Chollet 的《Python 深度学习》。尽管代码是用不同的语言重写的，并且为 JavaScript 生态系统添加了许多新内容，以反映该领域的新发展，但没有 François 领导的 Keras 的先驱工作，无论是这本书还是 TensorFlow.js 的整个高级 API 都不可能成为现实。
 

@@ -1,4 +1,4 @@
-# 2 开始 WordPress 网站
+# 第二章：开始 WordPress 网站
 
 ### 本章涵盖了
 
