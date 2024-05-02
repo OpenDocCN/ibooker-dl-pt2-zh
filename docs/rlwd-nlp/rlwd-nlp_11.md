@@ -1,4 +1,4 @@
-# 第九章：注意力与 Transformer
+# 第八章：注意力与 Transformer
 
 本章内容包括
 
