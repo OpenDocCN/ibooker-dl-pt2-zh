@@ -1,4 +1,4 @@
-# 附录 B. 安装 Python
+# 附录 B：安装 Python
 
 如果需要手动执行此操作，请参考在 Windows、macOS 和 Linux 机器上安装 Python 和 Pip 的指南。
 
