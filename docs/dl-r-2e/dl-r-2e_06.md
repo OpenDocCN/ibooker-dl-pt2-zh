@@ -1,4 +1,4 @@
-# 第六章：*Keras 和 TensorFlow 入门*
+# 第三章：*Keras 和 TensorFlow 入门*
 
 *本章包括*
 
