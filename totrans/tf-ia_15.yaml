@@ -1,16 +1,20 @@
 - en: '12 Sequence-to-sequence learning: Part 2'
+  id: totrans-0
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
 - en: This chapter covers
+  id: totrans-1
   prefs: []
   type: TYPE_NORMAL
 - en: Implementing the attention mechanism for the seq2seq model
+  id: totrans-2
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Generating visualizations from the attention layer to glean insights from the
     model
+  id: totrans-3
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -36,6 +40,7 @@
     that it predicted one word at a time instead of a sequence. This way, we can create
     a recursive decoder at inference time, which predicts a word and feeds the predicted
     word as an input to predict the next word in the sequence.'
+  id: totrans-4
   prefs: []
   type: TYPE_NORMAL
 - en: In this chapter, we will explore ways to increase the accuracy of our model.
@@ -46,26 +51,31 @@
     of the translation. Finally, we will conclude the chapter by visualizing the attention
     mechanisms that will give insights into how the model pays attention to words
     provided to it during the translation process.
+  id: totrans-5
   prefs: []
   type: TYPE_NORMAL
 - en: 'The data and the processing we do in this chapter are going to be identical
     to the last chapter. Therefore, we will not discuss data in detail. You have been
     provided all the code necessary to load and process data in the notebook. But
     let’s refresh the key steps we performed:'
+  id: totrans-6
   prefs: []
   type: TYPE_NORMAL
 - en: Download the data set manually from [http://www.manythings.org/anki/deu-eng.zip](http://www.manythings.org/anki/deu-eng.zip).
+  id: totrans-7
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: The data is in tab-separated format and <German phrase><tab><English phrase><tab><Attribution>
     format. We really care about the first two tab-separated values in a record. We
     are going to predict the German phrase given the English phrase.
+  id: totrans-8
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: We randomly sample 50,000 data points from the data set and use 5,000 (i.e.,
     10%) as validation data and another 5,000 (i.e., 10%) as test data.
+  id: totrans-9
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -74,22 +84,26 @@
     infer words from our recursive decoder at inference time (i.e., provide SOS as
     the initial seed and keep predicting until the model outputs EOS or reaches a
     maximum length).
+  id: totrans-10
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: We look at summary statistics of vocabulary size and sequence length, as these
     hyperparameters are very important for our TextVectorization layer (the layer
     can be found at tensorflow.keras.layers.experimental.preprocessing.TextVectorization*).*
+  id: totrans-11
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: The vocabulary size is set as the number of unique words that appear more than
     10 times in the corpus for both languages, and the sequence length is set as the
     99% quantile (plus a buffer of 5) for both languages.
+  id: totrans-12
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '12.1 Eyeballing the past: Improving our model with attention'
+  id: totrans-13
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
@@ -100,6 +114,7 @@
     implemented model to incorporate an attention layer that takes all the encoder
     outputs (one for each time step) and produces a sequence of outputs for each decoder
     step that will be concatenated with the standard output produced by the decoder.
+  id: totrans-14
   prefs: []
   type: TYPE_NORMAL
 - en: We have a working machine translator model that can translate from English to
@@ -112,6 +127,7 @@
     representation of historical/future input in a sequence to facilitate the model
     in understanding the language better. Let’s see how the attention mechanism can
     be tied in with the encoder-decoder model we have.
+  id: totrans-15
   prefs: []
   type: TYPE_NORMAL
 - en: The attention mechanism produces an output for each decoder time step, similar
@@ -127,6 +143,7 @@
     that was accessible to the decoder. This is a massive performance bottleneck,
     as it is impractical for the encoder to encode all the information present in
     a sentence using a small-sized vector.
+  id: totrans-16
   prefs: []
   type: TYPE_NORMAL
 - en: Let’s probe a bit more to understand the specific computations that transpire
@@ -134,39 +151,48 @@
     output at position *j* (1 < *j* < *T*[e]) is denoted by *h*[j], and the decoder
     RNN output state at time i (1 < *i* < *T*[d]) is denoted by *s*[i] ; then the
     attention output *c*[i] for the *i*^(th) decoding step is computed by
+  id: totrans-17
   prefs: []
   type: TYPE_NORMAL
 - en: '*e*[ij] = *v*^T *tanh*(*s*[i -1] *W* + *h*[j]*U*)'
+  id: totrans-18
   prefs: []
   type: TYPE_NORMAL
 - en: '![12_00a](../../OEBPS/Images/12_00a.png)'
+  id: totrans-19
   prefs: []
   type: TYPE_IMG
 - en: '![12_00b](../../OEBPS/Images/12_00b.png)'
+  id: totrans-20
   prefs: []
   type: TYPE_IMG
 - en: Here, W, U, and v are weight matrices (initialized randomly just like neural
     network weights). Their shapes are defined in accordance with the dimensionality
     of hidden representations s and h, which will be discussed in detail soon. In
     summary, this set of equations, for a given decoder position
+  id: totrans-21
   prefs: []
   type: TYPE_NORMAL
 - en: Computes energy values representing how important each encoder output is for
     that decoding step using a small fully connected network whose weights are W,
     U, and v
+  id: totrans-22
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Normalizes energies to represent a probability distribution over the encoder
     steps
+  id: totrans-23
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Computes a weighted sum of encoder outputs using the probability distribution
+  id: totrans-24
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: 12.1.1 Implementing Bahdanau attention in TensorFlow
+  id: totrans-25
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
@@ -174,20 +200,24 @@
     our models to enable the attention mechanism. Therefore, we will implement an
     Attention layer using the Keras subclassing API. We will call this the DecoderRNNAttentionWrapper
     and will have to implement the following functions:'
+  id: totrans-26
   prefs: []
   type: TYPE_NORMAL
 - en: __init__—Defines various initializations that need to happen before the layer
     can operate correctly
+  id: totrans-27
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: build()—Defines the parameters (e.g., trainable weights) and their shapes associated
     with the computation
+  id: totrans-28
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: call()—Defines the computations and the final output that should be produced
     by the layer
+  id: totrans-29
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -197,67 +227,101 @@
     the tf.keras .layers.AbstractRNNCell interface ([http://mng.bz/pO18](http://mng.bz/pO18)).
     There are several options, such as tf.keras.layers.GRUCell, tf.keras.layers.LSTMCell,
     and tf.keras.layers.RNNCell. In this case, we will use the tf.keras.layers.GRUCell.
+  id: totrans-30
   prefs: []
   type: TYPE_NORMAL
+  zh: __init__() 函数用于初始化层，包括需要正确运行的任何属性。在这种情况下，我们的 DecoderRNNAttentionWrapper 接受一个
+    cell_fn 作为参数。cell_fn 需要是一个实现了 tf.keras.layers.AbstractRNNCell 接口的 Keras 层对象（[http://mng.bz/pO18](http://mng.bz/pO18)）。有几个选项，例如
+    tf.keras.layers.GRUCell、tf.keras.layers.LSTMCell 和 tf.keras.layers.RNNCell。在这个例子中，我们将使用
+    tf.keras.layers.GRUCell。
 - en: Difference between tf.keras.layers.GRUCell and tf.keras.layers.GRU
+  id: totrans-31
   prefs: []
   type: TYPE_NORMAL
+  zh: tf.keras.layers.GRUCell 和 tf.keras.layers.GRU 之间的区别
 - en: 'The GRUCell can be thought of as an abstraction of the GRU layer. The GRUCell
     encompasses the most minimalist computation you can think of in an RNN layer.
     Given an input and a previous state, it computes the next output and the next
     state. This is the most primitive computation that governs an RNN layer:'
+  id: totrans-32
   prefs: []
   type: TYPE_NORMAL
+  zh: GRUCell 可以看作是 GRU 层的一个抽象，它包含了 RNN 层中最简化的计算。给定一个输入和上一个状态，它计算下一个输出和下一个状态。这是控制
+    RNN 层的最原始的计算：
 - en: '[PRE0]'
+  id: totrans-33
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE0]'
 - en: In other words, a GRUCell encapsulates the computations required to compute
     a single time step in an input sequence. The GRU layer is a fully fledged implementation
     of the GRUCell that can process the whole sequence. Furthermore, the GRU layer
     gives options like return_state and return_sequence to control the output produced
     by the GRU layer.
+  id: totrans-34
   prefs: []
   type: TYPE_NORMAL
+  zh: 换句话说，GRUCell 封装了计算输入序列中单个时间步所需的计算。GRU 层是 GRUCell 的完全实现，可以处理整个序列。此外，GRU 层还提供了
+    return_state 和 return_sequence 等选项来控制 GRU 层产生的输出。
 - en: In short, the GRU layer provides the convenience for processing input sequences,
     and the GRUCell exposes the more fine-grained implementation details that allow
     one to process a single time step in the sequence.
+  id: totrans-35
   prefs: []
   type: TYPE_NORMAL
+  zh: 简言之，GRU 层提供了便利的处理输入序列的方式，而 GRUCell 则暴露了更细粒度的实现细节，允许处理序列中的单个时间步。
 - en: 'Here, we have decided to go with GRU, as the GRU model is a lot simpler than
     an LSTM (meaning there is reduced training time) but achieves roughly similar
     results on NLP tasks:'
+  id: totrans-36
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这里，我们决定使用 GRU，因为 GRU 模型比 LSTM 简单得多（意味着减少了训练时间），但在 NLP 任务上实现了大致相似的结果：
 - en: '[PRE1]'
+  id: totrans-37
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE1]'
 - en: 'Next, the build() function is defined. The build function declares the three
     weight matrices used in the attention computation: W, U and v. The argument input_shape
     contains the shapes of the inputs. Our input will be a tuple containing encoder
     outputs and the decoder RNN inputs:'
+  id: totrans-38
   prefs: []
   type: TYPE_NORMAL
+  zh: 接下来，定义了 build() 函数。build 函数声明了用于注意力计算的三个权重矩阵：W、U 和 v。参数 input_shape 包含了输入的形状。我们的输入将是一个包含编码器输出和解码器
+    RNN 输入的元组：
 - en: '[PRE2]'
+  id: totrans-39
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE2]'
 - en: The most important argument to note in the weight definitions is the shape argument.
     We are defining them so that
+  id: totrans-40
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意权重定义中最重要的参数是 shape 参数。我们定义它们的形状为
 - en: W_a (representing W) has a shape of [ <encoder hidden size>, <attention hidden
     size>]
+  id: totrans-41
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: W_a（表示 W）的形状为[<encoder hidden size>, <attention hidden size>]
 - en: U_a (representing U) has a shape of [<decoder hidden size>, <attention hidden
     size>]
+  id: totrans-42
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: U_a（表示 U）的形状为[<decoder hidden size>, <attention hidden size>]
 - en: V_a (representing v) has a shape of [<attention hidden size>, 1]
+  id: totrans-43
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: V_a（表示 v）的形状为[<attention hidden size>, 1]
 - en: Here, the <encoder hidden size> and <decoder hidden size> are the number of
     units in the final output of the RNN layer of the encoder or the decoder, respectively.
     We typically keep the encoder and decoder RNN sizes the same to simplify the computations.
@@ -268,53 +332,67 @@
     where the heavy lifting required to compute the attention outputs happens. At
     a high level, the attention layer needs to traverse all the encoder inputs (i.e.,
     each time step) for each decoder input.
+  id: totrans-44
   prefs: []
   type: TYPE_NORMAL
 - en: Listing 12.1 Attention computation in the DecoderRNNAttentionWrapper
+  id: totrans-45
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE3]'
+  id: totrans-46
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE3]'
 - en: ❶ When calling the _step function, we are passing encoder_outputs as a constant,
     as we need access to the full encoder sequence. Here we access it within the _step
     function.
+  id: totrans-47
   prefs: []
   type: TYPE_NORMAL
 - en: ❷ Computes S.Wa where S represents all the encoder outputs and S=[s0, s1, ...,
     si]. This produces a [batch size, en_seq_len, hidden size]-sized output.
+  id: totrans-48
   prefs: []
   type: TYPE_NORMAL
 - en: ❸ Computes hj.Ua, where hj represent the j^{th} decoding step. This produces
     a [ batch_size, 1, hidden size]-sized output
+  id: totrans-49
   prefs: []
   type: TYPE_NORMAL
 - en: ❹ Computes tanh(S.Wa + hj.Ua). This produces a [batch_size, en_seq_len, hidden
     size]-sized output
+  id: totrans-50
   prefs: []
   type: TYPE_NORMAL
 - en: ❺ Computes the energies and normalizes them. Produces a [batch_size, en_seq_len]
     sized output
+  id: totrans-51
   prefs: []
   type: TYPE_NORMAL
 - en: ❻ Computes the final attention output (c_i) as a weighted sum of h_j (for all
     j), where weights are denoted by a_i. Produces a [batch_size, hidden_size] output
+  id: totrans-52
   prefs: []
   type: TYPE_NORMAL
 - en: ❼ Concatenate sthe current input and c_i and feeds it to the decoder RNN to
     get the output
+  id: totrans-53
   prefs: []
   type: TYPE_NORMAL
 - en: ❽ The inputs to the attention layer are encoder outputs and decoder RNN inputs.
+  id: totrans-54
   prefs: []
   type: TYPE_NORMAL
 - en: ❾ The K.rnn() function executes the _step() function for every input in the
     decoder inputs to produce attention outputs for all the decoding steps.
+  id: totrans-55
   prefs: []
   type: TYPE_NORMAL
 - en: '❿ The final output is two-fold: attention outputs of a [batch size, de_seq_len,
     hidden size]-sized output and attention energies [batch dize, de_seq_len, en_seq_len]-sized
     outputs'
+  id: totrans-56
   prefs: []
   type: TYPE_NORMAL
 - en: 'Let’s demystify what’s done in this function. The input to this layer is an
@@ -323,11 +401,14 @@
     Keras called K.rnn() ([http://mng.bz/OoPR](http://mng.bz/OoPR)) to iterate through
     these inputs while computing the final output required. In our example, it is
     called as'
+  id: totrans-57
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE4]'
+  id: totrans-58
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE4]'
 - en: Here, it applies the step_function to each time step slice of the inputs tensor.
     For example, the decoder_inputs is a [<batch size>, <decoder time steps>, <embedding
     size>]-sized input. Then the K.rnn() function applies the step_function to every
@@ -340,6 +421,7 @@
     at each decoding step. Within the step_function, constants gets appended to the
     value of the states argument. So, you can access encoder_outputs as the last element
     of states.
+  id: totrans-59
   prefs: []
   type: TYPE_NORMAL
 - en: The _step function does the computations we outlined in listing 12.1 for a single
@@ -355,50 +437,61 @@
     _step() function outputs the output for that time step (i.e., a tuple of decoder
     RNN output and normalized energies that computed the weighted sum of encoder inputs)
     and the next state of the decoder RNN.
+  id: totrans-60
   prefs: []
   type: TYPE_NORMAL
 - en: Finally, you can obtain the full output of the _step function for all the decoder
     time steps using the K.rnn() function as shown. We are only interested in the
     output itself (denoted by attn_outputs) and will ignore the other things output
     by the function.
+  id: totrans-61
   prefs: []
   type: TYPE_NORMAL
 - en: 'The K.rnn() function outputs the following outputs when called:'
+  id: totrans-62
   prefs: []
   type: TYPE_NORMAL
 - en: last_output—The last output produced by the _step_function after it reaches
     the end of the sequence
+  id: totrans-63
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: outputs—All the outputs produced by the step_function
+  id: totrans-64
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: new_states—The last states produced by the step_function after it reaches the
     end of the sequence
+  id: totrans-65
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: 'Finally, the call() function produces two outputs:'
+  id: totrans-66
   prefs: []
   type: TYPE_NORMAL
 - en: attn_out—Holds all the attention outputs for all the decoding steps
+  id: totrans-67
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: attn_energy—Provides the normalized energy values for a batch of data, where
     the energy matrix for one example contains energy values for all the encoder time
     steps for every decoder time step
+  id: totrans-68
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: We have discussed the most important functions of the DecoderRNNAttentionWrapper
     layer. If you want to see the full sub-classed implementation of the DecoderRNNAttentionWrapper,
     please refer to the code at Ch11/11.1_seq2seq_machine_translation .ipynb.
+  id: totrans-69
   prefs: []
   type: TYPE_NORMAL
 - en: 12.1.2 Defining the final model
+  id: totrans-70
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
@@ -407,132 +500,174 @@
     required need to happen in the decoder. Therefore, let’s define a function, get_
     final_seq2seq_model_with_attention(), that provides us the decoder with Bahdanau
     attention in place, as shown in the next listing.
+  id: totrans-71
   prefs: []
   type: TYPE_NORMAL
 - en: Listing 12.2 Defining the final sequence-to-sequence model with attention
+  id: totrans-72
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE5]'
+  id: totrans-73
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE5]'
 - en: ❶ Get the encoder outputs for all the timesteps.
+  id: totrans-74
   prefs: []
   type: TYPE_NORMAL
 - en: ❷ The input is (None,1) shaped and accepts an array of strings.
+  id: totrans-75
   prefs: []
   type: TYPE_NORMAL
 - en: ❸ Vectorize the data (assign token IDs).
+  id: totrans-76
   prefs: []
   type: TYPE_NORMAL
 - en: ❹ Define an embedding layer to convert IDs to word vectors.
+  id: totrans-77
   prefs: []
   type: TYPE_NORMAL
 - en: ❺ Define the initial state to the decoder as the concatenation of the last forward
     and backward encoder states.
+  id: totrans-78
   prefs: []
   type: TYPE_NORMAL
 - en: ❻ Define a GRUCell, which will then be used for the Attention layer.
+  id: totrans-79
   prefs: []
   type: TYPE_NORMAL
 - en: ❼ Get the attention outputs. The GRUCell is passed as the cell_fn, where the
     inputs are en_states (i.e., all of the encoder states) and d_emb_out (input to
     the decoder RNN).
+  id: totrans-80
   prefs: []
   type: TYPE_NORMAL
 - en: ❽ Define the intermediate and final Dense layer outputs.
+  id: totrans-81
   prefs: []
   type: TYPE_NORMAL
 - en: ❾ Define a model that takes encoder and decoder inputs as inputs and outputs
     the final predictions (d_final_out).
+  id: totrans-82
   prefs: []
   type: TYPE_NORMAL
 - en: 'We already have done all the hard work. Therefore, changes to the decoder can
     be summarized in two lines of code:'
+  id: totrans-83
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE6]'
+  id: totrans-84
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE6]'
 - en: We first define a GRUCell object with 256 hidden units. Then we define the DecoderRNNAttentionWrapper,
     where the cell_fn is the GRUCell we defined and units is set to 512\. units in
     the DecoderRNNAttentionWrapper defines the dimensionality of the weights and the
     intermediate attention outputs. We pass en_states (i.e., encoder output sequence)
     and d_emb_out (i.e., decoder input sequence to the RNN) and set the initial state
     as the final state of the encoder (i.e., d_init_state).
+  id: totrans-85
   prefs: []
   type: TYPE_NORMAL
 - en: Next, as before, we have to define a get_vectorizer() function (see the next
     listing) to get the English/German vectorizers.
+  id: totrans-86
   prefs: []
   type: TYPE_NORMAL
 - en: Listing 12.3 Defining the TextVectorizers for the encoder-decoder model
+  id: totrans-87
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE7]'
+  id: totrans-88
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE7]'
 - en: ❶ Define an input layer that takes a list of strings (or an array of strings).
+  id: totrans-89
   prefs: []
   type: TYPE_NORMAL
 - en: ❷ When defining the vocab size, there are two special tokens, (Padding) and
     '[UNK]' (OOV tokens), added automatically.
+  id: totrans-90
   prefs: []
   type: TYPE_NORMAL
 - en: ❸ Fit the vectorizer layer on the data.
+  id: totrans-91
   prefs: []
   type: TYPE_NORMAL
 - en: ❹ Get the token IDs for the data fed to the input.
+  id: totrans-92
   prefs: []
   type: TYPE_NORMAL
 - en: ❺ Return only the model, which takes an array of a string and outputs a tensor
     of token IDs.
+  id: totrans-93
   prefs: []
   type: TYPE_NORMAL
 - en: ❻ Return the vocabulary in addition to the model.
+  id: totrans-94
   prefs: []
   type: TYPE_NORMAL
 - en: The get_encoder() function shown in the following listing builds the encoder.
     As these have been discussed in detail, they will not be repeated here.
+  id: totrans-95
   prefs: []
   type: TYPE_NORMAL
 - en: Listing 12.4 The function that returns the encoder
+  id: totrans-96
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE8]'
+  id: totrans-97
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE8]'
 - en: ❶ The input is (None,1) shaped and accepts an array of strings.
+  id: totrans-98
   prefs: []
   type: TYPE_NORMAL
 - en: ❷ Vectorize the data (assign token IDs).
+  id: totrans-99
   prefs: []
   type: TYPE_NORMAL
 - en: ❸ Define an embedding layer to convert IDs to word vectors.
+  id: totrans-100
   prefs: []
   type: TYPE_NORMAL
 - en: ❹ Get the embeddings of the token IDs
+  id: totrans-101
   prefs: []
   type: TYPE_NORMAL
 - en: ❺ Define a bidirectional GRU layer. The encoder looks at the English text (i.e.,
     the input) both backward and forward; this leads to better performance.
+  id: totrans-102
   prefs: []
   type: TYPE_NORMAL
 - en: ❻ Get the output of the GRU layer (the last output state vector returned by
     the model).
+  id: totrans-103
   prefs: []
   type: TYPE_NORMAL
 - en: ❼ Define the encoder model; this takes in a list/array of strings as the input
     and returns the last output state of the GRU model as the output.
+  id: totrans-104
   prefs: []
   type: TYPE_NORMAL
 - en: 'As the very last step, we define the final model and compile it using the same
     specifications we used for the earlier model:'
+  id: totrans-105
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE9]'
+  id: totrans-106
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE9]'
 - en: 12.1.3 Training the model
+  id: totrans-107
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
@@ -542,34 +677,46 @@
     to convert token IDs to text), train_df (training data), valid_df (validation
     data), test_df (testing data), epochs (an int to represent how many epochs the
     model needs to be trained) and batch_size (size of a training/evaluation batch):'
+  id: totrans-108
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE10]'
+  id: totrans-109
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE10]'
 - en: This will output
+  id: totrans-110
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE11]'
+  id: totrans-111
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE11]'
 - en: Compared to the last model we had, this is quite an improvement. We have almost
     doubled the validation and testing BLEU scores. All this was possible because
     we introduced the attention mechanism to alleviate a huge performance bottleneck
     in the encoder-decoder model.
+  id: totrans-112
   prefs: []
   type: TYPE_NORMAL
 - en: NOTE On an Intel Core i5 machine with an NVIDIA GeForce RTX 2070 8 GB, the training
     took approximately five minutes to run five epochs.
+  id: totrans-113
   prefs: []
   type: TYPE_NORMAL
 - en: 'Finally, for later use, we save the trained model, along with the vocabularies:'
+  id: totrans-114
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE12]'
+  id: totrans-115
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE12]'
 - en: State-of-the-art results for English-German translation
+  id: totrans-116
   prefs: []
   type: TYPE_NORMAL
 - en: One way to know where our model stands is to compare it to the state-of-the-art
@@ -577,6 +724,7 @@
     of writing this book, a BLEU score of 0.3514 has been achieved by one of the models.
     The model is introduced in the paper “Lessons on Parameter Sharing across Layers
     in Transformers” by Takase et al. ([https://arxiv.org/pdf/2104.06022v1.pdf](https://arxiv.org/pdf/2104.06022v1.pdf)).
+  id: totrans-117
   prefs: []
   type: TYPE_NORMAL
 - en: This should not be taken as an exact comparison to our model, as the benchmarked
@@ -584,13 +732,16 @@
     which is a much larger and more complex data set. However, given that we have
     a relatively simple model with no special training time optimizations, 0.1978
     is a decent score.
+  id: totrans-118
   prefs: []
   type: TYPE_NORMAL
 - en: With that, we will discuss how we can visualize the attention weights to see
     the attention patterns the model uses when decoding inputs.
+  id: totrans-119
   prefs: []
   type: TYPE_NORMAL
 - en: Exercise 1
+  id: totrans-120
   prefs: []
   type: TYPE_NORMAL
 - en: You have invented a novel attention mechanism called AttentionX. Unlike Bahdanau
@@ -599,19 +750,26 @@
     output instead of the usual decoder’s RNN output. Given that, you’ve implemented
     the new attention mechanism in a layer called AttentionX. For encoder input x
     and decoder’s RNN output y, it can be called as
+  id: totrans-121
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE13]'
+  id: totrans-122
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE13]'
 - en: where the final output z is a [<batch size>, <decoder time steps>, <hidden size>]-sized
     output. How would you change the following decoder to use this new attention mechanism?
+  id: totrans-123
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE14]'
+  id: totrans-124
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE14]'
 - en: 12.2 Visualizing the attention
+  id: totrans-125
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
@@ -619,6 +777,7 @@
     without attention. But you are skeptical and want to understand if the attention
     layer is producing meaningful outputs. For that, you are going to visualize attention
     patterns generated by the model for several input sequences.
+  id: totrans-126
   prefs: []
   type: TYPE_NORMAL
 - en: Apart from the performance, one of the lucrative advantages of the attention
@@ -628,23 +787,28 @@
     how much each encoder output contributed to decoding/translating at each decoding
     timestep, it can be used to generate a heatmap, highlighting the most important
     words in English that correspond to a particular German word.
+  id: totrans-127
   prefs: []
   type: TYPE_NORMAL
 - en: 'If we go back to the DecoderRNNAttentionWrapper, by calling it on a certain
     input, it produces two outputs:'
+  id: totrans-128
   prefs: []
   type: TYPE_NORMAL
 - en: Decoder RNN output sequence
+  id: totrans-129
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Alpha (i.e., normalized energy values) for all the encoder positions for every
     decoder position
+  id: totrans-130
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: The second output is what we are after. That tensor holds the key to unlocking
     the powerful interpretability brought by the attention mechanism.
+  id: totrans-131
   prefs: []
   type: TYPE_NORMAL
 - en: Let’s write a function called the attention_visualizer() that will load the
@@ -654,54 +818,71 @@
     and final outputs of the decoder, as shown in the next listing. This is similar
     to how we retraced the various steps in the model to create an inference model
     from the trained model.
+  id: totrans-132
   prefs: []
   type: TYPE_NORMAL
 - en: Listing 12.5 A model that visualizes attention patterns from input text
+  id: totrans-133
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE15]'
+  id: totrans-134
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE15]'
 - en: ❶ Load the model.
+  id: totrans-135
   prefs: []
   type: TYPE_NORMAL
 - en: ❷ Define the encoder input for the model and get the final outputs of the encoder.
+  id: totrans-136
   prefs: []
   type: TYPE_NORMAL
 - en: ❸ Get the encoder vectorizer (required to interpret the final output).
+  id: totrans-137
   prefs: []
   type: TYPE_NORMAL
 - en: ❹ Define the decoder input.
+  id: totrans-138
   prefs: []
   type: TYPE_NORMAL
 - en: ❺ Get the decoder vectorizer and the output.
+  id: totrans-139
   prefs: []
   type: TYPE_NORMAL
 - en: ❻ The next few steps just reiterate the steps in the trained model. We simply
     get the corresponding layers and pass the output of the previous step to the current
     step.
+  id: totrans-140
   prefs: []
   type: TYPE_NORMAL
 - en: ❼ Here we define the final model to visualize attention patterns; we are interested
     in the attn_states output (i.e., normalized energy values). We will also need
     the vectorized token IDs to annotate the visualization.
+  id: totrans-141
   prefs: []
   type: TYPE_NORMAL
 - en: 'Note how the final model we defined returns four different outputs, as opposed
     to the trained model, which only returned the predictions. We will also need a
     get_ vocabulary() function that will load the saved vocabularies:'
+  id: totrans-142
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE16]'
+  id: totrans-143
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE16]'
 - en: 'Finally, call these functions so that we have the vocabularies and the model
     ready:'
+  id: totrans-144
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE17]'
+  id: totrans-145
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE17]'
 - en: Next, we’ll move on to visualizing the outputs produced by the visualizer_model;
     we will be using the Python library matplotlib to visualize attention patterns
     for several examples. Let’s define a function called visualize_attention() that
@@ -709,42 +890,55 @@
     and the corresponding German translation (see the next listing). Then it will
     make a prediction on the inputs, retrieve the attention weights, generate a heatmap,
     and annotate the two axes with the English/German tokens.
+  id: totrans-146
   prefs: []
   type: TYPE_NORMAL
 - en: Listing 12.6 Visualizing attention patterns using input text
+  id: totrans-147
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE18]'
+  id: totrans-148
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE18]'
 - en: ❶ Get the model predictions.
+  id: totrans-149
   prefs: []
   type: TYPE_NORMAL
 - en: ❷ Get the token IDs of the predictions of the model.
+  id: totrans-150
   prefs: []
   type: TYPE_NORMAL
 - en: ❸ Our y tick labels will be the input English words. We stop as soon as we see
     padding tokens.
+  id: totrans-151
   prefs: []
   type: TYPE_NORMAL
 - en: ❹ Our x tick labels will be the predicted German words. We stop as soon as we
     see the EOS token.
+  id: totrans-152
   prefs: []
   type: TYPE_NORMAL
 - en: ❺ We are going to visualize only the useful input and predicted words so that
     things like padded values and anything after the EOS token are discarded.
+  id: totrans-153
   prefs: []
   type: TYPE_NORMAL
 - en: ❻ Generate the attention heatmap.
+  id: totrans-154
   prefs: []
   type: TYPE_NORMAL
 - en: ❼ Set the x ticks, y ticks, and tick labels.
+  id: totrans-155
   prefs: []
   type: TYPE_NORMAL
 - en: ❽ Generate the color bar to understand the value range found in the heat map.
+  id: totrans-156
   prefs: []
   type: TYPE_NORMAL
 - en: ❾ Save the figure to the disk.
+  id: totrans-157
   prefs: []
   type: TYPE_NORMAL
 - en: First, we input the English and German input text to the model to generate a
@@ -756,6 +950,7 @@
     patterns. We are using the trained model itself to visualize patterns, as I want
     to focus on visualizing attention patterns rather than defining the inference
     model (which we already did for another model).
+  id: totrans-158
   prefs: []
   type: TYPE_NORMAL
 - en: 'Once the predictions and attention weights are obtained, we define two lists:
@@ -767,25 +962,32 @@
     these two criteria. You can then simply call the matplotlib’s imshow() function
     to generate the heatmap and set the axes’ ticks and the labels for those ticks.
     Finally, the figure is saved to the disk.'
+  id: totrans-159
   prefs: []
   type: TYPE_NORMAL
 - en: 'Let’s give this a trial run! Let’s take a few examples from our test DataFrame
     and visualize attention patterns. We will create 10 visualizations and will also
     make sure that those 10 examples we choose have at least 10 English words to make
     sure we don’t visualize very short phrases:'
+  id: totrans-160
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE19]'
+  id: totrans-161
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE19]'
 - en: If you run this code successfully, you should get 10 attention visualizations
     shown and stored on the disk. In figures 12.1 and 12.2, we show two such visualizations.
+  id: totrans-162
   prefs: []
   type: TYPE_NORMAL
 - en: '![12-01](../../OEBPS/Images/12-01.png)'
+  id: totrans-163
   prefs: []
   type: TYPE_IMG
 - en: Figure 12.1 Attention patterns visualized for an input English text
+  id: totrans-164
   prefs: []
   type: TYPE_NORMAL
 - en: In the figures, the lighter the color, the more the model has paid attention
@@ -797,20 +999,25 @@
     phrase “have no idea.” The other observation we can make is that the attention
     pattern falls roughly diagonally. This makes sense as both these languages roughly
     follow the same writing style.
+  id: totrans-165
   prefs: []
   type: TYPE_NORMAL
 - en: '![12-02](../../OEBPS/Images/12-02.png)'
+  id: totrans-166
   prefs: []
   type: TYPE_IMG
 - en: Figure 12.2 Attention patterns visualized for an input English text
+  id: totrans-167
   prefs: []
   type: TYPE_NORMAL
 - en: 'This concludes our discussion about sequence-to-sequence models. In the next
     chapter, we will discuss a family of models that has been writing the state-of-the-art
     of machine learning for a few years: Transformers.'
+  id: totrans-168
   prefs: []
   type: TYPE_NORMAL
 - en: Exercise 2
+  id: totrans-169
   prefs: []
   type: TYPE_NORMAL
 - en: You have an attention matrix given by attention_matrix, with English words given
@@ -818,14 +1025,17 @@
     you create a visualization similar to figure 12.1? Here, you will need to use
     the imshow(), set_xticks(), set_yticks(), set_xticklabels(), and set_yticklabels()
     functions.
+  id: totrans-170
   prefs: []
   type: TYPE_NORMAL
 - en: Summary
+  id: totrans-171
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
 - en: Using attention in sequence-to-sequence models can greatly help shoot their
     performance up.
+  id: totrans-172
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -833,6 +1043,7 @@
     historical outputs of the encoder and select and mix these outputs to come up
     with an aggregated (e.g., summed) representation of that, which gives a holistic
     view of what was in the encoder input.
+  id: totrans-173
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -843,22 +1054,30 @@
     time step combination. This can be visualized as a heatmap and can be used to
     interpret which words the decoder paid attention to when translating a certain
     token in the decoder.
+  id: totrans-174
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Answers to exercises
+  id: totrans-175
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
 - en: '**Exercise 1**'
+  id: totrans-176
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE20]'
+  id: totrans-177
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE20]'
 - en: '**Exercise 2**'
+  id: totrans-178
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE21]'
+  id: totrans-179
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE21]'
