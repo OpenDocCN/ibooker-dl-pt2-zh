@@ -1,34 +1,48 @@
 - en: 10 Learning from pairwise comparisons with preference optimization
+  id: totrans-0
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 通过偏好优化进行成对比较学习
 - en: This chapter covers
+  id: totrans-1
   prefs: []
   type: TYPE_NORMAL
+  zh: 本章涵盖
 - en: The problem of learning about and optimizing preferences using only pairwise
     comparison data
+  id: totrans-2
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 仅使用成对比较数据学习和优化偏好的问题
 - en: Training a GP on pairwise comparisons
+  id: totrans-3
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 在成对比较上训练 GP
 - en: Optimization policies for pairwise comparisons
+  id: totrans-4
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 成对比较的优化策略
 - en: Have you ever found it difficult to rate something (food, a product, or an experience)
     on an exact scale? Asking for the customer’s numerical score for a product is
     a common task in A/B testing and product recommendation workflows.
+  id: totrans-5
   prefs: []
   type: TYPE_NORMAL
+  zh: 你是否曾经发现难以为某物（食物、产品或体验）打分？在 A/B 测试和产品推荐工作流程中，询问客户对产品的数值评分是一个常见任务。
 - en: Definition The term *A/B testing* refers to the method of measuring a user’s
     experience in two environments (referred to as *A* and *B*) via randomized experiments
     and determining which environment is more desirable. A/B testing is commonly conducted
     by technology companies.
+  id: totrans-6
   prefs: []
   type: TYPE_NORMAL
+  zh: 定义术语 *A/B 测试* 指的是通过随机实验在两个环境（称为 *A* 和 *B*）中测量用户体验，并确定哪个环境更理想的方法。 A/B 测试通常由技术公司进行。
 - en: A/B testers and product recommendation engineers often have to deal with a high
     level of noise in the feedback collected from their customers. By *noise*, we
     mean any type of corruption that the feedback collected from customers is subject
@@ -37,8 +51,10 @@
     a package, or the general mood of the customer when they consume a product. These
     factors affect how the customer rates their product, potentially corrupting the
     signal that is the customer’s true evaluation of the product.
+  id: totrans-7
   prefs: []
   type: TYPE_NORMAL
+  zh: A/B 测试人员和产品推荐工程师经常需要处理从客户收集的反馈中的高水平噪音。通过*噪音*，我们指的是客户反馈所受到的任何类型的损坏。产品评分中的噪音示例包括在线流媒体服务上提供的广告数量，包裹的送货服务质量，或客户在消费产品时的一般心情。这些因素影响客户对产品的评分方式，可能会破坏客户对产品的真实评价。
 - en: Uncontrollable external factors make it hard for the customer to report their
     true evaluation of a product. Customers, therefore, often find it hard to choose
     a numerical score as their evaluation of a product when rating on a scale. The
@@ -46,8 +62,10 @@
     service platform cannot rely on a few data points collected from their users to
     learn about their preferences. Instead, the platform needs to collect more data
     from the customers to become more certain about what the customers truly want.
+  id: totrans-8
   prefs: []
   type: TYPE_NORMAL
+  zh: 不可控的外部因素使客户难以报告他们对产品的真实评价。因此，当在评分时难以选择数值评分作为对产品的评价时，客户通常会发现这很困难。在 A/B 测试和产品推荐中的反馈噪音的普遍存在意味着服务平台不能仅依靠从用户那里收集到的少量数据来了解其偏好。相反，平台需要从客户那里收集更多数据，以更加确定客户真正想要的是什么。
 - en: However, just as in other settings of black box optimization, such as hyperparameter
     tuning and drug discovery, querying the objective function is expensive. In product
     recommendation, every time we query a customer asking for their rating of a product,
@@ -55,20 +73,25 @@
     from continuing to use the platform. Hence, there’s a natural tension between
     the need for a large amount of data to better learn customers' preferences and
     being intrusive, potentially leading to a loss of customers.
+  id: totrans-9
   prefs: []
   type: TYPE_NORMAL
+  zh: 然而，正如在其他黑盒优化设置中一样，比如超参数调整和药物发现，查询目标函数是昂贵的。在产品推荐中，每当我们询问客户对产品的评分时，我们都面临着侵入客户体验和阻止他们继续使用平台的风险。因此，需要大量数据来更好地了解客户的偏好和具有侵入性之间存在自然紧张关系，可能导致客户流失。
 - en: Luckily, there’s a way around this problem. Research in the field of psychology
     ([http://mng.bz/0KOl](http://mng.bz/0KOl)) has found the intuitive result that
     we humans are much better at giving preference-based responses in the form of
     pairwise comparisons (e.g., “product A is better than product B”) than rating
     products on a scale (e.g., “product A is an 8 out of 10”).
+  id: totrans-10
   prefs: []
   type: TYPE_NORMAL
+  zh: 幸运的是，有一种方法可以解决这个问题。心理学领域的研究（[http://mng.bz/0KOl](http://mng.bz/0KOl)）发现了一个直观的结果，即我们人类在进行成对比较的偏好反应方面要比在评分产品时更擅长（例如，“产品A比产品B更好”）。
 - en: Definition A *pairwise comparison* is a method of collecting preference data.
     Each time we want to elicit information about a customer’s preference, we ask
     the customer to pick (from two items) the item they prefer. Pairwise comparisons
     are different from numerical ratings, where we ask the customer to rate an item
     on a scale.
+  id: totrans-11
   prefs: []
   type: TYPE_NORMAL
 - en: 'The reason for the difference in difficulty between pairwise comparisons and
@@ -77,25 +100,30 @@
     better than we can provide numerical ratings. In figure 10.1, consider two example
     interfaces of an online shopping site that is trying to learn about your preference
     for Hawaiian shirts:'
+  id: totrans-12
   prefs: []
   type: TYPE_NORMAL
 - en: The first interface asks you to rate the shirt on the scale from 1 to 10\. This
     can be difficult to do, especially if you don’t have a frame of reference.
+  id: totrans-13
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: The second interface asks you to instead pick the shirt that you like better.
     This task is easier to complete.
+  id: totrans-14
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '![](../../OEBPS/Images/10-01.png)'
+  id: totrans-15
   prefs: []
   type: TYPE_IMG
 - en: Figure 10.1 Examples of user’s preference elicitation in production recommendation.
     On the left, the user is asked to rate a recommended product. On the right, the
     user is asked to pick the product they like better. The latter situation helps
     better elicit the user’s preference.
+  id: totrans-16
   prefs: []
   type: TYPE_NORMAL
 - en: Given the potential of high-quality data we can collect using pairwise comparisons,
@@ -109,6 +137,7 @@
     preference as quickly as possible. In other words, we assume the user’s preference
     is the objective function defined over a search space, and we’d like to optimize
     this objective function.
+  id: totrans-17
   prefs: []
   type: TYPE_NORMAL
 - en: This setting of learning and optimizing a user’s preference from pairwise comparisons
@@ -116,15 +145,18 @@
     recommendation and has been gaining interest in both communities. By the end of
     this chapter, we learn how to approach this problem from the BayesOpt, trading
     off exploitation and exploration as we collect data from the user.
+  id: totrans-18
   prefs: []
   type: TYPE_NORMAL
 - en: 10.1 Black-box optimization with pairwise comparisons
+  id: totrans-19
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
 - en: In this section, we further discuss the usefulness of pairwise comparisons in
     the task of eliciting preference. We then examine the BayesOpt loop that is modified
     for this preference-based optimization setting.
+  id: totrans-20
   prefs: []
   type: TYPE_NORMAL
 - en: In addition to exact numerical evaluations as ratings, pairwise comparisons
@@ -132,9 +164,11 @@
     application. Compared to numerical ratings, pairwise comparisons pose less of
     a cognitive burden on the user and are, therefore, likely to result in higher-quality
     data (feedback that is consistent with the user’s true preference).
+  id: totrans-21
   prefs: []
   type: TYPE_NORMAL
 - en: Pairwise comparisons in multiobjective optimization
+  id: totrans-22
   prefs: []
   type: TYPE_NORMAL
 - en: 'A setting where pairwise comparisons are particularly useful is decision-making
@@ -145,6 +179,7 @@
     each of these criteria, hoping to find a clear winner. Unfortunately, car A scores
     higher than car B on some of the criteria but not all, and car B scores higher
     than car A on the rest of the criteria.'
+  id: totrans-23
   prefs: []
   type: TYPE_NORMAL
 - en: So, there’s no clear winner between the two cars, and combining the scores for
@@ -155,12 +190,14 @@
     pose an even greater challenge than choosing between the two cars themselves!
     It can be much easier to ignore the specifics, view each car as a whole, and compare
     the two cars “head-to-head.”
+  id: totrans-24
   prefs: []
   type: TYPE_NORMAL
 - en: The ease of using pairwise comparisons has, therefore, been exploited in optimization
     situations where there are multiple criteria to be considered. For example, a
     research project by Edward Abel, Ludmil Mikhailov, and John Keane ([http://mng.bz/KenZ](http://mng.bz/KenZ))
     used pairwise comparisons to tackle group decision-making.
+  id: totrans-25
   prefs: []
   type: TYPE_NORMAL
 - en: Of course, pairwise comparisons are not objectively better than numerical evaluations.
@@ -172,6 +209,7 @@
     gaining one bit of information). Meanwhile, if you were to report that you rate
     the orange shirt 8 out of 10 and the red 6 out of 10, we would have much more
     information than simply knowing that orange is valued more highly than red.
+  id: totrans-26
   prefs: []
   type: TYPE_NORMAL
 - en: In other words, there’s always a tradeoff in choosing the method of eliciting
@@ -179,27 +217,38 @@
     are prone to noise and can place a larger cognitive burden on the user. Pairwise
     comparisons, on the other hand, offer less information but are easier for the
     user to report. These pros and cons are summarized in figure 10.2.
+  id: totrans-27
   prefs: []
   type: TYPE_NORMAL
+  zh: 换句话说，在选择从用户那里引出反馈的方法时总是存在权衡。数值评估包含更多信息，但容易受到噪声影响，并且可能给用户带来更大的认知负担。另一方面，两两比较提供的信息较少，但用户报告起来更容易。这些优缺点在图
+    10.2 中总结。
 - en: '![](../../OEBPS/Images/10-02.png)'
+  id: totrans-28
   prefs: []
   type: TYPE_IMG
+  zh: '![](../../OEBPS/Images/10-02.png)'
 - en: Figure 10.2 Differences between numerical ratings and pairwise comparisons in
     terms of informativeness and difficulty in reporting. Each method of preference
     elicitation offers its own advantages and disadvantages.
+  id: totrans-29
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 10.2 数值评分和两两比较在信息量和报告难度方面的差异。每种偏好引出方法都有其优缺点。
 - en: Keeping the tradeoff between information and difficulty of reporting in mind,
     we should stick to numerical evaluations if we are willing to ask users to complete
     a more cognitively demanding task to gain more information and if we can account
     for noise. On the other hand, if we place more importance on having customers
     accurately express their true preferences and are willing to gain less information,
     pairwise comparisons should be our method of choice to elicit customers' feedback.
+  id: totrans-30
   prefs: []
   type: TYPE_NORMAL
+  zh: 在考虑信息和报告难度之间的权衡时，如果我们愿意让用户完成更具认知要求的任务以获取更多信息，并且可以考虑到噪声，那么我们应该坚持使用数值评估。另一方面，如果我们更注重客户准确表达他们真实的偏好，并且愿意获取更少的信息，那么两两比较应该是我们引出客户反馈的首选方法。
 - en: Other ways of eliciting customers' preferences
+  id: totrans-31
   prefs: []
   type: TYPE_NORMAL
+  zh: 其他引出客户偏好的方法
 - en: 'Pairwise comparisons are not the only form of relieving the cognitive burden
     of numerical evaluations. For example, the online streaming service Netflix collects
     viewers'' ratings by asking them to choose between three options: “thumbs down”
@@ -209,80 +258,109 @@
     classified into different categories and there’s an inherent order among the categories.
     The production recommendation problem in this setting is just as interesting to
     consider, but we keep our focus on pairwise comparisons in this chapter.'
+  id: totrans-32
   prefs: []
   type: TYPE_NORMAL
+  zh: 两两比较并不是减轻数值评估认知负担的唯一形式。例如，在线流媒体服务 Netflix 通过要求观众在三个选项中进行选择来收集观众的评分：“向下拇指”表示他们不喜欢某物，“向上拇指”表示他们喜欢某物，“双向上拇指”表示他们*喜欢*某物
+    ([http://mng.bz/XNgl](http://mng.bz/XNgl))。这种设置构成了一种有序分类问题，其中项目被分类到不同的类别中，并且类别之间存在固有的顺序。在这种情况下，产品推荐问题同样值得考虑，但在本章中我们将重点放在两两比较上。
 - en: 'In this chapter, we learn how to facilitate the task of using pairwise comparisons
     to learn and optimize a customer’s preference using BayesOpt. First, we examine
     a modified version of the BayesOpt loop we saw in figure 1.6, as shown in figure
     10.3:'
+  id: totrans-33
   prefs: []
   type: TYPE_NORMAL
+  zh: 在本章中，我们学习如何利用 BayesOpt 来促进使用两两比较来学习和优化客户偏好的任务。首先，我们研究了一个修改过的 BayesOpt 循环版本，如图
+    1.6 所示，如图 10.3 所示：
 - en: In step 1, the GP is trained on pairwise comparison data instead of numerical
     evaluations. The key challenge is to ensure that the GP belief about the objective
     function (the user’s true preference function) reflects information in the observed
     comparisons.
+  id: totrans-34
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 在第一步中，GP 是根据两两比较数据而不是数值评估进行训练的。关键挑战在于确保 GP 对于目标函数（用户真实偏好函数）的信念反映了观察到的比较中的信息。
 - en: In step 2, the BayesOpt policy computes acquisition scores to quantify how useful
     each potential new query to the user is. A query to the user needs to come in
     the form of a pair of products for the user to compare. Just as in other settings,
     the policy needs to balance exploiting a region where we know the user’s preference
     is high and exploring other regions where we don’t know a lot about the user’s
     preference.
+  id: totrans-35
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 在第二步中，BayesOpt 策略计算获取分数，以量化对用户每个潜在新查询的有用程度。用户的查询需要以一对产品的形式提供给用户进行比较。就像在其他情况下一样，策略需要平衡利用我们知道用户偏好高的区域和探索我们对用户偏好了解不多的其他区域。
 - en: In step 3, the user compares the two products presented to them by the BayesOpt
     policy and reports the product they prefer. This new information is then added
     to our training set.
+  id: totrans-36
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 在第 3 步中，用户比较了由贝叶斯优化策略呈现给他们的两种产品，并报告他们更喜欢的产品。然后，将此新信息添加到我们的训练集中。
 - en: '![](../../OEBPS/Images/10-03.png)'
+  id: totrans-37
   prefs: []
   type: TYPE_IMG
+  zh: '![](../../OEBPS/Images/10-03.png)'
 - en: Figure 10.3 The BayesOpt loop with pairwise comparisons for preference optimization.
     The GP trains on pairwise comparison data, and the BayesOpt policy decides which
     pair of data points it should ask the user to compare.
+  id: totrans-38
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 10.3 使用成对比较进行偏好优化的贝叶斯优化循环。高斯过程根据成对比较数据进行训练，而贝叶斯优化策略决定应该要求用户比较哪一对数据点。
 - en: 'We seek to address two main questions in the remainder of this chapter:'
+  id: totrans-39
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们在本章的剩余部分试图解决两个主要问题：
 - en: How can we train a GP only on pairwise comparisons? A GP, when trained on numerical
     responses, produces probabilistic predictions with quantified uncertainty, which
     is crucial in decision-making. Can we use the same model here with pairwise comparison
     responses?
+  id: totrans-40
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 我们如何仅根据成对比较训练高斯过程？高斯过程在数值响应上进行训练时，会产生具有量化不确定性的概率预测，这在决策中至关重要。我们能否在这里使用相同的模型来处理成对比较响应？
 - en: How should we generate new product pairs for the user to compare so as to identify
     the maximizer of the user’s preference as quickly as possible? That is, how do
     we best elicit the user’s feedback using pairwise comparisons to optimize their
     preference?
+  id: totrans-41
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 我们应该如何生成新的产品对供用户比较，以便尽快确定用户偏好的最大化者？也就是说，我们如何通过成对比较最好地引出用户的反馈以优化他们的偏好？
 - en: 10.2 Formulating a preference optimization problem and formatting pairwise comparison
     data
+  id: totrans-42
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 10.2 制定偏好优化问题和格式化成对比数据
 - en: Before we start tackling these questions, this section introduces the product
     recommendation problem we’ll be solving throughout the chapter and how we simulate
     the problem in Python. Setting up the problem properly will help us more easily
     integrate the BayesOpt tools we will learn about in subsequent sections. The code
     we use here is included in the first portion of the CH10/01 - Learning from pairwise
     comparisons.ipynb Jupyter notebook.
+  id: totrans-43
   prefs: []
   type: TYPE_NORMAL
+  zh: 在我们开始解决这些问题之前，本节介绍了我们将在整章中解决的产品推荐问题以及我们如何在 Python 中模拟这个问题。正确设置问题将帮助我们更轻松地整合我们将在随后章节学习到的贝叶斯优化工具。我们在此处使用的代码包含在
+    CH10/01 - 从成对比较中学习.ipynb Jupyter 笔记本的第一部分中。
 - en: As hinted at in figures 10.1 and 10.3, the scenario we’re in is a product recommendation
     problem for Hawaiian shirts. That is, imagine we run an online shopping site for
     Hawaiian shirts, and we are trying to determine the product that maximizes the
     preference of a specific customer who is currently shopping for a shirt.
+  id: totrans-44
   prefs: []
   type: TYPE_NORMAL
+  zh: 正如图 10.1 和 10.3 所示的，我们现在面临的情景是夏威夷衬衫的产品推荐问题。也就是说，想象我们经营一家夏威夷衬衫的在线购物网站，我们试图确定一款特定客户在购物时最大化偏好的产品。
 - en: For simplicity’s sake, let’s assume that after a brief survey, we learn that
     the factor that matters the most to the customer is the number of flowers printed
     on the shirt. Other factors, such as style and color, matter too, but the most
@@ -294,108 +372,152 @@
     this search in a one-dimensional search space, where the lower bound of the space
     corresponds to shirts without floral patterns and the upper bound of the space
     contains shirts covered in flowers.
+  id: totrans-45
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了简单起见，让我们假设在简要调查之后，我们得知对客户最重要的因素是衬衫上印花的数量。其他因素，如款式和颜色，也很重要，但对于这个客户来说，夏威夷衬衫最重要的是衬衫上的花朵有多少。此外，假设我们库存中有许多夏威夷衬衫，花朵数量各异，因此我们大致可以找到任何指定“花朵程度”的衬衫。因此，我们的目标是找到符合客户偏好的衬衫，这对我们来说是未知的。我们在一维搜索空间中进行这一搜索，其中空间的下限对应于没有花纹的衬衫，空间的上限包含覆盖着花朵的衬衫。
 - en: 'Figure 10.4 visualizes our setup in more detail. In the top portion, the figure
     shows the customer’s true preference and how it changes with respect to how floral
     a shirt is:'
+  id: totrans-46
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 10.4 更详细地展示了我们的设置。在图的顶部部分，显示了客户的真实偏好以及随着衬衫花朵程度的变化而变化的情况：
 - en: The *x*-axis indicates the number of flowers a shirt has. On one end of the
     spectrum, we have shirts without any flowers; on the other are shirts covered
     in flowers.
+  id: totrans-47
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '*x*轴表示衬衫的花朵数量。在光谱的一端，我们有没有花朵的衬衫；另一端是满是花朵的衬衫。'
 - en: The *y*-axis is the customer’s preference for each shirt. The higher the customer’s
     preference for a shirt, the more the customer likes the shirt.
+  id: totrans-48
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '*y*轴是每个衬衫的客户偏好度。客户对衬衫的偏好度越高，表示客户越喜欢这件衬衫。'
 - en: '![](../../OEBPS/Images/10-04.png)'
+  id: totrans-49
   prefs: []
   type: TYPE_IMG
+  zh: '![](../../OEBPS/Images/10-04.png)'
 - en: Figure 10.4 Searching for the shirt with the optimal number of flowers in a
     product recommendation problem. Our search space is one-dimensional since we only
     search for the number of flowers on a shirt. A shirt that’s more than half covered
     in flowers is a local optimum, while a shirt that’s almost fully covered maximizes
     the user’s preference.
+  id: totrans-50
   prefs: []
   type: TYPE_NORMAL
+  zh: 图10.4 在一个产品推荐问题中搜索具有最佳花朵数量的衬衫。我们的搜索空间是一维的，因为我们只搜索衬衫上花朵的数量。一件半面覆盖花朵的衬衫是一个局部最优点，而几乎完全覆盖的衬衫最大化了用户的偏好。
 - en: 'We see that this customer likes floral shirts: there’s a local optimum in preference
     past the middle point of the shirt, and the global optimum of the preference function
     is located near the upper bound of the search space. This means that a shirt that
     has a lot of flowers but is not completely covered in them maximizes the customer’s
     preference.'
+  id: totrans-51
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们可以看到这个客户喜欢花纹衬衫：在衬衫的中间点过后有一个局部最优点，而偏好函数的全局最优点位于搜索空间的上界附近。这意味着一件有很多花朵但不完全覆盖的衬衫最大化了客户的偏好。
 - en: Since what we have is a black box optimization problem, the customer’s preference
     curve in figure 10.4 is actually inaccessible to us in the real world, and we
     need to learn about this preference function using pairwise comparisons and optimize
     it as quickly as possible. Now, let’s see how we can set up this optimization
     problem in Python.
+  id: totrans-52
   prefs: []
   type: TYPE_NORMAL
+  zh: 由于我们处理的是一个黑盒优化问题，在实际世界中我们实际上无法获得图10.4中客户的偏好曲线，我们需要使用成对比较来学习这个偏好函数，并尽快对其进行优化。现在，让我们看看如何在Python中设置这个优化问题。
 - en: 'You might have already noticed that we are using the Forrester function used
     in previous chapters to simulate the objective function, the customer’s true preference,
     in figure 10.4\. As a result, the code for this function doesn’t change from what
     we had in other chapters, which is the following formula, defined as between –5
     and 5, the lower and upper bounds of our search space:'
+  id: totrans-53
   prefs: []
   type: TYPE_NORMAL
+  zh: 你可能已经注意到，在图10.4中我们使用了前几章中使用的Forrester函数来模拟客户的目标函数，也就是客户的真实偏好。因此，这个函数的代码与前几章没有任何区别，其定义如下（定义范围是我们搜索空间的下界-5和上界5之间）：
 - en: '[PRE0]'
+  id: totrans-54
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE0]'
 - en: ❶ The objective function
+  id: totrans-55
   prefs: []
   type: TYPE_NORMAL
+  zh: ❶ 目标函数
 - en: ❷ The bounds of the search space
+  id: totrans-56
   prefs: []
   type: TYPE_NORMAL
+  zh: ❷ 搜索空间的边界
 - en: Remember from previous chapters that where the labels of our data have numerical
     values, each data point in the training set, stored in variable `train_x`, has
     a corresponding label in `train_y`. Our current setting is a little different.
     As our data is in the form of pairwise comparisons, each observation results from
     comparing two data points in `train_x`, and the label of the observation indicates
     which data point is valued more by the customer.
+  id: totrans-57
   prefs: []
   type: TYPE_NORMAL
+  zh: 从前几章可以记得，当我们的数据标签具有数值值时，在变量`train_x`中的每个数据点都有对应的`train_y`标签。我们当前的设置有点不同。由于我们的数据以成对比较的形式存在，每个观察结果都来自于对`train_x`中的两个数据点进行比较，并且观察的标签指示了客户更看重哪个数据点。
 - en: 'Note We follow BoTorch’s convention to encode the result of each pairwise comparison
     between two data points in `train_x` as a PyTorch tensor of two elements: the
     first is the index of the data point that is preferred within `train_x`, and the
     second is the index of the data point not preferred.'
+  id: totrans-58
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意：我们遵循 BoTorch 的规定，用一个包含两个元素的 PyTorch 张量来编码在 `train_x` 中每对数据点之间的每个配对比较的结果：第一个元素是在
+    `train_x` 中被偏好的数据点的索引，第二个元素是未被偏好的数据点的索引。
 - en: 'For example, say that based on two queries to the user, we know that the user
     prefers *x* = 0 to *x* = 3 (that is, *f*(0) > *f*(3), where *f*(*x*) is the objective
     function), and the user also prefers *x* = 0 to *x* = –4 (so *f*(0) > *f*(–4)).
     A way for us to represent these two pieces of information expressed as a training
     data set is with `train_x` having the following values:'
+  id: totrans-59
   prefs: []
   type: TYPE_NORMAL
+  zh: '举个例子，假设根据两次用户查询，我们知道用户更喜欢*x* = 0而不是*x* = 3（也就是说，*f*（0）>*f*（3），其中*f*（*x*）是目标函数），用户也更喜欢*x*
+    = 0而不是*x* = -4（所以*f*（0）>*f*（-4））。我们可以用`train_x`来表示这两个信息作为训练数据集，`train_x`的取值如下:'
 - en: '[PRE1]'
+  id: totrans-60
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE1]'
 - en: ❶ Represents x = 0
+  id: totrans-61
   prefs: []
   type: TYPE_NORMAL
+  zh: ❶ 表示 x = 0
 - en: ❷ Represents x = 3
+  id: totrans-62
   prefs: []
   type: TYPE_NORMAL
+  zh: ❷ 表示 x = 3
 - en: ❸ Represents x = −4
+  id: totrans-63
   prefs: []
   type: TYPE_NORMAL
 - en: These values are the three *x* values we have used to query the user. The training
     labels `train_comp`, on the other hand, should be
+  id: totrans-64
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE2]'
+  id: totrans-65
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE2]'
 - en: ❶ Represents f(0) > f(3)
+  id: totrans-66
   prefs: []
   type: TYPE_NORMAL
 - en: ❷ Represents f(0) > f(−4)
+  id: totrans-67
   prefs: []
   type: TYPE_NORMAL
 - en: Each row in `train_comp` is a two-element tensor representing the result of
@@ -403,90 +525,120 @@
     index `0` in `train_x`, which is *x* = 0, is preferred to the point with index
     `1`, which is *x* = 3\. Similarly, the second row `[0,` `2]` encodes the comparison
     that *f*(0) > *f*(–4).
+  id: totrans-68
   prefs: []
   type: TYPE_NORMAL
 - en: 'To help streamline the process of comparing any pair of data points within
     our search space, we write a helper function that takes in the objective values
     of any two data points and returns `[0,` `1]` if the first objective value is
     the greater of the two and `[1,` `0]` otherwise:'
+  id: totrans-69
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE3]'
+  id: totrans-70
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE3]'
 - en: ❶ Makes sure we only have two objective values to compare
+  id: totrans-71
   prefs: []
   type: TYPE_NORMAL
 - en: ❷ If the first value is greater
+  id: totrans-72
   prefs: []
   type: TYPE_NORMAL
 - en: ❸ If the second value is greater
+  id: totrans-73
   prefs: []
   type: TYPE_NORMAL
 - en: 'Let’s use this function to generate a sample training set. We first randomly
     draw two data points within our search space:'
+  id: totrans-74
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE4]'
+  id: totrans-75
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE4]'
 - en: ❶ Fixes the random seed for reproducibility
+  id: totrans-76
   prefs: []
   type: TYPE_NORMAL
 - en: ❷ Draws two numbers between 0 and 1 and scales them to our search space
+  id: totrans-77
   prefs: []
   type: TYPE_NORMAL
 - en: 'The variable `train_x` here contains the following two points:'
+  id: totrans-78
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE5]'
+  id: totrans-79
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE5]'
 - en: 'Now, we obtain the result of the comparison between these two points by evaluating
     the user’s true preference function and calling `compare()`:'
+  id: totrans-80
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE6]'
+  id: totrans-81
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE6]'
 - en: ❶ Computes the actual objective values, which are hidden from us
+  id: totrans-82
   prefs: []
   type: TYPE_NORMAL
 - en: ❷ Obtains the result of the comparison
+  id: totrans-83
   prefs: []
   type: TYPE_NORMAL
 - en: The result of the comparison between the objective values of the data points
     in `train_x` is stored in `train_comp`, which is
+  id: totrans-84
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE7]'
+  id: totrans-85
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE7]'
 - en: This result means the first data point in `train_x` is valued by the customer
     more than the second point.
+  id: totrans-86
   prefs: []
   type: TYPE_NORMAL
 - en: 'We also write another helper function named `observe_and_append_data()` whose
     role is to take in a pair of data points, compare them, and add the result of
     the comparison to a running training set:'
+  id: totrans-87
   prefs: []
   type: TYPE_NORMAL
 - en: 'The function first calls the helper function `compare()` to obtain either `[0,`
     `1]` or `[1,` `0]` and then adjusts the values of the indices stored in the two-element
     tensor so that the indices point to the correct locations of the data points in
     the training set:'
+  id: totrans-88
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: '[PRE8]'
+  id: totrans-89
   prefs:
   - PREF_IND
   type: TYPE_PRE
+  zh: '[PRE8]'
 - en: ❶ Evaluates the comparison according to the user’s preference
+  id: totrans-90
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
 - en: ❷ Keeps track of the indices
+  id: totrans-91
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
@@ -496,48 +648,60 @@
     GP we learn in the next section to become numerically unstable. Our solution is
     to flag these similar data points, treat them as duplicates, and remove one of
     them:'
+  id: totrans-92
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: '[PRE9]'
+  id: totrans-93
   prefs:
   - PREF_IND
   type: TYPE_PRE
+  zh: '[PRE9]'
 - en: ❶ Checks for duplicates of the first data point in the new pair
+  id: totrans-94
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
 - en: ❷ If there are no duplicates, adds the data point to train_x
+  id: totrans-95
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
 - en: ❸ If there’s at least one duplicate, keeps track of the index of the duplicate
+  id: totrans-96
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
 - en: ❹ Checks for duplicates of the second data point in the new pair
+  id: totrans-97
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
 - en: ❺ If there’s at least one duplicate, keeps track of the index of the duplicate
+  id: totrans-98
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
 - en: ❻ Returns the updated training set
+  id: totrans-99
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
 - en: We make use of these two helper functions in our downstream tasks of training
     GPs and optimizing the user’s preference function, the first of which we explore
     in the next section.
+  id: totrans-100
   prefs: []
   type: TYPE_NORMAL
 - en: 10.3 Training a preference-based GP
+  id: totrans-101
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
 - en: We continue to use the code in the CH10/01 - Learning from pairwise comparisons.ipynb
     notebook to implement our GP model in this section.
+  id: totrans-102
   prefs: []
   type: TYPE_NORMAL
 - en: We learned in section 2.2.2 that under the Bayesian update rule (which allows
@@ -548,6 +712,7 @@
     update is only applicable under numerical observations. That is, we can only exactly
     update a GP with observations in the form of *y* = *f*(*x*), where *x* and *y*
     are real-valued numbers.
+  id: totrans-103
   prefs: []
   type: TYPE_NORMAL
 - en: Under our current setting, observations come in the form of pairwise comparisons,
@@ -555,9 +720,11 @@
     data is *not* a GP anymore, which rules out most of the methods we have developed
     in this book that rely on the fact that our predictive model is a GP. However,
     this doesn’t mean we have to abandon the entire project.
+  id: totrans-104
   prefs: []
   type: TYPE_NORMAL
 - en: Approximating the posterior GP under pairwise comparisons
+  id: totrans-105
   prefs: []
   type: TYPE_NORMAL
 - en: 'A common theme in ML (and computer science, in general) is trying to approximately
@@ -566,6 +733,7 @@
     for the observed pairwise comparisons. The interested reader can find more details
     about this approach in the research paper by Wei Chu and Zoubin Ghahramani that
     proposed it: [http://mng.bz/9Dmo](http://mng.bz/9Dmo).'
+  id: totrans-106
   prefs: []
   type: TYPE_NORMAL
 - en: 'Of course, the distribution that truly maximizes the likelihood of the data
@@ -575,14 +743,17 @@
     of the data is also what we do when we train a GP: we find the best hyperparameters
     for the GP (e.g., length scale and output scale) that maximize the data likelihood.
     (See section 3.3.2, where we first discuss this method.)'
+  id: totrans-107
   prefs: []
   type: TYPE_NORMAL
 - en: 'In terms of implementation, we can initialize and train a GP on pairwise comparisons
     using the following code:'
+  id: totrans-108
   prefs: []
   type: TYPE_NORMAL
 - en: BoTorch provides a special class implementation for this GP model named `PairwiseGP`,
     which can be imported from the `botorch.models.pairwise_gp` module.
+  id: totrans-109
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -590,6 +761,7 @@
     from that of the likelihood of real-valued data. For this computation, we use
     `PairwiseLaplaceMarginalLogLikelihood`, imported from the same module as the class
     implementation.
+  id: totrans-110
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -599,40 +771,51 @@
     `grad_(False)`. This step is only for visualization purposes and is, therefore,
     optional; we won’t do this when running our optimization policies later in the
     chapter.
+  id: totrans-111
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: 'Finally, we use the helper function `fit_gpytorch_mll` from `botorch.fit` to
     obtain the posterior GP that maximizes the likelihood of our training data:'
+  id: totrans-112
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '[PRE10]'
+  id: totrans-113
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE10]'
 - en: ❶ Imports the necessary classes and helper function
+  id: totrans-114
   prefs: []
   type: TYPE_NORMAL
 - en: ❷ Initializes the GP model
+  id: totrans-115
   prefs: []
   type: TYPE_NORMAL
 - en: ❸ Fixes the output scale for more readable output (optional)
+  id: totrans-116
   prefs: []
   type: TYPE_NORMAL
 - en: ❹ Initializes the (log) likelihood object
+  id: totrans-117
   prefs: []
   type: TYPE_NORMAL
 - en: ❺ Trains the model by maximizing the likelihood
+  id: totrans-118
   prefs: []
   type: TYPE_NORMAL
 - en: 'Using this trained GP model, we can now make and visualize predictions across
     our search space in figure 10.5\. We note a few interesting points about these
     predictions:'
+  id: totrans-119
   prefs: []
   type: TYPE_NORMAL
 - en: The mean predictions obey the relationship expressed in the training data that
     *f*(–0.0374) > *f*(2.6822), in that the mean prediction at *x* = –0.0374 is greater
     than 0, while at *x* = 2.6822, it is less than 0.
+  id: totrans-120
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -641,6 +824,7 @@
     that upon observing *f*(–0.0374) > f(2.6822), we have gained some information
     about *f*(–0.0374) and *f*(2.6822), and our knowledge about these two objective
     values should increase.
+  id: totrans-121
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -651,33 +835,41 @@
     uncertainty remains. Figure 10.5 shows that the GP we trained can effectively
     learn from a pairwise comparison where the mean function obeys the observed comparison
     and the uncertainty is well calibrated.
+  id: totrans-122
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
 - en: BoTorch warning when making predictions
+  id: totrans-123
   prefs: []
   type: TYPE_NORMAL
 - en: 'You might encounter a warning from BoTorch similar to the following when making
     predictions with the GP we just trained:'
+  id: totrans-124
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE11]'
+  id: totrans-125
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE11]'
 - en: This warning indicates that the covariance matrix produced by the GP is not
     positive definite, causing numerical stability-related problems, and BoTorch has
     automatically added a “jitter” to the diagonal of the matrix as a fix, so we,
     the users, don’t need to do anything further. Refer to section 5.3.2 for the instance
     in which we encounter this warning.
+  id: totrans-126
   prefs: []
   type: TYPE_NORMAL
 - en: '![](../../OEBPS/Images/10-05.png)'
+  id: totrans-127
   prefs: []
   type: TYPE_IMG
 - en: Figure 10.5 Predictions made by the GP trained on a pairwise comparison *f*(–0.0374)
     > *f*(2.6822). The posterior mean reflects the result of this comparison, while
     the posterior standard deviation around the two data points slightly decreased
     from the prior.
+  id: totrans-128
   prefs: []
   type: TYPE_NORMAL
 - en: 'To play around with this model further and see how it can learn from more complicated
@@ -686,55 +878,73 @@
     and *f*(4) > *f*(–0), all of which are true for the objective function we have
     in figure 10.5\. To this end, we set our training data points stored in `train_x`
     as'
+  id: totrans-129
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE12]'
+  id: totrans-130
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE12]'
 - en: 'This set contains all the data points involved in the preceding observed comparisons.
     Now, as for `train_comp`, we encode the three comparisons using two-element tensors
     in the way we discussed in section 10.2:'
+  id: totrans-131
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE13]'
+  id: totrans-132
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE13]'
 - en: ❶ [0, 1] means f(train_x[0]) > f(train_x[1]), or f(0) > f(3).
+  id: totrans-133
   prefs: []
   type: TYPE_NORMAL
 - en: ❷ [0, 2] means f(train_x[0]) > f(train_x[2]), or f(0) > f(−4).
+  id: totrans-134
   prefs: []
   type: TYPE_NORMAL
 - en: ❸ [3, 0] means f(train_x[3]) > f(train_x[0]), or f(4) > f(0).
+  id: totrans-135
   prefs: []
   type: TYPE_NORMAL
 - en: 'Now, we simply redeclare the GP and refit it on this new training data:'
+  id: totrans-136
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE14]'
+  id: totrans-137
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE14]'
 - en: ❶ Initializes the GP model
+  id: totrans-138
   prefs: []
   type: TYPE_NORMAL
 - en: ❷ Initializes the (log) likelihood object
+  id: totrans-139
   prefs: []
   type: TYPE_NORMAL
 - en: ❸ Trains the model by maximizing the likelihood
+  id: totrans-140
   prefs: []
   type: TYPE_NORMAL
 - en: The GP model produces the predictions shown in figure 10.6, where we see that
     all three comparison results in the training data are reflected in the mean predictions,
     and uncertainty, once again, decreases around the training data points.
+  id: totrans-141
   prefs: []
   type: TYPE_NORMAL
 - en: '![](../../OEBPS/Images/10-06.png)'
+  id: totrans-142
   prefs: []
   type: TYPE_IMG
 - en: Figure 10.6 Predictions made by the GP trained on the pairwise comparisons are
     shown on the right. The posterior mean reflects the result of this comparison,
     while the posterior standard deviation around the data points in the training
     set decreased from the prior.
+  id: totrans-143
   prefs: []
   type: TYPE_NORMAL
 - en: 'Figure 10.6 shows that our GP model can effectively train on pairwise comparison
@@ -743,9 +953,11 @@
     of this chapter: decision-making in preference optimization. That is, how should
     we select data pairs to have the user compare them to find the most preferred
     data point as quickly as possible?'
+  id: totrans-144
   prefs: []
   type: TYPE_NORMAL
 - en: The range of the objective function in preference learning
+  id: totrans-145
   prefs: []
   type: TYPE_NORMAL
 - en: An interesting advantage of training a GP on pairwise comparisons compared to
@@ -754,6 +966,7 @@
     about are the *relative comparisons* between objective values. In other words,
     learning about *f*(*x*) is equivalent to learning about *f*(*x*) + 5, or 2 *f*(*x*),
     or *f*(*x*) / 10.
+  id: totrans-146
   prefs: []
   type: TYPE_NORMAL
 - en: Meanwhile, when training a traditional GP with numerical evaluations, it’s crucial
@@ -762,14 +975,17 @@
     to model an objective function that ranges from –1 to 1, an output scale that’s
     equal to 1 is appropriate, while for an objective function that ranges from –10
     to 10, we need a larger output scale.)
+  id: totrans-147
   prefs: []
   type: TYPE_NORMAL
 - en: 10.4 Preference optimization by playing king of the hill
+  id: totrans-148
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
 - en: In this section, we learn to apply BayesOpt to preference learning. The code
     we use is included in the CH10/02 - Optimizing preferences.ipynb notebook.
+  id: totrans-149
   prefs: []
   type: TYPE_NORMAL
 - en: The question we need to address is how to select the best pair of data points,
@@ -778,6 +994,7 @@
     needs to achieve a balance between exploitation (zeroing in on a region in the
     search space where we know the user’s value is high) and exploration (inspecting
     the regions we don’t know much about).
+  id: totrans-150
   prefs: []
   type: TYPE_NORMAL
 - en: The BayesOpt policies we learned in chapters 4 through 6 effectively address
@@ -788,35 +1005,42 @@
     value in helping us optimize the objective function. By finding the data point
     maximizing this acquisition score, we obtain the next point to evaluate the objective
     function with.
+  id: totrans-151
   prefs: []
   type: TYPE_NORMAL
 - en: Using a BayesOpt policy to suggest pairwise comparisons
+  id: totrans-152
   prefs: []
   type: TYPE_NORMAL
 - en: In our current preference-based setting, we need to present a pair of data points
     to the user for them to compare. At each iteration of the optimization loop, we
     assemble this pair with, first, the data point that maximizes the acquisition
     score of a given BayesOpt policy and, second, the best point we have seen so far.
+  id: totrans-153
   prefs: []
   type: TYPE_NORMAL
 - en: The strategy we use resembles the popular children’s game king of the hill,
     where at each iteration, we attempt to “beat” the best data point we have collected
     so far (the current “king of the hill”), using a challenger chosen by a BayesOpt
     policy, as illustrated in figure 10.7.
+  id: totrans-154
   prefs: []
   type: TYPE_NORMAL
 - en: '![](../../OEBPS/Images/10-07.png)'
+  id: totrans-155
   prefs: []
   type: TYPE_IMG
 - en: Figure 10.7 Illustration of the “king of the hill” strategy in Bayesian preference
     optimization. We compare the best point we have seen so far against a promising
     candidate identified by a BayesOpt policy.
+  id: totrans-156
   prefs: []
   type: TYPE_NORMAL
 - en: By using this “king of the hill” strategy, we are outsourcing the task of constructing
     a pair of data points for the user to compare to a regular BayesOpt policy that
     can balance the exploitation–exploration tradeoff well and that we already know
     how to work with.
+  id: totrans-157
   prefs: []
   type: TYPE_NORMAL
 - en: 'Code-wise, this strategy is straightforward to implement. We simply declare
@@ -825,15 +1049,20 @@
     (UCB) policy, which we learned about in section 5.2\. The UCB policy uses upper
     bounds of the predictive normal distributions made by the GP as acquisition scores
     to quantify the value of inspecting a data point:'
+  id: totrans-158
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE15]'
+  id: totrans-159
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE15]'
 - en: ❶ Initializes the BayesOpt policy
+  id: totrans-160
   prefs: []
   type: TYPE_NORMAL
 - en: ❷ Finds the data point maximizing the acquisition score
+  id: totrans-161
   prefs: []
   type: TYPE_NORMAL
 - en: Another policy we use is Expected Improvement (EI), which we learned about in
@@ -845,14 +1074,17 @@
     so far is exactly what the “king of the hill” strategy is all about. To implement
     EI in our setting, we use a different class implementation that can handle noisy
     observations, named `qNoisyExpectedImprovement`.
+  id: totrans-162
   prefs: []
   type: TYPE_NORMAL
 - en: Noisy observations in BayesOpt
+  id: totrans-163
   prefs: []
   type: TYPE_NORMAL
 - en: The term *noisy observations* in BayesOpt refers to the situation in which we
     suspect the labels we observe are corrupted by noise in the same way described
     in the beginning of this chapter.
+  id: totrans-164
   prefs: []
   type: TYPE_NORMAL
 - en: 'As shown in figures 10.5 and 10.6, we still have substantial uncertainty in
@@ -860,26 +1092,35 @@
     The noisy version of EI should be used here because this policy handles this type
     of uncertain prediction better than the regular EI policy. We implement noisy
     EI as follows:'
+  id: totrans-165
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE16]'
+  id: totrans-166
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE16]'
 - en: ❶ Initializes the BayesOpt policy
+  id: totrans-167
   prefs: []
   type: TYPE_NORMAL
 - en: ❷ Finds the data point maximizing the acquisition score
+  id: totrans-168
   prefs: []
   type: TYPE_NORMAL
 - en: 'As a point of comparison, let’s also include a naïve strategy of picking the
     challenger for the best point seen so far uniformly at random within the search
     space:'
+  id: totrans-169
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE17]'
+  id: totrans-170
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE17]'
 - en: ❶ Picks a random point between 0 and 1 and scales the point to our search space
+  id: totrans-171
   prefs: []
   type: TYPE_NORMAL
 - en: 'This random strategy serves as a benchmark to determine whether the BayesOpt
@@ -889,18 +1130,24 @@
     chapters, except for the step where we present the pair of data points to the
     user for their feedback to append the result to our training set. This is done
     with the `observe_and_ append_data()` helper function we wrote in section 10.2:'
+  id: totrans-172
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE18]'
+  id: totrans-173
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE18]'
 - en: ❶ Finds the best point seen so far
+  id: totrans-174
   prefs: []
   type: TYPE_NORMAL
 - en: ❷ Assembles the batch with the best point and the point suggested by a policy
+  id: totrans-175
   prefs: []
   type: TYPE_NORMAL
 - en: ❸ Updates our training data
+  id: totrans-176
   prefs: []
   type: TYPE_NORMAL
 - en: In the code in the CH10/02 - Optimizing preferences.ipynb notebook, each BayesOpt
@@ -909,6 +1156,7 @@
     with 20 pairwise comparisons (that is, 20 queries to the user). We also repeat
     the experiment 10 times for each policy so that we can observe the aggregated
     performance of each strategy.
+  id: totrans-177
   prefs: []
   type: TYPE_NORMAL
 - en: Figure 10.8 shows the average best value (and error bars) found by the optimization
@@ -917,19 +1165,23 @@
     between our “king of the hill” method and the algorithmic motivation behind EI.
     More surprisingly, UCB fails to outperform the random strategy; perhaps a different
     value for the tradeoff parameter β can improve UCB’s performance.
+  id: totrans-178
   prefs: []
   type: TYPE_NORMAL
 - en: '![](../../OEBPS/Images/10-08.png)'
+  id: totrans-179
   prefs: []
   type: TYPE_IMG
 - en: Figure 10.8 Optimization performance of various BayesOpt policies, aggregated
     across 10 experiments. EI performs the best, consistently discovering the global
     optimum. Surprisingly, UCB fails to outperform the random strategy.
+  id: totrans-180
   prefs: []
   type: TYPE_NORMAL
 - en: Note UCB’s tradeoff parameter β directly controls how the policy balances between
     exploration and exploitation. Refer to section 5.2.2 for more discussion on this
     parameter.
+  id: totrans-181
   prefs: []
   type: TYPE_NORMAL
 - en: In this chapter, we covered the problem of preference learning and optimization
@@ -944,9 +1196,11 @@
     BayesOpt policy. In the next chapter, we learn about a multiobjective variant
     of the black box optimization problem where there are multiple competing objective
     functions we need to balance during optimization.
+  id: totrans-182
   prefs: []
   type: TYPE_NORMAL
 - en: Summary
+  id: totrans-183
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
@@ -954,18 +1208,21 @@
     feedback that is more consistent with the user’s true preference than ratings
     on a numerical scale. This is because the former poses a less cognitively demanding
     task.
+  id: totrans-184
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Pairwise comparisons contain less information than numerical evaluations, so
     there’s a tradeoff between relieving the user’s cognitive burden and obtaining
     information when choosing between the two methods of eliciting preference.
+  id: totrans-185
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: A GP can be trained to maximize the likelihood of a dataset of pairwise comparisons.
     This model approximates the true posterior non-GP model when conditioned on pairwise
     comparison data.
+  id: totrans-186
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -973,6 +1230,7 @@
     the comparison results in the training set. In particular, the mean predictions
     at preferred locations are greater than the mean predictions at locations not
     preferred.
+  id: totrans-187
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -980,6 +1238,7 @@
     from the prior GP but doesn’t collapse to zero, which appropriately reflects our
     uncertainty about the user’s preference function because pairwise comparisons
     offer less information than numerical evaluations.
+  id: totrans-188
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -987,6 +1246,7 @@
     the best data point found against the candidate recommended by a BayesOpt policy.
     The motivation of this strategy is to constantly try to improve from the best
     point we have found so far.
+  id: totrans-189
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -994,12 +1254,14 @@
     BoTorch where the first element is the index of the data point that is preferred
     within the training set, and the second element is the index of the data point
     not preferred.
+  id: totrans-190
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: To use the EI policy in the optimization setting with pairwise comparisons,
     we use the noisy version of the policy that can handle high levels of uncertainty
     in the trained GP better than regular EI.
+  id: totrans-191
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
