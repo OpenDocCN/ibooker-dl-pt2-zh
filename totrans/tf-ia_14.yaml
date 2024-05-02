@@ -1,26 +1,38 @@
 - en: '11 Sequence-to-sequence learning: Part 1'
+  id: totrans-0
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 11 序列到序列学习：第一部分
 - en: This chapter covers
+  id: totrans-1
   prefs: []
   type: TYPE_NORMAL
+  zh: 本章内容包括：
 - en: Understanding sequence-to-sequence data
+  id: totrans-2
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 理解序列到序列数据
 - en: Building a sequence-to-sequence machine translation model
+  id: totrans-3
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 构建序列到序列机器翻译模型
 - en: Training and evaluating sequence-to-sequence models
+  id: totrans-4
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 训练和评估序列到序列模型
 - en: Repurposing the trained model to generate translations for unseen text
+  id: totrans-5
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 将训练的模型用于生成未见过的文本的翻译
 - en: In the previous chapter, we discussed solving an NLP task known as language
     modeling with deep recurrent neural networks. In this chapter, we are going to
     further our discussion and learn how we can use recurrent neural networks to solve
@@ -28,8 +40,10 @@
     input sequence is mapped to another arbitrary-length sequence. Machine translation
     is a very appropriate example of this that involves converting a sequence of words
     in one language to a sequence of words in another.
+  id: totrans-6
   prefs: []
   type: TYPE_NORMAL
+  zh: 在上一章中，我们探讨了使用深度递归神经网络解决自然语言处理任务的语言建模。在本章中，我们将进一步探讨如何使用递归神经网络解决更复杂的任务。我们将学习各种任务，其中任意长度的输入序列映射到另一个任意长度的序列。机器翻译是这种情况的一个非常适当的例子，它涉及将一种语言中的单词序列转换为另一种语言的单词序列。
 - en: 'In this chapter, our primary focus is on building an English-to-German machine
     translator. To arrive at that, we will first download a machine translation data
     set, look at the structure of that data set, and apply some processing to prepare
@@ -49,12 +63,16 @@
     words (starting from an initial seed) while taking the previous prediction as
     the input for the current time step. In the first section, we will discuss the
     data a bit before diving into modeling.'
+  id: totrans-7
   prefs: []
   type: TYPE_NORMAL
+  zh: 此章节的主要目的是构建一个英德机器翻译器。我们首先需要下载一个机器翻译数据集，了解该数据集的结构并进行一些处理以准备好模型。接下来我们将定义一个可以将任意长的序列映射到另一个任意长的序列的机器翻译模型，这是一个基于编码器-解码器的模型，意味着有一个编码器将一个序列（例如一个英语短语）输出为一个潜在表示，并且有一个解码器来解码这个信息以生成目标序列（例如一个德语短语）。此模型的一个特殊特点是其能够内部将原始字符串转换为数值表示。因此，与我们在先前章节创建的其他自然语言处理模型相比，此模型更为全面。定义好模型后，我们将使用处理过的数据集进行训练，并评估其生成序列的每个单词的准确性以及BLEU（双语评估研究）。BLEU是一种比准确性更高级的度量，可以模拟人类评估翻译质量的方式。最后，我们将定义一个略微修改过的解码器，该解码器可以递归地生成单词（从一个初始种子开始），同时将前一个预测作为当前时间步的输入。在第一部分中，我们将讨论机器翻译数据，然后深入探讨建模。
 - en: 11.1 Understanding the machine translation data
+  id: totrans-8
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 11.1 理解机器翻译数据
 - en: You are developing a machine translation service for tourists who are visiting
     Germany. You found a bilingual parallel corpus of English and German text (available
     at [http://www.manythings.org/anki/deu-eng.zip](http://www.manythings.org/anki/deu-eng.zip)).
@@ -66,261 +84,405 @@
     of sentence”) at the beginning of the German translation and “eos” (denotes “end
     of sentence”) at the end of the translation. These are important tags that will
     help us at the time of generating translations from the model.
+  id: totrans-9
   prefs: []
   type: TYPE_NORMAL
+  zh: 您正在为前往德国的游客开发一项机器翻译服务。您找到了一份包含英语和德语文本的双语平行语料库（可在[http://www.manythings.org/anki/deu-eng.zip](http://www.manythings.org/anki/deu-eng.zip)找到）。它在文本文件中并排包含英语文本和相应的德语翻译。这个想法是使用它来训练一个序列到序列模型，在这之前，您必须了解数据的组织方式，将其加载到内存中，并分析词汇量和序列长度。此外，您将处理文本，使其在德语翻译的开头具有特殊标记“sos”（表示“句子开始”）并在翻译的结尾具有“eos”（表示“句子结束”）。这些是重要的标记，在生成模型的翻译时将对我们有所帮助。
 - en: 'Let’s first download the data set and take a tour of it. You will need to manually
     download this data set (available at [http://www.manythings.org/anki/deu-eng.zip](http://www.manythings.org/anki/deu-eng.zip)),
     as this web page does not support automatic retrieval through script. Once downloaded,
     we will extract the data, which has a text file containing the data:'
+  id: totrans-10
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们首先下载数据集并对其进行浏览。您需要手动下载此数据集（可在[http://www.manythings.org/anki/deu-eng.zip](http://www.manythings.org/anki/deu-eng.zip)找到），因为此网页不支持通过脚本进行自动检索。下载后，我们将提取包含数据的文本文件：
 - en: '[PRE0]'
+  id: totrans-11
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE0]'
 - en: 'If you open the text file, it will have entries as follows:'
+  id: totrans-12
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果你打开文本文件，它将有以下条目：
 - en: '[PRE1]'
+  id: totrans-13
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE1]'
 - en: 'The data is in tab-separated format and has a <German phrase><tab><English
     phrase><tab><Attribution> format. We really care about the first two tab-separated
     values in a record. Once the data is downloaded, we can easily load the data to
     a pandas DataFrame. Here we will load the data, set up column names, and extract
     the columns that are of interest to us:'
+  id: totrans-14
   prefs: []
   type: TYPE_NORMAL
+  zh: 数据以制表符分隔的格式呈现，并具有<德语短语><制表符><英语短语><制表符><归属>格式。我们真正关心记录中的前两个以制表符分隔的值。一旦数据下载完成，我们就可以轻松地将数据加载到
+    pandas DataFrame 中。在这里，我们将加载数据，设置列名，并提取我们感兴趣的列：
 - en: '[PRE2]'
+  id: totrans-15
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE2]'
 - en: We can also compute the size of the DataFrame through
+  id: totrans-16
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们还可以通过以下方式计算DataFrame的大小
 - en: '[PRE3]'
+  id: totrans-17
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE3]'
 - en: which will return
+  id: totrans-18
   prefs: []
   type: TYPE_NORMAL
+  zh: 这将返回
 - en: '[PRE4]'
+  id: totrans-19
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE4]'
 - en: NOTE The data here is updated over time. Therefore, you can get slightly different
     results (e.g., data set size, vocabulary size, vocabular distribution, etc.) than
     shown here.
+  id: totrans-20
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意：这里的数据会随着时间而更新。因此，您可能会得到与此处显示的略有不同的结果（例如，数据集大小，词汇量，词汇分布等）。
 - en: 'We have around 227,000 examples in our data set. Each example contains an English
     phrase/sentence/paragraph and the corresponding German translation. We will do
     one more cleaning step. It seems that some of the entries in the text file have
     some Unicode issues. These are handled fine by pandas, but are problematic for
     some downstream TensorFlow components. Therefore, let''s run the following cleanup
     step to ignore those problematic lines in the data:'
+  id: totrans-21
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们的数据集中有约227,000个示例。每个示例都包含一个英语短语/句子/段落和相应的德语翻译。我们将再进行一次清理步骤。看起来文本文件中的一些条目存在一些Unicode问题。这些问题对于pandas来说处理得很好，但对于一些下游TensorFlow组件来说会有问题。因此，让我们运行以下清理步骤来忽略数据中的这些问题行：
 - en: '[PRE5]'
+  id: totrans-22
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE5]'
 - en: Let’s analyze some of the samples by calling df.head() (table 11.1) and df.tail()
     (table 11.2). df.head() returns the contents of table 11.1, whereas df.tail()
     produces the contents of table 11.2.
+  id: totrans-23
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们通过调用 df.head()（表11.1）和 df.tail()（表11.2）来分析一些示例。df.head()返回表11.1的内容，而df.tail()生成表11.2的内容。
 - en: Table 11.1 Some of the examples at the beginning of the data
+  id: totrans-24
   prefs: []
   type: TYPE_NORMAL
+  zh: 表11.1 数据开头的一些示例
 - en: '|  | **EN** | **DE** |'
+  id: totrans-25
   prefs: []
   type: TYPE_TB
+  zh: '|  | **EN** | **DE** |'
 - en: '| 0 | Go. | Geh. |'
+  id: totrans-26
   prefs: []
   type: TYPE_TB
+  zh: '| 0 | Go. | Geh. |'
 - en: '| 1 | Hi. | Hallo! |'
+  id: totrans-27
   prefs: []
   type: TYPE_TB
+  zh: '| 1 | Hi. | Hallo! |'
 - en: '| 2 | Hi. | Grüß Gott! |'
+  id: totrans-28
   prefs: []
   type: TYPE_TB
+  zh: '| 2 | Hi. | Grüß Gott! |'
 - en: '| 3 | Run! | Lauf! |'
+  id: totrans-29
   prefs: []
   type: TYPE_TB
+  zh: '| 3 | Run! | Lauf! |'
 - en: '| 4 | Run. | Lauf! |'
+  id: totrans-30
   prefs: []
   type: TYPE_TB
+  zh: '| 4 | Run. | Lauf! |'
 - en: Table 11.2 Some of the examples at the end of the data
+  id: totrans-31
   prefs: []
   type: TYPE_NORMAL
+  zh: 表11.2 数据结尾的一些示例
 - en: '|  | **EN** | **DE** |'
+  id: totrans-32
   prefs: []
   type: TYPE_TB
+  zh: '|  | **EN** | **DE** |'
 - en: '| 227075 | Even if some by non-native speakers... | Auch wenn Sätze von Nichtmuttersprachlern
     mitu... |'
+  id: totrans-33
   prefs: []
   type: TYPE_TB
+  zh: '| 227075 | Even if some by non-native speakers... | Auch wenn Sätze von Nichtmuttersprachlern
+    mitu... |'
 - en: '| 227076 | If someone who doesn’t your background sa... | Wenn jemand, der
     deine Herkunft nicht kennt, s... |'
+  id: totrans-34
   prefs: []
   type: TYPE_TB
+  zh: '| 227076 | 如果一个不了解你的背景的人... | 如果一个不了解你的背景的人... |'
 - en: '| 227077 | If someone who doesn’t your background sa... | Wenn jemand Fremdes
     dir sagt, dass du dich wie... |'
+  id: totrans-35
   prefs: []
   type: TYPE_TB
+  zh: '| 227077 | 如果一个不了解你的背景的人... | 如果一个陌生人告诉你要按照他们... |'
 - en: '| 227078 | If someone who doesn’t your background sa... | Wenn jemand, der
     nicht weiß, woher man kommt, ... |'
+  id: totrans-36
   prefs: []
   type: TYPE_TB
+  zh: '| 227078 | 如果一个不了解你的背景的人... | 如果一个不知道你来自哪里的人... |'
 - en: '| 227079 | Doubtless there exists in this world precisely... | Ohne Zweifel
     findet sich auf dieser Welt zu je... |'
+  id: totrans-37
   prefs: []
   type: TYPE_TB
+  zh: '| 227079 | 这个世界上肯定存在... | 毫无疑问，这个世界上肯定存在... |'
 - en: 'The examples are sorted by their length, and you can see that they start with
     examples of a single word and end up with examples with approximately 50 words.
     We will only use a sample of 50,000 phrases from this data set to speed up our
     workflow:'
+  id: totrans-38
   prefs: []
   type: TYPE_NORMAL
+  zh: 示例按长度排序，你可以看到它们从一个单词的示例开始，然后以大约50个单词的示例结束。我们将只使用来自该数据集的50,000个短语的样本来加快工作流程：
 - en: '[PRE6]'
+  id: totrans-39
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE6]'
 - en: We set the random seed as random_seed=4321.
+  id: totrans-40
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们设置随机种子为random_seed=4321。
 - en: 'Finally, we will introduce two special tokens to the German translations: sos
     and eos. sos marks the start of the translation, whereas eos marks the end of
     the translation. As you will see, these tokens serve an important purpose when
     it comes to generating translations after the model trained. But for consistency
     during training and inference (or generation), we will introduce these tokens
     to all of our examples. This can be easily done as follows:'
+  id: totrans-41
   prefs: []
   type: TYPE_NORMAL
+  zh: 最后，我们将在德语翻译中引入两个特殊标记：sos和eos。sos标记翻译的开始，eos标记翻译的结束。正如您将看到的，这些标记在训练后生成翻译时起着重要作用。但为了在训练和推断（或生成）期间保持一致，我们将这些标记引入到所有示例中。可以使用以下方式轻松完成此操作：
 - en: '[PRE7]'
+  id: totrans-42
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE7]'
 - en: SOS and EOS tokens
+  id: totrans-43
   prefs: []
   type: TYPE_NORMAL
+  zh: SOS和EOS标记
 - en: The choice of SOS and EOS is just a convenience, and technically they could
     be represented by any two unique tokens, as long as they are not words from the
     corpus itself. It is important to make these tokens unique, as they play an important
     role when generating translations from previously unseen English sentences. The
     specifics of the role will be discussed in a later section.
+  id: totrans-44
   prefs: []
   type: TYPE_NORMAL
+  zh: SOS和EOS的选择只是一种便利，从技术上讲，它们可以由任何两个唯一的标记表示，只要它们不是语料库本身的词汇。使这些标记唯一是重要的，因为当从以前未见过的英文句子生成翻译时，它们起着重要作用。这些作用的具体细节将在后面的部分中讨论。
 - en: 'It’s a very straightforward transformation. This will convert the phrase "Grüß
     Gott!" to "sos Grüß Gott! eos". Next, we’re going to generate a training/validation/test
     subset from the data we sampled:'
+  id: totrans-45
   prefs: []
   type: TYPE_NORMAL
+  zh: 这是一个非常直接的转换。这将把短语“Grüß Gott！”转换为“sos Grüß Gott！eos”。接下来，我们将从我们抽样的数据中生成一个训练/验证/测试子集：
 - en: '[PRE8]'
+  id: totrans-46
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE8]'
 - en: 'We will keep 10% of the data as test data, another 10% as validation data,
     and the remaining 80% as training data. The data will be randomly sampled (without
     replacement) for the data sets. We then move on to analyze two important characteristics
     of text data sets, as we have done over and over again: the vocabulary size (listing
     11.1) and the sequence length (listing 11.2).'
+  id: totrans-47
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们将把数据的10%保留为测试数据，另外10%保留为验证数据，剩下的80%作为训练数据。数据集将随机抽样（无替换）以得到数据集。然后我们继续分析文本数据集的两个重要特征，就像我们一遍又一遍地做的那样：词汇大小（列表11.1）和序列长度（列表11.2）。
 - en: Listing 11.1 Analyzing the vocabulary size
+  id: totrans-48
   prefs: []
   type: TYPE_NORMAL
+  zh: 列表11.1 分析词汇大小
 - en: '[PRE9]'
+  id: totrans-49
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE9]'
 - en: ❶ Create a flattened list from English words.
+  id: totrans-50
   prefs: []
   type: TYPE_NORMAL
+  zh: ❶ 从英文单词中创建一个扁平化列表。
 - en: ❷ Create a flattened list of German words.
+  id: totrans-51
   prefs: []
   type: TYPE_NORMAL
+  zh: ❷ 创建一个扁平化的德文单词列表。
 - en: ❸ Get the vocabulary size of words appearing more than or equal to 10 times.
+  id: totrans-52
   prefs: []
   type: TYPE_NORMAL
+  zh: ❸ 获取出现次数大于或等于10次的单词的词汇大小。
 - en: ❹ Generate a counter object (i.e., dict word -> frequency).
+  id: totrans-53
   prefs: []
   type: TYPE_NORMAL
+  zh: ❹ 生成一个计数器对象（即dict word -> frequency）。
 - en: ❺ Create a pandas series from the counter, and then sort most frequent to least.
+  id: totrans-54
   prefs: []
   type: TYPE_NORMAL
+  zh: ❺ 从计数器创建一个pandas系列，然后按最频繁到最不频繁排序。
 - en: ❻ Print the most common words.
+  id: totrans-55
   prefs: []
   type: TYPE_NORMAL
+  zh: ❻ 打印最常见的单词。
 - en: ❼ Get the count of words that appear at least 10 times.
+  id: totrans-56
   prefs: []
   type: TYPE_NORMAL
+  zh: ❼ 获取至少出现10次的单词的计数。
 - en: which will return
+  id: totrans-57
   prefs: []
   type: TYPE_NORMAL
+  zh: 这将返回
 - en: '[PRE10]'
+  id: totrans-58
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE10]'
 - en: Next, sequence analysis is done in the following function.
+  id: totrans-59
   prefs: []
   type: TYPE_NORMAL
+  zh: 接下来，在以下函数中进行序列分析。
 - en: Listing 11.2 Analyzing the sequence length
+  id: totrans-60
   prefs: []
   type: TYPE_NORMAL
+  zh: 列表11.2 分析序列长度
 - en: '[PRE11]'
+  id: totrans-61
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE11]'
 - en: ❶ Create a pd.Series, which contains the sequence length for each review.
+  id: totrans-62
   prefs: []
   type: TYPE_NORMAL
+  zh: ❶ 创建包含每个评论的序列长度的pd.Series。
 - en: ❷ Get the median as well as summary statistics of the sequence length.
+  id: totrans-63
   prefs: []
   type: TYPE_NORMAL
+  zh: ❷ 获取序列长度的中位数以及摘要统计信息。
 - en: ❸ Get the quantiles at given marks (i.e., 1% and 99% percentiles).
+  id: totrans-64
   prefs: []
   type: TYPE_NORMAL
+  zh: ❸ 获取给定标记（即1％和99％的百分位）的分位数。
 - en: ❹ Print the summary stats of the data between the defined quantiles.
+  id: totrans-65
   prefs: []
   type: TYPE_NORMAL
+  zh: ❹ 打印定义的分位数之间的数据的摘要统计信息。
 - en: 'Next, call this function on the data to get the statistics:'
+  id: totrans-66
   prefs: []
   type: TYPE_NORMAL
+  zh: 接下来，对数据调用此函数以获取统计信息：
 - en: '[PRE12]'
+  id: totrans-67
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE12]'
 - en: This produces
+  id: totrans-68
   prefs: []
   type: TYPE_NORMAL
+  zh: 这产生
 - en: '[PRE13]'
+  id: totrans-69
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE13]'
 - en: 'Next, let’s print out the vocabulary size and the sequence length parameters
     for the two languages:'
+  id: totrans-70
   prefs: []
   type: TYPE_NORMAL
+  zh: 接下来，让我们打印出两种语言的词汇量和序列长度参数：
 - en: '[PRE14]'
+  id: totrans-71
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE14]'
 - en: This will return
+  id: totrans-72
   prefs: []
   type: TYPE_NORMAL
+  zh: 这将返回
 - en: '[PRE15]'
+  id: totrans-73
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE15]'
 - en: Now we have the language-specific parameters needed to define the model. In
     the next section, we’ll look at how we can define a model to translate between
     languages.
+  id: totrans-74
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在我们有了定义模型所需的语言特定参数。在下一节中，我们将看看如何定义一个能够在语言之间进行翻译的模型。
 - en: Exercise 1
+  id: totrans-75
   prefs: []
   type: TYPE_NORMAL
+  zh: 练习1
 - en: 'You have been given a pandas Series ser in the following format:'
+  id: totrans-76
   prefs: []
   type: TYPE_NORMAL
+  zh: 您已经获得了以下格式的pandas Series ser：
 - en: '[PRE16]'
+  id: totrans-77
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE16]'
 - en: Write a function called vocab_size(ser) to return the vocabulary size.
+  id: totrans-78
   prefs: []
   type: TYPE_NORMAL
+  zh: 编写一个名为vocab_size(ser)的函数来返回词汇量。
 - en: 11.2 Writing an English-German seq2seq machine translator
+  id: totrans-79
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 11.2 编写英语-德语seq2seq机器翻译器
 - en: 'You have a clean data set that is ready to go into a model. You will be using
     a sequence-to-sequence deep learning model as the machine translation model. It
     consists of two parts: an encoder that produces a hidden representation of the
@@ -329,8 +491,10 @@
     Moreover, the model will accept raw text and will convert the raw text to token
     IDs using a TextVectorization layer provided in TensorFlow. These token IDs will
     go to an embedding layer that will return word vectors of the token IDs.'
+  id: totrans-80
   prefs: []
   type: TYPE_NORMAL
+  zh: 您有一个准备进入模型的干净数据集。您将使用一个序列到序列的深度学习模型作为机器翻译模型。它由两部分组成：一个编码器，用于生成英文（源）文本的隐藏表示，以及一个解码器，用于解码该表示以生成德文（目标）文本。编码器和解码器都是循环神经网络。此外，模型将接受原始文本，并使用TensorFlow提供的TextVectorization层将原始文本转换为令牌ID。这些令牌ID将传递给一个嵌入层，该层将返回令牌ID的单词向量。
 - en: We have the data prepared and ready to go. Now let’s learn about the model that
     can consume this data. Sequence-to-sequence learning maps an arbitrarily long
     sequence to another arbitrarily long sequence. This poses a unique challenge for
@@ -340,8 +504,10 @@
     to have fewer or more words than the input. Because of this, they require a special
     type of model. These models are known as *encoder-decoder* or *seq2seq* (short
     for sequence-to-sequence) models.
+  id: totrans-81
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们已经准备好并准备好使用的数据。现在让我们了解一下可以使用此数据的模型。序列到序列学习将任意长的序列映射到另一个任意长的序列。对于我们来说，这提出了一个独特的挑战，因为模型不仅需要能够消耗任意长度的序列，还需要能够生成任意长度的序列作为输出。例如，在机器翻译中，翻译通常比输入的单词少或多。因此，它们需要一种特殊类型的模型。这些模型被称为*编码器-解码器*或*seq2seq*（缩写为序列到序列）模型。
 - en: 'Encoder-decoder models are, in fact, two different models interconnected in
     a certain way. Conceptually, the encoder takes in a sequence and produces a context
     vector (or a thought vector) that embeds the information present in the input
@@ -354,24 +520,34 @@
     language input (i.e., the language to translate from), and the decoder processes
     the target language input (i.e., the language to translate to). This is depicted
     in figure 11.1.'
+  id: totrans-82
   prefs: []
   type: TYPE_NORMAL
+  zh: 编码器-解码器模型实际上是两个不同的模型以某种方式相互连接起来。在概念上，编码器接受一个序列并产生一个上下文向量（或思考向量），其中嵌入了输入序列中的信息。解码器接受编码器产生的表示，并对其进行解码以生成另一个序列。由于两个部分（即编码器和解码器）分别在不同的事物上操作（即编码器消耗输入序列，而解码器生成输出序列），因此编码器-解码器模型非常适合解决序列到序列的任务。理解编码器和解码器的另一种方式是：编码器处理源语言输入（即要翻译的语言），解码器处理目标语言输入（即要翻译成的语言）。如图11.1所示。
 - en: '![11-01](../../OEBPS/Images/11-01.png)'
+  id: totrans-83
   prefs: []
   type: TYPE_IMG
+  zh: '![11-01](../../OEBPS/Images/11-01.png)'
 - en: Figure 11.1 High-level components of the encoder-decoder architecture in the
     context of machine translation
+  id: totrans-84
   prefs: []
   type: TYPE_NORMAL
+  zh: 图11.1 编码器-解码器架构在机器翻译环境中的高级组件
 - en: Particularly, the encoder contains a recurrent neural network. We will be using
     a gated recurrent unit (GRU) model. It goes through the input sequence and produces
     a final output, which is the final output of the GRU cell after it processes the
     last element in the input sequence.
+  id: totrans-85
   prefs: []
   type: TYPE_NORMAL
+  zh: 特别地，编码器包含一个循环神经网络。我们将使用门控循环单元（GRU）模型。它通过输入序列并产生一个最终输出，这是在处理输入序列中的最后一个元素之后GRU单元的最终输出。
 - en: Thought vector
+  id: totrans-86
   prefs: []
   type: TYPE_NORMAL
+  zh: 思想向量
 - en: A *thought vector* is a term popularized by Geoffery Hinten, a luminary in deep
     learning who has been involved since its inception. A thought vector refers to
     a vectorized representation of a thought. The ability to generate accurate numerical
@@ -380,27 +556,38 @@
     of a word is called a *word vector*. In the context of machine translation, the
     context vector can be called a thought vector as it captures the essence of a
     sentence or a phrase in a single vector.
+  id: totrans-87
   prefs: []
   type: TYPE_NORMAL
+  zh: '*思想向量* 是由深度学习领域的泰斗杰弗里·亨滕（Geoffery Hinten）推广的一个术语，他从深度学习的起源就参与其中。思想向量指的是思想的向量化表示。生成准确的思想数值表示将彻底改变我们搜索文档或在网络上搜索（例如，谷歌）的方式。这类似于数值表示单词被称为
+    *单词向量* 的方式。在机器翻译的背景下，上下文向量可以称为思想向量，因为它在一个向量中捕捉了句子或短语的本质。'
 - en: You can read more about this at [https://wiki.pathmind.com/thought-vectors](https://wiki.pathmind.com/thought-vectors).
+  id: totrans-88
   prefs: []
   type: TYPE_NORMAL
+  zh: 您可以在[https://wiki.pathmind.com/thought-vectors](https://wiki.pathmind.com/thought-vectors)阅读更多关于此的信息。
 - en: Next, we have the decoder, which also consists of a GRU model and several Dense
     layers. The purpose of the Dense layers is to generate a final prediction (a word
     from the target vocabulary). The weights of the Dense layers present in the decoder
     are shared across time. This means that, just as the GRU layer updates the same
     weights as it moves from one input to the other, the Dense layer reuses the same
     weights across the time steps. This process is depicted in figure 11.2.
+  id: totrans-89
   prefs: []
   type: TYPE_NORMAL
+  zh: 接下来，我们有解码器，它也由一个GRU模型和几个密集层组成。密集层的目的是生成最终的预测（目标词汇中的一个词）。解码器中存在的密集层的权重在时间上是共享的。这意味着，正如GRU层在从一个输入移动到另一个输入时更新相同的权重一样，密集层在时间步上重复使用相同的权重。这个过程在图11.2中有所描述。
 - en: '![11-02](../../OEBPS/Images/11-02.png)'
+  id: totrans-90
   prefs: []
   type: TYPE_IMG
+  zh: '![11-02](../../OEBPS/Images/11-02.png)'
 - en: Figure 11.2 Specific components in the encoder and decoder modules. The encoder
     has a GRU layer, and the decoder consists of a GRU layer followed by one or more
     Dense layers, whose weights are shared across time.
+  id: totrans-91
   prefs: []
   type: TYPE_NORMAL
+  zh: 图11.2 编码器和解码器模块中的特定组件。编码器有一个GRU层，解码器由一个或多个密集层后跟的GRU层组成，其权重在时间上是共享的。
 - en: Up until now, when solving NLP tasks, converting string tokens to numerical
     IDs was considered a preprocessing step. In other words, we would perform the
     tokens-to-ID conversion and input the IDs to the model. But it doesn’t have to
@@ -408,12 +595,17 @@
     internally as well as learn to solve the tasks. Keras provides certain layers
     that can plug into your model to be more end-to-end. The tensorflow.keras.layers.experimental.preprocessing.TextVectorization
     layer is one such layer. Let’s examine the usage of this layer.
+  id: totrans-92
   prefs: []
   type: TYPE_NORMAL
+  zh: 到目前为止，在解决NLP任务时，将字符串标记转换为数值ID被认为是预处理步骤。换句话说，我们会执行标记到ID的转换，并将ID输入模型。但它并不一定要这样。我们可以定义更加灵活的模型，让这种文本处理在内部完成并学会解决任务。Keras提供了一些层，可以插入到您的模型中，以使其更加端到端。tensorflow.keras.layers.experimental.preprocessing.TextVectorization
+    层就是这样一种层。让我们来看看这个层的用法。
 - en: 11.2.1 The TextVectorization layer
+  id: totrans-93
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 11.2.1 文本矢量化层
 - en: The TextVectorization layer takes in a string, tokenizes it, and converts the
     tokens to IDs by means of a vocabulary (or dictionary) lookup. It takes a list
     of strings (or an array of strings) as the input, where each string can be a word/phrase/sentence
@@ -421,28 +613,40 @@
     can be used to convert a list of strings to a tensor that contains a sequence
     of token IDs for each string in the list provided. Let’s see this layer in action.
     First import the layer with
+  id: totrans-94
   prefs: []
   type: TYPE_NORMAL
+  zh: 文本矢量化层接受一个字符串，对其进行标记化，并通过词汇表（或字典）查找将标记转换为ID。它以字符串列表（或字符串数组）作为输入，其中每个字符串可以是单词/短语/句子（等等）。然后它从语料库中学习词汇。最后，该层可以用于将字符串列表转换为包含该列表中每个字符串的标记ID序列的张量。让我们看看这个层的作用。首先，导入该层：
 - en: '[PRE17]'
+  id: totrans-95
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE17]'
 - en: 'Then define the layer as follows. Here we’re defining the layer for the English
     language. Keep in mind that we need two TextVectorization layers in our model,
     one for English and one for German:'
+  id: totrans-96
   prefs: []
   type: TYPE_NORMAL
+  zh: 然后，按以下方式定义该层。在这里，我们为英语定义了该层。请记住，我们的模型中需要两个TextVectorization层，一个用于英语，一个用于德语：
 - en: '[PRE18]'
+  id: totrans-97
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE18]'
 - en: 'It’s worthwhile to stop here and look at the different arguments we’re providing:'
+  id: totrans-98
   prefs: []
   type: TYPE_NORMAL
+  zh: 值得停下来看看我们提供的不同参数：
 - en: max_tokens—Specifies the number of words in the vocabulary. Any word that is
     not present in the vocabulary (i.e., an out-of-vocabulary word) is converted to
     [UNK].
+  id: totrans-99
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: max_tokens—指定词汇表中的单词数。如果词汇表中没有某个单词(即，超出词汇表的单词)，则将其转换为[UNK]。
 - en: output_mode—Specifies the type of the final output. Can be one of "int", "binary",
     "count", and "tf-idf". "int" means the layer will output a token ID for each token.
     "binary" implies that the output will be a [<batch size>, <vocab size>] tensor,
@@ -450,16 +654,21 @@
     is present in that example. "count" gives a similar output as "binary", but instead
     of 1s, it contains the number of times a token appeared in that example. "tf-id"
     gives a similar output as "binary", but the TF-IDF value at each position.
+  id: totrans-100
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: output_mode—指定最终输出的类型。可以是"int"、"binary"、"count"和"tf-idf"之一。"int"表示层将为每个标记输出一个标记ID。"binary"意味着输出将是一个[<批量大小>,
+    <词汇大小>]张量，在这个例子中，如果该标记所指示的索引在这个示例中存在，则给定值为1。"count"给出了与"binary"类似的输出，但其中包含了该示例中标记出现的次数。"tf-id"给出了与"binary"类似的输出，但每个位置处的TF-IDF值。
 - en: output_sequence_length—Specifies the length of the batched input sequence after
     converting to token IDs. If set to None, it means the sequence length will be
     set to the length of the longest sequence in the batch. The shorter sequences
     are padded with a special token (special token defaults to "").
+  id: totrans-101
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: output_sequence_length—指定转换为标记ID后的批量输入序列的长度。如果设置为None，则意味着序列长度将设置为批量中最长序列的长度。较短的序列将使用特殊标记(特殊标记默认为"")进行填充。
 - en: 'To make the best out of this layer, we have to fit it on a text corpus so that
     it can learn the vocabulary. Calling the adapt() function and passing the list
     of strings (or an array of strings) to it achieves that. In other words, adapt()
@@ -467,126 +676,192 @@
     It takes in some data and trains (or adapts) the model according to the data.
     In the case of the tokenizer, among other things, it builds out a dictionary (a
     mapping from word to ID):'
+  id: totrans-102
   prefs: []
   type: TYPE_NORMAL
+  zh: 要充分利用这个层，我们必须在文本语料库上适应它，以便它可以学习词汇表。调用adapt()函数并向其传递字符串列表(或字符串数组)可以实现这一目的。换句话说，adapt()产生了与scikit-learn模型的fit()方法相同的结果([http://mng.bz/aJmB](http://mng.bz/aJmB))。它接受一些数据并根据数据训练(或适应)模型。对于标记器来说，除其他外，它构建了一个词典(从单词到ID的映射)：
 - en: '[PRE19]'
+  id: totrans-103
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE19]'
 - en: After fitting the layer, you can get the vocabulary
+  id: totrans-104
   prefs: []
   type: TYPE_NORMAL
+  zh: 安装该层后，可以获得词汇表
 - en: '[PRE20]'
+  id: totrans-105
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE20]'
 - en: which prints
+  id: totrans-106
   prefs: []
   type: TYPE_NORMAL
+  zh: which prints
 - en: '[PRE21]'
+  id: totrans-107
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE21]'
 - en: In other words, the vocabulary is a list of tokens where the ID corresponds
     to their indexes in the list. You can compute the size of the vocabulary by
+  id: totrans-108
   prefs: []
   type: TYPE_NORMAL
+  zh: 换句话说，词汇表是一个标记列表，其中ID对应于它们在列表中的索引。你可以通过计算词汇表的大小来得到：
 - en: '[PRE22]'
+  id: totrans-109
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE22]'
 - en: which returns
+  id: totrans-110
   prefs: []
   type: TYPE_NORMAL
+  zh: which returns
 - en: '[PRE23]'
+  id: totrans-111
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE23]'
 - en: 'Next, to use this layer to convert strings to numerical IDs, we must wrap it
     in a model. To do so, let’s first define a Keras Sequential model. Let’s name
     the model toy_model as this will only be used to learn the behavior of the text
     vectorizer:'
+  id: totrans-112
   prefs: []
   type: TYPE_NORMAL
+  zh: 接下来，要使用这个层将字符串转换为数字ID，我们必须将其封装在一个模型中。为此，首先让我们定义一个Keras顺序模型。让我们将模型命名为toy_model，因为这只用于学习文本向量化器的行为：
 - en: '[PRE24]'
+  id: totrans-113
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE24]'
 - en: 'Define an input layer, set its size to accept a tensor with a single column
     (i.e., a list of strings), and set the data type to tf.string:'
+  id: totrans-114
   prefs: []
   type: TYPE_NORMAL
+  zh: 定义一个输入层，将其大小设置为接受单列张量(即，一个字符串列表)，并将数据类型设置为tf.string：
 - en: '[PRE25]'
+  id: totrans-115
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE25]'
 - en: 'Then add the text vectorization layer we defined:'
+  id: totrans-116
   prefs: []
   type: TYPE_NORMAL
+  zh: 然后添加我们定义的文本向量化层：
 - en: '[PRE26]'
+  id: totrans-117
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE26]'
 - en: 'You can use this just like any other Keras model and convert arbitrary text
     to numerical ID sequences. Specifically, you use the model.predict() function
     on some input data, which takes in the input and transforms it accordingly depending
     on the layers used in the model:'
+  id: totrans-118
   prefs: []
   type: TYPE_NORMAL
+  zh: 你可以像使用其他Keras模型一样使用它，并将任意文本转换为数字ID序列。具体地，你可以在一些输入数据上使用model.predict()函数，该函数接受输入并根据模型中使用的层进行相应转换：
 - en: '[PRE27]'
+  id: totrans-119
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE27]'
 - en: Finally, print the inputs and results as follows
+  id: totrans-120
   prefs: []
   type: TYPE_NORMAL
+  zh: 最后，按以下方式打印输入和结果
 - en: '[PRE28]'
+  id: totrans-121
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE28]'
 - en: which gives
+  id: totrans-122
   prefs: []
   type: TYPE_NORMAL
+  zh: which gives
 - en: '[PRE29]'
+  id: totrans-123
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE29]'
 - en: The layer does everything accordingly. Let’s first looks at the shape of the
     output. The shape, since we set the output_sequence_length=None, pads all the
     examples in the input up to the length of the longest input in the inputs. Here,
     “how are you” is the longest and has three words in it. Therefore, all the rows
     are padded with zeros, such that each example has three columns. Generally, the
     layer returns a [<batch size>, sequence_length]-sized output.
+  id: totrans-124
   prefs: []
   type: TYPE_NORMAL
+  zh: 该层按照一切都进行。 首先让我们看一下输出的形状。 由于我们设置了 output_sequence_length=None，所以将所有输入示例填充到输入中最长输入的长度。
+    在这里，“how are you”是最长的，其中有三个单词。 因此，所有行都用零填充，以便每个示例都有三列。 通常，该层返回一个大小为 [<batch size>,
+    sequence_length] 的输出。
 - en: If the word is found in the vocabulary, it is converted to some number (e.g.,
     “run” is converted to 427). If the word is not found in the vocabulary (e.g.,
     “ectoplasmic”), it is replaced with a special ID (1) that corresponds to out-of-vocabulary
     words.
+  id: totrans-125
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果单词在词汇表中找到，它将转换为某个数字（例如，“run”转换为 427）。 如果单词未在词汇表中找到（例如，“ectoplasmic”），则会用表示词汇表外单词的特殊
+    ID（1）替换。
 - en: 11.2.2 Defining the TextVectorization layers for the seq2seq model
+  id: totrans-126
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 11.2.2 为 seq2seq 模型定义 TextVectorization 层
 - en: 'With a good understanding of the TextVectorization layer, let’s define a function
     to return a text vectorization layer wrapped in a Keras Model object. This function,
     named get_vectorizer(), takes in the following arguments:'
+  id: totrans-127
   prefs: []
   type: TYPE_NORMAL
+  zh: 通过对 TextVectorization 层有很好的理解，让我们定义一个函数，返回一个包装在 Keras Model 对象中的文本向量化层。 此函数名为
+    get_vectorizer()，接受以下参数：
 - en: corpus—Accepts a list (or array) of strings (i.e., a corpus to build the vocabulary).
+  id: totrans-128
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 语料库—接受字符串列表（或数组）（即要构建词汇表的语料库）。
 - en: n_vocab—Vocabulary size. The most common n_vocab words are kept to build the
     vocabulary.
+  id: totrans-129
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: n_vocab—词汇量大小。 保留最常见的 n_vocab 个词以构建词汇表。
 - en: max_length (optional)—Length of the resulting token sequences. It defaults to
     None, in which case the sequence length will be the length of the longest text
     sequence.
+  id: totrans-130
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: max_length（可选）—结果标记序列的长度。 默认为 None，此时序列长度将为最长文本序列的长度。
 - en: return_vocabulary (optional)—Whether to return the vocabulary (i.e., list of
     string tokens).
+  id: totrans-131
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: return_vocabulary（可选）—是否返回词汇表（即字符串标记列表）。
 - en: name (optional)—String to set the model name
+  id: totrans-132
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: name（可选）—用于设置模型名称的字符串
 - en: It defines an input layer that accepts a batch of strings (having a total shape
     of [None, 1]). Next, the function defines a text vectorizer layer. Note that the
     layer has a vocabulary size of n_vocab + 2. The extra 2 is necessary to accommodate
@@ -595,41 +870,65 @@
     and the output of the text vectorization layer (vectorize_out). If the return_vocabulary
     is set to True, it will also return the vocabulary of the vectorize_layer, as
     shown in the next listing.
+  id: totrans-133
   prefs: []
   type: TYPE_NORMAL
+  zh: 它定义了一个接受字符串批次（总共形状为 [None, 1]）的输入层。 接下来，函数定义了一个文本向量化层。 请注意，该层的词汇量为 n_vocab +
+    2。额外的 2 是为了容纳特殊标记" "和"[UNK]"。 该层适应了传递给函数的文本语料库。 最后，我们使用输入层（inp）和文本向量化层的输出（vectorize_out）定义了一个
+    Keras 模型。 如果 return_vocabulary 设置为 True，则还会返回 vectorize_layer 的词汇表，如下一列表所示。
 - en: Listing 11.3 Defining the text vectorizers for the encoder-decoder model
+  id: totrans-134
   prefs: []
   type: TYPE_NORMAL
+  zh: 列表 11.3 为编码器-解码器模型定义文本向量化器
 - en: '[PRE30]'
+  id: totrans-135
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE30]'
 - en: ❶ Define an input layer that takes a list of strings (or an array of strings).
+  id: totrans-136
   prefs: []
   type: TYPE_NORMAL
+  zh: ❶ 定义一个接受字符串列表（或字符串数组）的输入层。
 - en: ❷ When defining the vocab size, we use n_vocab + 2 ,as there are two special
     tokens, "(Padding)" and "[UNK]", added automatically.
+  id: totrans-137
   prefs: []
   type: TYPE_NORMAL
+  zh: ❷ 在定义词汇量大小时，我们使用 n_vocab + 2，因为自动添加了两个特殊标记“(填充)”和“[UNK]”。
 - en: ❸ Fit the vectorizer layer on the data.
+  id: totrans-138
   prefs: []
   type: TYPE_NORMAL
+  zh: ❸ 在数据上拟合向量化层。
 - en: ❹ Get the token IDs for the data fed to the input.
+  id: totrans-139
   prefs: []
   type: TYPE_NORMAL
+  zh: ❹ 获取输入数据的标记 ID。
 - en: ❺ Return the model only. The model takes an array of strings and outputs a tensor
     of token IDs.
+  id: totrans-140
   prefs: []
   type: TYPE_NORMAL
+  zh: ❺ 仅返回模型。 该模型接受字符串数组并输出标记 ID 的张量。
 - en: ❻ Return the vocabulary in addition to the model.
+  id: totrans-141
   prefs: []
   type: TYPE_NORMAL
+  zh: ❻ 除了模型外，返回词汇表。
 - en: 'Since we have defined the function, let’s use it and define two vectorizers,
     one for the English inputs and one for the German inputs:'
+  id: totrans-142
   prefs: []
   type: TYPE_NORMAL
+  zh: 既然我们已经定义了该函数，让我们使用它并定义两个向量化器，一个用于英文输入，一个用于德文输入：
 - en: '[PRE31]'
+  id: totrans-143
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE31]'
 - en: Here, the corpus takes in a list or an array of text. Each text is a string
     containing an English or German phrase/sentence. n_vocab defines the size of the
     vocabulary, and max_length defines the sequence length to which we should pad
@@ -637,71 +936,100 @@
     1 here is a necessity due to the way data is presented to the decoder during the
     model training. We will discuss the specific details when we reach model training.
     Finally, we can define a name to keep track of different layers.
+  id: totrans-144
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这里，语料库接受一个文本列表或数组。每个文本都是一个包含英语或德语短语/句子的字符串。n_vocab定义词汇表的大小，max_length定义了我们应该对数据进行填充的序列长度。请注意，我们在解码器中使用de_seq_length-1。这里减1的操作是由于在模型训练期间数据呈现给解码器的方式所决定的。当我们到达模型训练时，我们将讨论具体细节。最后，我们可以定义一个名称来跟踪不同的层。
 - en: 11.2.3 Defining the encoder
+  id: totrans-145
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 11.2.3 定义编码器
 - en: Moving on to the encoder, we will use a GRU model at the core of our encoder.
     The encoder is responsible for processing the source input sequence. Its responsibility
     is to process the source input and produce a *context vector* (sometimes called
     a *thought vector*). This vector captures the essence of the input sequence in
     a compact, vectorized representation. Normally, this context vector would be the
     GRU cell’s last output state after it processes the full input sequence.
+  id: totrans-146
   prefs: []
   type: TYPE_NORMAL
+  zh: 接下来我们来到编码器，我们将在编码器的核心使用一个GRU模型。编码器负责处理源输入序列。它的责任是处理源输入并生成一个*上下文向量*（有时称为*思考向量*）。该向量以紧凑的、向量化的形式捕获输入序列的本质。通常情况下，这个上下文向量将是GRU单元在处理完整输入序列后的最后输出状态。
 - en: 'Let’s see the steps involved in getting the encoder ready. For this, we will
     use the Keras Functional layer. Sequence-to-sequence models are not sequential
     and involve nonlinear connections between the encoder and the decoder. Therefore,
     we cannot use the Keras Sequential API. First, we define the input layer:'
+  id: totrans-147
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们看看准备编码器所涉及的步骤。为此，我们将使用Keras Functional层。序列到序列模型不是顺序的，并且在编码器和解码器之间涉及非线性连接。因此，我们不能使用Keras
+    Sequential API。首先，我们定义输入层：
 - en: '[PRE32]'
+  id: totrans-148
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE32]'
 - en: 'The input accepts a list of strings. Note how we are setting the shape to (1,)
     to make sure the model accepts a tensor with just one column and dtype to tf.string.
     Next, we vectorize the text input fed forward by inp:'
+  id: totrans-149
   prefs: []
   type: TYPE_NORMAL
+  zh: 输入接受一个字符串列表。请注意，我们将形状设置为（1，）以确保模型接受具有一个列的张量，并将dtype设置为tf.string。接下来，我们将由inp前向传递的文本输入进行向量化。
 - en: '[PRE33]'
+  id: totrans-150
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE33]'
 - en: Here, the vectorizer is a model that performs text vectorization, which is output
     by the get_vectorizer() function we defined earlier.
+  id: totrans-151
   prefs: []
   type: TYPE_NORMAL
+  zh: 这里，向量化器是由我们之前定义的get_vectorizer()函数输出的执行文本向量化的模型。
 - en: 'Next, we define an embedding layer that will convert the token IDs returned
     by the vectorizer to word vectors. This is a layer that has trainable weights.
     Therefore, during the training, the model will tune the word embeddings to reflect
     useful representations to solve the task at hand:'
+  id: totrans-152
   prefs: []
   type: TYPE_NORMAL
+  zh: 接下来，我们定义一个嵌入层，它将由向量化器返回的标记ID转换为单词向量。这是一个具有可训练权重的层。因此，在训练期间，模型将调整单词嵌入以反映解决手头任务的有用表示：
 - en: '[PRE34]'
+  id: totrans-153
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE34]'
 - en: When defining the embedding layer, you need to always pass the vocabulary size
     (input_dim) and the output_dim. Note that the vocabulary size has been increased
     by 2 to accommodate the two special tokens (i.e., UNK and PAD) that are introduced.
     We will set the output_dim to 128\. We also want to mask excessive zeros that
     were padded from the final computations and thus set mask_zero=True. Finally,
     we will also pass a name to identify the layer easily.
+  id: totrans-154
   prefs: []
   type: TYPE_NORMAL
+  zh: 在定义嵌入层时，您需要始终传递词汇表大小（input_dim）和output_dim。请注意，词汇表大小已经增加了2以容纳引入的两个特殊标记（即UNK和PAD）。我们将output_dim设置为128。我们还希望屏蔽过多的零，因此设置mask_zero=True。最后，我们还将传递一个名称以便于识别该层。
 - en: 'Now we are coming to the core of our model: the recurrent neural network (RNN).
     As mentioned earlier, we will use a GRU model but with an added twist! We are
     going to make our GRU model bidirectional! A bidirectional RNN is a special type
     of RNN that processes a sequence both forward and backward. This is in contrast
     to a standard RNN, which only processes the sequence forward:'
+  id: totrans-155
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在我们要来到我们模型的核心：循环神经网络（RNN）。正如前面提到的，我们将使用一个GRU模型，但是带有一个额外的特点！我们将使我们的GRU模型成为双向的！双向RNN是一种特殊类型的RNN，它同时处理序列的前向和后向。这与标准RNN相反，后者只处理序列的前向：
 - en: '[PRE35]'
+  id: totrans-156
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE35]'
 - en: 'Bidirectional RNN: Reading text forward and backward'
+  id: totrans-157
   prefs: []
   type: TYPE_NORMAL
+  zh: '**双向RNN**：前向和后向阅读文本'
 - en: The standard RNN reads the text forward, one time step at a time, and outputs
     a sequence of outputs. Bidirectional RNNs, as the name suggests, not only read
     the text forward, but read it backward. This means that bidirectional RNNs have
@@ -709,198 +1037,294 @@
     strategy (e.g., *concatenation*) to produce the final output. Bidirectional RNNs
     typically outperform standard RNNs because they understand relationships in text
     both forward and backward, as shown in the following figure.
+  id: totrans-158
   prefs: []
   type: TYPE_NORMAL
+  zh: 标准的循环神经网络逐步阅读文本，一次处理一个时间步，然后输出一系列输出。双向循环神经网络正如其名称所示，不仅向前阅读文本，而且向后阅读文本。这意味着双向循环神经网络有两个输出序列。然后，这两个序列使用组合策略（例如*连接*）进行组合，以产生最终输出。通常双向循环神经网络的性能优于标准循环神经网络，因为它们可以理解文本前后的关系，如下图所示。
 - en: '![11-02-unnumb](../../OEBPS/Images/11-02-unnumb.png)'
+  id: totrans-159
   prefs: []
   type: TYPE_IMG
+  zh: '![11-02-unnumb](../../OEBPS/Images/11-02-unnumb.png)'
 - en: Comparison between standard RNNs and bidirectional RNNs
+  id: totrans-160
   prefs: []
   type: TYPE_NORMAL
+  zh: 标准RNN和双向RNN之间的比较
 - en: Why does reading text backward help? There are some languages that are read
     backward (e.g., Arabic, Hebrew). Unless the text is specifically processed to
     account for this writing style, a standard RNN would have a very difficult time
     understanding the language. By having a bidirectional RNN, you are removing the
     model's dependency on a language to always be left to right or right to left.
+  id: totrans-161
   prefs: []
   type: TYPE_NORMAL
+  zh: 阅读文本倒置为什么有帮助呢？有一些语言是倒序阅读的（例如阿拉伯语、希伯来语）。除非文本经过特殊处理以考虑这种书写风格，否则标准的循环神经网络将很难理解这种语言。通过使用双向循环神经网络，您可以消除模型对语言始终从左到右或从右到左的依赖。
 - en: If we consider the English language, there can be instances where it's impossible
     to infer a relationship going only forward. Consider the two sentences
+  id: totrans-162
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果考虑英语，可能存在只从前面推断关系是不可能的情况。考虑以下两个句子
 - en: John went toward the bank on Clarence Street.
+  id: totrans-163
   prefs: []
   type: TYPE_NORMAL
+  zh: 约翰走向了克拉伦斯街上的银行。
 - en: John went towards the bank of the river.
+  id: totrans-164
   prefs: []
   type: TYPE_NORMAL
+  zh: 约翰朝河边的银行走去。
 - en: Since the two sentences are identical up to the word "bank," it is not possible
     to know if the bank is referring to the financial institution or a river bank
     until you read the rest. For a bidirectional RNN, this is trivial.
+  id: totrans-165
   prefs: []
   type: TYPE_NORMAL
+  zh: 由于这两个句子在“bank”一词之前是相同的，因此在阅读其余部分之前，不可能知道“bank”是指金融机构还是河岸。对于双向循环神经网络来说，这是微不足道的。
 - en: 'Then we get the output of the gru_layer and assign it to gru_out:'
+  id: totrans-166
   prefs: []
   type: TYPE_NORMAL
+  zh: 然后我们获得gru_layer的输出，并将其分配给gru_out：
 - en: '[PRE36]'
+  id: totrans-167
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE36]'
 - en: 'Finally, we define the encoder model as a tf.keras.models.Model object. It
     takes inp (i.e., a single-column tensor of type tf.string) and outputs gru_out
     (i.e., the final state of the bidirectional GRU model). This final state of the
     GRU model is what is considered the context vector that provides the decoder information
     about the source language sentence/phrase input:'
+  id: totrans-168
   prefs: []
   type: TYPE_NORMAL
+  zh: 最后，我们将编码器模型定义为tf.keras.models.Model对象。它接受inp（即tf.string类型的单列张量）并输出gru_out（即双向GRU模型的最终状态）。这个GRU模型的最终状态被认为是上下文向量，为解码器提供有关源语言句子/短语输入的信息：
 - en: '[PRE37]'
+  id: totrans-169
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE37]'
 - en: You can observe the step-by-step build of the encoder model encapsulated in
     a function, as shown in the following listing.
+  id: totrans-170
   prefs: []
   type: TYPE_NORMAL
+  zh: 可以观察在以下清单中显示的逐步构建编码器模型的函数封装方式。
 - en: Listing 11.4 The function that returns the encoder
+  id: totrans-171
   prefs: []
   type: TYPE_NORMAL
+  zh: 清单11.4 返回编码器的函数
 - en: '[PRE38]'
+  id: totrans-172
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE38]'
 - en: ❶ The input is (None,1) shaped and accepts an array of strings.
+  id: totrans-173
   prefs: []
   type: TYPE_NORMAL
+  zh: ❶ 输入形状为(None,1)，接受一个字符串数组。
 - en: ❷ Vectorize the data (assign token IDs)
+  id: totrans-174
   prefs: []
   type: TYPE_NORMAL
+  zh: ❷ 对数据进行向量化（分配令牌ID）
 - en: ❸ Define an embedding layer to convert IDs to word vectors.
+  id: totrans-175
   prefs: []
   type: TYPE_NORMAL
+  zh: ❸ 定义一个嵌入层，将ID转换为词向量。
 - en: ❹ Get the embeddings of the token IDs.
+  id: totrans-176
   prefs: []
   type: TYPE_NORMAL
+  zh: ❹ 获取令牌ID的嵌入。
 - en: ❺ Define a bidirectional GRU layer. The encoder looks at the English text (i.e.,
     the input) both backward and forward.
+  id: totrans-177
   prefs: []
   type: TYPE_NORMAL
+  zh: ❺ 定义一个双向GRU层。编码器同时查看英文文本（即输入）的前向和后向。
 - en: ❻ Get the output of the gru the last (the last output state vector returned
     by the model).
+  id: totrans-178
   prefs: []
   type: TYPE_NORMAL
+  zh: ❻ 获取gru的最后一个输出（模型返回的最后一个输出状态向量）。
 - en: ❼ Define the encoder model; it takes in a list/array of strings and returns
     the last output state of the GRU model.
+  id: totrans-179
   prefs: []
   type: TYPE_NORMAL
+  zh: ❼ 定义编码器模型；它接受一个字符串列表/数组并返回GRU模型的最后输出状态。
 - en: 'After defining the function, you can simply call it to build the encoder model:'
+  id: totrans-180
   prefs: []
   type: TYPE_NORMAL
+  zh: 定义函数后，您可以简单地调用它来构建编码器模型：
 - en: '[PRE39]'
+  id: totrans-181
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE39]'
 - en: 11.2.4 Defining the decoder and the final model
+  id: totrans-182
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 11.2.4 定义解码器和最终模型
 - en: The encoder is done and dusted, and it’s time to look at the decoder. The decoder
     is going to look slightly more complex than the encoder. The core model of the
     decoder is again a GRU model. It is then followed by a fully connected hidden
     layer and a fully connected prediction layer. The prediction layer outputs a word
     from the German vocabulary (by computing probability over all the words in the
     vocabulary) for each time step.
+  id: totrans-183
   prefs: []
   type: TYPE_NORMAL
+  zh: 编码器已经完成，现在是看看解码器的时候了。解码器看起来会比编码器稍微复杂一些。解码器的核心模型再次是一个 GRU 模型。然后是一个完全连接的隐藏层和一个完全连接的预测层。预测层对每个时间步输出来自德语词汇表的一个单词（通过计算整个词汇表上的概率）。
 - en: 'During model training, the decoder predicts the next word in a given target
     sequence. For example, the decoder, given the target sequence [A, B, C, D], will
     train the model for three time steps on the following input-output tuples: (A,
     B), (B, C), and (C, D). In other words, given the token A, predict token B; given
     the token B, predict token C; and so on. If you think about the end-to-end process
     of the encoder-decoder model, the following steps take place:'
+  id: totrans-184
   prefs: []
   type: TYPE_NORMAL
+  zh: 在模型训练期间，解码器预测给定目标序列中的下一个单词。例如，给定目标序列 [A, B, C, D]，解码器将根据以下输入-输出元组对模型进行三个时间步的训练：(A,
+    B)，(B, C) 和 (C, D)。换句话说，给定标记 A，预测标记 B；给定标记 B，预测标记 C；依此类推。如果你考虑编码器-解码器模型的端到端过程，将会发生以下步骤：
 - en: The encoder processes the source input sequence (i.e., English) and produces
     a context vector (i.e., the last output state of the GRU model).
+  id: totrans-185
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 编码器处理源输入序列（即英文）并生成上下文向量（即 GRU 模型的最后输出状态）。
 - en: The decoder uses the context vector produced by the encoder as its initial state
     for the recurrent component.
+  id: totrans-186
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 解码器使用编码器产生的上下文向量作为其循环组件的初始状态。
 - en: The decoder takes in the target input sequence (i.e., German) and predicts the
     next token given the previous token. For each time step, it predicts a token over
     the complete target vocabulary using a fully connected layer and a softmax layer.
+  id: totrans-187
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 解码器接收目标输入序列（即德语）并根据前一个标记预测下一个标记。对于每个时间步，它使用完全连接的层和 softmax 层在完整的目标词汇表上预测一个标记。
 - en: This way of training the model is known as *teacher forcing*, as you are guiding
     the decoder with the target sequence (i.e., the teacher). Using teacher forcing
     quickly leads to better performance, compared to not using teacher forcing during
     the training of encoder-decoder-type models. Let’s look at the decoder and see
     how the encoder and the decoder tie in to create the final model in more depth,
     shown in figure 11.3.
+  id: totrans-188
   prefs: []
   type: TYPE_NORMAL
+  zh: 这种模型训练的方式被称为*教师强制*，因为你正在用目标序列（即老师）引导解码器。与在编码器-解码器类型模型的训练中不使用教师强制相比，使用教师强制很快会导致更好的性能。让我们深入了解解码器，并看看编码器和解码器如何相互联系以创建更深入的最终模型，如图
+    11.3 所示。
 - en: '![11-03](../../OEBPS/Images/11-03.png)'
+  id: totrans-189
   prefs: []
   type: TYPE_IMG
+  zh: '![11-03](../../OEBPS/Images/11-03.png)'
 - en: Figure 11.3 The implementation of the final sequence-to-sequence model with
     the focus on various layers and outputs involved
+  id: totrans-190
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 11.3 最终的序列到序列模型的实现，重点关注各种层和输出
 - en: 'It’s time to discuss the specifics of building the decoder and the final model.
     The first thing we have to do is get the encoder’s output by passing an input.
     We define an input layer identical to the input of the encoder and pass that to
     the encoder model we defined earlier:'
+  id: totrans-191
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在是讨论构建解码器和最终模型的具体细节的时候了。我们首先必须做的事情是通过传递一个输入来获得编码器的输出。我们定义了一个与编码器的输入相同的输入层，并将其传递给我们之前定义的编码器模型：
 - en: '[PRE40]'
+  id: totrans-192
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE40]'
 - en: 'Then we pass the e_inp to the encoder model, which will give us the last output
     state of the GRU model as the output. This is an important input for the decoder:'
+  id: totrans-193
   prefs: []
   type: TYPE_NORMAL
+  zh: 然后我们将 e_inp 传递给编码器模型，它将给出 GRU 模型的最后输出状态作为输出。这是解码器的重要输入：
 - en: '[PRE41]'
+  id: totrans-194
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE41]'
 - en: 'As the starting point of the decoder, we define an input layer with identical
     specifications to the encoder’s input:'
+  id: totrans-195
   prefs: []
   type: TYPE_NORMAL
+  zh: 作为解码器的起点，我们定义了一个具有与编码器输入相同规格的输入层：
 - en: '[PRE42]'
+  id: totrans-196
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE42]'
 - en: 'We then pass the input to a text vectorization model given the get_vectorizer()
     function:'
+  id: totrans-197
   prefs: []
   type: TYPE_NORMAL
+  zh: 然后我们将输入传递给一个文本向量化模型，给定 get_vectorizer() 函数：
 - en: '[PRE43]'
+  id: totrans-198
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE43]'
 - en: 'We define an embedding layer as we did with the encoder so that token IDs produced
     by the text vectorization layer are converted to word vectors. Note that we have
     two separate embedding layers for the encoder and the decoder, as they use sequences
     from two different languages:'
+  id: totrans-199
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们像对编码器一样定义一个嵌入层，以便文本向量化层生成的标记 ID 转换为单词向量。请注意，我们为编码器和解码器分别定义了两个单独的嵌入层，因为它们使用来自两种不同语言的序列：
 - en: '[PRE44]'
+  id: totrans-200
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE44]'
 - en: 'It’s now time to implement the recurrent component of the decoder. Similar
     to the encoder, we are using a GRU model to process the sequence:'
+  id: totrans-201
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在是时候实现解码器的循环组件了。与编码器类似，我们使用GRU模型来处理序列：
 - en: '[PRE45]'
+  id: totrans-202
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE45]'
 - en: 'But note that, in contrast to the encoder, in the decoder we are not using
     a bidirectional wrapper on the GRU model. The decoder cannot rely on a backward
     reading capability because it should generate the next output depending only on
     the previous and the current input. Note also that we have set return_sequences=True:'
+  id: totrans-203
   prefs: []
   type: TYPE_NORMAL
+  zh: 但请注意，与编码器相比，在解码器中，我们没有在GRU模型上使用双向包装器。解码器不能依赖于向后阅读能力，因为它应该仅根据前一个和当前输入生成下一个输出。还要注意，我们设置了return_sequences=True：
 - en: '[PRE46]'
+  id: totrans-204
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE46]'
 - en: Finally, passing the output of the embedding layer to the gru_layer, we get
     the output. We stated earlier that the d_init_state (i.e., the encoder’s output)
     is one of the important inputs to the decoder. Here, we pass the d_init_state
@@ -909,121 +1333,185 @@
     vector as the initial state. Since we have set return_sequences=True, the output
     will contain output state vectors from all the time steps, not just the last one.
     This means the output will be of size [<batch size>, <time steps>, 256].
+  id: totrans-205
   prefs: []
   type: TYPE_NORMAL
+  zh: 最后，将嵌入层的输出传递给gru_layer，我们得到输出。之前我们声明过d_init_state（即编码器的输出）是解码器的重要输入之一。在这里，我们将d_init_state作为初始状态传递给解码器的GRU层。这意味着，解码器不是从零初始化状态向量开始，而是使用编码器的上下文向量作为初始状态。由于我们设置了return_sequences=True，因此输出将包含所有时间步的输出状态向量，而不仅仅是最后一个时间步。这意味着输出的大小为[<批大小>，<时间步长>，256]。
 - en: Listing 11.5 Defining the decoder and the final model
+  id: totrans-206
   prefs: []
   type: TYPE_NORMAL
+  zh: 清单11.5定义解码器和最终模型
 - en: '[PRE47]'
+  id: totrans-207
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE47]'
 - en: ❶ Define an encoder input layer and get the encoder output (i.e., the context
     vector).
+  id: totrans-208
   prefs: []
   type: TYPE_NORMAL
+  zh: ❶定义编码器输入层并获取编码器输出（即上下文向量）。
 - en: ❷ The input is (None,1) shaped and accepts an array of strings. We feed the
     German sequence as the input and ask the model to predict it with the words offset
     by 1 (i.e., the next word).
+  id: totrans-209
   prefs: []
   type: TYPE_NORMAL
+  zh: ❷输入的形状为（None，1），并接受字符串数组作为输入。我们将德语序列作为输入并要求模型使用偏移一个（即下一个）单词的单词预测它。
 - en: ❸ Get the decoder’s vectorized output.
+  id: totrans-210
   prefs: []
   type: TYPE_NORMAL
+  zh: ❸获取解码器的向量化输出。
 - en: ❹ Define an embedding layer to convert IDs to word vectors. This is a different
     layer from the encoder's embedding layer.
+  id: totrans-211
   prefs: []
   type: TYPE_NORMAL
+  zh: ❹定义嵌入层，将ID转换为单词向量。这是与编码器嵌入层不同的层。
 - en: ❺ Define a GRU layer. Unlike the encoder, we cannot define a bidirectional GRU
     for the decoder.
+  id: totrans-212
   prefs: []
   type: TYPE_NORMAL
+  zh: ❺定义GRU层。与编码器不同，我们不能为解码器定义双向GRU。
 - en: ❻ Get the output of the GRU layer of the decoder.
+  id: totrans-213
   prefs: []
   type: TYPE_NORMAL
+  zh: ❻获取解码器的GRU层输出。
 - en: ❼ Define an intermediate Dense layer and get the output.
+  id: totrans-214
   prefs: []
   type: TYPE_NORMAL
+  zh: ❼定义中间的Dense层并获取输出。
 - en: ❽ The final prediction layer with softmax
+  id: totrans-215
   prefs: []
   type: TYPE_NORMAL
+  zh: ❽最终预测层使用softmax
 - en: ❾ Define the full model.
+  id: totrans-216
   prefs: []
   type: TYPE_NORMAL
+  zh: ❾定义完整模型。
 - en: We can now define everything needed for our final model as
+  id: totrans-217
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们现在可以定义所需的所有内容，以制定我们的最终模型
 - en: '[PRE48]'
+  id: totrans-218
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE48]'
 - en: Here, we are defining the English and German vectorizers (en_vectorizer and
     de_vectorizer, respectively). An encoder is then defined using the English vocabulary
     size and the English vectorizer. Finally, the final encoder-decoder model is defined
     using the German vocabulary size (de_vocab) encoder and the German vectorizer
     (de_vectorizer).
+  id: totrans-219
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这里，我们定义英语和德语的向量器（分别为en_vectorizer和de_vectorizer）。然后使用英语词汇量和英语向量器定义编码器。最后，使用德语词汇量（de_vocab）编码器和德语向量器（de_vectorizer）定义最终的编码器-解码器模型。
 - en: 11.2.5 Compiling the model
+  id: totrans-220
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 11.2.5编译模型
 - en: 'The last thing to do have the model ready for training is compile the model.
     We will use sparse categorical cross-entropy loss, the Adam optimizer, and the
     accuracy as metrics:'
+  id: totrans-221
   prefs: []
   type: TYPE_NORMAL
+  zh: 准备好模型进行培训的最后一件事是编译模型。我们将使用稀疏分类交叉熵损失，Adam优化器和准确度作为指标：
 - en: '[PRE49]'
+  id: totrans-222
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE49]'
 - en: Finally, let’s print the model summary
+  id: totrans-223
   prefs: []
   type: TYPE_NORMAL
+  zh: 最后，让我们打印模型摘要
 - en: '[PRE50]'
+  id: totrans-224
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE50]'
 - en: which will output
+  id: totrans-225
   prefs: []
   type: TYPE_NORMAL
+  zh: 将输出
 - en: '[PRE51]'
+  id: totrans-226
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE51]'
 - en: In the next section, we will learn how the model we just defined can be trained
     with the data we prepared.
+  id: totrans-227
   prefs: []
   type: TYPE_NORMAL
+  zh: 在下一节中，我们将学习如何使用准备好的数据训练我们刚刚定义的模型。
 - en: Exercise 2
+  id: totrans-228
   prefs: []
   type: TYPE_NORMAL
+  zh: 习题2
 - en: In contrast to teacher forcing, another technique used to define encoder-decoder
     models is by defining a model where
+  id: totrans-229
   prefs: []
   type: TYPE_NORMAL
+  zh: 与教师强制相反，另一种定义编码器-解码器模型的技术是定义一个模型，其中
 - en: The encoder takes in the English token sequence
+  id: totrans-230
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 编码器接收英语标记序列
 - en: The decoder takes in the context vector repeated on the time axis as inputs
     so that the same context vector is fed to the decoder for every time step
+  id: totrans-231
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 解码器在时间轴上重复上下文向量作为输入，以便将相同的上下文向量馈送到解码器的每个时间步
 - en: 'You have been provided the following encoder. Define the decoder that has a
     GRU layer and two fully connected hidden layers and the final model that starts
     with en_inp, and produce the final predictions:'
+  id: totrans-232
   prefs: []
   type: TYPE_NORMAL
+  zh: 您已提供以下编码器。定义一个具有 GRU 层和两个全连接隐藏层的解码器，以及以 en_inp 开头并生成最终预测的最终模型：
 - en: '[PRE52]'
+  id: totrans-233
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE52]'
 - en: You can use the tf.keras.layers.RepeatVector layer to repeat the context vector
     for any number of times. For example, if you pass a [None, 32]-sized tensor to
     the tf.keras.layers.RepeatVector(5) layer, it returns a [None, 5, 32]-sized tensor
     by repeating the [None, 32] tensor five times on the time dimension.
+  id: totrans-234
   prefs: []
   type: TYPE_NORMAL
+  zh: 您可以使用 tf.keras.layers.RepeatVector 层重复上下文向量任意次数。例如，如果您将一个 [None, 32] 大小的张量传递给
+    tf.keras.layers.RepeatVector(5) 层，则通过在时间维度上五次重复 [None, 32] 张量，返回一个 [None, 5, 32]
+    大小的张量。
 - en: 11.3 Training and evaluating the model
+  id: totrans-235
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 11.3 训练和评估模型
 - en: 'You have defined an end-to-end model that can consume raw text and generate
     translations. Next, you will train this model on the data that was prepared earlier.
     You will use the training set to train the model and the validation set to monitor
@@ -1031,80 +1519,117 @@
     To evaluate the model, we will use two metrics: accuracy and BLEU. BLEU is a popular
     metric used in sequence-to-sequence problems to measure the quality of the output
     sequence (e.g., translation).'
+  id: totrans-236
   prefs: []
   type: TYPE_NORMAL
+  zh: 您已经定义了一个可以接受原始文本并生成翻译的端到端模型。接下来，您将在之前准备的数据上训练此模型。您将使用训练集来训练模型，并使用验证集来监视其训练性能。最后，模型将在测试数据上进行测试。为了评估模型，我们将使用两个指标：准确率和
+    BLEU。BLEU 是序列到序列问题中常用的指标，用于衡量输出序列（例如，翻译）的质量。
 - en: We have defined and compiled the model. We will now train the model on training
     data and evaluate its performance on validation and testing data across several
     metrics. We will use a performance metric known as BLEU to measure the performance
     of our model. It is not a standard metric provided in Keras and will be implemented
     using standard Python/NumPy functions. Due to this, we will write custom train/
     evaluation loops to train and evaluate the model, respectively.
+  id: totrans-237
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们已经定义并编译了模型。现在，我们将在训练数据上训练模型，并在验证和测试数据上评估其性能，涵盖几个指标。我们将使用称为 BLEU 的性能指标来衡量模型的性能。它不是
+    Keras 提供的标准指标，将使用标准的 Python/NumPy 函数实现。因此，我们将编写自定义的训练/评估循环来分别训练和评估模型。
 - en: To facilitate the model training and evaluation, we are going to create several
     helper functions. First, we will create a function to create inputs and targets
     from the Python DataFrame objects we defined at the beginning (see the next listing).
+  id: totrans-238
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了方便模型的训练和评估，我们将创建几个辅助函数。首先，我们将创建一个函数，从我们在开头定义的 Python DataFrame 对象中创建输入和目标（请参阅下一个列表）。
 - en: Listing 11.6 Preparing the training/validation/test data for model training
     and evaluation
+  id: totrans-239
   prefs: []
   type: TYPE_NORMAL
+  zh: 列表 11.6 准备用于模型训练和评估的训练/验证/测试数据
 - en: '[PRE53]'
+  id: totrans-240
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE53]'
 - en: ❶ Define a dictionary for containing train/validation/test data.
+  id: totrans-241
   prefs: []
   type: TYPE_NORMAL
+  zh: ❶ 定义一个包含训练/验证/测试数据的字典。
 - en: ❷ Iterate through the train, valid, and test DataFrames.
+  id: totrans-242
   prefs: []
   type: TYPE_NORMAL
+  zh: ❷ 遍历 train、valid 和 test 数据框。
 - en: ❸ Define the encoder inputs as the English text.
+  id: totrans-243
   prefs: []
   type: TYPE_NORMAL
+  zh: ❸ 将编码器输入定义为英文文本。
 - en: ❹ Define the decoder inputs as all of the German text but the last token.
+  id: totrans-244
   prefs: []
   type: TYPE_NORMAL
+  zh: ❹ 将解码器输入定义为除最后一个令牌外的所有德语文本。
 - en: ❺ Define the decoder outputs as all of the German text but the first token.
+  id: totrans-245
   prefs: []
   type: TYPE_NORMAL
+  zh: ❺ 将解码器输出定义为除第一个令牌外的所有德语文本。
 - en: ❻ Update the dictionary with encoder inputs, decoder inputs, and the decoder
     outputs.
+  id: totrans-246
   prefs: []
   type: TYPE_NORMAL
+  zh: ❻ 更新字典，包括编码器输入、解码器输入和解码器输出。
 - en: 'This function takes in the three data frames, train_df, valid_df, and test_df,
     and performs some transformations on them to return a dictionary that contains
     three keys: train, valid, and test. Under each key, you will find the following:'
+  id: totrans-247
   prefs: []
   type: TYPE_NORMAL
+  zh: 此函数接受三个数据框 train_df、valid_df 和 test_df，并对它们进行一些转换，以返回一个包含三个键的字典：train、valid
+    和 test。在每个键下，您将找到以下内容：
 - en: Encoder inputs (i.e., an English word sequence)
+  id: totrans-248
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 编码器输入（即，英文单词序列）
 - en: Decoder inputs (i.e., a German word sequence)
+  id: totrans-249
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 解码器输入（即，德语单词序列）
 - en: Decoder outputs (i.e., a German word sequence)
+  id: totrans-250
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 解码器输出（即，德语单词序列）
 - en: 'As we stated earlier, we are using a technique known as teacher forcing to
     lift the model’s performance. Therefore, the decoder’s object becomes predicting
     the next word given the previous word(s). For instance, for the example (“I want
     a piece of chocolate cake”, “Ich möchte ein Stück Schokoladenkuchen”), encoder
     inputs, decoder inputs, and decoder outputs become the following:'
+  id: totrans-251
   prefs: []
   type: TYPE_NORMAL
 - en: '[“I”, “want”, “a”, “piece”, “of”, “chocolate”, “cake”] (encoder inputs)'
+  id: totrans-252
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '[“Ich”, “möchte”, “ein”, “Stück”] (decoder inputs)'
+  id: totrans-253
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '[“möchte”, “ein”, “Stück”, “Schokoladenkuchen”] (decoder outputs)'
+  id: totrans-254
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -1112,21 +1637,28 @@
     given the previous word(s). The prepare_data(...) function does this, as the next
     listing shows. Then we will write a function to shuffle the data. This function
     will then be used to shuffle data at the beginning of every epoch during training.
+  id: totrans-255
   prefs: []
   type: TYPE_NORMAL
 - en: Listing 11.7 Shuffling the training data
+  id: totrans-256
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE54]'
+  id: totrans-257
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE54]'
 - en: ❶ If shuffle_indices are not passed, create shuffled indices automatically.
+  id: totrans-258
   prefs: []
   type: TYPE_NORMAL
 - en: ❷ Shuffle the provided shuffle_indices.
+  id: totrans-259
   prefs: []
   type: TYPE_NORMAL
 - en: ❸ Return shuffled data.
+  id: totrans-260
   prefs: []
   type: TYPE_NORMAL
 - en: The shuffle_data() function takes the data output by the prepare_data function
@@ -1135,6 +1667,7 @@
     to be passed into the function so that, by shuffling the already shuffled indices,
     you get a new permutation of the order of the data. This is useful for generating
     different shuffle configurations in every epoch during the training.
+  id: totrans-261
   prefs: []
   type: TYPE_NORMAL
 - en: The shuffle_data() function, if shuffle_indices is not passed, will generate
@@ -1146,30 +1679,36 @@
     will be shuffled, generating a new shuffled data configuration. Finally, we return
     encoder inputs (en_inputs), decoder inputs (de_inputs), and decoder outputs (de_labels)
     shuffled, as determined by the shuffle_indices array.
+  id: totrans-262
   prefs: []
   type: TYPE_NORMAL
 - en: 'Next, we will write a function to evaluate the model. In this function, we
     evaluate a given model on given data using the defined batch_size. Particularly,
     we evaluate the machine translation model on three metrics:'
+  id: totrans-263
   prefs: []
   type: TYPE_NORMAL
 - en: '*Cross-entropy loss*—The standard multiclass cross-entropy loss calculated
     between the prediction probabilities and true targets.'
+  id: totrans-264
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '*Accuracy*—Standard accuracy measured on whether the model predicts the same
     word as the true target at a given time step. In other words, the prediction must
     match the true target exactly, from word to word.'
+  id: totrans-265
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '*BLEU score*—A more powerful metric than the accuracy that is based on precision
     but takes into account many n-grams for different values of n.'
+  id: totrans-266
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Bilingual Evaluation Understudy (BLEU)
+  id: totrans-267
   prefs: []
   type: TYPE_NORMAL
 - en: 'BLEU is a metric used to measure the quality of generated text sequences (e.g.,
@@ -1180,34 +1719,44 @@
     A BLEU score is a variant of the precision metric that is used to compute the
     similarity between a candidate text (i.e., prediction) against *multiple* reference
     translations (i.e., ground truths).'
+  id: totrans-268
   prefs: []
   type: TYPE_NORMAL
 - en: 'To understand the BLEU metric, let’s consider the following candidates and
     references:'
+  id: totrans-269
   prefs: []
   type: TYPE_NORMAL
 - en: 'Candidate 1 (C1): the cat was on the red mat'
+  id: totrans-270
   prefs: []
   type: TYPE_NORMAL
 - en: 'Candidate 2 (C2): the cat the cat the cat the'
+  id: totrans-271
   prefs: []
   type: TYPE_NORMAL
 - en: 'Reference 1: the cat is on the floor'
+  id: totrans-272
   prefs: []
   type: TYPE_NORMAL
 - en: 'Reference 2: there was a cat on the mat'
+  id: totrans-273
   prefs: []
   type: TYPE_NORMAL
 - en: The precision for candidate 1 and 2 can be computed as
+  id: totrans-274
   prefs: []
   type: TYPE_NORMAL
 - en: precision = Number of words matched any reference/Number of words in the candidate
+  id: totrans-275
   prefs: []
   type: TYPE_NORMAL
 - en: which means
+  id: totrans-276
   prefs: []
   type: TYPE_NORMAL
 - en: Precision(C1) = 6/7 and Precision(C2) = 7/7
+  id: totrans-277
   prefs: []
   type: TYPE_NORMAL
 - en: This contradicts intuition. Obviously, C1 is a much better choice as a match
@@ -1216,10 +1765,12 @@
     you compute the number of times that the word appears in any single reference
     and take the maximum of it. Then you sum this value for all the unique words in
     the candidate text. For example, for C1 and C2, modified unigram precision is
+  id: totrans-278
   prefs: []
   type: TYPE_NORMAL
 - en: ModPrecision(C1) = (2 + 1 + 1 + 2 + 0 + 1) /7 = 5/7 and ModPrecision(C2) = (2
     + 1)/7 = 3/7
+  id: totrans-279
   prefs: []
   type: TYPE_NORMAL
 - en: 'This is much better: C1 has a higher precision than C2, which is what we wanted.
@@ -1227,58 +1778,76 @@
     the modified precision for several n-grams (e.g., unigrams, bigrams, trigrams,
     etc.). Computing modified precision over many different n-grams enables BLEU to
     favor translations or candidates that have longer subsequences matching the reference.'
+  id: totrans-280
   prefs: []
   type: TYPE_NORMAL
 - en: We will define an object called BLEUMetric, which will compute the BLEU score
     for a given batch of predictions and targets, as shown in the following listing.
+  id: totrans-281
   prefs: []
   type: TYPE_NORMAL
 - en: Listing 11.8 Defining the BLEUMetric for evaluating the machine translation
     model
+  id: totrans-282
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE55]'
+  id: totrans-283
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE55]'
 - en: ❶ Get the vocabulary from the fitted TextVectorizer.
+  id: totrans-284
   prefs: []
   type: TYPE_NORMAL
 - en: ❷ Define a StringLookup layer, which can convert token IDs to words.
+  id: totrans-285
   prefs: []
   type: TYPE_NORMAL
 - en: ❸ Get the predicted token IDs.
+  id: totrans-286
   prefs: []
   type: TYPE_NORMAL
 - en: ❹ Convert token IDs to words using the vocabulary and the StringLookup.
+  id: totrans-287
   prefs: []
   type: TYPE_NORMAL
 - en: ❺ Strip the string of any extra white spaces.
+  id: totrans-288
   prefs: []
   type: TYPE_NORMAL
 - en: ❻ Replace everything after the EOS token with a blank.
+  id: totrans-289
   prefs: []
   type: TYPE_NORMAL
 - en: ❼ Join all the tokens to one string in each sequence.
+  id: totrans-290
   prefs: []
   type: TYPE_NORMAL
 - en: ❽ Decode the byte stream to a string.
+  id: totrans-291
   prefs: []
   type: TYPE_NORMAL
 - en: ❾ If the string is empty, add a [UNK] token. If not, it can lead to numerical
     errors.
+  id: totrans-292
   prefs: []
   type: TYPE_NORMAL
 - en: ❿ Split the sequences into individual tokens.
+  id: totrans-293
   prefs: []
   type: TYPE_NORMAL
 - en: ⓫ Get the clean versions of the predictions and real sequences.
+  id: totrans-294
   prefs: []
   type: TYPE_NORMAL
 - en: ⓬ We have to wrap each real sequence in a list to make use of a third-party
     function to compute BLEU.
+  id: totrans-295
   prefs: []
   type: TYPE_NORMAL
 - en: ⓭ Get the BLEU value for the given batch of targets and predictions.
+  id: totrans-296
   prefs: []
   type: TYPE_NORMAL
 - en: First, we define an __init__(...) function and several attributes of this class,
@@ -1290,6 +1859,7 @@
     means that this layer will convert a given token ID to a string token. We also
     need to say that we don't want this layer to automatically add representations
     for out-of-vocabulary words. For that we set num_oov_indices=0.
+  id: totrans-297
   prefs: []
   type: TYPE_NORMAL
 - en: 'Next, we define a function called calculate_bleu_from_predictions(...) that
@@ -1297,31 +1867,43 @@
     the model to compute the BLEU score for that batch. First, it computes the predicted
     token IDs by taking the maximum index of each probability vector for each time
     step:'
+  id: totrans-298
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE56]'
+  id: totrans-299
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE56]'
 - en: 'Next, the string tokens are generated using the StringLookup layer defined
     earlier:'
+  id: totrans-300
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE57]'
+  id: totrans-301
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE57]'
 - en: Specifically, we pass the token ID matrices (predicted and target) to the StringLookup
     layer. For example, if
+  id: totrans-302
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE58]'
+  id: totrans-303
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE58]'
 - en: then
+  id: totrans-304
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE59]'
+  id: totrans-305
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE59]'
 - en: 'After that, we define a function to perform some cleaning. The defined function
     will truncate the predictions such that everything after the EOS token is removed
     (inclusive) and will tokenize the sentences into lists of words. The input to
@@ -1329,70 +1911,91 @@
     Let’s make this an opportunity to hone our understanding of the TensorFlow string
     operations. TensorFlow has a namespace known as tf.strings ([http://mng.bz/gw7E](http://mng.bz/gw7E))
     that provides a variety of basic string manipulation functionality:'
+  id: totrans-306
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE60]'
+  id: totrans-307
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE60]'
 - en: 'Let’s look at the first line of code that calls several tf.string operations
     on the inputs:'
+  id: totrans-308
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE61]'
+  id: totrans-309
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE61]'
 - en: It executes a sequence of transformations on the input string tensor. First,
     calling tf.strings.join() on tokens will join all the tokens in one column using
     a given separator. For example
+  id: totrans-310
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE62]'
+  id: totrans-311
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE62]'
 - en: becomes
+  id: totrans-312
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE63]'
+  id: totrans-313
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE63]'
 - en: Since our sentences are across the rows, we first need to transpose tokens,
     such that sentences are in the columns. Next, tf.strings.regex_replace() is called
     on the tensor, where each item is a sentence resulting from the join. It will
     remove everything followed by the EOS token. This string pattern is captured by
     the eos.* regex. Finally, we strip any starting and ending spaces from the resulting
     strings.
+  id: totrans-314
   prefs: []
   type: TYPE_NORMAL
 - en: 'TensorFlow keeps strings in byte format. In order to convert the string to
     UTF-8 encoding, we have a series of conversions to get it into the correct format:'
+  id: totrans-315
   prefs: []
   type: TYPE_NORMAL
 - en: First, we have to convert the array to a NumPy array. The elements in this array
     would be in Object format.
+  id: totrans-316
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: Next, we convert this to an array of bytes by calling translations_in_bytes.numpy().astype(np.bytes_).
+  id: totrans-317
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: Finally, we decode the array of bytes and convert it to a desired encoding (in
     our case, UTF-8).
+  id: totrans-318
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: The rest of the code is straightforward to understand and has been delineated
     in the code as annotations.
+  id: totrans-319
   prefs: []
   type: TYPE_NORMAL
 - en: 'Finally, we call the clean_text() function on both predicted and real token
     tensors and feed the final results to a third-party implementation of the BLEU
     metric:'
+  id: totrans-320
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE64]'
+  id: totrans-321
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE64]'
 - en: 'The clean_text() function will convert both predicted translations and true
     translations (sometimes referred to as *references*) to a list of a list of tokens.
     Here, the outer list represents individual examples, whereas the inner list represents
@@ -1402,42 +2005,52 @@
     of the BLEU metric. compute_bleu, used here, is a third-party implementation found
     in the TensorFlow repository ([http://mng.bz/e7Ev](http://mng.bz/e7Ev)). The compute_bleu()
     function expects two main arguments:'
+  id: totrans-322
   prefs: []
   type: TYPE_NORMAL
 - en: '*Translation*—A list of a list of tokens.'
+  id: totrans-323
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '*References*—A list of a list of list of tokens. In other words, each translation
     can have multiple references, where each reference is a list of tokens.'
+  id: totrans-324
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Then it returns
+  id: totrans-325
   prefs: []
   type: TYPE_NORMAL
 - en: bleu—BLEU score for a given batch of candidate reference pairs.
+  id: totrans-326
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: precisions—Individual n-gram precisions that build up the final BLEU score.
+  id: totrans-327
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: bp—Brevity penalty (special part of BLEU score that penalizes short candidates).
+  id: totrans-328
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: ratio—Candidate length divided by reference length.
+  id: totrans-329
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: translation_length—Sum of lengths of candidates in the batch.
+  id: totrans-330
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: reference_length—Sum of lengths of references in the batch. In the case of multiple
     references per candidate, minimum is selected.
+  id: totrans-331
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -1446,197 +2059,255 @@
     at the beginning and the remaining match the reference completely. In the second
     scenario, we again have two [UNK] tokens, but they appear at the beginning and
     in the middle. Let’s see the result:'
+  id: totrans-332
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE65]'
+  id: totrans-333
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE65]'
 - en: This will print
+  id: totrans-334
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE66]'
+  id: totrans-335
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE66]'
 - en: If you were to compute the word-to-word accuracy of the translation compared
     to the reference, you would get the same result, as only the two [UNK] tokens
     are mismatched. However, the BLEU score is different for the two instances. It
     clearly shows that BLEU prefers the translation that gets more words continuously
     right, without breaks.
+  id: totrans-336
   prefs: []
   type: TYPE_NORMAL
 - en: We have all the bells and whistles we need to write the training and evaluation
     loops for the model. Let’s first write the evaluation loop (see the next listing),
     as it will be used in the training loop to evaluate the model.
+  id: totrans-337
   prefs: []
   type: TYPE_NORMAL
 - en: Listing 11.9 Evaluating the encoder-decoder model
+  id: totrans-338
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE67]'
+  id: totrans-339
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE67]'
 - en: ❶ Define the metric.
+  id: totrans-340
   prefs: []
   type: TYPE_NORMAL
 - en: ❷ Get the number of batches.
+  id: totrans-341
   prefs: []
   type: TYPE_NORMAL
 - en: ❸ Evaluate one batch at a time.
+  id: totrans-342
   prefs: []
   type: TYPE_NORMAL
 - en: ❹ Status update
+  id: totrans-343
   prefs: []
   type: TYPE_NORMAL
 - en: ❺ Get the inputs and targets.
+  id: totrans-344
   prefs: []
   type: TYPE_NORMAL
 - en: ❻ Get the evaluation metrics.
+  id: totrans-345
   prefs: []
   type: TYPE_NORMAL
 - en: ❼ Get the predictions to compute BLEU.
+  id: totrans-346
   prefs: []
   type: TYPE_NORMAL
 - en: ❽ Update logs that contain loss, accuracy, and BLEU metrics.
+  id: totrans-347
   prefs: []
   type: TYPE_NORMAL
 - en: ❾ Compute the BLEU metric.
+  id: totrans-348
   prefs: []
   type: TYPE_NORMAL
 - en: 'The evaluate_model() function takes in several important arguments:'
+  id: totrans-349
   prefs: []
   type: TYPE_NORMAL
 - en: model—The encoder-decoder model we defined.
+  id: totrans-350
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: en_inputs_raw—The encoder inputs (text). This will be an array of strings, where
     each string is an English sentence/phrase.
+  id: totrans-351
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: de_inputs_raw—The decoder inputs (text). This will be an array of strings. It
     will have all the words but the last word in every German translation.
+  id: totrans-352
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: de_labels_raw—The decoder labels (text). This will be an array of strings. It
     will have all the words but the first one in every German translation.
+  id: totrans-353
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: de_vectorizer—The decoder vectorizer to convert decoder_labels_raw (text) to
     token IDs.
+  id: totrans-354
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: 'The function defines a BLEUMetric object we defined earlier. It defines placeholders
     for accumulating loss, accuracy, and BLEU scores for each batch in the given data
     set. Then it goes through each batch of data and does the following:'
+  id: totrans-355
   prefs: []
   type: TYPE_NORMAL
 - en: Creates the batch input as the corresponding batch of data from en_inputs_ raw
     and de_inputs_raw
+  id: totrans-356
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Creates the targets as token IDs using de_labels_raw
+  id: totrans-357
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Evaluates the model using batch inputs and targets to get the loss and accuracy
     scores of the batch
+  id: totrans-358
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Computes the BLEU score using the true targets and predictions
+  id: totrans-359
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Accumulates the metrics in the placeholders defined earlier
+  id: totrans-360
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Finally, after the model has iterated through all the batches of data, it will
     return the mean loss, accuracy, and BLEU scores as the final evaluation benchmark
     for the data set.
+  id: totrans-361
   prefs: []
   type: TYPE_NORMAL
 - en: 'With that, we jump into defining the training loop (see the next listing).
     We will define a function called train_model() that will do following four core
     tasks:'
+  id: totrans-362
   prefs: []
   type: TYPE_NORMAL
 - en: Train the model with the training data.
+  id: totrans-363
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Evaluate the model with the training data.
+  id: totrans-364
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Evaluate the model with validation data.
+  id: totrans-365
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Evaluate the model with testing data.
+  id: totrans-366
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Listing 11.10 Training the model using a custom training/evaluation loop
+  id: totrans-367
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE68]'
+  id: totrans-368
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE68]'
 - en: ❶ Define the metric.
+  id: totrans-369
   prefs: []
   type: TYPE_NORMAL
 - en: ❷ Define the data.
+  id: totrans-370
   prefs: []
   type: TYPE_NORMAL
 - en: ❸ Reset metric logs at the beginning of every epoch.
+  id: totrans-371
   prefs: []
   type: TYPE_NORMAL
 - en: ❹ Shuffle data at the beginning of every epoch.
+  id: totrans-372
   prefs: []
   type: TYPE_NORMAL
 - en: ❺ Get the number of training batches.
+  id: totrans-373
   prefs: []
   type: TYPE_NORMAL
 - en: ❻ Train one batch at a time.
+  id: totrans-374
   prefs: []
   type: TYPE_NORMAL
 - en: ❼ Status update
+  id: totrans-375
   prefs: []
   type: TYPE_NORMAL
 - en: ❽ Get a batch of inputs (English and German sequences).
+  id: totrans-376
   prefs: []
   type: TYPE_NORMAL
 - en: ❾ Get a batch of targets (German sequences offset by 1).
+  id: totrans-377
   prefs: []
   type: TYPE_NORMAL
 - en: ❿ Train for a single step.
+  id: totrans-378
   prefs: []
   type: TYPE_NORMAL
 - en: ⓫ Evaluate the model to get the metrics.
+  id: totrans-379
   prefs: []
   type: TYPE_NORMAL
 - en: ⓬ Get the final prediction to compute BLEU.
+  id: totrans-380
   prefs: []
   type: TYPE_NORMAL
 - en: ⓭ Compute the BLEU metric.
+  id: totrans-381
   prefs: []
   type: TYPE_NORMAL
 - en: ⓮ Update the epoch's log records of the metrics.
+  id: totrans-382
   prefs: []
   type: TYPE_NORMAL
 - en: ⓯ Define validation data.
+  id: totrans-383
   prefs: []
   type: TYPE_NORMAL
 - en: ⓰ Evaluate the model on validation data.
+  id: totrans-384
   prefs: []
   type: TYPE_NORMAL
 - en: ⓱ Print the evaluation metrics of each epoch.
+  id: totrans-385
   prefs: []
   type: TYPE_NORMAL
 - en: 'Let’s analyze the function in listing 11.10 to understand its behavior. If
@@ -1650,21 +2321,31 @@
     function. Then, after the training loop finishes, the model is evaluated on the
     validation data. Finally, at the end of training the model, the model is evaluated
     on the test data. You can call the train_ model() function as shown:'
+  id: totrans-386
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们分析列表11.10中的函数，以了解其行为。如果你退一步思考，它所做的只是调用我们之前定义的函数并显示结果。首先，它通过将数据准备（使用prepare_data()函数）呈现为具有train、valid和test键的字典来准备数据。接下来，它经历了几个周期的训练。在每个周期中，它会对训练数据进行打乱，并逐批处理数据。对于每个训练批次，模型都会在该批次的数据上进行训练，并对相同批次进行评估。训练数据的评估日志用于计算训练性能，就像我们在evaluate_model()函数中看到的那样。然后，在训练循环完成后，模型会在验证数据上进行评估。最后，在训练模型结束时，模型会在测试数据上进行评估。你可以像下面这样调用train_model()函数：
 - en: '[PRE69]'
+  id: totrans-387
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE69]'
 - en: 'This will output a result similar to the following:'
+  id: totrans-388
   prefs: []
   type: TYPE_NORMAL
+  zh: 这将输出类似于以下的结果：
 - en: '[PRE70]'
+  id: totrans-389
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE70]'
 - en: NOTE On an Intel Core i5 machine with an NVIDIA GeForce RTX 2070 8 GB, the training
     took approximately 4 minutes and 10 seconds to run five epochs.
+  id: totrans-390
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意 在一台配有NVIDIA GeForce RTX 2070 8 GB的Intel Core i5机器上，训练大约需要4分钟10秒来运行五个时期。
 - en: 'The first observation we can make is that the training has progressed in the
     right direction. Both training and validation metrics have improved over time.
     The model has kicked off with a training accuracy of 24% and a BLEU score of 0.001,
@@ -1672,37 +2353,53 @@
     the model has increased the accuracy from 33% to 51%, whereas the BLEU score has
     gone from 0.01 to 0.12\. As we did before, let’s save the model so that it can
     later be used in the real world. We will save the model as well as the vocabulary:'
+  id: totrans-391
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们可以做出的第一个观察是，训练的方向是正确的。随着时间的推移，训练和验证指标都有所提高。模型从24%的训练准确率和0.001的BLEU分数开始，最终达到了52%的准确率和0.14的BLEU分数。在验证过程中，模型将准确率从33%提高到了51%，而BLEU分数则从0.01提高到了0.12。与之前一样，让我们保存模型，以便以后可以在现实世界中使用。我们将保存模型以及词汇表：
 - en: '[PRE71]'
+  id: totrans-392
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE71]'
 - en: When training the model, we used the target (i.e., target language tokens) to
     provide an input to the decoder. This is not possible when using the model to
     translate where the target is unknown. For this, in the following section, we
     modify our trained model while using the same model parameters.
+  id: totrans-393
   prefs: []
   type: TYPE_NORMAL
+  zh: 在训练模型时，我们使用目标（即目标语言标记）作为解码器的输入。但是在翻译时，目标是未知的，因此无法这样做。因此，在接下来的部分中，我们在保持模型参数不变的同时修改我们训练的模型。
 - en: Exercise 3
+  id: totrans-394
   prefs: []
   type: TYPE_NORMAL
+  zh: 练习3
 - en: 'You have the following function for training a model. Here, en_inputs_raw represents
     the encoder inputs, de_inputs_raw represents decoder inputs, and de_labels_raw
     represents decoder labels:'
+  id: totrans-395
   prefs: []
   type: TYPE_NORMAL
+  zh: 你有以下用于训练模型的函数。这里，en_inputs_raw代表编码器输入，de_inputs_raw代表解码器输入，de_labels_raw代表解码器标签：
 - en: '[PRE72]'
+  id: totrans-396
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE72]'
 - en: You want to change the code so that, if the mean training BLEU score of a given
     epoch is smaller than the last epoch, the training is stopped. How would you change
     the code?
+  id: totrans-397
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果给定时期的平均训练BLEU分数小于上一个时期，你想改变代码以停止训练。你会如何改变代码？
 - en: '11.4 From training to inference: Defining the inference model'
+  id: totrans-398
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 11.4 从训练到推理：定义推理模型
 - en: You have trained a sequence-to-sequence machine translation model and plan to
     use it to generate German translations for some unseen English phrases. It has
     been trained using teacher forcing, meaning that the words in the translation
@@ -1712,6 +2409,7 @@
     In this model, the decoder operates recursively, where it feeds its previous prediction
     as the input in the next time step. The decoder starts off with the SOS token
     and continues in this manner until it outputs the EOS token.
+  id: totrans-399
   prefs: []
   type: TYPE_NORMAL
 - en: The ultimate objective of training a machine translator is to use it in the
@@ -1720,6 +2418,7 @@
     we cannot take this off of the shelf and use it straight away for inference. There’s
     extra effort required to bridge the gap between using a trained model for inference.
     Before coming up with a solution, let’s first understand the underlying problem.
+  id: totrans-400
   prefs: []
   type: TYPE_NORMAL
 - en: 'During model training, we used teacher forcing to improve the performance of
@@ -1730,6 +2429,7 @@
     sequences. Our task is to generate those German sequences for given English sequences.
     Therefore, we need to repurpose our trained model to be able to generate German
     translations without relying on whole German sequences to be available.'
+  id: totrans-401
   prefs: []
   type: TYPE_NORMAL
 - en: The solution is to keep the encoder as it is and introduce several modifications
@@ -1737,105 +2437,132 @@
     that the decoder will use its previous predicted word as an input to the next
     time step, until it reaches the end of the sequence (figure 11.4). Specifically,
     we do the following. For a given English sequence
+  id: totrans-402
   prefs: []
   type: TYPE_NORMAL
 - en: Get the context vector by inputting the English sequence to the encoder.
+  id: totrans-403
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: We first input the SOS token (*x*^d[0]) (denoted by start_token in the code)
     along with the context vector (si^d[1]) and get the decoder’s prediction (*ŷ*^d[1])
     and the output state (so^d[1]).
+  id: totrans-404
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Until the decoder’s prediction (*ŷ*^d[t] [+1]) is EOS (denoted by end_token
     in the code)
+  id: totrans-405
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Feed the decoder’s prediction (*ŷ*^d[t]) and the output state (so^d[t]) at
     time t as the input (*x*^d[t] [+1]) and the initial state (si^d[t] [+1]) for the
     next time step (t + 1).
+  id: totrans-406
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
 - en: Get the decoder’s prediction (*ŷ*^d[t] [+1]) and the output state (so^d[t]
     [+1]) in the next time step.
+  id: totrans-407
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
 - en: '![11-04](../../OEBPS/Images/11-04.png)'
+  id: totrans-408
   prefs: []
   type: TYPE_IMG
 - en: Figure 11.4 Using the sequence-to-sequence model for inference (i.e., generating
     translations from English inputs)
+  id: totrans-409
   prefs: []
   type: TYPE_NORMAL
 - en: 'To achieve this, we have to introduce two major changes to the trained model:'
+  id: totrans-410
   prefs: []
   type: TYPE_NORMAL
 - en: Separate the encoder and the decoder as separate models.
+  id: totrans-411
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Change the decoder such that it takes an input token and an initial state as
     the input and outputs the predicted token and the next state as the output.
+  id: totrans-412
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: 'Let’s see how we can do this in TensorFlow. First, we will load the model we
     just saved:'
+  id: totrans-413
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE73]'
+  id: totrans-414
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE73]'
 - en: It’s very easy to get the encoder model because we have encapsulated the encoder
     as a nested model in the final model. It can be taken out by calling
+  id: totrans-415
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE74]'
+  id: totrans-416
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE74]'
 - en: 'After that, we define two inputs to represent the two inputs of the decoder:'
+  id: totrans-417
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE75]'
+  id: totrans-418
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE75]'
 - en: 'As we discussed earlier, we define two inputs: one to represent the input to
     the decoder (d_inp) and another to represent the state input to the decoder’s
     GRU layer (d_state_inp). Analyzing the shapes, d_inp takes in an array of strings,
     just like before. d_state_inp represents the state vector of the GRU model and
     has 256 feature dimensionality.'
+  id: totrans-419
   prefs: []
   type: TYPE_NORMAL
 - en: 'After we define the inputs, we will retrace all the steps we followed during
     the decoder build in the trained model. However, instead of creating new randomly
     initialized layers, we will get layers from the trained model. Particularly, we
     will have the following layers to flow the inputs through:'
+  id: totrans-420
   prefs: []
   type: TYPE_NORMAL
 - en: Decoder’s vectorization layer (produces d_vectorized_out)
+  id: totrans-421
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Decoder’s embedding layer (produces d_emb_out)
+  id: totrans-422
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Decoder’s GRU layer (produces d_gru_out)
+  id: totrans-423
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Decoder’s fully connected hidden layer (produces d_dense1_out)
+  id: totrans-424
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Final prediction layer (produces d_final_out)
+  id: totrans-425
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -1847,76 +2574,101 @@
     to build a recursive model. Furthermore, the GRU layer takes d_state_inp as the
     initial_state in the model. This way, we can feed the output state vector as a
     recursive input to the decoder:'
+  id: totrans-426
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE76]'
+  id: totrans-427
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE76]'
 - en: 'It’s time to define the final decoder model:'
+  id: totrans-428
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE77]'
+  id: totrans-429
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE77]'
 - en: The model takes the d_inp and d_state_inp as inputs and produces d_final_out
     (i.e., the final prediction) and d_gru_out (i.e., the GRU output state) as the
     output. Finally, let’s take a step back and encapsulate the work we did in a single
     function called get_inference_model(), as shown in the next listing.
+  id: totrans-430
   prefs: []
   type: TYPE_NORMAL
 - en: Listing 11.11 Defining the recursive inference model for the machine translation
     model
+  id: totrans-431
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE78]'
+  id: totrans-432
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE78]'
 - en: ❶ Load the saved trained model.
+  id: totrans-433
   prefs: []
   type: TYPE_NORMAL
 - en: ❷ Get the encoder model from the loaded model by calling the get_layer() function.
+  id: totrans-434
   prefs: []
   type: TYPE_NORMAL
 - en: ❸ Define the first input to the new inference decoder, an input layer that takes
     a batch of strings.
+  id: totrans-435
   prefs: []
   type: TYPE_NORMAL
 - en: ❹ Define the second input to the new inference decoder, an input layer that
     takes an initial state to pass to the decoder GRU as the input state.
+  id: totrans-436
   prefs: []
   type: TYPE_NORMAL
 - en: ❺ Generate the vectorized output of the string input to the decoder.
+  id: totrans-437
   prefs: []
   type: TYPE_NORMAL
 - en: ❻ Generate the embeddings from the vectorized input.
+  id: totrans-438
   prefs: []
   type: TYPE_NORMAL
 - en: ❼ Get the decoder’s GRU layer.
+  id: totrans-439
   prefs: []
   type: TYPE_NORMAL
 - en: ❽ Since we generate one word at a time, we will not need the return_sequences.
+  id: totrans-440
   prefs: []
   type: TYPE_NORMAL
 - en: ❾ Get the GRU out while using d_state_inp from earlier as the initial state.
+  id: totrans-441
   prefs: []
   type: TYPE_NORMAL
 - en: ❿ Get the dense output.
+  id: totrans-442
   prefs: []
   type: TYPE_NORMAL
 - en: ⓫ Get the final output.
+  id: totrans-443
   prefs: []
   type: TYPE_NORMAL
 - en: ⓬ Define the final decoder.
+  id: totrans-444
   prefs: []
   type: TYPE_NORMAL
 - en: 'We will then define a function to load back the vocabularies we just saved.
     We saved the vocabularies using the JSON format, and all we need to do to load
     the vocabularies is call json.load() with the opened vocabulary files:'
+  id: totrans-445
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE79]'
+  id: totrans-446
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE79]'
 - en: Steaming ahead, we now have everything to generate new translations. As discussed,
     we are going to create a process/function where we input the English sentence
     (denoted by sample_en_text) to the encoder to produce the context vector. Next,
@@ -1925,101 +2677,133 @@
     of the decoder as inputs to the decoder until the predicted token is EOS. The
     following listing delineates this functionality using the inference model we just
     built.
+  id: totrans-447
   prefs: []
   type: TYPE_NORMAL
 - en: Listing 11.12 Generating translations with the new inference model
+  id: totrans-448
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE80]'
+  id: totrans-449
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE80]'
 - en: ❶ Print the input.
+  id: totrans-450
   prefs: []
   type: TYPE_NORMAL
 - en: ❷ Get the initial state for the decoder.
+  id: totrans-451
   prefs: []
   type: TYPE_NORMAL
 - en: ❸ The first input word to the decoder will always be the start_token (i.e.,
     it has the value sos).
+  id: totrans-452
   prefs: []
   type: TYPE_NORMAL
 - en: ❹ We collect the translation in this list.
+  id: totrans-453
   prefs: []
   type: TYPE_NORMAL
 - en: ❺ Keep predicting until we get the end_token (i.e., it has the value eos).
+  id: totrans-454
   prefs: []
   type: TYPE_NORMAL
 - en: ❻ Override the previous state input with the new state.
+  id: totrans-455
   prefs: []
   type: TYPE_NORMAL
 - en: ❼ Get the actual word from the token ID of the prediction.
+  id: totrans-456
   prefs: []
   type: TYPE_NORMAL
 - en: ❽ Add that to the translation.
+  id: totrans-457
   prefs: []
   type: TYPE_NORMAL
 - en: 'Let’s run this for several test inputs in our data set and see what we get:'
+  id: totrans-458
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE81]'
+  id: totrans-459
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE81]'
 - en: This will output
+  id: totrans-460
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE82]'
+  id: totrans-461
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE82]'
 - en: You can run these English phrases/sentences against Google Translate and see
     how closely our model is getting them. For a model trained on a relatively simple
     and small data set, our model is doing very well. The [UNK] token is present in
     the translation because all the less-frequent words are replaced with [UNK] in
     the corpus. Therefore, when the model is uncertain of the word that should be
     filled in a certain position, it is likely to output [UNK].
+  id: totrans-462
   prefs: []
   type: TYPE_NORMAL
 - en: Exercise 4
+  id: totrans-463
   prefs: []
   type: TYPE_NORMAL
 - en: 'Instead of using the GRU model, you have decided to use an LSTM model. As you
     know, an LSTM model has two states: a cell state and an output state. You have
     built the encoder and are now building the decoder. You are planning to adapt
     the following code to use an LSTM model:'
+  id: totrans-464
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE83]'
+  id: totrans-465
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE83]'
 - en: If you set return_state=True in an LSTM layer and call it on some compatible
     input x, the output is as follows
+  id: totrans-466
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE84]'
+  id: totrans-467
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE84]'
 - en: where state_h and state_c represent the output state and the cell state respectively.
+  id: totrans-468
   prefs: []
   type: TYPE_NORMAL
 - en: We have trained a machine translation model using the sequence-to-sequence architecture.
     In the next chapter, we will look at how we can improve this model further by
     using a technique known as attention.
+  id: totrans-469
   prefs: []
   type: TYPE_NORMAL
 - en: Summary
+  id: totrans-470
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
 - en: The encoder-decoder pattern is common for sequence-to-sequence tasks such as
     machine translation.
+  id: totrans-471
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: The encoder takes in source language inputs and produces a context vector.
+  id: totrans-472
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: The context vector is used by the decoder to produce target language outputs
     (i.e., translation).
+  id: totrans-473
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -2027,11 +2811,13 @@
     you to integrate tokenization (i.e., converting strings to list of tokens and
     then to token IDs) into your model. This enables the model to take in strings
     rather than numerical values.
+  id: totrans-474
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: 'When training models on sequence-to-sequence tasks, you can employ teacher
     forcing:'
+  id: totrans-475
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -2039,58 +2825,76 @@
     the context vector as usual. Then the decoder consumes and predicts the words
     in the translation. In other words, the decoder is trained in such a way that
     the decoder predicts the next word given the previous word(s) in the translation.
+  id: totrans-476
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
 - en: 'The quality of translations produced by a machine translation model is measured
     using the BLEU score:'
+  id: totrans-477
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: The BLEU score uses a modified version of the precision metric along with measuring
     precision on different n-grams of the translation to come up with a score.
+  id: totrans-478
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
 - en: 'Once a model is trained using teacher forcing, a separate inference model needs
     to be defined using the trained weights:'
+  id: totrans-479
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: This inference model has the same encoder, but the decoder takes in the previously
     predicted word as an input for the next step and recursively predicts words until
     a predefined ending criterion is met.
+  id: totrans-480
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
 - en: Answers to exercises
+  id: totrans-481
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
 - en: '**Exercise 1**'
+  id: totrans-482
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE85]'
+  id: totrans-483
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE85]'
 - en: '**Exercise 2**'
+  id: totrans-484
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE86]'
+  id: totrans-485
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE86]'
 - en: '**Exercise 3**'
+  id: totrans-486
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE87]'
+  id: totrans-487
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE87]'
 - en: '**Exercise 4**'
+  id: totrans-488
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE88]'
+  id: totrans-489
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE88]'
