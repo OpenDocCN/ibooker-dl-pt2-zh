@@ -1,0 +1,3094 @@
+- en: 9 Advanced deep learning for computer vision
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: '*This chapter covers*'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The different branches of computer vision: image classification, image segmentation,
+    and object detection'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Modern convnet architecture patterns: residual connections, batch normalization,
+    and depthwise separable convolutions'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Techniques for visualizing and interpreting what convnets learn
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The previous chapter gave you a first introduction to deep learning for computer
+    vision via simple models (stacks of layer_conv_2d() and layer_max_pooling_2d()
+    layers) and a simple use case (binary image classification). But there’s more
+    to computer vision than image classification! This chapter dives deeper into more
+    diverse applications and advanced best practices.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 9.1 Three essential computer vision tasks
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'So far, we’ve focused on image classification models: an image goes in, a label
+    comes out: “This image likely contains a cat; this other one likely contains a
+    dog.” But image classification is only one of several possible applications of
+    deep learning in computer vision. In general, there are three essential computer
+    vision tasks you need to know about:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Image classification*—Where the goal is to assign one or more labels to an
+    image. It may be either single-label classification (an image can only be in one
+    category, excluding the others), or multilabel classification (tagging all categories
+    that an image belongs to, as seen in [figure 9.1](#fig9-1)). For example, when
+    you search for a keyword on the Google Photos app, behind the scenes you’re querying
+    a very large multilabel classification model—one with over 20,000 different classes,
+    trained on millions of images.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '![Image](../images/f0259-01.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: '**Figure 9.1 The three main computer vision tasks: Classification, segmentation,
+    detection**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Image segmentation*—Where the goal is to “segment” or “partition” an image
+    into different areas, with each area usually representing a category (as seen
+    in [figure 9.1](#fig9-1)). For instance, when Zoom or Google Meet diplays a custom
+    background behind you in a video call, it’s using an image segmentation model
+    to tell your face apart from what’s behind it, at pixel precision.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Object detection*—Where the goal is to draw rectangles (called *bounding boxes*)
+    around objects of interest in an image and associate each rectangle with a class.
+    A self-driving car could use an object-detection model to monitor cars, pedestrians,
+    and signs in view of its cameras, for instance.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Deep learning for computer vision also encompasses a number of somewhat more
+    niche tasks besides these three, such as image similarity scoring (estimating
+    how visually similar two images are), keypoint detection (pinpointing attributes
+    of interest in an image, such as facial features), pose estimation, 3D mesh estimation,
+    and so on. But to start with, image classification, image segmentation, and object
+    detection form the foundation that every machine learning engineer should be familiar
+    with. Most computer vision applications boil down to one of these three.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You’ve seen image classification in action in the previous chapter. Next, let’s
+    dive into image segmentation. It’s a very useful and versatile technique, and
+    you can straightforwardly approach it with what you’ve already learned so far.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that we won’t cover object detection, because it would be too specialized
+    and too complicated for an introductory book. However, you can check out the RetinaNet
+    example on [keras.rstudio.com/examples](http://www.keras.rstudio.com/examples),
+    which shows how to build and train an object detection model from scratch in R
+    using Keras.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 9.2 An image segmentation example
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Image segmentation with deep learning is about using a model to assign a class
+    to each pixel in an image, thus *segmenting* the image into different zones (such
+    as “background” and “foreground,” or “road,” “car,” and “sidewalk”). This general
+    category of techniques can be used to power a considerable variety of valuable
+    applications in image and video editing, autonomous driving, robotics, medical
+    imaging, and so on. There are two different flavors of image segmentation that
+    you should know about:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Semantic segmentation*, where each pixel is independently classified into
+    a semantic category, like “cat.” If there are two cats in the image, the corresponding
+    pixels are all mapped to the same generic “cat” category (see [figure 9.2](#fig9-2)).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Instance segmentation*, which seeks not only to classify image pixels by category
+    but also to parse out individual object instances. In an image with two cats in
+    it, instance segmentation would treat “cat 1” and “cat 2” as two separate classes
+    of pixels (see [figure 9.2](#fig9-2)).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'In this example, we’ll focus on semantic segmentation: we’ll be looking once
+    again at images of cats and dogs, and this time we’ll learn how to tell apart
+    the main subject and its background.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We’ll work with the Oxford-IIIT Pets dataset ([http://www.robots.ox.ac.uk/~vgg/data/pets/](http://www.robots.ox.ac.uk/~vgg/data/pets/)),
+    which contains 7,390 pictures of various breeds of cats and dogs, together with
+    foreground-background segmentation masks for each picture. A *segmentation mask*
+    is the image-segmentation equivalent of a label: it’s an image the same size as
+    the input image, with a single color channel where each integer value corresponds
+    to the class of the corresponding pixel in the input image. In our case, the pixels
+    of our segmentation masks can take one of three integer values:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Image](../images/f0261-01.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: '**Figure 9.2 Semantic segmentation vs. instance segmentation**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 1 (foreground)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 2 (background)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 3 (contour
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Let’s start by downloading and uncompressing our dataset, using the the download
+    .file() and untar() utilities provided by R. Just like in chapter 8, we’ll use
+    the fs package for filesystem operations:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: library(fs)
+  prefs: []
+  type: TYPE_NORMAL
+- en: data_dir <- path("pets_dataset")
+  prefs: []
+  type: TYPE_NORMAL
+- en: dir_create(data_dir)
+  prefs: []
+  type: TYPE_NORMAL
+- en: data_url <- path("http://www.robots.ox.ac.uk/~vgg/data/pets/data")
+  prefs: []
+  type: TYPE_NORMAL
+- en: for (filename in c("images.tar.gz", "annotations.tar.gz")) {
+  prefs: []
+  type: TYPE_NORMAL
+- en: download.file(url = data_url / filename,
+  prefs: []
+  type: TYPE_NORMAL
+- en: destfile = data_dir / filename)
+  prefs: []
+  type: TYPE_NORMAL
+- en: untar(data_dir / filename, exdir = data_dir)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '}'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The input pictures are stored as JPG files in the images/ folder (such as images/
+    Abyssinian_1.jpg), and the corresponding segmentation mask is stored as a PNG
+    file with the same name in the annotations/trimaps/ folder (such as annotations/
+    trimaps/Abyssinian_1.png).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s prepare a data.frame (technically, a tibble) with columns for our input
+    file paths, as well as the list of the corresponding mask file paths:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: input_dir <- data_dir / "images"
+  prefs: []
+  type: TYPE_NORMAL
+- en: target_dir <- data_dir / "annotations/trimaps/"
+  prefs: []
+  type: TYPE_NORMAL
+- en: image_paths <- tibble::tibble(
+  prefs: []
+  type: TYPE_NORMAL
+- en: input = sort(dir_ls(input_dir, glob = "*.jpg")),
+  prefs: []
+  type: TYPE_NORMAL
+- en: target = sort(dir_ls(target_dir, glob = "*.png")))
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To make sure we match up the image with the correct target, we sort the two
+    lists. The path vectors sort the same because targets and image paths share the
+    same base filename. Then, to help us keep track of the paths and make sure that
+    our input and target vectors stay in sync, we combine them into a two-column data
+    frame (we use tibble() to make the data.frame):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: tibble::glimpse(image_paths)
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Rows: 7,390'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Columns: 2'
+  prefs: []
+  type: TYPE_NORMAL
+- en: $ input <fs::path> "pets_dataset/images/Abyssinian_1.jpg", "pets_dataset/…
+  prefs: []
+  type: TYPE_NORMAL
+- en: $ target <fs::path> "pets_dataset/annotations/trimaps/Abyssinian_1.png", "…
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'What does one of these inputs and its mask look like? Let’s take a quick look.
+    We’ll use TensorFlow utilities for reading the image, so we can get familiar with
+    the API. First, we define a helper function that will plot a TensorFlow Tensor
+    containing an image using R’s plot() function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: display_image_tensor <- function(x, …, max = 255,
+  prefs: []
+  type: TYPE_NORMAL
+- en: plot_margins = c(0, 0, 0, 0)) {
+  prefs: []
+  type: TYPE_NORMAL
+- en: if(!is.null(plot_margins))
+  prefs: []
+  type: TYPE_NORMAL
+- en: par(mar = plot_margins)➊
+  prefs: []
+  type: TYPE_NORMAL
+- en: x %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: as.array() %>%➋
+  prefs: []
+  type: TYPE_NORMAL
+- en: drop() %>%➌
+  prefs: []
+  type: TYPE_NORMAL
+- en: as.raster(max = max) %>%➍
+  prefs: []
+  type: TYPE_NORMAL
+- en: plot(…, interpolate = FALSE)➎
+  prefs: []
+  type: TYPE_NORMAL
+- en: '}'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➊ **Default to no margins when plotting images.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➋ **Convert the Tensor to an R array.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➌ **drop() removes axes that are size 1. For example, if x is a grayscale image
+    with one color channel, it would squeeze the Tensor shape from (height, width,
+    1) to (height, width).**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➍ **Convert the R array to a 'raster' object.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➎ **interpolate = FALSE tells the R graphics device to draw pixels with sharp
+    edges, with no blending or interpolation of colors between pixels.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the as.raster() call we set max = 255 because, just like with MNIST, the
+    images are encoded as uint8. Unsigned 8-bit integers can encode values only in
+    the range of [0, 255]. By setting max = 255, we tell the R graphics device to
+    plot pixel values of 255 as white and 0 as black and interpolate linearly for
+    values in between to different shades of grey.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now we can read an image into a Tensor, and view it using our helper display_
+    image_tensor() (see [figure 9.3](#fig9-3)):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: library(tensorflow)
+  prefs: []
+  type: TYPE_NORMAL
+- en: image_tensor <- image_paths$input[10] %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: tf$io$read_file() %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: tf$io$decode_jpeg()
+  prefs: []
+  type: TYPE_NORMAL
+- en: str(image_tensor)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '<tf.Tensor: shape=(448, 500, 3), dtype=uint8, numpy=…>'
+  prefs: []
+  type: TYPE_NORMAL
+- en: display_image_tensor(image_tensor)➊
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➊ **Display input image Abyssinian_107.jpg.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Image](../images/f0263-01.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: '**Figure 9.3 An example image**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We’ll also define a helper to display a target image. The target image is also
+    read in as a uint8, but this time only values of (1, 2, 3) are found in the target
+    image tensor. To plot it, we subtract 1 so that the labels range from 0 to 2,
+    and then set max = 2 so that the labels become 0 (black), 1 (gray), and 2 (white).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'And here is its corresponding target (see [figure 9.4](#fig9-4)):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: display_target_tensor <- function(target)
+  prefs: []
+  type: TYPE_NORMAL
+- en: display_image_tensor(target - 1, max = 2)
+  prefs: []
+  type: TYPE_NORMAL
+- en: target <- image_paths$target[10] %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: tf$io$read_file() %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: tf$io$decode_png()
+  prefs: []
+  type: TYPE_NORMAL
+- en: str(target)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '<tf.Tensor: shape=(448, 500, 1), dtype=uint8, numpy=…>'
+  prefs: []
+  type: TYPE_NORMAL
+- en: display_target_tensor(target)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Image](../images/f0263-02.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: '**Figure 9.4 The corresponding target mask**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, let’s load our inputs and targets into two TF Datasets, and let’s split
+    the files into training and validation sets. Because the dataset is very small,
+    we can just load everything into memory:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: library(tfdatasets)
+  prefs: []
+  type: TYPE_NORMAL
+- en: tf_read_image <➊
+  prefs: []
+  type: TYPE_NORMAL
+- en: function(path, format = "image", resize = NULL, …) {
+  prefs: []
+  type: TYPE_NORMAL
+- en: img <- path %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: tf$io$read_file() %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: tf$io[[paste0("decode_", format)]](…)➋
+  prefs: []
+  type: TYPE_NORMAL
+- en: if (!is.null(resize))
+  prefs: []
+  type: TYPE_NORMAL
+- en: img <- img %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: tf$image$resize(as.integer(resize))➌
+  prefs: []
+  type: TYPE_NORMAL
+- en: img
+  prefs: []
+  type: TYPE_NORMAL
+- en: '}'
+  prefs: []
+  type: TYPE_NORMAL
+- en: img_size <- c(200, 200)
+  prefs: []
+  type: TYPE_NORMAL
+- en: tf_read_image_and_resize <- function(…, resize = img_size)
+  prefs: []
+  type: TYPE_NORMAL
+- en: tf_read_image(…, resize = resize)➍
+  prefs: []
+  type: TYPE_NORMAL
+- en: make_dataset <- function(paths_df) {
+  prefs: []
+  type: TYPE_NORMAL
+- en: tensor_slices_dataset(paths_df) %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: dataset_map(function(path) {➎
+  prefs: []
+  type: TYPE_NORMAL
+- en: image <- path$input %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: tf_read_image_and_resize("jpeg", channels = 3L)➏
+  prefs: []
+  type: TYPE_NORMAL
+- en: target <- path$target %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: tf_read_image_and_resize("png", channels = 1L)➐
+  prefs: []
+  type: TYPE_NORMAL
+- en: target <- target - 1➑
+  prefs: []
+  type: TYPE_NORMAL
+- en: list(image, target)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '}) %>%'
+  prefs: []
+  type: TYPE_NORMAL
+- en: dataset_cache() %>%➒
+  prefs: []
+  type: TYPE_NORMAL
+- en: dataset_shuffle(buffer_size = nrow(paths_df)) %>%➓
+  prefs: []
+  type: TYPE_NORMAL
+- en: dataset_batch(32)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '}'
+  prefs: []
+  type: TYPE_NORMAL
+- en: num_val_samples <- 1000⓫
+  prefs: []
+  type: TYPE_NORMAL
+- en: val_idx <- sample.int(nrow(image_paths), num_val_samples)
+  prefs: []
+  type: TYPE_NORMAL
+- en: val_paths <- image_paths[val_idx, ]⓬
+  prefs: []
+  type: TYPE_NORMAL
+- en: train_paths <- image_paths[-val_idx, ]
+  prefs: []
+  type: TYPE_NORMAL
+- en: validation_dataset <- make_dataset(val_paths)
+  prefs: []
+  type: TYPE_NORMAL
+- en: train_dataset <- make_dataset(train_paths)
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➊ **Here we define a helper to read in and resize the image using TensorFlow
+    operations.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➋ **Look up decode_image(), decode_jpeg(), or decode_png() from the tf$io submodule.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➌ **We make sure to call the tf module function with integers using as.integer().**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➍ **We resize everything to 200 × 200.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➎ **The R function passed to dataset_map() is called with symbolic tensors and
+    must return symbolic tensors. dataset_map() receives a single argument here, a
+    named list of two scalar string tensors, containing file paths to the input and
+    target images.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: '➏ **Each input image has three channels: RGB values.**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '➐ **Each target image has a single channel: integer labels for each pixel.**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➑ **Subtract 1 so that our labels become 0, 1, and 2.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➒ **Caching the dataset will store the full dataset in memory after the first
+    run. If your computer doesn't have enough RAM, remove this call, and the image
+    files will be loaded dynamically as needed throughout training.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➓ **Shuffle the images, using the total number of samples in the data as a buffer_size.
+    We make sure to call shuffle after cache.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ⓫ **Reserve 1,000 samples for validation.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ⓬ **Split the data into training and validation sets.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now it’s time to define our model:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: get_model <- function(img_size, num_classes) {
+  prefs: []
+  type: TYPE_NORMAL
+- en: conv <- function(…, padding = "same", activation = "relu")➊➋
+  prefs: []
+  type: TYPE_NORMAL
+- en: layer_conv_2d(…, padding = padding, activation = activation)➊
+  prefs: []
+  type: TYPE_NORMAL
+- en: conv_transpose <- function(…, padding = "same", activation = "relu")➊➋
+  prefs: []
+  type: TYPE_NORMAL
+- en: layer_conv_2d_transpose(…, padding = padding, activation = activation)➊
+  prefs: []
+  type: TYPE_NORMAL
+- en: input <- layer_input(shape = c(img_size, 3))
+  prefs: []
+  type: TYPE_NORMAL
+- en: output <- input %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: layer_rescaling(scale = 1/255) %>%➌
+  prefs: []
+  type: TYPE_NORMAL
+- en: conv(64, 3, strides = 2) %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: conv(64, 3) %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: conv(128, 3, strides = 2) %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: conv(128, 3) %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: conv(256, 3, strides = 2) %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: conv(256, 3) %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: conv_transpose(256, 3) %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: conv_transpose(256, 3, strides = 2) %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: conv_transpose(128, 3) %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: conv_transpose(128, 3, strides = 2) %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: conv_transpose(64, 3) %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: conv_transpose(64, 3, strides = 2) %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: conv(num_classes, 3, activation = "softmax")➍
+  prefs: []
+  type: TYPE_NORMAL
+- en: keras_model(input, output)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '}'
+  prefs: []
+  type: TYPE_NORMAL
+- en: model <- get_model(img_size = img_size, num_classes = 3)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '➊ **Define local functions conv() and conv_transpose(), so we can avoid passing
+    the same arguments to each call: padding = "same", activation = "relu".**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➋ **We use padding = "same" everywhere to avoid the influence of border padding
+    on feature map size.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➌ **Don't forget to rescale input images to the [0–1] range.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➍ **We end the model with a per-pixel three-way softmax to classify each output
+    pixel into one of our three categories.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here is the model summary:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: model
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Image](../images/f0265-01.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'The first half of the model closely resembles the kind of convnet you’d use
+    for image classification: a stack of Conv2D layers, with gradually increasing
+    filter sizes. We down-sample our images three times by a factor of two each, ending
+    up with activations of size (25, 25, 256). The purpose of this first half is to
+    encode the images into smaller feature maps, where each spatial location (or pixel)
+    contains information about a large spatial chunk of the original image. You can
+    understand it as a kind of compression.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'One important difference between the first half of this model and the classification
+    models you’ve seen before is the way we do downsampling: in the classification
+    convnets from the last chapter, we used MaxPooling2D layers to downsample feature
+    maps. Here, we downsample by adding strides to every other convolution layer (if
+    you don’t remember the details of how convolution strides work, see “Understanding
+    convolution strides” in section 8.1.1). We do this because, in the case of image
+    segmentation, we care a lot about the *spatial location* of information in the
+    image, because we need to produce per-pixel target masks as output of the model.
+    When you do 2 × 2 max pooling, you are completely destroying location information
+    within each pooling window: you return one scalar value per window, with zero
+    knowledge of which of the four locations in the windows the value came from. So
+    although max pooling layers perform well for classification tasks, they would
+    hurt us quite a bit for a segmentation task. Meanwhile, strided convolutions do
+    a better job at downsampling feature maps while retaining location information.
+    Throughout this book, you’ll notice that we tend to use strides instead of max
+    pooling in any model that cares about feature location, such as the generative
+    models in chapter 12.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The second half of the model is a stack of Conv2DTranspose layers. What are
+    those? Well, the output of the first half of the model is a feature map of shape
+    (25, 25, 256), but we want our final output to have the same shape as the target
+    masks, (200, 200, 3). Therefore, we need to apply a kind of *inverse* of the transformations
+    we’ve applied so far—something that will *upsample* the feature maps instead of
+    downsampling them. That’s the purpose of the Conv2DTranspose layer: you can think
+    of it as a kind of convolution layer that *learns to upsample*. If you have an
+    input of shape (100, 100, 64), and you run it through a layer layer_conv_2d(128,
+    3, strides = 2, padding = “same”), you get an output of shape (50, 50, 128). If
+    you run this output through a layer layer_conv_2d_transpose(64, 3, strides = 2,
+    padding = “same”), you get back an output of shape (100, 100, 64), the same as
+    the original. So after compressing our inputs into feature maps of shape (25,
+    25, 256) via a stack of Conv2D layers, we can simply apply the corresponding sequence
+    of Conv2DTranspose layers to get back to images of shape (200, 200, 3).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We can now compile and fit our model:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: model %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: compile(optimizer = "rmsprop",
+  prefs: []
+  type: TYPE_NORMAL
+- en: loss = "sparse_categorical_crossentropy")
+  prefs: []
+  type: TYPE_NORMAL
+- en: callbacks <- list(
+  prefs: []
+  type: TYPE_NORMAL
+- en: callback_model_checkpoint("oxford_segmentation.keras",
+  prefs: []
+  type: TYPE_NORMAL
+- en: save_best_only = TRUE))
+  prefs: []
+  type: TYPE_NORMAL
+- en: history <- model %>% fit(
+  prefs: []
+  type: TYPE_NORMAL
+- en: train_dataset,
+  prefs: []
+  type: TYPE_NORMAL
+- en: epochs = 50,
+  prefs: []
+  type: TYPE_NORMAL
+- en: callbacks = callbacks,
+  prefs: []
+  type: TYPE_NORMAL
+- en: validation_data = validation_dataset
+  prefs: []
+  type: TYPE_NORMAL
+- en: )
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'NOTE During training, you may see a warning like Corrupt JPEG data: premature
+    end of data segment. The image dataset is not perfect, but the tf$io module functions
+    can recover gracefully.'
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: 'Let’s display our training and validation loss (see [figure 9.5](#fig9-5)):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: plot(history)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Image](../images/f0267-01.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: '**Figure 9.5 Displaying training and validation loss curves**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You can see that we start overfitting midway, around epoch 25\. Let’s reload
+    our best-performing model according to the validation loss and demonstrate how
+    to use it to predict a segmentation mask (see [figure 9.6](#fig9-6)):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: model <- load_model_tf("oxford_segmentation.keras")
+  prefs: []
+  type: TYPE_NORMAL
+- en: test_image <- val_paths$input[309] %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: tf_read_image_and_resize("jpeg", channels = 3L)
+  prefs: []
+  type: TYPE_NORMAL
+- en: predicted_mask_probs <
+  prefs: []
+  type: TYPE_NORMAL
+- en: model(test_image[tf$newaxis, , , ])➊
+  prefs: []
+  type: TYPE_NORMAL
+- en: predicted_mask <➋
+  prefs: []
+  type: TYPE_NORMAL
+- en: tf$argmax(predicted_mask_probs, axis = -1L)➌
+  prefs: []
+  type: TYPE_NORMAL
+- en: predicted_target <- predicted_mask + 1
+  prefs: []
+  type: TYPE_NORMAL
+- en: par(mfrow = c(1, 2))
+  prefs: []
+  type: TYPE_NORMAL
+- en: display_image_tensor(test_image)
+  prefs: []
+  type: TYPE_NORMAL
+- en: display_target_tensor(predicted_target)
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➊ **tf$newaxis adds a batch dimension, because our model expects batches of
+    images. model() returns a Tensor with shape=(1, 200, 200, 3), dtype=float32.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➋ **predicted_mask is a Tensor with shape=(1, 200, 200), dtype=int64.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➌ **tf$argmax() is similar to which.max() in R. A key difference is that tf$argmax()
+    returns 0-based values. The base R equivalent of tf$argmax(x, axis = -1L) is apply(x,
+    c(1, 2, 3), which.max) - 1L.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Image](../images/f0268-01.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: '**Figure 9.6 A test image and its predicted segmentation mask**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: There are a couple of small artifacts in our predicted mask. Nevertheless, our
+    model appears to work nicely.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'By this point, throughout chapter 8 and the beginning of chapter 9, you’ve
+    learned the basics of how to perform image classification and image segmentation:
+    you can already accomplish a lot with what you know. However, the convnets that
+    experienced engineers develop to solve real-world problems aren’t quite as simple
+    as those we’ve been using in our demonstrations so far. You’re still lacking the
+    essential mental models and thought processes that enable experts to make quick
+    and accurate decisions about how to put together state-of-the-art models. To bridge
+    that gap, you need to learn about *architecture patterns*. Let’s dive in.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 9.3 Modern convnet architecture patterns
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'A model’s “architecture” is the sum of the choices that went into creating
+    it: which layers to use, how to configure them, and in what arrangement to connect
+    them. These choices define the *hypothesis space* of your model: the space of
+    possible functions that gradient descent can search over, parameterized by the
+    model’s weights. Like feature engineering, a good hypothesis space encodes *prior
+    knowledge* that you have about the problem at hand and its solution. For instance,
+    using convolution layers means that you know in advance that the relevant patterns
+    present in your input images are translation invariant. To effectively learn from
+    data, you need to make assumptions about what you’re looking for.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Model architecture is often the difference between success and failure. If you
+    make inappropriate architecture choices, your model may be stuck with suboptimal
+    metrics, and no amount of training data will save it. Inversely, a good model
+    architecture will accelerate learning and will enable your model to make efficient
+    use of the training data available, reducing the need for large datasets. A good
+    model architecture is one that *reduces the size of the search space* or otherwise
+    *makes it easier to converge to a good point of the search space*. Just like feature
+    engineering and data curation, model architecture is all about *making the problem
+    simpler* for gradient descent to solve. And remember that gradient descent is
+    a pretty stupid search process, so it needs all the help it can get.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Model architecture is more an art than a science. Experienced machine learning
+    engineers are able to intuitively cobble together high-performing models on their
+    first try, while beginners often struggle to create a model that trains at all.
+    The keyword here is *intuitively*: no one can give you a clear explanation of
+    what works and what doesn’t. Experts rely on pattern-matching, an ability that
+    they acquire through extensive practical experience. You’ll develop your own intuition
+    throughout this book. However, it’s not *all* about intuition, either—there isn’t
+    much in the way of actual science, but as in any engineering discipline, there
+    are best practices.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the following sections, we’ll review a few essential convnet architecture
+    best practices: in particular, *residual connections, batch normalization*, and
+    *separable convolutions*. Once you master how to use them, you will be able to
+    build highly effective image models. We will apply them to our cat vs. dog classification
+    problem.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s start from the bird’s-eye view: the modularity-hierarchy-reuse (MHR)
+    formula for system architecture.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 9.3.1 Modularity, hierarchy, and reuse
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'If you want to make a complex system simpler, you can apply a universal recipe:
+    just structure your amorphous soup of complexity into *modules*, organize the
+    modules into a *hierarchy*, and start *reusing* the same modules in multiple places
+    as appropriate (“reuse” is another word for *abstraction* in this context). That’s
+    the MHR formula (modularity-hierarchy-reuse), and it underlies system architecture
+    across pretty much every domain where the term “architecture” is used. It’s at
+    the heart of the organization of any system of meaningful complexity, whether
+    it’s a cathedral, your own body, the US Navy, or the Keras codebase (see [figure
+    9.7](#fig9-7)).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Image](../images/f0270-01.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: '**Figure 9.7 Complex systems follow a hierarchical structure and are organized
+    into distinct modules, which are reused multiple times (such as your four limbs,
+    which are all variants of the same blueprint, or your 20 “fingers”).**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If you’re a software engineer, you’re already keenly familiar with these principles:
+    an effective codebase is one that is modular and hierarchical and where you don’t
+    reimplement the same thing twice, but instead rely on reusable classes and functions.
+    If you factor your code by following these principles, you could say you’re doing
+    “software architecture.”'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Deep learning itself is simply the application of this recipe to continuous
+    optimization via gradient descent: you take a classic optimization technique (gradient
+    descent over a continuous function space), and you structure the search space
+    into modules (layers), organized into a deep hierarchy (often just a stack, the
+    simplest kind of hierarchy), where you reuse whatever you can (e.g., convolutions
+    are all about reusing the same information in different spatial locations).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Likewise, deep learning model architecture is primarily about making clever
+    use of modularity, hierarchy, and reuse. You’ll notice that all popular convnet
+    architectures are not only structured into layers, they’re structured into repeated
+    groups of layers (called “blocks” or “modules”). For instance, the popular VGG16
+    architecture we used in the previous chapter is structured into repeated “conv,
+    conv, max pooling” blocks (see [figure 9.8](#fig9-8)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Further, most convnets often feature pyramid-like structures (*feature hierarchies*).
+    Recall, for example, the progression in the number of convolution filters we used
+    in the first convnet we built in the previous chapter: 32, 64, 128\. The number
+    of filters grows with layer depth, whereas the size of the feature maps shrinks
+    accordingly. You’ll notice the same pattern in the blocks of the VGG16 model (see
+    [figure 9.8](#fig9-8)).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Image](../images/f0271-01.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: '**Figure 9.8 The VGG16 architecture: Note the repeated layer blocks and the
+    pyramid-like structure of the feature maps.**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Deeper hierarchies are intrinsically good because they encourage feature reuse
+    and, therefore, abstraction. In general, a deep stack of narrow layers performs
+    better than a shallow stack of large layers. However, there’s a limit to how deep
+    you can stack layers, due to the problem of *vanishing gradients*. This leads
+    us to our first essential model architecture pattern: residual connections.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**On the importance of ablation studies in deep learning research**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Deep learning architectures are often more *evolved* than designed—they were
+    developed by repeatedly trying things and selecting what seemed to work. Much
+    like in biological systems, if you take any complicated experimental deep learning
+    setup, chances are you can remove a few modules (or replace some trained features
+    with random ones) with no loss of performance.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This is made worse by the incentives that deep learning researchers face: by
+    making a system more complex than necessary, they can make it appear more interesting
+    or more novel and thus increase their chances of getting a paper through the peer-review
+    process. If you read lots of deep learning papers, you will notice that they’re
+    often optimized for peer review in both style and content in ways that actively
+    hurt clarity of explanation and reliability of results. For instance, mathematics
+    in deep learning papers is rarely used for clearly formalizing concepts or deriving
+    non-obvious results—rather, it gets leveraged as a *signal of seriousness*, like
+    an expensive suit on a salesman.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The goal of research shouldn’t be merely to publish but to generate reliable
+    knowledge. Crucially, understanding *causality* in your system is the most straightforward
+    way to generate reliable knowledge. And there’s a very low-effort way to look
+    into causality: *ablation studies*. Ablation studies consist of systematically
+    trying to remove parts of a system—making it simpler—to identify where its performance
+    actually comes from. If you find that X + Y + Z gives you good results, also try
+    X, Y, Z, X + Y, X + Z, and Y + Z, and see what happens.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If you become a deep learning researcher, cut through the noise in the research
+    process: do ablation studies for your models. Always ask, “Could there be a simpler
+    explanation? Is this added complexity really necessary? Why?”'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 9.3.2 Residual connections
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: You probably know about the game of Telephone, also called Chinese Whispers
+    in the UK and *téléphone arabe* in France, where an initial message is whispered
+    in the ear of a player, who then whispers it in the ear of the next player, and
+    so on. The final message ends up bearing little resemblance to its original version.
+    It’s a fun metaphor for the cumulative errors that occur in sequential transmission
+    over a noisy channel.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As it happens, backpropagation in a sequential deep learning model is pretty
+    similar to the game of Telephone. You’ve got a chain of functions, like this one:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: y = f4(f3(f2(f1(x))))
+  prefs: []
+  type: TYPE_NORMAL
+- en: The name of the game is to adjust the parameters of each function in the chain
+    based on the error recorded on the output of f4 (the loss of the model). To adjust
+    f1, you’ll need to percolate error information through f2, f3, and f4. However,
+    each successive function in the chain introduces some amount of noise. If your
+    function chain is too deep, this noise starts overwhelming gradient information,
+    and backpropagation stops working. Your model won’t train at all. This is the
+    *vanishing gradients* problem.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The fix is simple: just force each function in the chain to be nondestructive—to
+    retain a noiseless version of the information contained in the previous input.
+    The easiest way to implement this is to use a *residual connection*.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'It’s dead easy: just add the input of a layer or block of layers back to its
+    output (see [figure 9.9](#fig9-9)). The residual connection acts as an *information
+    shortcut* around destructive or noisy blocks (such as blocks that contain relu
+    activations or dropout layers), enabling error gradient information from early
+    layers to propagate noiselessly through a deep network. This technique was introduced
+    in 2015 with the ResNet family of models (developed by He et al. at Microsoft).^([1](#Rendnote1))'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Image](../images/f0273-01.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: '**Figure 9.9 A residual connection around a processing block**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In practice, you’d implement a residual connection as follows.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 9.1 A residual connection in pseudocode
+  prefs: []
+  type: TYPE_NORMAL
+- en: x <- …➊
+  prefs: []
+  type: TYPE_NORMAL
+- en: residual <- x➋
+  prefs: []
+  type: TYPE_NORMAL
+- en: x <- block(x)➌
+  prefs: []
+  type: TYPE_NORMAL
+- en: x <- layer_add(c(x, residual))➍
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➊ **Some input tensor**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➋ **Save a pointer to the original input. This is called the residual.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➌ **This computation block can potentially be destructive or noisy, and that's
+    fine.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: '➍ **Add the original input to the layer''s output: the final output will thus
+    always preserve full information about the original input.**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that adding the input back to the output of a block implies that the output
+    should have the same shape as the input. However, this is not the case if your
+    block includes convolutional layers with an increased number of filters or a max-pooling
+    layer. In such cases, use a 1 × 1 layer_conv_2d() with no activation to linearly
+    project the residual to the desired output shape (see listing 9.2). You’d typically
+    use padding = “same” in the convolution layers in your target block so as to avoid
+    spatial downsampling due to padding, and you’d use strides in the residual projection
+    to match any downsampling caused by a max pooling layer (see listing 9.3).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 9.2 Residual block where the number of filters changes
+  prefs: []
+  type: TYPE_NORMAL
+- en: inputs <- layer_input(shape = c(32, 32, 3))
+  prefs: []
+  type: TYPE_NORMAL
+- en: x <- inputs %>% layer_conv_2d(32, 3, activation = "relu")
+  prefs: []
+  type: TYPE_NORMAL
+- en: residual <- x➊
+  prefs: []
+  type: TYPE_NORMAL
+- en: x <- x %>% layer_conv_2d(64, 3, activation = "relu", padding = "same")➋
+  prefs: []
+  type: TYPE_NORMAL
+- en: residual <- residual %>% layer_conv_2d(64, 1)➌
+  prefs: []
+  type: TYPE_NORMAL
+- en: x <- layer_add(c(x, residual))➍
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➊ **Set aside the residual.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: '➋ **This is the layer around which we create a residual connection: it increases
+    the number of output filers from 32 to 64\. Note that we use padding = "same"
+    to avoid downsampling due to padding.**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➌ **The residual had only 32 filters, so we use a 1 × 1 layer_conv_2d to project
+    it to the correct shape.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➍ **Now the block output and the residual have the same shape and can be added.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 9.3 Case where the target block includes a max-pooling layer
+  prefs: []
+  type: TYPE_NORMAL
+- en: inputs <- layer_input(shape = c(32, 32, 3))
+  prefs: []
+  type: TYPE_NORMAL
+- en: x <- inputs %>% layer_conv_2d(32, 3, activation = "relu")
+  prefs: []
+  type: TYPE_NORMAL
+- en: residual <- x➊
+  prefs: []
+  type: TYPE_NORMAL
+- en: x <- x %>%➋
+  prefs: []
+  type: TYPE_NORMAL
+- en: layer_conv_2d(64, 3, activation = "relu", padding = "same") %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: layer_max_pooling_2d(2, padding = "same")
+  prefs: []
+  type: TYPE_NORMAL
+- en: residual <- residual %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: layer_conv_2d(64, 1, strides = 2)➌
+  prefs: []
+  type: TYPE_NORMAL
+- en: x <- layer_add(list(x, residual))➍
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➊ **Set aside the residual.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: '➋ **This is the block of two layers around which we create a residual connection:
+    it includes a 2 × 2 max pooling layer. Note that we use padding = "same" in both
+    the convolution layer and the max-pooling layer to avoid downsampling due to padding.**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➌ **We use strides = 2 in the residual projection to match the downsampling
+    created by the max-pooling layer.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➍ **Now the block output and the residual have the same shape and can be added.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To make these ideas more concrete, here’s an example of a simple convnet structured
+    into a series of blocks, each made of two convolution layers and one optional
+    max-pooling layer, with a residual connection around each block:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: inputs <- layer_input(shape = c(32, 32, 3))
+  prefs: []
+  type: TYPE_NORMAL
+- en: x <- layer_rescaling(inputs, scale = 1/255)
+  prefs: []
+  type: TYPE_NORMAL
+- en: residual_block <- function(x, filters, pooling = FALSE) {➊
+  prefs: []
+  type: TYPE_NORMAL
+- en: residual <- x
+  prefs: []
+  type: TYPE_NORMAL
+- en: x <- x %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: layer_conv_2d(filters, 3, activation = "relu", padding = "same") %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: layer_conv_2d(filters, 3, activation = "relu", padding = "same")
+  prefs: []
+  type: TYPE_NORMAL
+- en: if (pooling) {➋
+  prefs: []
+  type: TYPE_NORMAL
+- en: x <- x %>% layer_max_pooling_2d(pool_size = 2, padding = "same")
+  prefs: []
+  type: TYPE_NORMAL
+- en: residual <- residual %>% layer_conv_2d(filters, 1, strides = 2)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '} else if (filters != dim(residual)[4]) {➌'
+  prefs: []
+  type: TYPE_NORMAL
+- en: residual <- residual %>% layer_conv_2d(filters, 1)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '}'
+  prefs: []
+  type: TYPE_NORMAL
+- en: layer_add(list(x, residual))
+  prefs: []
+  type: TYPE_NORMAL
+- en: '}'
+  prefs: []
+  type: TYPE_NORMAL
+- en: outputs <- x %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: residual_block(filters = 32, pooling = TRUE) %>%➍
+  prefs: []
+  type: TYPE_NORMAL
+- en: residual_block(filters = 64, pooling = TRUE) %>%➎
+  prefs: []
+  type: TYPE_NORMAL
+- en: residual_block(filters = 128, pooling = FALSE) %>%➏
+  prefs: []
+  type: TYPE_NORMAL
+- en: layer_global_average_pooling_2d() %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: layer_dense(units = 1, activation = "sigmoid")
+  prefs: []
+  type: TYPE_NORMAL
+- en: model <- keras_model(inputs = inputs, outputs = outputs)
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➊ **Utility function to apply a convolutional block with a residual connection,
+    with an option to add max pooling**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➋ **If we use max pooling, we add a strided convolution to project the residual
+    to the expected shape.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➌ **If we don't use max pooling, we project the residual only if the number
+    of channels has changed.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➍ **First block**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➎ **Second block; note the increasing filter count in each block.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➏ **The last block doesn't need a max-pooling layer, because we will apply global
+    average pooling right after it.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This is the model summary we get:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: model
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Image](../images/f0275-01.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: With residual connections, you can build networks of arbitrary depth, without
+    having to worry about vanishing gradients.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now let’s move on to the next essential convnet architecture pattern: *batch
+    normalization*.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 9.3.3 Batch normalization
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '*Normalization* is a broad category of methods that seek to make different
+    samples seen by a machine learning model more similar to each other, which helps
+    the model learn and generalize well to new data. The most common form of data
+    normalization is one you’ve already seen several times in this book: centering
+    the data on zero by subtracting the mean from the data and giving the data a unit
+    standard deviation by dividing the data by its standard deviation. In effect,
+    this makes the assumption that the data follows a normal (or Gaussian) distribution
+    and makes sure this distribution is centered and scaled to unit variance:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: normalize_data <- apply(data, <axis>, function(x) (x - mean(x)) / sd(x))
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Previous examples in this book normalized data before feeding it into models.
+    But data normalization may be of interest after every transformation operated
+    by the network: even if the data entering a Dense or Conv2D network has a 0 mean
+    and unit variance, there’s no reason to expect a priori that this will be the
+    case for the data coming out. Could normalizing intermediate activations help?'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Batch normalization does just that. It’s a type of layer (layer_batch_normalization()
+    in Keras) introduced in 2015 by Ioffe and Szegedy^([2](#Rendnote2)) ; it can adaptively
+    normalize data even as the mean and variance change over time during training.
+    During training, it uses the mean and variance of the current batch of data to
+    normalize samples, and during inference (when a big enough batch of representative
+    data may not be available), it uses an exponential moving average of the batchwise
+    mean and variance of the data seen during training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Although the original paper stated that batch normalization operates by “reducing
+    internal covariate shift,” no one really knows for sure why batch normalization
+    helps. Various hypotheses exist, but no certitudes. You’ll find that this is true
+    of many things in deep learning—it is not an exact science but a set of ever-changing,
+    empirically derived engineering best practices, woven together by unreliable narratives.
+    You will sometimes feel like the book you have in hand tells you *how* to do something
+    but doesn’t quite satisfactorily say *why* it works: that’s because we know the
+    how but we don’t know the why. Whenever a reliable explanation is available, I
+    make sure to mention it. Batch normalization isn’t one of those cases.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In practice, the main effect of batch normalization appears to be that it helps
+    with gradient propagation—much like residual connections—and thus allows for deeper
+    networks. Some very deep networks can be trained only if they include multiple
+    BatchNormalization layers. For instance, batch normalization is used liberally
+    in many of the advanced convnet architectures that come packaged with Keras, such
+    as ResNet50, EfficientNet, and Xception.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'layer_batch_normalization() can be used after any layer—layer_dense(), layer_conv_2d(),
+    and so on:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: x <- …➊
+  prefs: []
+  type: TYPE_NORMAL
+- en: x <- x %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: layer_conv_2d(32, 3, use_bias = FALSE) %>%➋
+  prefs: []
+  type: TYPE_NORMAL
+- en: layer_batch_normalization()
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➊ **For example, a layer_input(), keras_model_sequential(), or output from another
+    layer**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➋ **Because the output of the layer_conv_2d() is normalized, the layer doesn't
+    need its own bias vector.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: Both layer_dense() and layer_conv_2d() involve a *bias vector*, a learned variable
+    whose purpose is to make the layer *affine* rather than purely linear. For instance,
+    layer_ conv_2d() returns, schematically, y = conv(x, kernel) + bias, and layer_dense()
+    returns y = dot(x, kernel) + bias. Because the normalization step will take care
+    of centering the layer’s output on zero, the bias vector is no longer needed when
+    using layer_ batch_normalization(), and the layer can be created without it via
+    the option use_bias = FALSE. This makes the layer slightly leaner.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Importantly, I would generally recommend placing the previous layer’s activation
+    *after* the batch normalization layer (although this is still a subject of debate).
+    So instead of doing what is shown in listing 9.4, you would do what’s shown in
+    listing 9.5.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 9.4 How not to use batch normalization
+  prefs: []
+  type: TYPE_NORMAL
+- en: x %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: layer_conv_2d(32, 3, activation = "relu") %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: layer_batch_normalization()
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Listing 9.5 How to use batch normalization: The activation comes last'
+  prefs: []
+  type: TYPE_NORMAL
+- en: x %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: layer_conv_2d(32, 3, use_bias = FALSE) %>%➊
+  prefs: []
+  type: TYPE_NORMAL
+- en: layer_batch_normalization() %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: layer_activation("relu")➋
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➊ **Note the lack of activation here.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➋ **We place the activation after layer_batch_normalization().**
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The intuitive reason for this approach is that batch normalization will center
+    your inputs on zero, whereas your relu activation uses zero as a pivot for keeping
+    or dropping activated channels: doing normalization before the activation maximizes
+    the utilization of the relu. That said, this ordering best practice is not exactly
+    critical, so if you do convolution, then activation, and then batch normalization,
+    your model will still train, and you won’t necessarily see worse results.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**On batch normalization and fine-tuning**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Batch normalization has many quirks. One of the main ones relates to fine-tuning:
+    when fine-tuning a model that includes BatchNormalization layers, I recommend
+    leaving these layers frozen (call freeze_weights() to set their trainable attribute
+    to FALSE). Otherwise, they will keep updating their internal mean and variance,
+    which can interfere with the very small updates applied to the surrounding Conv2D
+    layers:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: batch_norm_layer_s3_classname <- class(layer_batch_normalization())[1]
+  prefs: []
+  type: TYPE_NORMAL
+- en: batch_norm_layer_s3_classname
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[1] "keras.layers.normalization.batch_normalization.BatchNormalization"'
+  prefs: []
+  type: TYPE_NORMAL
+- en: is_batch_norm_layer <- function(x)
+  prefs: []
+  type: TYPE_NORMAL
+- en: inherits(x, batch_norm_layer_s3_classname)
+  prefs: []
+  type: TYPE_NORMAL
+- en: model <- application_efficientnet_b0()
+  prefs: []
+  type: TYPE_NORMAL
+- en: for(layer in model$layers)
+  prefs: []
+  type: TYPE_NORMAL
+- en: if(is_batch_norm_layer(layer))
+  prefs: []
+  type: TYPE_NORMAL
+- en: layer$trainable <- FALSE➊
+  prefs: []
+  type: TYPE_NORMAL
+- en: '➊ **Example of how to set trainable <- FALSE to freeze only BatchNormalization
+    layers. Note: you can also call freeze_ weights(model, which = is_batch_norm_layer)
+    to achieve the same outcome.**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now let’s take a look at the last architecture pattern in our series: depthwise
+    separable convolutions.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 9.3.4 Depthwise separable convolutions
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: What if I told you that there’s a layer you can use as a drop-in replacement
+    for layer_ conv_2d() that will make your model smaller (fewer trainable weight
+    parameters) and leaner (fewer floating-point operations) and cause it to perform
+    a few percentage points better on its task? That is precisely what the *depthwise
+    separable convolution* layer does (layer_separable_conv_2d() in Keras). This layer
+    performs a spatial convolution on each channel of its input, independently, before
+    mixing output channels via a pointwise convolution (a 1 × 1 convolution), as shown
+    in [figure 9.10.](#fig9-10)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Image](../images/f0278-01.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: '**Figure 9.10 Depthwise separable convolution: A depthwise convolution followed
+    by a pointwise convolution**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is equivalent to separating the learning of spatial features and the learning
+    of channel-wise features. In much the same way that convolution relies on the
+    assumption that the patterns in images are not tied to specific locations, depthwise
+    separable convolution relies on the assumption that *spatial locations* in intermediate
+    activations are *highly correlated*, but *different channels* are *highly independent*
+    . Because this assumption is generally true for the image representations learned
+    by deep neural networks, it serves as a useful prior that helps the model make
+    more efficient use of its training data. A model with stronger priors about the
+    structure of the information it will have to process is a better model—as long
+    as the priors are accurate.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Depthwise separable convolution requires significantly fewer parameters and
+    involves fewer computations compared to regular convolution, while having comparable
+    representational power. It results in smaller models that converge faster and
+    are less prone to overfitting. These advantages become especially important when
+    you’re training small models from scratch on limited data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When it comes to larger-scale models, depthwise separable convolutions are
+    the basis of the Xception architecture, a high-performing convnet that comes packaged
+    with Keras. You can read more about the theoretical grounding for depthwise separable
+    convolutions and Xception in the paper “Xception: Deep Learning with Depthwise
+    Separable Convolutions.”^([3](#Rendnote3))'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**The co-evolution of hardware, software, and algorithms**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Consider a regular convolution operation with a 3 × 3 window, 64 input channels,
+    and 64 output channels. It uses 3 * 3 * 64 * 64 = 36,864 trainable parameters,
+    and when you apply it to an image, it runs a number of floating-point operations
+    that is proportional to this parameter count. Meanwhile, consider an equivalent
+    depthwise separable convolution: it involves only 3 * 3 * 64 + 64 * 64 = 4,672
+    trainable parameters and proportionally fewer floating-point operations. This
+    efficiency improvement only increases as the number of filters or the size of
+    the convolution windows gets larger.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As a result, you would expect depthwise separable convolutions to be dramatically
+    faster, right? Hold on. This would be true if you were writing simple CUDA or
+    C implementations of these algorithms—in fact, you do see a meaningful speedup
+    when running on CPU, where the underlying implementation is parallelized C. But
+    in practice, you’re probably using a GPU, and what you’re executing on it is far
+    from a “simple” CUDA implementation: it’s a *cuDNN kernel*, a piece of code that
+    has been extraordinarily optimized, down to each machine instruction. It certainly
+    makes sense to spend a lot of effort optimizing this code, since cuDNN convolutions
+    on NVIDIA hardware are responsible for many exaFLOPS of computation every day.
+    But a side effect of this extreme micro-optimization is that alternative approaches
+    have little chance to compete on performance—even approaches that have significant
+    intrinsic advantages, like depthwise separable convolutions.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Despite repeated requests to NVIDIA, depthwise separable convolutions have
+    not benefited from nearly the same level of software and hardware optimization
+    as regular convolutions, and as a result they remain only about as fast as regular
+    convolutions, even though they’re using quadratically fewer parameters and floating-point
+    operations. Note, though, that using depthwise separable convolutions remains
+    a good idea even if it does not result in a speedup: their lower parameter count
+    means that you are less at risk of overfitting, and their assumption that channels
+    should be uncorrelated leads to faster model convergence and more robust representations.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'What is a slight inconvenience in this case can become an impassable wall in
+    other situations: because the entire hardware and software ecosystem of deep learning
+    has been micro-optimized for a very specific set of algorithms (in particular,
+    convnets trained via backpropagation), there’s an extremely high cost to steering
+    away from the beaten path.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you were to experiment with alternative algorithms, such as gradient-free
+    optimization or spiking neural networks, the first few parallel C++ or CUDA implementations
+    you’d come up with would be orders of magnitude slower than a good old convnet,
+    no matter how clever and efficient your ideas were. Convincing other researchers
+    to adopt your method would be a tough sell, even if it were just plain better.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You could say that modern deep learning is the product of a co-evolution process
+    between hardware, software, and algorithms: the availability of NVIDIA GPUs and
+    CUDA led to the early success of backpropagation-trained convnets, which led NVIDIA
+    to optimize its hardware and software for these algorithms, which in turn led
+    to consolidation of the research community behind these methods. At this point,
+    figuring out a different path would require a multiyear re-engineering of the
+    entire ecosystem.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '9.3.5 Putting it together: A mini Xception-like model'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'As a reminder, here are the convnet architecture principles you’ve learned
+    so far:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Your model should be organized into repeated *blocks* of layers, usually made
+    of multiple convolution layers and a max-pooling layer.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The number of filters in your layers should increase as the size of the spatial
+    feature maps decreases.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Deep and narrow is better than broad and shallow.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Introducing residual connections around blocks of layers helps you train deeper
+    networks.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: It can be beneficial to introduce batch normalization layers after your convolution
+    layers.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: It can be beneficial to replace layer_conv_2d() with layer_separable_ conv_2d(),
+    which are more parameter efficient
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Let’s bring these ideas together into a single model. Its architecture will
+    resemble a smaller version of Xception, and we’ll apply it to the dogs vs. cats
+    task from the previous chapter. For data loading and model training, we’ll simply
+    reuse the setup we used in section 8.2.5, but we’ll replace the model definition
+    with the following convnet:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: data_augmentation <- keras_model_sequential() %>%➊
+  prefs: []
+  type: TYPE_NORMAL
+- en: layer_random_flip("horizontal") %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: layer_random_rotation(0.1) %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: layer_random_zoom(0.2)
+  prefs: []
+  type: TYPE_NORMAL
+- en: inputs <- layer_input(shape = c(180, 180, 3))
+  prefs: []
+  type: TYPE_NORMAL
+- en: x <- inputs %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: data_augmentation() %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: layer_rescaling(scale = 1 / 255)➋
+  prefs: []
+  type: TYPE_NORMAL
+- en: x <- x %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: layer_conv_2d(32, 5, use_bias = FALSE)➌
+  prefs: []
+  type: TYPE_NORMAL
+- en: for (size in c(32, 64, 128, 256, 512)) {➍
+  prefs: []
+  type: TYPE_NORMAL
+- en: residual <- x
+  prefs: []
+  type: TYPE_NORMAL
+- en: x <- x %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: layer_batch_normalization() %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: layer_activation("relu") %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: layer_separable_conv_2d(size, 3, padding = "same", use_bias = FALSE) %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: layer_batch_normalization() %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: layer_activation("relu") %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: layer_separable_conv_2d(size, 3, padding = "same", use_bias = FALSE) %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: layer_max_pooling_2d(pool_size = 3, strides = 2, padding = "same")
+  prefs: []
+  type: TYPE_NORMAL
+- en: residual <- residual %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: layer_conv_2d(size, 1, strides = 2, padding = "same", use_bias = FALSE)
+  prefs: []
+  type: TYPE_NORMAL
+- en: x <- layer_add(list(x, residual))
+  prefs: []
+  type: TYPE_NORMAL
+- en: '}'
+  prefs: []
+  type: TYPE_NORMAL
+- en: outputs <- x %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: layer_global_average_pooling_2d() %>%➎
+  prefs: []
+  type: TYPE_NORMAL
+- en: layer_dropout(0.5) %>%➏
+  prefs: []
+  type: TYPE_NORMAL
+- en: layer_dense(1, activation = "sigmoid")
+  prefs: []
+  type: TYPE_NORMAL
+- en: model <- keras_model(inputs, outputs)
+  prefs: []
+  type: TYPE_NORMAL
+- en: train_dataset <- image_dataset_from_directory(
+  prefs: []
+  type: TYPE_NORMAL
+- en: '"cats_vs_dogs_small/train",'
+  prefs: []
+  type: TYPE_NORMAL
+- en: image_size = c(180, 180),
+  prefs: []
+  type: TYPE_NORMAL
+- en: batch_size = 32
+  prefs: []
+  type: TYPE_NORMAL
+- en: )
+  prefs: []
+  type: TYPE_NORMAL
+- en: validation_dataset <- image_dataset_from_directory(
+  prefs: []
+  type: TYPE_NORMAL
+- en: '"cats_vs_dogs_small/validation",'
+  prefs: []
+  type: TYPE_NORMAL
+- en: image_size = c(180, 180),
+  prefs: []
+  type: TYPE_NORMAL
+- en: batch_size = 32
+  prefs: []
+  type: TYPE_NORMAL
+- en: )
+  prefs: []
+  type: TYPE_NORMAL
+- en: model %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: compile(
+  prefs: []
+  type: TYPE_NORMAL
+- en: loss = "binary_crossentropy",
+  prefs: []
+  type: TYPE_NORMAL
+- en: optimizer = "rmsprop",
+  prefs: []
+  type: TYPE_NORMAL
+- en: metrics = "accuracy"
+  prefs: []
+  type: TYPE_NORMAL
+- en: )
+  prefs: []
+  type: TYPE_NORMAL
+- en: history <- model %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: fit(
+  prefs: []
+  type: TYPE_NORMAL
+- en: train_dataset,
+  prefs: []
+  type: TYPE_NORMAL
+- en: epochs = 100,
+  prefs: []
+  type: TYPE_NORMAL
+- en: validation_data = validation_dataset)
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➊ **We use the same data augmentation configuration as before.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➋ **Don't forget input rescaling!**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➌**Note that the assumption that underlies separable convolution, "feature channels
+    are largely independent," does not hold for RGB images! Red, green, and blue color
+    channels are actually highly correlated in natural images. As such, the first
+    layer in our model is a regular layer_conv_2d() layer. We'll start using layer_separable_conv_2d()
+    afterward.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➍**We apply a series of convolutional blocks with increasing feature depth.
+    Each block consists of two batch-normalized depthwise separable convolution layers
+    and a max-pooling layer, with a residual connection around the entire block.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➎**In the original model, we used a layer_flatten() before the layer_dense().
+    Here, we go with a layer_global_average_pooling_2d().**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➐**Like in the original model, we add a dropout layer for regularization.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: This convnet has a total parameter count of 721,857, slightly lower than the
+    991,041 parameters of the original model we defined in chapter 8 (Listing 8.7),
+    but still in the same ballpark. [Figure 9.11](#fig9-11) shows its training and
+    validation curves.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Image](../images/f0282-01.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: '**Figure 9.11 Training and validation metrics with an Xception-like architecture**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: You’ll find that our new model achieves a test accuracy of 90.8%, compared to
+    81.4% for the naive model in the previous chapter. As you can see, following architecture
+    best practices does have an immediate, sizable impact on model performance!
+  prefs: []
+  type: TYPE_NORMAL
+- en: At this point, if you want to further improve performance, you should start
+    systematically tuning the hyperparameters of your architecture—a topic we’ll cover
+    in detail in chapter 13\. We haven’t gone through this step here, so the configuration
+    of the preceding model is purely based on the best practices we discussed, plus,
+    when it comes to gauging model size, a small amount of intuition.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that these architecture best practices are relevant to computer vision
+    in general, not just image classification. For example, Xception is used as the
+    standard convolutional base in DeepLabV3, a popular state-of-the-art image segmentation
+    solution.^([4](#Rendnote4))
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This concludes our introduction to essential convnet architecture best practices.
+    With these principles in hand, you’ll be able to develop higher-performing models
+    across a wide range of computer vision tasks. You’re now well on your way to becoming
+    a proficient computer vision practitioner. To further deepen your expertise, there’s
+    one last important topic we need to cover: interpreting how a model arrives at
+    its predictions.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 9.4 Interpreting what convnets learn
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'A fundamental problem when building a computer vision application is that of
+    *interpretability*: *why* did your classifier think a particular image contained
+    a fridge, when all you can see is a truck? This is especially relevant to use
+    cases where deep learning is used to complement human expertise, such as in medical
+    imaging use cases. We will end this chapter by getting you familiar with a range
+    of different techniques for visualizing what convnets learn and understanding
+    the decisions they make.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'It’s often said that deep learning models are “black boxes”: they learn representations
+    that are difficult to extract and present in a human-readable form. Although this
+    is partially true for certain types of deep learning models, it’s definitely not
+    true for convnets. The representations learned by convnets are highly amenable
+    to visualization, in large part because they’re *representations of visual concepts*.
+    Since 2013, a wide array of techniques has been developed for visualizing and
+    interpreting these representations. We won’t survey all of them, but we’ll cover
+    three of the most accessible and useful ones:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Visualizing intermediate convnet outputs (intermediate activations)*—Useful
+    for understanding how successive convnet layers transform their input, and for
+    getting a first idea of the meaning of individual convnet filters'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Visualizing convnet filters*—Useful for understanding precisely what visual
+    pattern or concept each filter in a convnet is receptive to'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Visualizing heatmaps of class activation in an image*—Useful for understanding
+    which parts of an image were identified as belonging to a given class, thus allowing
+    you to localize objects in images'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: For the first method—activation visualization—we’ll use the small convnet that
+    we trained from scratch on the dogs-versus-cats classification problem in section
+    8.2\. For the next two methods, we’ll use a pretrained Xception model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 9.4.1 Visualizing intermediate activations
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Visualizing intermediate activations consists of displaying the values returned
+    by various convolution and pooling layers in a model, given a certain input (the
+    output of a layer is often called its *activation*, the output of the activation
+    function). This gives a view into how an input is decomposed into the different
+    filters learned by the network. We want to visualize feature maps with three dimensions:
+    width, height, and depth (channels). Each channel encodes relatively independent
+    features, so the proper way to visualize these feature maps is by independently
+    plotting the contents of every channel as a 2D image. Let’s start by loading the
+    model that you saved in section 8.2:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: model <- load_model_tf("convnet_from_scratch_with_augmentation.keras")
+  prefs: []
+  type: TYPE_NORMAL
+- en: model
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Image](../images/f0284-01.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Next, we’ll get an input image—a picture of a cat, not part of the images the
+    network was trained on.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 9.6 Preprocessing a single image
+  prefs: []
+  type: TYPE_NORMAL
+- en: img_path <- get_file(➊
+  prefs: []
+  type: TYPE_NORMAL
+- en: fname = "cat.jpg",
+  prefs: []
+  type: TYPE_NORMAL
+- en: origin = "https://img-datasets.s3.amazonaws.com/cat.jpg")
+  prefs: []
+  type: TYPE_NORMAL
+- en: img_tensor <- img_path %>%➋
+  prefs: []
+  type: TYPE_NORMAL
+- en: tf_read_image(resize = c(180, 180))
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➊**Download a test image.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➋ **Read and resize the image to a float32 Tensor of shape (180, 180, 3).**
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s display the picture (see [figure 9.12](#fig9-12)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 9.7 Displaying the test picture
+  prefs: []
+  type: TYPE_NORMAL
+- en: display_image_tensor(img_tensor)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Image](../images/f0285-01.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: '**Figure 9.12 The test cat picture**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: To extract the feature maps we want to look at, we’ll create a Keras model that
+    takes batches of images as input and that outputs the activations of all convolution
+    and pooling layers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 9.8 Instantiating a model that returns layer activations
+  prefs: []
+  type: TYPE_NORMAL
+- en: conv_layer_s3_classname <-➊
+  prefs: []
+  type: TYPE_NORMAL
+- en: class(layer_conv_2d(NULL, 1, 1))[1]
+  prefs: []
+  type: TYPE_NORMAL
+- en: pooling_layer_s3_classname <-
+  prefs: []
+  type: TYPE_NORMAL
+- en: class(layer_max_pooling_2d(NULL))[1]
+  prefs: []
+  type: TYPE_NORMAL
+- en: is_conv_layer <- function(x) inherits(x, conv_layer_s3_classname)
+  prefs: []
+  type: TYPE_NORMAL
+- en: is_pooling_layer <- function(x) inherits(x, pooling_layer_s3_classname)
+  prefs: []
+  type: TYPE_NORMAL
+- en: layer_outputs <- list()
+  prefs: []
+  type: TYPE_NORMAL
+- en: for (layer in model$layers)
+  prefs: []
+  type: TYPE_NORMAL
+- en: if (is_conv_layer(layer) || is_pooling_layer(layer))
+  prefs: []
+  type: TYPE_NORMAL
+- en: layer_outputs[[layer$name]] <- layer$output➋
+  prefs: []
+  type: TYPE_NORMAL
+- en: activation_model <- keras_model(inputs = model$input,➌
+  prefs: []
+  type: TYPE_NORMAL
+- en: outputs = layer_outputs)
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➊ **Make dummy conv and pooling layers to determine what the S3 classname is.
+    This is generally a long string like "keras.layers.convolutional.Conv2D", but
+    because it can change between Tensorflow versions, it's better to not hardcode
+    it.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➋ **Extract the outputs of all Conv2D and MaxPooling2D layers and put them in
+    a named list.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➌ **Create a model that will return these outputs, given the model input.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When fed an image input, this model returns the values of the layer activations
+    in the original model, as a list. This is the first time you’ve encountered a
+    multi-output model in this book in practice since you learned about them in chapter
+    7; until now, the models you’ve seen have had exactly one input and one output.
+    This one has one input and nine outputs: one output per layer activation.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 9.9 Using the model to compute layer activations
+  prefs: []
+  type: TYPE_NORMAL
+- en: activations <- activation_model %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: predict(img_tensor[tf$newaxis, , , ])➊➋
+  prefs: []
+  type: TYPE_NORMAL
+- en: '➊ **predict() returns a list of nine R arrays: one array per layer activation.**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➋ **Call [tf$newaxis, , , ] to change img_tensor shape from (180, 180, 3) to
+    (1, 180, 180, 3). In other words, adds a batch dimension, because the model expects
+    input to be a batch of images, not a single image.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Because we passed a named list for outputs when we built the model, we get
+    back a named list of R arrays when we call predict() on the model:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: str(activations)
+  prefs: []
+  type: TYPE_NORMAL
+- en: List of 9
+  prefs: []
+  type: TYPE_NORMAL
+- en: '$ conv2d_15      : num [1, 1:178, 1:178, 1:32] 0.00418 0.0016 0.00453 0 …'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '$ max_pooling2d_9: num [1, 1:89, 1:89, 1:32] 0.01217 0.00453 0.00742 0.00514'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '$ conv2d_14      : num [1, 1:87, 1:87, 1:64] 0 0 0 0 0.00531 …'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '$ max_pooling2d_8: num [1, 1:43, 1:43, 1:64] 0 0 0.00531 0 0 …'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '$ conv2d_13      : num [1, 1:41, 1:41, 1:128] 0 0 0.0288 0 0.0342 …'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '$ max_pooling2d_7: num [1, 1:20, 1:20, 1:128] 0.0313 0.0288 0.0342 0.4004 0.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '$ conv2d_12      : num [1, 1:18, 1:18, 1:256] 0 0 0 0 0 0 0 0 0 0 …'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '$ max_pooling2d_6: num [1, 1:9, 1:9, 1:256] 0 0 0 0 0 0 0 0 0 0 …'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[list output truncated]'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Lets take a closer look at the first layer activations:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: first_layer_activation <- activations[[ names(layer_outputs)[1] ]]
+  prefs: []
+  type: TYPE_NORMAL
+- en: dim(first_layer_activation)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[1] 1 178 178 32'
+  prefs: []
+  type: TYPE_NORMAL
+- en: It’s a 178 × 178 feature map with 32 channels. Let’s try plotting the fifth
+    channel of the activation of the first layer of the original model (see [figure
+    9.13](#fig9-13)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 9.10 Visualizing the fifth channel
+  prefs: []
+  type: TYPE_NORMAL
+- en: plot_activations <- function(x, …) {
+  prefs: []
+  type: TYPE_NORMAL
+- en: x <- as.array(x)➊
+  prefs: []
+  type: TYPE_NORMAL
+- en: if(sum(x) == 0)➋
+  prefs: []
+  type: TYPE_NORMAL
+- en: return(plot(as.raster("gray")))
+  prefs: []
+  type: TYPE_NORMAL
+- en: rotate <- function(x) t(apply(x, 2, rev))➌
+  prefs: []
+  type: TYPE_NORMAL
+- en: image(rotate(x), asp = 1, axes = FALSE, useRaster = TRUE,
+  prefs: []
+  type: TYPE_NORMAL
+- en: col = terrain.colors(256), …)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '}'
+  prefs: []
+  type: TYPE_NORMAL
+- en: plot_activations(first_layer_activation[, , , 5])
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➊ **Convert Tensors to arrays.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➋ **All-zero channels (i.e., no activations) are plotted as a gray rectangle,
+    so they're easy to distinguish.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➌ **Rotate the image clockwise for easier viewing.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Image](../images/f0287-01.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: '**Figure 9.13 Fifth channel of the activation of the first layer on the test
+    cat picture**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: This channel appears to encode a diagonal edge detector—but note that your own
+    channels may vary, because the specific filters learned by convolution layers
+    aren’t deterministic.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now let’s plot a complete visualization of all the activations in the network
+    (see [figure 9.14](#fig9-14)). We’ll extract and plot every channel in each of
+    the layer activations, and we’ll stack the results in one big grid, with channels
+    stacked side by side.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 9.11 Visualizing every channel in every intermediate activation
+  prefs: []
+  type: TYPE_NORMAL
+- en: for (layer_name in names(layer_outputs)) {➊
+  prefs: []
+  type: TYPE_NORMAL
+- en: layer_output <- activations[[layer_name]]
+  prefs: []
+  type: TYPE_NORMAL
+- en: n_features <- dim(layer_output) %>% tail(1) ➋
+  prefs: []
+  type: TYPE_NORMAL
+- en: par(mfrow = n2mfrow(n_features, asp = 1.75),➌
+  prefs: []
+  type: TYPE_NORMAL
+- en: mar = rep(.1, 4), oma = c(0, 0, 1.5, 0))
+  prefs: []
+  type: TYPE_NORMAL
+- en: for (j in 1:n_features)
+  prefs: []
+  type: TYPE_NORMAL
+- en: plot_activations(layer_output[, , , j])➍
+  prefs: []
+  type: TYPE_NORMAL
+- en: title(main = layer_name, outer = TRUE)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '}'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➊ **Iterate over the activations (and the names of the corresponding layers).**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➋ **The layer activation has shape (1, height, width, n_features).**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➌ **Prepare to display all the channels in this activation in one plot.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➍ **This is a single channel (or feature).**
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There are a few things to note here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The first layer acts as a collection of various edge detectors. At that stage,
+    the activations retain almost all of the information present in the initial picture
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: As you go deeper, the activations become increasingly abstract and less visually
+    interpretable. They begin to encode higher-level concepts such as “cat ear” and
+    “cat eye.” Deeper presentations carry increasingly less information about the
+    visual contents of the image and increasingly more information related to the
+    class of the image
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '![Image](../images/f0288-01.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: '**Figure 9.14 Every channel of every layer activation on the test cat picture**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The sparsity of the activations increases with the depth of the layer: in the
+    first layer, almost all filters are activated by the input image, but in the following
+    layers, more and more filters are blank. This means the pattern encoded by the
+    filter isn’t found in the input image'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'We have just evidenced an important universal characteristic of the representations
+    learned by deep neural networks: the features extracted by a layer become increasingly
+    abstract with the depth of the layer. The activations of higher layers carry less
+    and less information about the specific input being seen and more and more information
+    about the target (in this case, the class of the image: cat or dog). A deep neural
+    network effectively acts as an *information distillation pipeline*, with raw data
+    going in (in this case, RGB pictures) and being repeatedly transformed so that
+    irrelevant information is filtered out (e.g., the specific visual appearance of
+    the image) and useful information is magnified and refined (e.g., the class of
+    the image).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This is analogous to the way humans and animals perceive the world: after observing
+    a scene for a few seconds, a human can remember which abstract objects were present
+    in it (bicycle, tree) but can’t remember the specific appearance of these objects.
+    In fact, if you tried to draw a generic bicycle from memory, chances are you couldn’t
+    get it even remotely right, even though you’ve seen thousands of bicycles in your
+    lifetime (see, for example, [figure 9.15](#fig9-15)). Try it right now: this effect
+    is absolutely real. Your brain has learned to completely abstract its visual input—to
+    transform it into high-level visual concepts while filtering out irrelevant visual
+    details—making it tremendously difficult to remember how things around you look.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Image](../images/f0289-01.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: '**Figure 9.15 Left: Attempts to draw a bicycle from memory; right: What a schematic
+    bicycle should look like**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 9.4.2 Visualizing convnet filters
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Another easy way to inspect the filters learned by convnets is to display the
+    visual pattern that each filter is meant to respond to. This can be done with
+    *gradient ascent in input space*: applying *gradient descent* to the value of
+    the input image of a convnet so as to *maximize* the response of a specific filter,
+    starting from a blank input image. The resulting input image will be one that
+    the chosen filter is maximally responsive to.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s try this with the filters of the Xception model, pretrained on ImageNet.
+    The process is simple: we’ll build a loss function that maximizes the value of
+    a given filter in a given convolution layer, and then we’ll use stochastic gradient
+    descent to adjust the values of the input image so as to maximize this activation
+    value. This will be our second example of a low-level gradient descent loop leveraging
+    the GradientTape() object (the first one was in chapter 2). First, let’s instantiate
+    the Xception model, loaded with weights pretrained on the ImageNet dataset.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 9.12 Instantiating the Xception convolutional base
+  prefs: []
+  type: TYPE_NORMAL
+- en: model <- application_xception(
+  prefs: []
+  type: TYPE_NORMAL
+- en: weights = "imagenet",
+  prefs: []
+  type: TYPE_NORMAL
+- en: include_top = FALSE➊
+  prefs: []
+  type: TYPE_NORMAL
+- en: )
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➊ **The classification layers are irrelevant for this use case, so we don't
+    include the top stage of the model.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: We’re interested in the convolutional layers of the model—the Conv2D and SeparableConv2D
+    layers. We’ll need to know their names so we can retrieve their outputs. Let’s
+    print their names, in order of depth.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 9.13 Printing the names of all convolutional layers in Xception
+  prefs: []
+  type: TYPE_NORMAL
+- en: for (layer in model$layers)
+  prefs: []
+  type: TYPE_NORMAL
+- en: if(any(grepl("Conv2D", class(layer))))
+  prefs: []
+  type: TYPE_NORMAL
+- en: print(layer$name)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[1] "block1_conv1"'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[1] "block1_conv2"'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[1] "block2_sepconv1"'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[1] "block2_sepconv2"'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[1] "conv2d_29"'
+  prefs: []
+  type: TYPE_NORMAL
+- en: …
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[1] "block14_sepconv1"'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[1] "block14_sepconv2"'
+  prefs: []
+  type: TYPE_NORMAL
+- en: You’ll notice that the separable conv 2D layers here are all named something
+    like block6_sepconv1, block7_sepconv2, and so forth. Xception is structured into
+    blocks, each containing several convolutional layers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now let’s create a second model that returns the output of a specific layer—a
+    *feature extractor* model. Because our model is a Functional API model, it is
+    inspectable: we can query the output of one of its layers and reuse it in a new
+    model. No need to copy the entire Xception code.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 9.14 Creating a feature extractor model
+  prefs: []
+  type: TYPE_NORMAL
+- en: layer_name <- "block3_sepconv1"➊
+  prefs: []
+  type: TYPE_NORMAL
+- en: layer <- model %>% get_layer(name = layer_name)➋
+  prefs: []
+  type: TYPE_NORMAL
+- en: feature_extractor <- keras_model(inputs = model$input,➌
+  prefs: []
+  type: TYPE_NORMAL
+- en: outputs = layer$output)
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➊ **You could replace this with the name of any layer in the Xception convolutional
+    base.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➋ **This is the layer object we're interested in.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➌ **We use model$input and layer$output to create a model that, given an input
+    image, returns the output of our target layer.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: To use this model, simply call it on some input data (note that Xception requires
+    inputs to be preprocessed via the xception_preprocess_input() function).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 9.15 Using the feature extractor
+  prefs: []
+  type: TYPE_NORMAL
+- en: activation <- img_tensor %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: .[tf$newaxis, , , ] %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: xception_preprocess_input() %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: feature_extractor()➊
+  prefs: []
+  type: TYPE_NORMAL
+- en: str(activation)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '<tf.Tensor: shape=(1, 44, 44, 256), dtype=float32, numpy=…>'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➊ **Note that this time we're calling the model directly, instead of using predict(),
+    and that activation is a tf.Tensor, not an R array. (More on this soon.)**
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s use our feature extractor model to define a function that returns a scalar
+    value quantifying how much a given input image “activates” a given filter in the
+    layer. This is the “loss function” that we’ll maximize during the gradient ascent
+    process:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: compute_loss <- function(image, filter_index) {➊
+  prefs: []
+  type: TYPE_NORMAL
+- en: activation <- feature_extractor(image)
+  prefs: []
+  type: TYPE_NORMAL
+- en: filter_index <- as_tensor(filter_index, "int32")➋
+  prefs: []
+  type: TYPE_NORMAL
+- en: filter_activation <-
+  prefs: []
+  type: TYPE_NORMAL
+- en: activation[, , , filter_index, style = "python"]➌
+  prefs: []
+  type: TYPE_NORMAL
+- en: mean(filter_activation[, 3:-3, 3:-3])➎
+  prefs: []
+  type: TYPE_NORMAL
+- en: '}'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➊ **The loss function takes an image tensor and the index of the filter we are
+    considering (an integer).**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➋ **We cast filter_index to an tensor integer here to make sure we have consistent
+    behavior when we're running this function eagerly (i.e., not through tf_function()).**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➌ **Tell [ that filter_index is zero-based with style="python".**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➍ **Note that we avoid border artifacts by only involving nonborder pixels in
+    the loss; we discard the first two pixels along the sides of the activation.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➎ **Return the mean of the activation values for the filter.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: NOTE We’ll be tracing compute_loss() with tf_function() later, with filter_
+    index as a tracing tensors. Python style (0-based) indexing is currently the only
+    supported style when the index is itself a tensor (this may change in the future).
+    We inform [ that filter_index is zero-based with style = “python”.
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: '**The difference between predict(model, x) and model(x)**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the previous chapter, we used predict(x) for feature extraction. Here, we’re
+    using model(x). What gives?
+  prefs: []
+  type: TYPE_NORMAL
+- en: Both y <- predict(model, x) and y <- model(x) (where x is an array of input
+    data) mean “run the model on x and retrieve the output y.” Yet they aren’t exactly
+    the same thing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'predict() loops over the data in batches (in fact, you can specify the batch
+    size via predict(x, batch_size = 64)), and it extracts the R array value of the
+    outputs. It’s schematically equivalent to this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: predict <- function(model, x) {
+  prefs: []
+  type: TYPE_NORMAL
+- en: y <- list()
+  prefs: []
+  type: TYPE_NORMAL
+- en: for(x_batch in split_into_batches(x)) {
+  prefs: []
+  type: TYPE_NORMAL
+- en: y_batch <- as.array(model(x_batch))
+  prefs: []
+  type: TYPE_NORMAL
+- en: y[[length(y)+1]] <- y_batch
+  prefs: []
+  type: TYPE_NORMAL
+- en: '}'
+  prefs: []
+  type: TYPE_NORMAL
+- en: unsplit_batches(y)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '}'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This means that predict() calls can scale to very large arrays. Meanwhile,
+    model(x) happens in-memory and doesn’t scale. On the other hand, predict() is
+    not differentiable: you cannot retrieve its gradient if you call it in a GradientTape()
+    scope.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: You should use model(x) when you need to retrieve the gradients of the model
+    call, and you should use predict() if you just need the output value. In other
+    words, always use predict() unless you’re in the middle of writing a low-level
+    gradient descent loop (as we are now).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s set up the gradient ascent step function, using the GradientTape(). A
+    non-obvious trick to help the gradient descent process go smoothly is to normalize
+    the gradient tensor by dividing it by its L2 norm (the square root of the average
+    of the square of the values in the tensor). This ensures that the magnitude of
+    the updates done to the input image is always within the same range.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 9.16 Loss maximization via stochastic gradient ascent
+  prefs: []
+  type: TYPE_NORMAL
+- en: gradient_ascent_step <-
+  prefs: []
+  type: TYPE_NORMAL
+- en: function(image, filter_index, learning_rate) {
+  prefs: []
+  type: TYPE_NORMAL
+- en: with(tf$GradientTape() %as% tape, {
+  prefs: []
+  type: TYPE_NORMAL
+- en: tape$watch(image)➊
+  prefs: []
+  type: TYPE_NORMAL
+- en: loss <- compute_loss(image, filter_index)➋
+  prefs: []
+  type: TYPE_NORMAL
+- en: '})'
+  prefs: []
+  type: TYPE_NORMAL
+- en: grads <- tape$gradient(loss, image)➌
+  prefs: []
+  type: TYPE_NORMAL
+- en: grads <- tf$math$l2_normalize(grads)➍
+  prefs: []
+  type: TYPE_NORMAL
+- en: image + (learning_rate * grads)➎
+  prefs: []
+  type: TYPE_NORMAL
+- en: '}'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➊ **Explicitly watch the image tensor, because it isn't a TensorFlow Variable
+    (only Variables are automatically watched in a gradient tape).**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➋ **Compute the loss scalar, indicating how much the current image activates
+    the filter.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➌ **Compute the gradients of the loss with respect to the image.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➍ **Apply the "gradient normalization trick."**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➎ **Move the image a little bit in a direction that activates our target filter
+    more strongly. Return the updated image so we can run the step function in a loop.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now we have all the pieces. Let’s put them together into an R function that
+    takes as input a layer name and a filter index and returns a tensor representing
+    the pattern that maximizes the activation of the specified filter. Note that we’ll
+    use tf_function() to speed it up.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 9.17 Function to generate filter visualizations
+  prefs: []
+  type: TYPE_NORMAL
+- en: c(img_width, img_height) %<-% c(200, 200)
+  prefs: []
+  type: TYPE_NORMAL
+- en: generate_filter_pattern <- tf_function(function(filter_index) {
+  prefs: []
+  type: TYPE_NORMAL
+- en: iterations <- 30➊
+  prefs: []
+  type: TYPE_NORMAL
+- en: learning_rate <- 10➋
+  prefs: []
+  type: TYPE_NORMAL
+- en: image <- tf$random$uniform(➌
+  prefs: []
+  type: TYPE_NORMAL
+- en: minval = 0.4, maxval = 0.6,
+  prefs: []
+  type: TYPE_NORMAL
+- en: shape = shape(1, img_width, img_height, 3)
+  prefs: []
+  type: TYPE_NORMAL
+- en: )
+  prefs: []
+  type: TYPE_NORMAL
+- en: for (i in seq(iterations))➍
+  prefs: []
+  type: TYPE_NORMAL
+- en: image <- gradient_ascent_step(image, filter_index, learning_rate)
+  prefs: []
+  type: TYPE_NORMAL
+- en: image[1, , , ]➎
+  prefs: []
+  type: TYPE_NORMAL
+- en: '})'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➊ **Initialize an image tensor with random values. (The Xception model expects
+    input values in the [0, 1] range, so here we pick a range centered on 0.5.)**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➋ **Number of gradient ascent steps to apply**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➌ **Amplitude of a single step**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➍ **Repeatedly update the values of the image tensor so as to maximize our loss
+    function.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➎ **Drop the batch dim and return the image.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: The resulting image tensor is a floating-point array of shape (200, 200, 3),
+    with values that may not be integers within [0, 255]. Hence, we need to postprocess
+    this tensor to turn it into a displayable image. We do so with the following straightforward
+    utility function. We’ll do this with tensor operations and wrap in a tf_function()
+    to speed it up as well.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 9.18 Utility function to convert a tensor into a valid image
+  prefs: []
+  type: TYPE_NORMAL
+- en: deprocess_image <- tf_function(function(image, crop = TRUE) {
+  prefs: []
+  type: TYPE_NORMAL
+- en: image <- image - mean(image)➊
+  prefs: []
+  type: TYPE_NORMAL
+- en: image <- image / tf$math$reduce_std(image)➋
+  prefs: []
+  type: TYPE_NORMAL
+- en: image <- (image * 64) + 128
+  prefs: []
+  type: TYPE_NORMAL
+- en: image <- tf$clip_by_value(image, 0, 255)
+  prefs: []
+  type: TYPE_NORMAL
+- en: if(crop)
+  prefs: []
+  type: TYPE_NORMAL
+- en: image <- image[26:-26, 26:-26, ]➌
+  prefs: []
+  type: TYPE_NORMAL
+- en: image
+  prefs: []
+  type: TYPE_NORMAL
+- en: '})'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➊ **mean() invokes tf$math$reduce_mean().**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➋ **Normalize image values within the [0, 255] range.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➌ **Center-crop to avoid border artifacts.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s try it (see [figure 9.16](#fig9-16)):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: generate_filter_pattern(filter_index = as_tensor(2L)) %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: deprocess_image() %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: display_image_tensor()
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Image](../images/f0293-01.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: '**Figure 9.16 Pattern that the second channel in layer block3_sepconv1 responds
+    to maximally**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that we cast filter_index with as_tensor() here. We do this because a tf_
+    function() compiles a separate optimized function for each unique way it’s called,
+    and a different constant literal counts as a unique call signature. If we didn’t
+    call as_tensor() here, then in the coming loop where we plot the first 64 activations,
+    tf_function() would trace and compile generate_filter_pattern() 64 times! Calling
+    the tf_function() decorated function with a tensor, however, even a constant tensor,
+    doesn’t count as a unique function signature for tf_function(), and generate_
+    filter_pattern() is traced only once.
+  prefs: []
+  type: TYPE_NORMAL
+- en: It seems that the third filter in layer block3_sepconv1 is responsive to a horizontal
+    lines pattern, somewhat water-like or fur-like.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now the fun part: you can start visualizing every filter in the layer, and
+    even every filter in every layer in the model .'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 9.19 Generating a grid of all filter response patterns in a layer
+  prefs: []
+  type: TYPE_NORMAL
+- en: par(mfrow = c(8, 8))
+  prefs: []
+  type: TYPE_NORMAL
+- en: for (i in seq(0, 63)) {➊
+  prefs: []
+  type: TYPE_NORMAL
+- en: generate_filter_pattern(filter_index = as_tensor(i)) %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: deprocess_image() %>%
+  prefs: []
+  type: TYPE_NORMAL
+- en: display_image_tensor(plot_margins = rep(.1, 4))
+  prefs: []
+  type: TYPE_NORMAL
+- en: '}'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➊ **Generate and plot visualizations for the first 64 filters in the layer.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'These filter visualizations (see [figure 9.17](#fig9-17)) tell you a lot about
+    how convnet layers see the world: each layer in a convnet learns a collection
+    of filters such that their inputs can be expressed as a combination of the filters.
+    This is similar to how the Fourier transform decomposes signals onto a bank of
+    cosine functions. The filters in these convnet filter banks get increasingly complex
+    and refined as you go deeper in the model:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Image](../images/f0294-01.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: '**Figure 9.17 Some filter patterns for layers block2_sepconv1, block4_sepconv1,
+    and block8_sepconv1**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The filters from the first layers in the model encode simple directional edges
+    and colors (or colored edges, in some cases).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The filters from layers a bit further up the stack, such as block4_sepconv1,
+    encode simple textures made from combinations of edges and colors
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The filters in higher layers begin to resemble textures found in natural images:
+    feathers, eyes, leaves, and so on'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 9.4.3 Visualizing heatmaps of class activation
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: We’ll introduce one last visualization technique—one that is useful for understanding
+    which parts of a given image led a convnet to its final classification decision.
+    This is helpful for “debugging” the decision process of a convnet, particularly
+    in the case of a classification mistake (a problem domain called *model interpretability*).
+    It can also allow you to locate specific objects in an image.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This general category of techniques is called *class activation map* (CAM) visualization,
+    and it consists of producing heatmaps of class activation over input images. A
+    class activation heatmap is a 2D grid of scores associated with a specific output
+    class, computed for every location in any input image, indicating how important
+    each location is with respect to the class under consideration. For instance,
+    given an image fed into a dogs-versus-cats convnet, CAM visualization would allow
+    you to generate a heat-map for the class “cat,” indicating how catlike different
+    parts of the image are, and also a heatmap for the class “dog,” indicating how
+    doglike parts of the image are.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The specific implementation we’ll use is the one described in an article titled,
+    “Grad-CAM: Visual Explanations from Deep Networks via Gradient-based Localization.”^([5](#Rendnote5))'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Grad-CAM consists of taking the output feature map of a convolution layer, given
+    an input image, and weighing every channel in that feature map by the gradient
+    of the class with respect to the channel. Intuitively, one way to understand this
+    trick is to imagine that you’re weighting a spatial map of “how intensely the
+    input image activates different channels” by “how important each channel is with
+    regard to the class,” resulting in a spatial map of “how intensely the input image
+    activates the class.” Let’s demonstrate this technique using the pretrained Xception
+    model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 9.20 Loading the Xception network with pretrained weights
+  prefs: []
+  type: TYPE_NORMAL
+- en: model <- application_xception(weights = "imagenet")➊
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➊ **Note that we include the densely connected classifier on top; in all previous
+    cases, we discarded it.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Consider the image of two African elephants shown in [figure 9.18](#fig9-18),
+    possibly a mother and her calf, strolling on the savanna. Let’s convert this image
+    into something the Xception model can read: the model was trained on images of
+    size 299 × 299, preprocessed according to a few rules that are packaged in the
+    xception_preprocess_input() utility function.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Image](../images/f0296-01.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: '**Figure 9.18 Test picture of African elephants**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: So we need to load the image, resize it to 299 × 299, convert it to a float32
+    tensor, and apply these preprocessing rules.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 9.21 Preprocessing an input image for Xception
+  prefs: []
+  type: TYPE_NORMAL
+- en: img_path <- get_file(➊
+  prefs: []
+  type: TYPE_NORMAL
+- en: fname = "elephant.jpg",
+  prefs: []
+  type: TYPE_NORMAL
+- en: origin = "https://img-datasets.s3.amazonaws.com/elephant.jpg")
+  prefs: []
+  type: TYPE_NORMAL
+- en: img_tensor <- tf_read_image(img_path, resize = c(299, 299))➋
+  prefs: []
+  type: TYPE_NORMAL
+- en: preprocessed_img <- img_tensor[tf$newaxis, , , ] %>%➌
+  prefs: []
+  type: TYPE_NORMAL
+- en: xception_preprocess_input()➍
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➊ **Download the image and store it locally under the path img_path.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➋ **Read the image as a tensor and resize it to 299 × 299\. img_tensor is float32
+    with shape (299, 299, 3).**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➌ **Add a dimension to transform the array into a batch of size (1, 299, 299,
+    3).**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➍ **Preprocess the batch (this does channel-wise color normalization).**
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You can now run the pretrained network on the image and decode its prediction
+    vector back to a human-readable format:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: preds <- predict(model, preprocessed_img)
+  prefs: []
+  type: TYPE_NORMAL
+- en: str(preds)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Image](../images/f0297-01.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: imagenet_decode_predictions(preds, top=3)[[1]]
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Image](../images/f0297-02.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'The top three classes predicted for this image are as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: African elephant (with 90% probability)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Tusker (with 5% probability)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Indian elephant (with 2% probability
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The network has recognized the image as containing an undetermined quantity
+    of African elephants. The entry in the prediction vector that was maximally activated
+    is the one corresponding to the “African elephant” class, at index 387:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: which.max(preds[1, ])
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[1] 387'
+  prefs: []
+  type: TYPE_NORMAL
+- en: To visualize which parts of the image are the most African-elephant-like, let’s
+    set up the Grad-CAM process. First, we create a model that maps the input image
+    to the activations of the last convolutional layer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 9.22 Setting up a model that returns the last convolutional output
+  prefs: []
+  type: TYPE_NORMAL
+- en: last_conv_layer_name <- "block14_sepconv2_act"
+  prefs: []
+  type: TYPE_NORMAL
+- en: classifier_layer_names <- c("avg_pool", "predictions")➊
+  prefs: []
+  type: TYPE_NORMAL
+- en: last_conv_layer <- model %>% get_layer(last_conv_layer_name)
+  prefs: []
+  type: TYPE_NORMAL
+- en: last_conv_layer_model <- keras_model(model$inputs,
+  prefs: []
+  type: TYPE_NORMAL
+- en: last_conv_layer$output)
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➊ **Names of last two layers in the Xception model**
+  prefs: []
+  type: TYPE_NORMAL
+- en: Second, we create a model that maps the activations of the last convolutional
+    layer to the final class predictions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 9.23 Reapplying the classifier on top of the last convolutional output
+  prefs: []
+  type: TYPE_NORMAL
+- en: classifier_input <- layer_input(batch_shape = last_conv_layer$output$shape)
+  prefs: []
+  type: TYPE_NORMAL
+- en: x <- classifier_input
+  prefs: []
+  type: TYPE_NORMAL
+- en: for (layer_name in classifier_layer_names)
+  prefs: []
+  type: TYPE_NORMAL
+- en: x <- get_layer(model, layer_name)(x)
+  prefs: []
+  type: TYPE_NORMAL
+- en: classifier_model <- keras_model(classifier_input, x)
+  prefs: []
+  type: TYPE_NORMAL
+- en: Then we compute the gradient of the top predicted class for our input image
+    with respect to the activations of the last convolution layer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 9.24 Retrieving the gradients of the top predicted class
+  prefs: []
+  type: TYPE_NORMAL
+- en: with (tf$GradientTape() %as% tape, {
+  prefs: []
+  type: TYPE_NORMAL
+- en: last_conv_layer_output <- last_conv_layer_model(preprocessed_img)
+  prefs: []
+  type: TYPE_NORMAL
+- en: tape$watch(last_conv_layer_output)➊
+  prefs: []
+  type: TYPE_NORMAL
+- en: preds <- classifier_model(last_conv_layer_output)
+  prefs: []
+  type: TYPE_NORMAL
+- en: top_pred_index <- tf$argmax(preds[1, ])
+  prefs: []
+  type: TYPE_NORMAL
+- en: top_class_channel <- preds[, top_pred_index, style = "python"]➋
+  prefs: []
+  type: TYPE_NORMAL
+- en: '})'
+  prefs: []
+  type: TYPE_NORMAL
+- en: grads <- tape$gradient(top_class_channel, last_conv_layer_output)➌
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➊ **Compute activations of the last conv layer and make the tape watch it.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➋ **Retrieve the activation channel corresponding to the top predicted class.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➌ **This is the gradient of the top predicted class with regard to the output
+    feature map of the last convolutional layer.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now we apply pooling and importance weighting to the gradient tensor to obtain
+    our heatmap of class activation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 9.25 Gradient pooling and channel-importance weighting
+  prefs: []
+  type: TYPE_NORMAL
+- en: pooled_grads <- mean(grads, axis = c(1, 2, 3), keepdims = TRUE)➊
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➋
+  prefs: []
+  type: TYPE_NORMAL
+- en: heatmap <
+  prefs: []
+  type: TYPE_NORMAL
+- en: (last_conv_layer_output * pooled_grads) %>%➌➍➎➏
+  prefs: []
+  type: TYPE_NORMAL
+- en: mean(axis = -1) %>%➐➑
+  prefs: []
+  type: TYPE_NORMAL
+- en: .[1, , ]➒
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➊ **pooled_grads is a vector where each entry is the mean intensity of the gradient
+    for a given channel. It quantifies the importance of each channel with regard
+    to the top predicted class.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➋ **We take advantage of Tensor broadcasting rules here to avoid writing a for
+    loop. The size-1 axes of pooled_grads are automatically broadcast to match the
+    corresponding axes of last_conv_layer_output.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➌ **Multiply each channel in the output of the last convolutional layer by "how
+    important this channel is."**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➍ **grads and last_conv_layer_output have the same shape, (1, 10, 10, 2048).**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➎ **pooled_grads has shape (1, 1, 1, 2048).**
+  prefs: []
+  type: TYPE_NORMAL
+- en: '➏ **Shape: (1, 10, 10, 2048)**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➐ **The channel-wise mean of the resulting feature map is our heatmap of class
+    activation.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: '➑ **Shape: (1, 10, 10)**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '➒ **Drop batch dim; output shape: (10, 10).**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The result is shown in [figure 9.19.](#fig9-19)
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 9.26 Heatmap postprocessing
+  prefs: []
+  type: TYPE_NORMAL
+- en: par(mar = c(0, 0, 0, 0))
+  prefs: []
+  type: TYPE_NORMAL
+- en: plot_activations(heatmap)
+  prefs: []
+  type: TYPE_NORMAL
+- en: Finally, let’s superimpose the activations heatmap over the original image.
+    We cut() the heatmap values to a sequential color palette, and then convert to
+    an R raster object. Note we make sure to pass alpha = .4 to the palette, so that
+    we can still see the original image when we superimpose the heatmap over it. (See
+    [figure 9.20](#fig9-20).)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Image](../images/f0299-01.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: '**Figure 9.19 Standalone class activation heatmap**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 9.27 Superimposing the heatmap on the original picture
+  prefs: []
+  type: TYPE_NORMAL
+- en: pal <- hcl.colors(256, palette = "Spectral", alpha = .4, rev = TRUE)
+  prefs: []
+  type: TYPE_NORMAL
+- en: heatmap <- as.array(heatmap)
+  prefs: []
+  type: TYPE_NORMAL
+- en: heatmap[] <- pal[cut(heatmap, 256)]
+  prefs: []
+  type: TYPE_NORMAL
+- en: heatmap <- as.raster(heatmap)
+  prefs: []
+  type: TYPE_NORMAL
+- en: img <- tf_read_image(img_path, resize = NULL)➊
+  prefs: []
+  type: TYPE_NORMAL
+- en: display_image_tensor(img)
+  prefs: []
+  type: TYPE_NORMAL
+- en: rasterImage(heatmap, 0, 0, ncol(img), nrow(img), interpolate = FALSE)➋
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➊ **Load the original image, without resizing this time.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: ➋ **Superimpose the heatmap over the original image, with the heatmap at 40%
+    opacity. We pass ncol(img) and nrow(img) so that the heatmap, which has fewer
+    pixels, is drawn to match the size of the original image. We pass interpolate
+    = FALSE so we can clearly see where the activation map pixel boundaries are.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This visualization technique answers two important questions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Why did the network think this image contained an African elephant
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Where is the African elephant located in the picture
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'In particular, it’s interesting to note that the ears of the elephant calf
+    are strongly activated: this is probably how the network can tell the difference
+    between African and Indian elephants.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Image](../images/f0300-01.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: '**Figure 9.20 African elephant class activation heatmap over the test picture**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'You can do three essential computer vision tasks with deep learning: image
+    classification, image segmentation, and object detection.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Following modern convnet architecture best practices will help you get the most
+    out of your models. Some of these best practices include using residual connections,
+    batch normalization, and depthwise separable convolutions.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The representations that convnets learn are easy to inspect—convnets are the
+    opposite of black boxes!
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: You can generate visualizations of the filters learned by your convnets, as
+    well as heatmaps of class activity.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: ^([1](#endnote1)) Kaiming He et al., “Deep Residual Learning for Image Recognition,”
+    Conference on Computer Vision and Pattern Recognition (2015), [https://arxiv.org/abs/1512.03385](https://arxiv.org/abs/1512.03385).
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '^([2](#endnote2)) Sergey Ioffe and Christian Szegedy, “Batch Normalization:
+    Accelerating Deep Network Training by Reducing Internal Covariate Shift,” *Proceedings
+    of the 32nd International Conference on Machine Learning* (2015), [https://arxiv.org/abs/1502.03167](https://arxiv.org/abs/1502.03167).'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '^([3](#endnote3)) François Chollet, “Xception: Deep Learning with Depthwise
+    Separable Convolutions,” Conference on Computer Vision and Pattern Recognition
+    (2017), [https://arxiv.org/abs/1610.02357](https://arxiv.org/abs/1610.02357).'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: ^([4](#endnote4)) Liang-Chieh Chen et al., “Encoder-Decoder with Atrous Separable
+    Convolution for Semantic Image Segmentation,” ECCV (2018), [https://arxiv.org/abs/1802.02611](https://arxiv.org/abs/1802.02611).
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: ^([5](#endnote5)) Ramprasaath R. Selvaraju et al., arXiv (2017), [https://arxiv.org/abs/1610.02391](https://arxiv.org/abs/1610.02391).
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
