@@ -1,0 +1,1235 @@
+- en: 5 Hyperparameter optimization service
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter covers
+  prefs: []
+  type: TYPE_NORMAL
+- en: Hyperparameters and why they are important
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Two common approaches to hyperparameter optimization (HPO)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Designing an HPO service
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Three popular HPO libraries: Hyperopt, Optuna, and Ray Tune'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'In the previous two chapters, we saw how models are trained: a training service
+    manages training processes in a remote compute cluster with given model algorithms.
+    But model algorithms and training services aren’t all there is to model training.
+    There’s one more component we haven’t discussed yet—hyperparameter optimization
+    (HPO). Data scientists often overlook the fact that hyperparameter choices can
+    influence model training results significantly, especially when these decisions
+    can be automated using engineering methods.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Hyperparameters are parameters whose value must be set before the model training
+    process starts. Learning rate, batch size, and number of hidden layers are all
+    examples of hyperparameters. Unlike the value of *model parameters*—weights and
+    bias, for example—hyperparameters cannot be learned during the training process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Research reveals that the chosen value of hyperparameters can affect both the
+    quality of the model training as well as the time and memory requirements of the
+    training algorithm. Therefore, hyperparameters must be tuned to be optimal for
+    model training. Nowadays, HPO has become a standard step in the deep learning
+    model development process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As one of the deep learning components, HPO is very important to software engineers.
+    This is because HPO doesn’t require a deep understanding of deep learning algorithms,
+    so engineers are often assigned to this task. Most of the time, HPO can run like
+    a black box, and the training code does not need to be modified. Furthermore,
+    engineers have the capability of building an automatic HPO mechanism, making HPO
+    possible. As there are so many hyperparameters to tune (learning rate, number
+    of epochs, data batch size, and more) and so many values to try, it is simply
+    impractical to manually adjust each hyperparameter value. Software engineers are
+    well-suited to create an automated system because of their expertise in microservices,
+    distributed computing, and resource management.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, we will focus on the engineering of automatic HPO. We first
+    introduce the background information necessary to feel comfortable working with
+    HPO. We delve into a deeper understanding of hyperparameters and the process of
+    tuning or optimizing them. We’ll also meet some popular HPO algorithms and compare
+    two common approaches to automating HPO: using a library and building a service.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Then we’ll start designing. We will look at how to design an HPO service, including
+    five design principles for creating an HPO service, as well as one general design
+    proposal that is particularly important at this stage. Finally, we show you three
+    popular open source HPO frameworks that would be a perfect fit if you want to
+    optimize your training code locally.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Unlike previous chapters, we will not be building a brand new sample service
+    in this chapter. Instead, we suggest you use the open source Kubeflow Katib (discussed
+    in appendix C). Katib is a well-designed, extensible, and highly portable HPO
+    service that can be used for almost any HPO project. Thus, we do not have to build
+    one if it is a low-hanging fruit for you.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This chapter should give you a holistic view of the HPO domain while also providing
+    you with a practical understanding of how to run HPO for your specific needs.
+    Whether you decide to run HPO with a remote service or at your local machine with
+    libraries/frameworks like Hyperopt, Optuna, or Ray Tune, we’ve got you covered.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.1 Understanding hyperparameters
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Before we look at how to tune hyperparameters, let’s get a clearer understanding
+    of what hyperparameters are and why they are important.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.1.1 What is a hyperparameter?
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The process of training deep learning models uses two types of parameters,
+    or values: *model parameters* and *hyperparameters*. Model parameters are trainable—that
+    is, their values are learned during model training—and they change as the model
+    iterates. Hyperparameters, in contrast, are static; these configurations are defined
+    and set before the training starts. For example, we can set the training epoch
+    as 30 and the activation function of the neural network as ReLU (rectified linear
+    unit) in the input parameters to kick off a model training process.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In other words, any model training configuration that affects model training
+    performance but can’t be estimated from data is a hyperparameter. There can be
+    hundreds of hyperparameters in a model training algorithm, including, for example,
+    the choice of model optimizer—ADAM (see “Adam: A Method for Stochastic Optimization,”
+    by Diederik P. Kingma and Jimmy Ba; [https://arxiv.org/abs/1412.6980](https://arxiv.org/abs/1412.6980))
+    or RMSprop (see “A Look at Gradient Descent and RMSprop Optimizers,” by Rohith
+    Gandhi; [http://mng.bz/xdZX](http://mng.bz/xdZX))—the number of layers in the
+    neural network, the embedding dimensions, the minibatch size, and the learning
+    rate.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.1.2 Why are hyperparameters important?
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The choice of values for hyperparameters can have a tremendous effect on model
+    training results. Typically set manually, the values control the behavior of training
+    algorithm execution and determine the speed of model training and the model accuracy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To see this effect for yourself, you can experiment with hyperparameter values
+    by running model training in the TensorFlow playground ([https://playground.tensorflow.org](https://playground.tensorflow.org)).
+    In this online playground, you can design your own neural network and train it
+    to recognize four types of graphic patterns. By setting different hyperparameters,
+    such as learning rate, regularization method, activation function, neural network
+    layer count, and neuron count, you will see not only how the model performance
+    varies but also how the learning behavior, such as training time and learning
+    curve, can differ. To train a model to recognize a complicated data pattern like
+    a spiral shape in this playground, we need to select the hyperparameters very
+    carefully. For example, try setting the hidden layer count to 6, the neuron count
+    per layer to 5, the activation function to `ReLU`, the data batch size to 10,
+    and the regularization method to `L1`. After nearly 500 epochs of training, you’ll
+    see that the model can make an accurate classification prediction on a spiral-shaped
+    graph.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the research field, the effect of hyperparameter selection on model performance
+    has long been documented. Take natural language processing embedding training,
+    for instance. One paper, “Improving Distributional Similarity with Lessons Learned
+    from Word Embeddings,” by Levy et al. ([https://aclanthology.org/Q15-1016.pdf](https://aclanthology.org/Q15-1016.pdf)),
+    reveals that much of the performance gains of word embeddings are due to certain
+    system design choices along with the HPOs rather than the embedding algorithms
+    themselves. In NLP embedding training, these authors found the selection of hyperparameters
+    has more effect than the selection of the training algorithm! Because the hyperparameter
+    selection is so crucial to model training performance, hyperparameter tuning has
+    now become a standard step in the model training process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.2 Understanding hyperparameter optimization
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Now that you have a solid idea of what hyperparameters are and why they are
+    so important to model training, let’s turn to the process of optimizing them for
+    your model. In this section, we will walk you through the steps for HPO. We will
+    also look at HPO algorithms, which are used to optimize hyperparameters, as well
+    as common approaches to performing HPO.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.2.1 What is HPO?
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: HPO, or tuning, is the process of discovering a set of hyperparameters that
+    yields an optimal model. Optimal here means a model that minimizes a predefined
+    loss function on a given dataset. In figure 5.1, you can see a high-level view
+    of the generic workflow of HPO on the model training process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/05-01.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.1 This high-level view of the HPO workflow shows that the process is
+    essentially an experiment to find the optimal hyperparameter values.
+  prefs: []
+  type: TYPE_NORMAL
+- en: From figure 5.1, we see that an HPO workflow can be visualized as a loop made
+    with four steps. It shows us that the HPO process is a repetitive model training
+    process, except that the neural network is trained each time with a different
+    set of hyperparameters. The optimal set of hyperparameters will be discovered
+    in this process. We normally call each run of the model training a *trial*. The
+    whole HPO experiment is a trial loop in which we run one trial after another until
+    the end criteria are met.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note To have a fair evaluation, the same dataset is used for each HPO trial.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Each trial has four steps, as shown in figure 5.1\. Step 1 is training the neural
+    network with a set of hyperparameter values. Step 2 is evaluating the training
+    output (the model).
+  prefs: []
+  type: TYPE_NORMAL
+- en: In step 3, the HPO process checks whether the end criteria have been met—for
+    example, whether we have run out of our trial budget or whether the model produced
+    in this trial has reached our performance evaluation target. If the trial result
+    meets the end condition, the trial loop breaks and the experiment ends. The hyperparameter
+    values that produced the best model evaluation result are considered the optimal
+    hyperparameters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If the end condition is not met, the process moves to step 4: the HPO process
+    will produce a new set of hyperparameter values and start a new trial by triggering
+    a model training run. The hyperparameter values used in each trial are generated
+    either manually or automatically by an HPO algorithm. Let’s look closer at these
+    two approaches and the HPO algorithms in the next two sections.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Manual HPO
+  prefs: []
+  type: TYPE_NORMAL
+- en: As data scientists, we often manually pick the hyperparameter values to run
+    the HPO process shown in figure 5.1\. Though, admittedly, choosing the optimal
+    hyperparameter values manually is more like improvisation than science. But we
+    are also drawing from our experience and the intuition that comes from that experience.
+    We tend to start training a model with empirical hyperparameter values, such as
+    the values used in a relevant published paper, and then make some small adjustments
+    and test the model. After a few trials, we manually compare the model performance
+    and choose the best-performing model from these trials. Figure 5.2 illustrates
+    this workflow.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/05-02.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.2 Manually picking hyperparameter values can be tedious and time-consuming.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The biggest problem with manual HPO is not knowing whether our hyperparameter
+    values are optimal because we just choose some empirical values and tweak them.
+    To get the optimal values, we need to try all possible hyperparameter values,
+    aka search spaces. In the example of figure 5.2, we want to optimize two hyperparameters:
+    learning rate and dataset batch size. In the HPO process, the goal is to find
+    the pair of `batch_size` and `learning_rate` that produces the best model. Let’s
+    say we define a search space for `batch_size` as {8, 16, 32, 64, 128, 256} and
+    define another search space for `learning_rate` as {0.1, 0.01, 0.001, 0.5, 0.05,
+    0.005}. Then the total number of hyperparameter values we need to verify is 36
+    (62).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Because we run the HPO manually, we have to run the model training process (HPO
+    trial) 36 times and record the model evaluation result and the hyperparameters’
+    values used in each trial. After completing all 36 trials and comparing the results,
+    which is usually the model accuracy, we find the optimal `batch_size` and `learning_rate`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Manually running HPO for the entire hyperparameter search space can be time-consuming,
+    error prone, and tedious, as you can see. Moreover, deep learning hyperparameters
+    usually have a complex configuration space, which often consists of a combination
+    of continuous, categorical, and conditional hyperparameters as well as high dimensions.
+    The deep learning industry is currently moving toward automatic HPO because manual
+    HPO is simply not feasible.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Automatic HPO
+  prefs: []
+  type: TYPE_NORMAL
+- en: Automatic HPO is the process of using compute power and algorithms to automatically
+    find the optimal hyperparameters for a training code. The idea is to use an efficient
+    search algorithm to discover the optimal hyperparameters without human intervention.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We also want the automatic HPO to run in a black-box fashion, so it is agnostic
+    about the training code it is optimizing, and therefore we can easily onboard
+    existing model training code to the HPO system. Figure 5.3 shows the automatic
+    HPO workflow.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/05-03.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.3 An automatic HPO workflow
+  prefs: []
+  type: TYPE_NORMAL
+- en: In step 1, data scientists submit HPO requests to the automatic HPO system,
+    which runs the HPO process in a black-box fashion (figure 5.3). They input the
+    hyperparameters to be optimized and their value search space into the black box
+    (the “automatic HPO” box in figure 5.3)—for example, the learning rate’s search
+    space may be [0.005, 0.1] and dataset batch size’s search space may be {8, 16,
+    32, 64, 128, 256}. Data scientists also need to configure the training execution,
+    such as the training code; an evaluation method; an exit objective; and a trial
+    budget, such as 24 total trials for this experiment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Once users submit the HPO request, the HPO experiment (step 2) starts. The HPO
+    system schedules all the trials and manages their training executions; it also
+    runs an HPO algorithm to generate hyperparameter values (picking values from the
+    search space) for each trial. When the trial budget runs out or the training objective
+    is met, the system returns a set of optimal hyperparameter values (step 3).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Automatic HPO relies on two key components: the HPO algorithm and trial training
+    execution management. We can find the optimal hyperparameter values with fewer
+    compute resources using an efficient HPO algorithm. By using a sophisticated training
+    management system, data scientists can be hands-free for the entire HPO process.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: NOTE Because of the inefficiency of manual HPO, automatic HPO is the mainstream
+    approach. To keep things concise, we will use the term *HPO* to refer to “automatic
+    hyperparameter optimization” in the rest of this chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.2.2 Popular HPO algorithms
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Most of the HPO algorithms can be categorized into three buckets: model-free
+    optimization, Bayesian optimization, and multifidelity optimization.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Note Because the main goal of this chapter is teaching HPO engineering, the
+    HPO algorithms discussed here will stay at a high level. The goal of this section
+    is to provide you with enough background knowledge on HPO algorithms to be able
+    to build or set up an HPO system. If you want to know the mathematical reasoning
+    behind the algorithms, please check out chapter 1, “Hyperparameter Optimization,”
+    by Matthias Feurer and Frank Hutter, of *AutoML: Methods, Systems, Challenges*
+    ([http://mng.bz/AlGx](http://mng.bz/AlGx)) and the paper “Algorithms for Hyper-Parameter
+    Optimization,” by Bergstra et al. ([http://mng.bz/Zo9A](http://mng.bz/Zo9A)).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Model-free optimization methods
+  prefs: []
+  type: TYPE_NORMAL
+- en: In model-free methods, data scientists make no assumptions about training code,
+    and the correlation between HPO trials is ignored. Grid search and random search
+    are the most commonly used methods.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In grid search, users specify a limited set of values for each hyperparameter
+    and then choose trial hyperparameters from the Cartesian product of those values.
+    For example, we can first specify value sets (search space) for the learning rate
+    as {0.1, 0.005, 0.001} and data batch size as {10, 40, 100} and then build the
+    grid with Cartesian products (as grid value) of these sets, such as (0.1, 10),
+    (0.1, 40), and (0.1, 100). After the grid is built, we can start the HPO trial
+    with the grid values.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Grid search suffers when the number of hyperparameters becomes larger or the
+    parameter’s search space becomes bigger because the required number of evaluations
+    will grow exponentially in this case. Another problem with grid search is its
+    ineffectiveness. Because grid search treats each set of hyperparameter candidates
+    equally, it will waste a lot of compute resources in the nonoptimal configuration
+    space while not spending enough compute power on the optimal space.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Random search works by sampling the hyperparameter configuration space at random
+    until a certain budget for the search is run out. For example, we can set the
+    search space for the learning rate to [0.001, 0.1] and data batch size to [10,
+    100] and then set the search budget to 100, which means it will run up to a total
+    of 100 HPO trials. In each trial, a random value is selected between 0.001 and
+    0.1 as the learning rate, and a random value is selected between 10 and 100 as
+    the data batch size.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This approach has two advantages over grid search. First, random search can
+    evaluate more values for each hyperparameter, which increases the chance of finding
+    the optimal hyperparameter set. Second, random search has easier parallelization
+    requirements; because all evaluation workers can run completely parallel, they
+    don’t need to communicate with each other, and a failed worker doesn’t leave holes
+    in the search space. But in grid search, a failed worker can skip the trial hyperparameters
+    assigned to the worker in the HPO.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The downside of random search is uncertainty; there is no guarantee an optimal
+    set of hyperparameters can be found within a finite computing budget. In theory,
+    if we allow for enough resources, random search can add sufficient random points
+    in the search, so it will, as expected, find the optimum hyperparameter set. In
+    practice, random search is used as a baseline.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/05-04.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 5.4 Comparison of grid search and random search for minimizing a function
+    with one important and one unimportant parameter. (Source: Figure 1.1\. of “Hyperparameter
+    Optimization,” by Matthias Feurer and Frank Hutter, in *AutoML: Methods, Systems,
+    Challenges*, eds. Frank Hutter, Lars Kotthoff, and Joaquin Vanschoren; Springer,
+    2019\. [www.automl.org/wp-content/uploads/2019/05/AutoML_Book_Chapter1.pdf](http://www.automl.org/wp-content/uploads/2019/05/AutoML_Book_Chapter1.pdf))'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 5.4 illustrates the comparison between grid search and random search.
+    The trial hyperparameter candidates (black dots) in grid search are Cartesian
+    products of important parameter values (in rows) and unimportant value points
+    (in columns). Their distribution can be seen as a grid in the search space (the
+    white square canvas). The random search algorithm obtains the hyperparameter candidates
+    randomly from the search space. When given enough of a search budget, its search
+    point has a better chance of getting closer to the optimal position.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Model-based Bayesian optimization
+  prefs: []
+  type: TYPE_NORMAL
+- en: Bayesian optimization is a state-of-the-art optimization framework for the global
+    optimization of expensive black-box functions. It’s used widely for various problem
+    settings, such as image classification, speech recognition, and neural language
+    modeling.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The Bayesian optimization methods can use different samplers, such as Gaussian
+    process regression (see “An Intuitive Tutorial to Gaussian Processes Regression,”
+    by Jie Wang; [https://arxiv.org/abs/2009.10862](https://arxiv.org/abs/2009.10862))
+    and tree-structured Parzen estimator approach (TPE), to calculate hyperparameter
+    candidates in the search space. In less rigorous words, the Bayesian optimization
+    methods use statistical methods to calculate new hyperparameter value suggestions
+    from the values used in past trials and their evaluation results.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note Why is it called Bayesian optimization? Bayesian analysis ([https://www.britannica.com/science/Bayesian-analysis](https://www.britannica.com/science/Bayesian-analysis))
+    is a widely used statistical inference method, named after English mathematician
+    Thomas Bayes ([https://www.britannica.com/biography/Thomas-Bayes](https://www.britannica.com/biography/Thomas-Bayes)),
+    that allows you to combine prior information about a population parameter with
+    evidence from information contained in a sample to guide the statistical inference
+    process. Based on this method, Jonas Mockus introduced the term Bayesian optimization
+    (see “Bayesian Linear Regression,” Bruna Wundervald; [https://www.researchgate.net/publication/333917874_Bayesian_Linear_
+    Regression](https://www.researchgate.net/publication/333917874_Bayesian_Linear_Regressionin))
+    in his 1970s and 1980s work on global optimization.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The concept behind Bayesian optimization methods is that the optimal hyperparameters
+    search would be more efficient if the algorithm could learn from past trials.
+    In practice, the Bayesian optimization method can find the optimal hyperparameters
+    set with fewer evaluation runs (trials) and is more stable than the other search
+    methods. Figure 5.5 shows the data sampling difference between random search and
+    the Bayesian approach.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/05-05.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.5 A data sampler comparison of random search (a) and Bayesian approach
+    (b) using 10 trials
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s assume the optimal hyperparameter value is at (x,y) = (0.5, 1), and we
+    try to use random search and Bayesian search to find it. In figure 5.5 (a), we
+    see the data is randomly sampled in the search space where x := [–1.0, 1.0] and
+    y := [1, 5]. In figure 5.5 (b), we see that the data is sampled heavily in the
+    area (x := [0.3, 0.7] and y := [1,1.5]), where the optimal value is located. This
+    comparison shows that the Bayesian search is more likely to find the optimal hyperparameters
+    in the given search space, and with a limited execution budget, the selected (sampled)
+    hyperparameter values become closer and closer to the optimal value after each
+    experiment in the search process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There are other advanced HPO algorithms, such as Hyperband ([http://mng.bz/Rlwv](http://mng.bz/Rlwv)),
+    TPE ([http://mng.bz/2a6a](http://mng.bz/2a6a)), and covariance matrix adaptation
+    evolution strategy (CMA-ES; [http://mng.bz/1M5q](http://mng.bz/1M5q)). Although
+    they do not follow the exact same mathematical theory as the Bayesian–Gaussian
+    process method, they share the same hyperparameter selection strategy: calculating
+    the next suggested value by considering the historical evaluation results.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Multifidelity optimization
+  prefs: []
+  type: TYPE_NORMAL
+- en: Multifidelity methods improve the efficiency of model-free and Bayesian optimization
+    methods. Nowadays, tuning hyperparameters on large datasets can take several hours
+    and even days. To speed up the HPO, multifidelity methods were developed. With
+    this approach, we minimize the loss function using so-called low-fidelity approximations
+    of the actual loss function. As a result, we can skip a lot of computations during
+    HPO.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note In the machine learning context, the loss function ([https://www.datarobot.com/blog/introduction-to-loss-functions/](https://www.datarobot.com/blog/introduction-to-loss-functions/))
+    is a method of evaluating how well a training algorithm models your dataset. If
+    the model output (predictions) is far off from the expected results, the loss
+    function should output a higher number; otherwise, it should output a lower number.
+    The loss function is a key component of ML algorithm development; the design of
+    the loss function directly affects model accuracy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Although the approximation introduces a tradeoff between optimization performance
+    and run time, in practice, the speedups often outweigh the approximation errors.
+    For more details, refer to “Hyperparameter Optimization,” by Matthias Feurer and
+    Frank Hutter ([www.automl.org/wp-content/uploads/2019/05/AutoML_Book_Chapter1.pdf](http://www.automl.org/wp-content/uploads/2019/05/AutoML_Book_Chapter1.pdf)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Why does the Bayesian-like HPO algorithm work?
+  prefs: []
+  type: TYPE_NORMAL
+- en: The blog post “Intuition behind Gaussian Processes,” by Michael McCourt ([https://sigopt.com/blog/intuition-behind-gaussian-processes/](https://sigopt.com/blog/intuition-behind-gaussian-processes/))
+    gives an excellent explanation for why the Bayesian-like optimization algorithm
+    can find the optimum hyperparameter set without checking every possible value
+    in the search space. In some settings, the experiments we observe are independent,
+    such as flipping a coin 50 times; knowledge of one does not imply knowledge of
+    others. But, fortunately, many settings have a more helpful structure from which
+    previous observations provide insight into unobserved outcomes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the machine learning context, we assume there is some relationship between
+    historical experiment (training trial) results and future experiment results.
+    More specifically, we believe there is a math model for this relationship. Although
+    using the Bayesian approach—for example, in the Gaussian process—to model this
+    relationship is a very strong assumption, we are given great power to make provable
+    optimal predictions. A side bonus is we now have a way to handle the uncertainty
+    of the model prediction result.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note If you are interested in applying Bayesian optimization to deep learning
+    projects, Quan Nguyen’s book *Bayesian Optimization in Action* (Manning, 2022;
+    [https://www.manning.com/books/bayesian-optimization-in-action](https://www.manning.com/books/bayesian-optimization-in-action))
+    is a good resource.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Which HPO algorithm works the best?
+  prefs: []
+  type: TYPE_NORMAL
+- en: No single HPO algorithm works best. Different optimization algorithms may fit
+    different tuning tasks under different constraints. Some of those variables might
+    include how the search space looks (e.g., hyperparameter types, value ranges),
+    how the trial budget looks, and what the goal is (eventual optimality or optimal
+    anytime performance). Figure 5.6 shows an HPO algorithm selection guideline from
+    the Optuna ([https://optuna.org/](https://optuna.org/)) HPO framework.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/05-06.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.6 A HPO algorithm selection cheat sheet from the Optuna HPO framework
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In figure 5.6, we see a decision graph for when to use the following three
+    HPO algorithms: Gaussian process, TPE, and CMA-ES. Because HPO is a fast-developing
+    field, new efficient algorithms can be published at any time, so algorithm selection
+    cheat sheets like this will quickly become outdated. For example, FLAML ([https://github.com/microsoft/FLAML](https://github.com/microsoft/FLAML))
+    is a newly developed Python HPO library that checks the hyperparameter correlation
+    during the HPO process; it is definitely worth a try. So please check with your
+    data science team for the latest HPO algorithm selection guideline.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note The HPO algorithm is not the primary focus of HPO engineering. The math
+    behind the HPO algorithm can be intimidating, but luckily, it is not the engineer’s
+    focus. Normally, it’s the data scientist’s job to determine which HPO algorithm
+    to use for a certain training job. As engineers, our role is to build a flexible,
+    extensible, black-box–fashion HPO system, so data scientists can run their model
+    training code with arbitrary HPO algorithms easily.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.2.3 Common automatic HPO approaches
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Fortunately, many mature frameworks and systems already exist today for conducting
+    HPO. Depending on the usage, they fall into two different categories: the HPO
+    library approach and the HPO service approach. Figure 5.7 illustrates the two
+    approaches. Let’s now discuss them one by one.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: HPO library approach
+  prefs: []
+  type: TYPE_NORMAL
+- en: In figure 5.7 (a), the library approach, we see that data scientists manage
+    the HPO process themselves, from coding to execution. They code the entire HPO
+    flow by using an HPO library, such as Hyperopt—an open source Python HPO library—and
+    integrate it with the training code together in one training application. Next,
+    data scientists run this application on their local machine or on the servers
+    to which they have direct access. The HPO library inside the application will
+    execute the HPO workflow that we see in figure 5.3.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/05-07.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 5.7 Two different HPO approaches: library vs. service. (a) HPO libraries
+    can run HPO experiments (training) on a local machine or a group of servers with
+    preconfiguration; (b) HPO service can run HPO experiments in a fully remote and
+    automatic fashion.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Flexibility and agility are the biggest advantages of the library approach;
+    you can choose any HPO algorithm/libraries you like, integrate them into your
+    training code, and start the HPO process right away because everything (training
+    plus hyperparameter calculation) happens on your local machine. Some HPO libraries—for
+    example, Ray Tune (section 5.4.3)—also support parallel distributed execution
+    but not in a fully automatic manner. This requires setting up a distributed computing
+    group with specific software that allows cross-machine communication, and it also
+    requires manually kicking off the parallel process on each server.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The biggest challenges for the library approach are scalability, reusability,
+    and stability. HPO requires lots of compute resources to execute its trials, so
+    a single server is often not capable of HPO. Even with the distributed functionality,
+    it still can’t scale. Imagine we want to use 20 servers for an HPO task that requires
+    10,000 trial runs; we need to manually set up the HPO process on 20 servers and
+    redo the setup every time the training or HPO code changes. Also, if 1 of the
+    20 parallel workers fails, the entire HPO work group comes to a halt. To address
+    these problems, the HPO service approach is introduced.
+  prefs: []
+  type: TYPE_NORMAL
+- en: HPO service approach
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now let’s take a closer look at the HPO service approach; we repeat figure 5.7
+    for clarity, presented here as figure 5.8\. In figure 5.8 (b), the service approach,
+    we see that the HPO happens in a remote compute cluster, managed by a service—the
+    HPO service. A data scientist only provides training code and a selected HPO algorithm
+    configuration to the service and starts the HPO job. The service manages both
+    compute resource allocation and the HPO workflow (figure 5.3) execution; it tracks
+    each trial’s result (model performance metric, such as accuracy) and returns the
+    final optimal hyperparameters to the data scientist when all trials are complete.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/05-08.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 5.8 Two different HPO approaches: library vs. service'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The service approach provides a real black-box experience. Data scientists don’t
+    need to worry about managing their own servers, setting up trial workers, and
+    learning how to modify training code to work with different HPO algorithms. The
+    HPO service takes care of all of these tasks. As the HPO service user, we just
+    pass parameters into the service, and then the service runs the HPO automatically
+    and returns the optimal hyperparameters at the end. The service also takes care
+    of autoscaling and failure recovery of failed trial jobs. Because of these advantages,
+    the service approach is now the dominant HPO approach in the deep learning production
+    environment. Because you are now familiar with HPO concepts and approaches, let’s
+    look at how to design an HPO service and how to use HPO libraries in the next
+    two sections.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note HPO is *not* a one-time job. If training with a different dataset, you
+    need to redo the HPO even if the model architecture didn’t change. If the dataset
+    changes, the optimal set model weights that fit best with the given data change
+    as well, so you need a new HPO searching effort.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.3 Designing an HPO service
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Now that you have a good understanding of the HPO library approach, let’s review
+    the HPO service approach. In this section, we will look at how to design an HPO
+    service to support HPO for arbitrary model training in an automatic and black-box
+    fashion.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.3.1 HPO design principles
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Before we look at the concrete design proposal, let’s first check out the five
+    design principles for building an HPO service.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Principle 1: Training code agnostic'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The HPO service needs to be agnostic to training code and model training frameworks.
+    In addition to supporting arbitrary machine learning frameworks like TensorFlow,
+    PyTorch, and MPI, we would like the service to be able to tune hyperparameters
+    of training code written in any programming language.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Principle 2: Extensibility and consistency in supporting different HPO algorithms'
+  prefs: []
+  type: TYPE_NORMAL
+- en: From the HPO algorithms discussion in section 5.2.2, we know the hyperparameters
+    search algorithm is the brain of the HPO process. The efficiency of the hyperparameter
+    search decides the HPO performance. A good HPO algorithm can find optimal hyperparameters
+    with a large hyperparameter number and arbitrary search spaces in a small number
+    of trials.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Because HPO algorithm research is an active field, a new effective algorithm
+    is published every few months. Our HPO service needs to integrate with these new
+    algorithms easily and expose them as algorithm options to customers (data scientists).
+    Also, the newly added algorithm should behave consistently with the existing algorithms
+    in terms of user experience.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Principle 3: Scalability and fault tolerance'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Besides HPO algorithms, another important responsibility of an HPO service is
+    to manage the computing resources used for HPO—the model training with various
+    hyperparameter values. From an HPO experiment perspective, we want distributed
+    execution at both the experiment level and trial level. More specifically, we
+    want to not only run trials in a distributed and parallel manner but also be able
+    to run a single training trial distributedly—for example, running distributed
+    training for the model training in one trial. From a resource utilization perspective,
+    the system needs to support autoscaling, which allows the compute cluster size
+    to be automatically adjusted to the current workload, so there is no under- or
+    overutilization of resources.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Fault tolerance is also another important aspect of HPO trial execution management.
+    Fault tolerance is important because some HPO algorithms are required to execute
+    trials sequentially. For example, trial 2 must happen after trial 1 because the
+    algorithm needs the past hyperparameter values and results to deduce the hyperparameters
+    before the next trial starts. In this case, when one trial fails unexpectedly—for
+    example, because of a node restart or a network problem—the entire HPO process
+    fails. The system should recover from the previous failure automatically. The
+    common approach is to record the latest state of each trial, so we can resume
+    from the last recorded checkpoint.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Principle 4: Multitenancy'
+  prefs: []
+  type: TYPE_NORMAL
+- en: An HPO process is essentially a set of model training executions. Similar to
+    model training, HPO services must provide resource isolation for various users
+    or groups. This will ensure that different user activities stay within their boundaries.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Principle 5: Portability'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Nowadays, the concept of “cloud neutral” has become very popular. People want
+    to run their model training job in different environments—Amazon Web Services,
+    Google Cloud Platform, and Azure—so the HPO service we build needs to decouple
+    from the underlying infrastructure. Running HPO service on Kubernetes is a good
+    choice here.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.3.2 A general HPO service design
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Because the HPO workflow (figure 5.3) is quite standard and there are not many
+    variations, the HPO service system design (figure 5.9) can be applied to most
+    of the HPO scenarios. It consists of three main components: an API interface,
+    HPO job manager, and hyperparameter (HP) suggestion maker. (They are marked as
+    A, B, and C in figure 5.9.)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/05-09.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.9 A general system design of an HPO service
+  prefs: []
+  type: TYPE_NORMAL
+- en: The API interface (component A) is the entrance point for users to submit HPO
+    jobs. To start an HPO experiment, users submit an API request (step 1) to the
+    interface; the request provides model training code, such as a Docker image; hyperparameters
+    and their search space; and an HPO algorithm.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The HP suggestion maker (component C) is a wrapper/adapter for different HPO
+    algorithms. It provides a unified interface for users to run each different HPO
+    algorithm, so users can select an algorithm without worrying about the execution
+    details. To add a new HPO algorithm, it must be registered in this suggestion-maker
+    component to become an algorithm option for users.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The HPO job manager (component B) is the core component of the HPO service;
+    it manages the HPO experiments for customer requests. For each HPO request, the
+    job manager starts an HPO trial loop (step 2). Within the loop, it first calls
+    the HP suggestion maker to obtain a set of suggested hyperparameter values (step
+    2.a) and then creates a trial to run model training with these hyperparameter
+    values (steps 2.b and 2.c).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For each training trial, the HPO job manager creates a trial object. This object
+    has two responsibilities: first, it collects the output of a trial execution,
+    such as the training progress, model metrics, model accuracy, and tried hyperparameters;
+    second, it manages the training process. It handles the training process launching,
+    distributed training setup, and failure recovery.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: HPO service end-to-end execution workflow
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s walk through the end-to-end user workflow, as shown in figure 5.9\. For
+    your convenience, we repeat figure 5.9, shown here as figure 5.10.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/05-10.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.10 A general system design of an HPO service
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, the user submits an HPO request to the API interface (step 1). The request
+    defines the training code, a list of hyperparameters and their value search space,
+    the training objective, and an HPO algorithm. Then, the HPO job manager starts
+    an HPO trial loop for this request (step 2). This loop launches a set of trials
+    to determine which set of hyperparameter values works the best. In the end, when
+    the trial budgets run out or one trial meets the training objective, the trial
+    loop breaks, and the best hyperparameters are returned (step 3).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Within a trial loop, the job manager first queries the HP suggestion maker to
+    recommend hyperparameter candidates (step 2.a). The suggestion maker will run
+    the selected HPO algorithm to calculate a set of hyperparameter values and return
+    it to the job manager (step 2.b). The job manager then creates a trial object
+    that launches a model training process with the suggested hyperparameter values
+    (step 2.c). The trial object will also monitor the training process and continue
+    reporting training metrics to the trial history database until the training completes
+    (step 2.d). When the job manager notices the current trial is complete, it pulls
+    the trial history (trial metrics and hyperparameter values used in past trials)
+    and passes it to the HP suggestion maker to obtain a new set of HP candidates
+    (step 2.e).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Because the HPO use cases are quite standard and generic and there are already
+    multiple open source HPO projects that work out of the box, we think it’s better
+    to learn how to use them instead of rebuilding a new system that has no added
+    value. So in appendix C, we will introduce you to a powerful and highly portable
+    Kubernetes-based HPO service—Kubeflow Katib.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.4 Open source HPO libraries
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The HPO service might seem like too much overhead for a small data scientist
+    team, especially if all their models are trained on a few servers they manage
+    themselves. In this case, using HPO libraries to optimize model training in local
+    machines or managed clusters (small scale, 1–10 servers) is a better option.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this section, we will introduce three useful HPO open source libraries:
+    Optuna, Hyperopt, and Ray Tune. They all run as HPO libraries, and they are easy
+    to learn and simple to use. Because Optuna, Hyperopt, and Ray Tune all have clear
+    onboarding docs and suitable examples, we will focus on the general overview and
+    feature introduction so you can decide which one to use based on your own circumstances.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the following discussion about different HPO libraries, especially in the
+    “How to Use” sections, you will see the term *objective function* a lot. What
+    is an objective function? Figure 5.11 demonstrates the process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For an HPO algorithm, such as Bayesian search, to generate a hyperparameter
+    suggestion so that the next trial works better, it needs to know how well the
+    previous HPO trial operated. Therefore, the HPO algorithm requires that we define
+    a function to score each training trial and continue minimizing or maximizing
+    the return value of the function (score) in the subsequent trials. We named this
+    the objective function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In figure 5.11, we see that an objective function receives hyperparameters as
+    input and returns a float value, or score. The objective function executes the
+    model training with given hyperparameters and evaluates the output model when
+    the training completes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/05-11.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.11 An objective function receives the hyperparameters as input and
+    returns a score.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.4.1 Hyperopt
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Hyperopt ([http://hyperopt.github.io/hyperopt/#getting-started](http://hyperopt.github.io/hyperopt/#getting-started))
+    is a lightweight and easy-to-use Python library for serial and parallel HPO. Random
+    search, TPE, and adaptive TPE are the three HPO algorithms implemented in Hyperopt.
+    Bayesian optimization algorithms (based on Gaussian processes) and regression
+    trees have been designed to accommodate but were not yet implemented at the time
+    this book was written.
+  prefs: []
+  type: TYPE_NORMAL
+- en: How to use
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s say you want to know which classifiers work best for your deep learning
+    case. We can use Hyperopt to obtain the answer in three steps.
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, we create an objective function that is basically a wrapper function
+    of the actual training code but reads the hyperparameter values from the `args`
+    variable. Second, we define search space for the selected hyperparameter. Third,
+    we choose an HPO algorithm, which selects hyperparameter values from the search
+    space and passes them to the objective function to start the optimization process.
+    Listing 5.1 implements this scenario.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this example, we want to determine which classifier leads to the best model
+    accuracy, so we choose to optimize the `classifier_type` hyperparameter among
+    three candidates: `naive_bayes`, `svm`, and `dtree`. You may also notice that
+    each classifier has its own value search space, such as `hp.lognormal(''svm_rbf_width'',`
+    `0,` `1)` for the `svm` classifier. In the `fmin` function (in step 3), we specify
+    TPE as the HPO algorithm with 10 max trials and pass in the objective function
+    and search space as the required parameters.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 5.1 Getting started with Hyperopt
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Trains the model with the passed in hyperparameters and evaluates the result
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Declares three classifier candidates
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Defines search space for the parameters of the SVM classifier
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ The fmin function minimizes the objective over the space with the selected
+    algorithm.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Parallelization
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Although Hyperopt is a standalone library, we can run it parallelly in a cluster
+    of machines. The basic idea is to run Hyperopt workers on different machines and
+    let them talk to a central database for coordination. Hyperopt can also use Spark
+    computing to run HPO parallelly. You can check out the following two articles
+    for more details: “On Using Hyperopt: Advanced Machine Learning,” by Tanay Agrawal
+    ([http://mng.bz/PxwR](http://mng.bz/PxwR)) and “Scaling Out Search with Apache
+    Spark” ([http://hyperopt.github.io/hyperopt/scaleout/spark/](http://hyperopt.github.io/hyperopt/scaleout/spark/)).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: When to use
+  prefs: []
+  type: TYPE_NORMAL
+- en: Hyperopt is a good option for small or early-phase model training projects.
+    First, it’s easy to use. You can run HPO in three steps on a local machine or
+    on servers to which you have direct access. Second, it’s friendly to modification.
+    Because it takes a library approach, the HPO code is placed with training code
+    in the same code project. So, trying different optimization plans, such as choosing
+    various hyperparameters to tune, is very convenient.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.4.2 Optuna
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Similar to Hyperopt, Optuna is also a lightweight Python library designed to
+    automate hyperparameter searches. It supports large space search and early pruning
+    on the unpromising trials, as well as parallelization on multiple threads or processes
+    without modifying code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In our opinion, Optuna is an advanced version of Hyperopt, and its visualization
+    capabilities are much better. By examining the interactions between parameters
+    in a graph, the visualization in hyperparameter search gives you a lot of insight,
+    so you can easily determine which parameters are more effective than others. Optuna’s
+    visualization is beautiful and interactive.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Optuna has another advantage over Hyperopt concerning its documentation. Optuna’s
+    documentation is excellent. In addition to its detailed API doc and well-organized
+    tutorials, it has well-maintained source code. If you look at its GitHub project
+    issue section, you will find a very active and growing community, and great features
+    and GitHub pull requests are still to come.
+  prefs: []
+  type: TYPE_NORMAL
+- en: How to use
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Listing 5.2 shows a quick three-step example of how to use Optuna: step 1,
+    define the objective function; step 2, create a study object to represent the
+    HPO process; and step 3, start the HPO process with a max trials quota.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Compared to Hyperopt, Optuna requires most of the HPO logic to be defined in
+    the objective function. The general code pattern is as follows. First, define
+    the search space and generate the hyperparameter values by `trial.suggest_xxx`
+    function. Next, start the model training with the sampled hyperparameter values.
+    Then run the evaluation method to calculate model performance and return the objective
+    value. In the following example, the evaluation score is calculated by `mean_squared_error`.
+    You can find more Optuna examples at [https://github.com/optuna/optuna-examples](https://github.com/optuna/optuna-examples).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 5.2 Getting started with Optuna
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Sets classifier candidates
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Invokes suggest_XXX methods to generate the hyperparameters
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Chooses max_depth in the range of 2 and 32
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Runs model training with the Optuna regressor
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Sets mean square error as the objective value and links to the trial object
+  prefs: []
+  type: TYPE_NORMAL
+- en: Parallelization
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We can run distributed HPO on one machine or a cluster of machines with Optuna.
+    The distributed execution setup is fairly simple and can be done in three steps:
+    first, start a relational database server, such as MySQL; second, create a study
+    with storage argument; and third, share the study among multiple nodes and processes.
+    Compared to Hyperopt, Optuna’s distributed execution setup is simpler, and it
+    can scale up from a single machine to multiple machines without code modifications.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: When to use
+  prefs: []
+  type: TYPE_NORMAL
+- en: Optuna can be seen as the successor of Hyperopt; it has better documentation,
+    visualization, and parallel execution. For any deep learning model training project
+    that can run on one or more machines, you can use Optuna to find the optimal hyperparameters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Optuna will hit its limit with a large data science team or multiple HPO projects
+    to support because it requires managing a central machine cluster to provide the
+    computing resource. But Optuna’s parallel/distributed execution is manual; people
+    need to distribute the code to each server and execute it one server at a time,
+    manually. To manage distributed computing jobs in an automatic and programmatic
+    fashion, we can use Kubeflow Katib (appendix C) or Ray Tune.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.4.3 Ray Tune
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Ray ([https://docs.ray.io/en/latest/index.html](https://docs.ray.io/en/latest/index.html))
+    provides a simple, universal API for building distributed applications. Ray Tune
+    ([https://docs.ray.io/en/latest/tune/index.html](https://docs.ray.io/en/latest/tune/index.html))
+    is a Python library built on top of Ray for HPO at any scale.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The Ray Tune library supports almost any machine learning framework, including
+    PyTorch, XGBoost, MXNet, and Keras. It also supports state-of-the-art HPO algorithms
+    such as Population Based Training (PBT), BayesOptSearch, and HyperBand/ ASHA.
+    In addition, Tune provides a mechanism to integrate HPO algorithms from other
+    HPO libraries, such as Hyperopt integration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: By using Ray as its distributed executing support, we can launch a multinode
+    HPO experimentation in a few lines of code. Ray will take care of code distribution,
+    distributed computing management, and fault tolerance.
+  prefs: []
+  type: TYPE_NORMAL
+- en: How to use
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using Ray Tune to execute an HPO task is very straightforward. First, define
+    an objective function. In the function, read hyperparameter values from the `config`
+    variable, start model training, and return the evaluation score. Second, define
+    hyperparameters and their value search space. Third, start the HPO execution by
+    linking the objective function and search space together. Listing 5.3 implements
+    the aforementioned three steps.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 5.3 Getting started with Ray Tune
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ ConvNet is a self-defined neural network.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Reads the hyperparameter value from the input config
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Starts model training
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Sends the evaluation result (accuracy) back to Tune
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Samples a float value uniformly between 0.1 and 0.9 for "momentum"
+  prefs: []
+  type: TYPE_NORMAL
+- en: You may notice a scheduler object, `ASHAScheduler``,` is passed to the `tune.run`
+    function in step 3\. ASHA ([http://mng.bz/JlwZ](http://mng.bz/JlwZ)) is a scalable
+    algorithm for principled early stopping (see “Massively Parallel Hyperparameter
+    Optimization,” by Liam Li; [http://mng.bz/wPZ5](http://mng.bz/wPZ5)). At a high
+    level, ASHA terminates trials that are less promising and allocates time and resources
+    to more promising trials. By properly adjusting the parameter `num_samples`, the
+    search can be much more efficient, and it can support a larger search space.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Parallelization
+  prefs: []
+  type: TYPE_NORMAL
+- en: Distributed execution is Ray Tune’s biggest advantage compared with Optuna.
+    Ray Tune allows you to transparently parallelize across multiple GPUs and multiple
+    nodes (see Ray documentation at [http://mng.bz/qdRx](http://mng.bz/qdRx)). Tune
+    even has seamless fault tolerance and cloud support. Unlike Optuna and Hyperopt,
+    we don’t need to manually set up a distributed environment and execute worker
+    scripts one machine after another. Ray Tune takes care of these steps automatically.
+    Figure 5.12 shows how Ray Tune distributes HPO Python code to a cluster of machines.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/05-12.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.12 Ray Tune running distributed HPO on a cluster of machines
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, we set up a Ray cluster with the command `"ray` `up` `tune-cluster.yaml"`;
+    the `tune-cluster.yaml` is a cluster configuration that declares the computing
+    resources for the cluster. Then we run the following command to submit the HPO
+    code from the local machine to the head node of the cluster: `"ray` `submit` `tune-cluster.yaml`
+    `tune_ script.py` `--start` `--` `--ray-address={server_address}"`. Next, Ray
+    assigns resources, copies the HPO code to the servers, and starts the distributed
+    execution. For further details, please see “Tune Distributed Experiments” ([http://mng.bz/71QQ](http://mng.bz/71QQ)).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Besides distributed HPO execution, Ray Tune also supports running distributed
+    training for single-trial, automatic checkpoint management and TensorBoard logging.
+    These features add great value to Ray Tune for their high fault tolerance and
+    simple troubleshooting.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When to use
+  prefs: []
+  type: TYPE_NORMAL
+- en: Compared with other HPO libraries, is Ray Tune the way to go for HPO? Provisionally,
+    yes. As this book is being written, Ray provides integration between the underlying
+    training framework (such as TensorFlow and PyTorch) and the cutting-edge HPO algorithm
+    (such as Bayesian search and TPE), as well as early stopping (ASHA). It allows
+    us to run HPO searches distributedly in a straightforward and reliable manner.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For most of the data science team, who don’t want to own an HPO service, Ray
+    Tune is the suggested approach. It’s simple to use, and it meets almost every
+    model training project’s HPO requirement: great documents, cutting-edge HPO algorithms,
+    and efficient and simple distributed execution management.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Note We recommend using Ray Tune over other HPO libraries for the following
+    five reasons: (1) it is simple to use; (2) it has great documents and examples;
+    (3) its distributed execution is automatic and programmatic; (4) Ray Tune supports
+    distributed training for a single trial; and (5) Ray Tune has a scheduler feature
+    (for example, `ASHAScheduler`) that can greatly reduce computing cost by terminating
+    unpromising trials earlier.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The limitation of Ray Tune
+  prefs: []
+  type: TYPE_NORMAL
+- en: Ray Tune and other HPO libraries will hit their limits when we need to support
+    different teams and different deep learning projects in one shared HPO system.
+    Ray Tune is missing computing isolation, which leads to two big problems.
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, package versions of different training codes can cause conflicts between
+    Ray workers. When performing distributed HPO in Ray Tune, we submit the HPO code
+    to the Ray cluster’s head server and then run this code in the cluster workers
+    in parallel. This means every Ray worker server needs to install the dependent
+    libraries for every training code that it needs to run. Imagine how we manage
+    the package installation and potential version conflicts when you have to run
+    10 different HPO tasks in one Ray cluster; the worker machine needs to install
+    hundreds of packages for these 10 different training codes and also resolve their
+    version conflicts. Second, Ray Tune doesn’t enforce user segregation. It’s very
+    difficult to build a virtual boundary in Ray Tune for different data science teams
+    to limit their computing resource usage.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.4.4 Next steps
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: When you encounter the aforementioned problems with HPO libraries, it’s time
+    to switch to an HPO service. We strongly recommend you read appendix C before
+    you consider building your own HPO. It introduces a solid open source HPO service
+    called Kubeflow Katib, which is a well-designed, general-purpose HPO service.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: A hyperparameter is a parameter whose value is used to control the learning
+    process. This type of parameter is not learnable in model training; therefore,
+    we need to tune it.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: HPO is a process to discover a set of hyperparameters that yields an optimal
+    model, which minimizes a predefined loss function on a given dataset.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Automatic HPO is the process of using compute power and algorithms (HPO algorithms)
+    to automatically find the optimal hyperparameters for a training code.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Automatic HPO now is a standard step for model training.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Most HPO algorithms can be categorized into one of three buckets: model-free
+    optimization, Bayesian optimization, or multifidelity optimization.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: There is no single best HPO algorithm. Different optimization algorithms may
+    fit different HPO tasks under different constraints.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: HPO can run with a library or in a remote service. The library approach is simple,
+    flexible, and suitable for small teams and projects in the prototyping phase whereas
+    the service approach is for large organizations and production use cases.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The HPO service approach provides a fully automatic black-box HPO experience,
+    including computing resource management; therefore, we recommend taking a service
+    approach if you are building a deep learning system for large teams.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The five design principles for building an HPO service are training code agnostic,
+    high extensibility, high scalability and reliability, HPO execution and resource
+    consumption segregation, and high portability.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: To expedite an HPO experiment, we can parallelize training executions of different
+    trials, introduce distributed training, and stop the unpromising trials early.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: We encourage you to adopt Kubeflow Katib as your HPO service instead of building
+    a new service yourself.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Among three commonly used open source HPO libraries—Optuma, Hyperopt, and Ray
+    tune—Ray Tune has so far proven to be the best.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL

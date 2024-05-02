@@ -1,0 +1,931 @@
+- en: Appendix C. Creating an HPO service with Kubeflow Katib
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: We will introduce you to an open source hyperparameter optimization (HPO) service—Kubeflow
+    Katib—that addresses virtually all the HPO requirements we discussed in chapter
+    5\. We strongly recommend that you consider adopting Katib before building your
+    HPO service. Along with showing you how to use Katib, we will also cover its system
+    design and its codebase to make you comfortable with the open source service.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As a member of the Kubeflow family, Katib is a cloud-native, scalable, and production-ready
+    hyperparameter optimization system. In addition, Katib is agnostic to the machine
+    learning framework or programming language. Also, Katib is written in Go, takes
+    a Kubernetes-native approach, and runs standalone in a Kubernetes cluster. In
+    addition to hyperparameter optimization with early stopping support, Katib supports
+    neural architecture search (NAS).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There are many advantages to Katib, including its ability to support multitenancy
+    and distributed training, its cloud nativeness, and its extensibility, all of
+    which distinguish it from other systems. No matter if you manage your server cluster
+    using Kubernetes in the cloud or on your local server, Katib is the best choice.
+    In this chapter, we will tour Katib in the following five steps: Katib overview,
+    how to use Katib, Katib system design and code reading, expediting HPO execution,
+    and adding customized HPO algorithms to Katib.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: C.1 Katib overview
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Katib manages HPO experiments and computing resources in a black-box fashion,
+    so Katib users only need to provide training code and define the HPO execution
+    plan, and then Katib will take care of the rest. Figure C.1 shows Katib’s system
+    overview.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/C-1.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure C.1 Katib system overview. Katib components run as Kubernetes native
+    services, and Katib supports three types of user interfaces: UI, API, and SDK.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In figure C.1, we see that Katib exposes three types of user interfaces for
+    the user’s convenience: a web UI, a Python SDK, and a set of APIs. Users can run
+    HPO via a web page, a Jupyter notebook, Kubernetes commands, and an HTTP request.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'From a user perspective, Katib is a remote system. To run HPO, a user submits
+    an experiment request to Katib, and Katib executes the HPO experiment for them.
+    To build the experiment request, users need to do two things: first, Dockerize
+    the training code and expose the hyperparameters they want to optimize as external
+    variables; second, create an experiment object that defines the spec of the HPO
+    experiment, such as HPO algorithm, trial budget, or hyperparameters and their
+    value search space. Once the experiment object is created inside Katib, Katib
+    will allocate computing resources to start the HPO execution.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Katib runs inside a Kubernetes cluster. Katib service itself doesn’t consume
+    a lot of memory or disk space; it launches Kubernetes pod to run model training
+    jobs (HPO trials) for testing different hyperparameter suggestions. Katib can
+    run training jobs in different namespaces for different users to create resource
+    segregation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: C.2 Getting started with Katib
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In this section, we will look at how to operate Katib. First, we install Katib
+    locally and then explain the terms, and finally, we show you a Katib end-to-end
+    use case.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Why talk about Katib operation and installation in a design book?
+  prefs: []
+  type: TYPE_NORMAL
+- en: Ideally, we don’t want to include installation and user guides for software
+    in a design book, because this information might become stale right after the
+    book is published, and we can find the living doc on its official website. Here
+    are two reasons why we violated our rules.
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, because we recommend you use Katib instead of building your own service,
+    we are obligated to show you the complete user experience, both from the perspective
+    of a Katib user (a data scientist) and a Katib operator (an engineer). Second,
+    to understand Katib's design and learn how to read its codebase, it's best to
+    first explain its terminology and typical user workflow. Once you comprehend how
+    Katib works, you'll have a much easier time reading its code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'C.2.1 Step 1: Installation'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'If you install the Kubeflow system ([https://mng.bz/WAp4](https://mng.bz/WAp4)),
+    then Katib is included. But if you are only interested in HPO, you can install
+    Katib standalone. Katib is actively evolving and well maintained, so please check
+    its official installation document “Getting Started with Katib: Installing Katib”
+    ([http://mng.bz/81YZ](http://mng.bz/81YZ)) for the up-to-date installation tips.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'C.2.2 Step 2: Understanding Katib terms'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: For a Katib user, experiment, suggestion, and trial are the three most important
+    entities/concepts with which to familiarize yourself. The definitions are as follows.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Experiment
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'An experiment is a single optimization run; it is an end-to-end HPO process.
+    An experiment configuration contains the following main components: a Docker image
+    for training code, an objective metric (aka target value) for what we want to
+    optimize, hyperparameters to tune, and a value search space and HPO algorithm.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Suggestion
+  prefs: []
+  type: TYPE_NORMAL
+- en: A suggestion is a set of hyperparameter values that the HPO algorithm has proposed.
+    Katib creates a trial job to evaluate the suggested set of values.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Trial
+  prefs: []
+  type: TYPE_NORMAL
+- en: A trial is one iteration of the experiment. A trial takes one suggestion, executes
+    a training process (a trial job) to produce a model, and evaluates the model performance.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Each experiment runs a trial loop. The experiment keeps scheduling new trials
+    until either the objective is met or the configured maximum number of trials is
+    reached. You can see more of Katib concepts’ explanation in Katib’s official doc
+    “Introduction to Katib” ([http://mng.bz/ElBo](http://mng.bz/ElBo)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'C.2.3 Step 3: Packaging training code to Docker image'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Compared to the HPO library approaches (section 5.4), the biggest difference
+    is that the HPO service approach requires us to package model training code to
+    a Docker image. This is because the HPO service needs to run the HPO training
+    experiment in a remote cluster, and a Docker image is the ideal method to run
+    the model training code remotely.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There are two things we need to pay attention to when preparing the Docker
+    image: defining hyperparameters as command-line arguments of the training code
+    and reporting training metrics to Katib. Let’s look at an example.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, we define the hyperparameters needed to be optimized as command-line
+    arguments in the training code. Because Katib needs to execute the training code
+    as a docker container for different hyperparameter values, the training code needs
+    to take the hyperparameter value from the command-line arguments. In the next
+    code example, we define two hyperparameters to tune: lr (learning rate) and batch
+    size. During the HPO process, Katib will pass in the values at the training container
+    launching time; see the code that follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Parses the hyperparameter value from the command line arguments
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Second, we let the training code report training metrics, especially the objective
+    metrics, to Katib, so it can track the progress and result of each trial execution.
+    Katib can collect metrics from the following three places: stdout (OS standard
+    output location), an arbitrary file, and TensorFlow events. If you have special
+    metric collection or storage requirements, you can also write your own metric
+    collection container.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The simplest option is to print evaluation (objective) metrics to stdout from
+    your training code and collect them with Katib’s standard metrics collector. For
+    example, if we define our objective metric as `Validation-accuracy` and want the
+    HPO process to find optimal HP to minimize this value, we can write the following
+    logs to stdout. Katib standard metric collector will detect `Validation-accuracy=0.924463`
+    in the stdout and parse the value. See a sample stdout output as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: The default regex format Katib uses to parse objective metrics from the log
+    is `([\w|-]+)\s*=\s*([+-]?\d*(\.\d+)?([Ee][+-]?\d+)?)`. You can define your own
+    regex format at `.source.filter.metricsFormat` in the experiment configuration
+    file. Please check out the Metrics Collector section ([http://mng.bz/NmvN](http://mng.bz/NmvN))
+    of the Katib doc “Running an Experiment” for more details.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To get you started, Katib provides a list of sample training codes and sample
+    Docker image files to show you how to package your training code. These examples
+    are written for different training frameworks, such as TensorFlow, PyTorch, MXNet,
+    and more. You can find these samples in the Katib GitHub repo ([http://mng.bz/DZln](http://mng.bz/DZln)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'C.2.4 Step 4: Configuring an experiment'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Now that you have the training code ready, we can start to prepare an HPO experiment
+    in Katib. We just need to create an Experiment CRD (customer resource definition)
+    object in Katib.
+  prefs: []
+  type: TYPE_NORMAL
+- en: By using Kubernetes API or the `kubectl` command, we can create the experiment
+    CRD by specifying a YAML configuration. See the following config as an example.
+    For ease of reading, we divided the sample config into three chunks. Let’s go
+    over each chunk individually.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First section: Objective'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The first section is to define the goal of an HPO experiment and determine how
+    to measure the performance of each trial (training execution). Katib uses the
+    value of `objectiveMetric` and `additionalMetric` as the objective value to monitor
+    how the suggested hyperparameters work with the model. If the objective value
+    in a trial reaches the goal, Katib will mark the suggested hyperparameters as
+    the best value and stop further trials in the experimentation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For the following configuration, the objective metric is set as `Validation-accuracy`
+    and the goal is set to `0.99`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Defines the objective metric
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Second section: The HPO algorithm and hyperparameters'
+  prefs: []
+  type: TYPE_NORMAL
+- en: After setting the HPO objective, we can configure the HPO algorithm and declare
+    their search spaces and the hyperparameters that need to be tuned. Let’s look
+    at these configs separately.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The *algorithm config* specifies the HPO algorithm we want Katib to use for
+    the experiment. In the current example, we chose the Bayesian optimization algorithm
+    ([http://mng.bz/lJw6](http://mng.bz/lJw6)). Katib supports many cutting-edge HPO
+    algorithms; you can see them in the Katib official doc “Running an Experiment”
+    in the section Search Algorithm in Detail ([http://mng.bz/BlV0](http://mng.bz/BlV0)).
+    You can also add your own HPO algorithm to Katib, which we will discuss in section
+    C.5.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`ParallelTrialCount`, `maxTrialCount`, and `maxFailedTrialCount`: are self-explanatory
+    by their names, which define how the trials are scheduled for experimentation.
+    In this example, we run three trials in parallel, with a total of 12 trials. The
+    experiment stops if we have three failed trials.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The *parameters config* defines the hyperparameters to tune and their value
+    search space. Katib selects hyperparameter values in the search space based on
+    the hyperparameter tuning algorithm that you specified. See the following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Uses the Bayesian optimization algorithm provided by Katib
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Defines hyperparameters to optimize and their value search space
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Last section: Trial configuration'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this *trial template* *config*, we define what training code (Docker image)
+    to execute and what hyperparameters are passed to the training code. Katib has
+    built-in jobs for almost every model training framework—such as TensorFlow, PyTorch
+    MXNet job types, and more—which takes care of the actual training execution in
+    Kubernetes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For example, if we want to run distributed training in an HPO trial for a PyTorch
+    training code, which requires setting up a distributed group, we can define the
+    trial as a PyTorch job type. Katib will run the distributed training for you.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the following example, we define the trial as the default job type `Kubernetes`
+    `Job`. In the experimentation, Katib will run the trial job as a Kubernetes pod,
+    using no special customized configuration for the training code; see the code
+    as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Declares hyperparameters for the training code
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Configures the training container
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Configures how to execute the training code
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Katib provides sample experiment configuration files for each HPO algorithm
+    it supports; you can find them in the Katib GitHub repo: `katib/examples/v1beta1/hp-tuning/`
+    ([http://mng.bz/dJVN](http://mng.bz/dJVN))'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'C.2.5 Step 5: Start the experiment'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Once we define the experiment configuration and save it in a YAML file, we
+    can run the following command to start the experiment:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: From the return message of the `kubectl` `get` `experiment` `-n` `kubeflow`,
+    we see the experiment `bayesian-optimization` is created as an Experiment CRD
+    resource. From now on, Katib will own the HPO experiment completely until a result
+    is obtained.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note Katib completely relies on Kubernetes CRD objects to manage the HPO experiments
+    and trials. It also uses CRD objects to store metrics and status for its HPO activities,
+    so we say Katib is a Kubernetes native application.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Besides the previous `kubectl` commands, we can also start an experiment by
+    using Katib SDK, by using its web UI, or by sending HTTP requests.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'C.2.6 Step 6: Query progress and result'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'You can check the experiment running status by using the following commands:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `kubectl` `describe` command will return all the information about the
+    experiment, such as its configuration, metadata, and status. From a progress tracking
+    perspective, we are mostly interested in the status section. See the following
+    example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Experiment history
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Metadata of the current best trial
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ The objective metrics of the current best trial
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Hyperparameters’ value used in the current best trial
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ The list of finished trials
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here are a few explanations of the previous sample response:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Status/conditions*—Shows current and previous states. In the previous example,
+    we see that the experiment went through three states: created, ran, and succeeded.
+    From the message, we know the experiment completes because it runs out the training
+    budget—the max trial count.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Current optimal trial*—Displays the current “best” trial and the hyperparameter
+    values the trial used. It also shows the statistics of the objective metrics.
+    As the experiment progresses, these values will keep updating until all the trials
+    in the experiment are completed, and then we take `status.currentOptimalTrial
+    .parameterAssignment` (the hyperparameter value assignment) as the final result.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Succeeded trial lists/failed trial lists/trials*—Shows how the experiment
+    is progressing by listing all the trials the experiment executes.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'C.2.7 Step 7: Troubleshooting'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'If there are failed trials, we can run the following command to check the error
+    message of the failed trial job. See the failed HPO example as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Failure message
+  prefs: []
+  type: TYPE_NORMAL
+- en: From the return data, we can see the hyperparameter values used in the trial
+    and the associated error message.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Besides the error message from the `describe` command, we can also find the
+    root cause by checking the logs of the training container. If you choose to use
+    the Katib standard metric collector, Katib will run a `metrics-logger-and-collector`
+    container with your training code container in the same pod. That metric collector
+    captures all the stdout logging from your training container; you can check these
+    logs by using the following command: `kubectl` `logs` `${trial_pod}` `-c` `metrics-logger-and-collector`
+    `-n` `kubeflow`. See a sample command as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `logs` command outputs lots of valuable information, such as initial parameters
+    to the training process, dataset download results, and model training metrics.
+    In the following sample log output, we can see `Validation-accuracy` and `Train-accuracy`.
+    Katib metric collector will parse these values out because they are defined as
+    the objective metric in the experiment configuration:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Trial name
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Initial parameters of the training trial
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Dataset download
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Additional metric value
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Objective metric value
+  prefs: []
+  type: TYPE_NORMAL
+- en: C.3 Expedite HPO
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'HPO is a time-consuming and expensive operation. Katib offers three methods
+    to expedite the process: parallel trials, distributed training, and early stopping.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: C.3.1 Parallel trials
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: By specifying `parallelTrialCount` in the experiment configuration, you can
+    run trials parallelly. One thing we should be aware of is that some HPO algorithms
+    don’t support parallel trial execution. Because this type of algorithm has a linear
+    requirement on the trial execution sequence, the next trial needs to wait until
+    the current trial completes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: C.3.2 Distributed trial (training) job
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: To get trial jobs completed faster, Katib allows us to enable distributed training
+    for running training code. As we explained in C.2 (step 4), Katib defines different
+    job types in `trialTemplate` for different training frameworks, such as PyTorch,
+    TensorFlow, and MXNet.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following is an example of how to enable distributed training (one master,
+    two workers) for a PyTorch training code in the Katib experiment:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Declares learning rate and momentum as hyperparameters
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Sets the trial job type as PyTorch
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Configures the master trainer
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Configures the worker trainer
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the previous example, we see the only difference compared to the nondistributed
+    experiment configuration in section C.2 (step 4) is the `trialSpec` section. The
+    job type now changes to `PyTorchJob`, and it has separate settings, such as replicas
+    numbers, for the master and worker trainer. You can find the details of the Katib
+    training operator and their configuration examples in the following two GitHub
+    repositories: Kubeflow training operator ([https://github.com/kubeflow/training-operator](https://github.com/kubeflow/training-operator))
+    and Katib operator configuration examples ([http://mng.bz/rdgB](http://mng.bz/rdgB)).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: C.3.3 Early stopping
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Another useful trick Katib offers is early stopping. Early stopping ends the
+    trial when its objective metric(s) no longer improves. It saves computing resources
+    and reduces execution times by cutting off the unpromising trials.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The advantage of using early stopping in Katib is that we only need to update
+    our experiment configuration file without modifying our training code. Simply
+    define `.earlyStopping.algorithmName` and `.earlyStopping.algorithmSettings` in
+    the `.spec.algorithm` section and you are good to go.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The current early stopping algorithm Katib supports is median stopping rules,
+    which stops a trial if the trial’s best objective value is worse than the median
+    value of the running averages of all other completed trials’ objectives reported
+    up to the same step. Please read more details in the Katib official doc “Using
+    Early Stopping.”
+  prefs: []
+  type: TYPE_NORMAL
+- en: C.4 Katib system design
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Finally, we can talk about our favorite topic—system design. By reading sections
+    C.2 and C.3, you should have a clear sense of how Katib solves HPO problems from
+    a user perspective. This builds a great foundation for understanding Katib’s system
+    design.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As we have seen, Katib is not only solving the HPO problem but also addressing
+    it in production quality. Normally, such a powerful system has a large and complicated
+    codebase, but Katib is an exception. Because the core Katib’s components are all
+    implemented in a sample design pattern—Kubernetes controller/operator pattern—if
+    you understand one component, you understand almost the entire system. By following
+    our introduction in this section, reading the Katib source code will be straightforward
+    for you.
+  prefs: []
+  type: TYPE_NORMAL
+- en: C.4.1 Kubernetes controller/operator pattern
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: We have discussed the controller design pattern in section 3.4.2\. However,
+    to help you remember, we reposted figure 3.10 as figure C.2 here. If figure C.2
+    doesn’t look familiar, please revisit section 3.4.2.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/C-2.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure C.2 The Kubernetes controller/operator pattern runs an infinite control
+    loop that watches the actual state (on the right) and desired state (on the left)
+    of certain Kubernetes resources and tries to move its actual state to the desired
+    one.
+  prefs: []
+  type: TYPE_NORMAL
+- en: C.4.2 Katib system design and workflow
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Figure C.2 illustrates Katib’s internal components and their interactions.
+    The system has three core components: experiment controller (marked as A), suggestion
+    controller (marked as B), and trial controller (marked as C).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The experiment controller manages HPO experiments throughout its lifecycle,
+    such as scheduling HPO trials for an experiment and updating its status. The suggestion
+    controller runs HPO algorithms to provide suggested values for given hyperparameters.
+    And the trial controller runs the actual model training for a given set of hyperparameters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: From the names of these core components, you know their implementations all
+    follow the Kubernetes controller pattern. Besides the controller, Katib defines
+    a set of CRD objects (spec) to work with these three controllers. For example,
+    *experiment spec* is a type of CRD that defines the desired state for an HPO experiment
+    and works as an input request to the experiment controller.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As shown in figure C.3, Alex, a data scientist, might follow a typical workflow
+    when interacting with Katib. The major steps are listed in the following sections.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/C-3.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure C.3 A Katib system design graph and user workflow
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Step 1: Creating an experiment request'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In step 1, Alex creates an experiment CRD object by using client tools, such
+    as Katib SDK, Katib web UI, or `kubectl` commands. This experiment object contains
+    all the HPO experiment definitions, such as the training algorithm, hyperparameters
+    and their search spaces, HPO algorithm, and trial budget.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The experiment controller (component A) periodically scans all the experiment
+    CRD objects. For every experiment CRD object, it creates the declared suggestion
+    CRD object and trial CRD object. In short, the experiment controller spawns the
+    actual resources to achieve the desired state defined in the experiment CRD. Additionally,
+    it keeps the experiment’s runtime status updated in the experiment’s CRD object,
+    so Alex can see trial hyperparameters and the execution status of the experiment
+    in real time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Once Alex’s experiment object has been created in step 1, Katib deploys an HPO
+    algorithm suggestion service (component D) for Alex’s experiment so that the required
+    HPO algorithm can be run. In this suggestion service, the HPO search algorithm
+    (library) defined in the experiment CRD object is loaded and exposed through a
+    gRPC interface, allowing the suggestion controller to talk to it and ask for suggested
+    hyperparameters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Step 2: Get the next trial hyperparameters'
+  prefs: []
+  type: TYPE_NORMAL
+- en: When the experiment controller finds Alex’s experiment CRD object in step 2,
+    it creates a suggestion CRD object as an input request for the suggestion controller
+    (component B). Hyperparameters and their values are specified in this suggestion
+    CRD object, as well as the search algorithm and the number of suggestions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Afterward, the suggestion controller calls the suggestion algorithm service,
+    created in step 1, to calculate the suggested hyperparameter values. Additionally,
+    the suggestion controller maintains the history of the suggested hyperparameter
+    values in the suggestion CRD objects.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Step 3: Create a trial request'
+  prefs: []
+  type: TYPE_NORMAL
+- en: As part of step 3, after the suggestion controller provides a set of trial hyperparameter
+    values, the experiment controller (component A) creates a trial CRD object to
+    kick off a model training trial. The trial trains the model using the set of hyperparameter
+    values calculated by the suggestion service (component D).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Step 4: Launch training job'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In step 4, the trial controller (component C) reads the newly created trial
+    CRD objects (created in step 3) and creates a TrialJob CRD object. There are several
+    types of TrialJob CRD objects, including Kubernetes jobs, PyTorch jobs, TF jobs,
+    and MXNet jobs. For each job type, Kubeflow ([https://www.kubeflow.org/docs/components/training/](https://www.kubeflow.org/docs/components/training/))
+    provides a dedicated training operator to execute it, such as a PyTorch training
+    operator or TensorFlow training operator (component E).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Upon detecting a newly created TrialJob CRD object in its type, the training
+    operator (component E) creates Kubernetes pods to execute the training image based
+    on the hyperparameters defined in the trial job. The training trials for Alex’s
+    HPO experiment will be run by a PyTorch training operator because his training
+    code is written in PyTorch.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Step 5: Return trial result'
+  prefs: []
+  type: TYPE_NORMAL
+- en: As the model trial training begins, the metric collector sidecar (a Docker container
+    in a Kubernetes training pod) collects training metrics and reports them to the
+    Katib metric storage (a MySQL database) in step 5\. Using these metrics, the trial
+    controller (component C) updates the trial execution status to the trial CRD object.
+    When the experiment controller notices the latest changes on the trial CRD object,
+    it reads the change and updates the experiment CRD object with the latest trial
+    execution information, so the experiment object has the latest status. The latest
+    status is aggregated into the experiment object in this way.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The HPO workflow is essentially a trial loop. To work on Alex’s HPO request
+    in Katib, steps 2, 3, 4, and 5 in this workflow keep repeating until the exit
+    criterion is met. Alex can check the experiment CRD object throughout the HPO
+    execution process to obtain the timely execution status of the HPO, which includes
+    the number of completed or failed trials, the model training metrics, and the
+    current best hyperparameter values.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note Simplicity and reliability are two major benefits of using CRD objects
+    to store HPO execution data. First, the information on the experiment’s latest
+    status can be accessed easily. For example, you can use Kubernetes commands, such
+    as `kubectl` `describe` `experiment|trial|suggestion`, to get the intermediate
+    data and the latest status of experiments, trials, and suggestions in a few seconds.
+    Second, CRD objects help improve the reliability of HPO experiments. When the
+    Katib service is down or the training operator fails, we can resume the HPO execution
+    from where it failed, because these CRD objects retain the HPO execution history.
+  prefs: []
+  type: TYPE_NORMAL
+- en: C.4.3 Kubeflow training operator integration for distributed training
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Katib’s default training operator—Kubernetes job operator—only supports single-pod
+    model training; it launches a Kubernetes pod for each trial in an experiment.
+    To support distributed training, Katib works with Kubeflow training operators
+    ([https://www.kubeflow.org/docs/components/training/](https://www.kubeflow.org/docs/components/training/)).
+    You can see how this works in figure C.4.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/C-4.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure C.4 Katib creates different trial jobs to trigger training operators
+    to run distributed training for different training frameworks.
+  prefs: []
+  type: TYPE_NORMAL
+- en: An HPO experiment consists of trials. Katib creates a trial CRD object and a
+    TrialJob CRD object for each trail. The trial CRD contains the HPO trial metadata,
+    such as suggested hyperparameter values, worker numbers, and exit criteria. In
+    the TrialJob CRD, trial metadata is reformatted so that Kubeflow training operators
+    can understand it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`PyTorchJob` and `TFJob` are two of the most commonly used CRD types for TrialJobs.
+    They can be processed by TensorFlow training operators and PyTorch training operators,
+    each of which supports distributed training. When Alex sets the number of workers
+    to three in the experiment CRD object, Katib creates a PyTorchJob trial CRD object,
+    and the PyTorch trainer can conduct distributed training on this experiment.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: This example also illustrates how flexible and extensible the Kubernetes controller
+    pattern is. Two applications, Katib and KubeFlow training operators, can integrate
+    easily if they are all implemented as controllers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: note We discussed Kubeflow training operator design in section 3.4.3\. Please
+    revisit it if you want to know more.
+  prefs: []
+  type: TYPE_NORMAL
+- en: C.4.4 Code reading
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Although Katib has a large code repository ([https://github.com/kubeflow/katib](https://github.com/kubeflow/katib)),
+    reading and debugging its code isn’t too difficult.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Where to start code reading
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'All Katib core components are written in controller pattern: `experiment_controller`,
+    `trial_controller``,` and `suggestion_controller`. It’s a controller’s job to
+    ensure that, for any given object, the actual state of the Kubernetes world matches
+    the desired state in the object. We call this process *reconciling*. For example,
+    the reconcile function in `experiment_controller` reads the state of the cluster
+    for an experiment object and makes changes (suggestion, trial) based on the state
+    read. By following this thought, we can start with the reconcile function of each
+    controller class to understand its core logic.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can find the experiment controller at `pkg/controller.v1beta1/experiment/experiment_controller.go`,
+    suggestion controller at `pkg/controller.v1beta1/ suggestion/suggestion_controller.go`,
+    and trial controller at `pkg/controller .v1beta1/trial/trial_ controller.go`.
+    Remember to start with the reconcile function in these files.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Debugging
+  prefs: []
+  type: TYPE_NORMAL
+- en: The Katib core application (katib-controller) runs as a console application.
+    There is no UI or web code in this console application, just pure logic code,
+    so its local debugging setup is straightforward. To debug Katib, first set up
+    your local Kubernetes cluster and run katib-controller locally with breakpoints,
+    then you can start the HPO process by creating a test experiment request—for example,
+    `kubectl` `apply` `-f` `{test_experiment.yaml}`. The breakpoint in the reconcile
+    function will be hit, and you can start to debug and explore the code from there.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To set up a local development environment, please follow Katib’s Developer Guide
+    ([http://mng.bz/VpzP](http://mng.bz/VpzP)). The entry point for katib-controller
+    is at cmd/katib-controller/ v1beta1/main.go.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note Katib is a production-quality HPO tool. It runs with high reliability and
+    stability. But to operate it on a daily basis, we need to read its source code
+    to understand its behavior so we know how to steer it when an HPO execution goes
+    off the script. By following the workflow in figure C.2 and reading the reconcile
+    function of each controller, you will gain a great understanding of Katib in a
+    few hours.
+  prefs: []
+  type: TYPE_NORMAL
+- en: C.5 Adding a new algorithm
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: From figure C.2, we know Katib runs different HPO algorithms as independent
+    suggestion/algorithm services. Once an experiment is created, Katib creates a
+    suggestion service for the selected HPO algorithm. This mechanism makes it easy
+    to add a new algorithm to Katib and let the newly added algorithm work consistently
+    with existing algorithms. To add a new algorithm to Katib, we need to carry out
+    the following three steps.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'C.5.1 Step 1: Implement Katib Suggestion API with the new algorithm'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'First, we need to implement the Katib `Suggestion` interface. This interface
+    is defined in gRPC, so you can implement it in any language you prefer. The detailed
+    definition of this interface can be found at [http://mng.bz/xdzW](http://mng.bz/xdzW);
+    see the following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The following code snippet is one example of implementing the `Suggestion`
+    interface. The hyperparameters and their value search spaces are defined in the
+    `request` variable. The past trials and their metrics can also be found in the
+    `request` variable, so you can run your algorithm to calculate the next suggestion
+    by using these input data in the `GetSuggestions` method; see the following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Defines a new algorithm service and implements the GetSuggestions interface
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ The Suggestion function provides hyperparameters to each trial.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Obtains the past trials
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Implements the actual HPO algorithm to provide candidate values
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'C.5.2 Step 2: Dockerize the algorithm code as a GRPC service'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Once we implement the `Suggestion` interface, we need to build a gRPC server
+    to expose this API to Katib and Dockerize it so Katib can launch the algorithm
+    service and obtain hyperparameter suggestions by sending gRPC calls. The code
+    would look as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'C.5.3 Step 3: Register the algorithm to Katib'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The last step is to register the new algorithm to Katib’s starting configuration.
+    Add a new entry in the `suggestion` section of the Katib service config; see an
+    example as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: C.5.4 Examples and documents
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Most of the previous content comes from the readme file—“Document about How
+    to Add a New Algorithm in Katib” ([http://mng.bz/Alrz](http://mng.bz/Alrz))—at
+    the Katib GitHub repo ([https://github.com/kubeflow/katib](https://github.com/kubeflow/katib)).
+    This is a very detailed and well-written doc that we highly recommend you read.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Because all of Katib’s predefined HPO algorithms follow the same HPO algorithm
+    registering pattern, you can use them as examples. This sample code can be found
+    at katib/cmd/suggestion ([http://mng.bz/ZojP](http://mng.bz/ZojP)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: C.6 Further reading
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Good job on getting here! This is a lot to digest, but you made it this far.
+    Although we have covered a good portion of Katib, there are still important pieces
+    we didn’t discuss because of page limits. In case you want to proceed further,
+    we listed some useful reading materials for you to explore.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To understand the thinking process behind the Katib design, please read “A Scalable
+    and Cloud-Native Hyperparameter Tuning System” ([https://arxiv.org/pdf/2006.02085.pdf](https://arxiv.org/pdf/2006.02085.pdf)).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: To check feature updates, tutorials, and code examples, please visit the Katib
+    official website ([https://www.kubeflow.org/docs/components/katib/](https://www.kubeflow.org/docs/components/katib/))
+    and Katib GitHub repo ([https://github.com/kubeflow/katib](https://github.com/kubeflow/katib)).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: To use Python SDK to run an HPO from a Jupyter notebook directly, please read
+    the SDK API doc ([http://mng.bz/RlpK](http://mng.bz/RlpK)) and Jupyter notebook
+    samples ([http://mng.bz/2aY0](http://mng.bz/2aY0)).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: C.7 When to use it
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: As we can see from this discussion, Katib satisfies all the design principles
+    of an HPO service. It is agnostic to training frameworks and training code; it
+    can be extended to incorporate different HPO algorithms and different metric collectors;
+    and it is portable and scalable thanks to Kubernetes. Katib is the best option
+    if you are seeking a production-level HPO service.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The only caveat for Katib is that its upfront costs are high. You need to build
+    a Kubernetes cluster, install Katib, and Dockerize the training code to get started.
+    You need to know Kubernetes commands to troubleshoot failures. It requires dedicated
+    engineers to operate and maintain the system, as these are nontrivial tasks.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For production scenarios, these challenges are not major problems, because usually
+    the model training system is set up in the same way as Katib in Kubernetes. As
+    long as engineers have experience operating model training systems, they can manage
+    Katib easily. But for small teams or prototyping projects, if you prefer something
+    simpler, an HPO library approach—such as Ray Tune—is a better fit.
+  prefs: []
+  type: TYPE_NORMAL

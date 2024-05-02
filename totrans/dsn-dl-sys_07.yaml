@@ -1,0 +1,2213 @@
+- en: 7 Model serving in practice
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter covers
+  prefs: []
+  type: TYPE_NORMAL
+- en: Building a sample predictor with the model service approach
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Building a sample service with TorchServe and the model server approach
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Touring popular open source model serving libraries and systems
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Explaining the production model release process
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Discussing postproduction model monitoring
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In the previous chapter, we discussed the concept of model serving, as well
+    as user scenarios and design patterns. In this chapter, we will focus on the actual
+    implementation of these concepts in production.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As we’ve said, one of the challenges to implementing model serving nowadays
+    is that we have too many possible ways of doing it. In addition to multiple black-box
+    solutions, there are many options for customizing and building all or part of
+    it from scratch. We think the best way to teach you how to choose the right approach
+    is with concrete examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, we implement two sample services to demo two of the most commonly
+    used model serving approaches: one uses a self-build model serving container,
+    which demonstrates the model service approach (section 7.1), and the other uses
+    TorchServe (a model server for the PyTorch model), which demonstrates the model
+    server approach (section 7.2). Both of these serve the intent classification model
+    trained in chapter 3\. Once you work through the examples, we provide (in section
+    7.3) a tour of the most popular open source model serving tools to help you understand
+    their features, best uses, and other factors important to your decision on which
+    to use. In the rest of the chapter, we will focus on the model serving operation
+    and monitoring, including shipping models to production and monitoring the model
+    performance.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: By reading this chapter, you will not only have a concrete understanding of
+    different model serving designs but also have the acumen to choose the right approach
+    for your own situation. More importantly, this chapter will present a holistic
+    view of the model serving field, not just *building* model serving but also *operating*
+    and *monitoring* it after the model serving system is built.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note In this chapter, the terms *model serving*, *model inference*, and *model
+    prediction* are used interchangeably. They all refer to executing a model with
+    given data points.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.1 A model service sample
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In this section, we will show you the first sample prediction service. This
+    service takes the model service approach (section 6.2.2), and it can be used for
+    both single-model (section 6.3.1) and multitenant applications (section 6.3.2).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This sample service follows the single model application design (section 6.3.1),
+    which has a frontend API component and a backend predictor. We also made some
+    enhancements in the predictor so it can support multiple intent classification
+    models. We will tour this sample service by following these steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Running the sample prediction service locally
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Discussing the system design
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Looking at the implementation details of its subcomponents: frontend service
+    and backend predictor'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 7.1.1 Play with the service
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Listing 7.1 shows how to run the sample prediction service on your local machine.
+    The following scripts first run the backend predictor and then the frontend service.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note Setting up a prediction service is a bit tedious; we need to run the metadata
+    and artifactory store service and prepare the models. To demonstrate the idea
+    clearly, listing 7.1 highlights the main setup steps. To make model serving work
+    on your local machine, please complete the lab (section A.2) in appendix A and
+    then use the code `./scripts/lab-004-model-serving.sh` `{run_id}` `{document}`
+    to send the model prediction requests.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 7.1 Starting a prediction service
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Builds the predictor Docker image
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Runs the predictor service container
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Builds the prediction service image
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Runs the prediction service container
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Once the service starts, you can send prediction requests to it; the service
+    will load the intent classification model trained in chapter 3, run the model
+    prediction with the given text, and return the prediction results. In the following
+    example, a text string “merry christmas” is sent to the service and is predicted
+    to the “joy” category:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Specifies the model ID to the response
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Prediction payload
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Prediction response, the predicted category
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.1.2 Service design
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'This sample service consists of a frontend interface component and a backend
+    predictor. The frontend component does three things: hosts the public prediction
+    API, downloads model files from the metadata store to a shared disk volume, and
+    forwards the prediction request to the backend predictor. The backend predictor
+    is a self-built predictor container that responds to load intent classification
+    models and executes these models to serve prediction requests.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This prediction service has two external dependencies: the metadata store service
+    and a shared disk volume. The metadata store keeps all the information about a
+    model, such as the model algorithm name, the model version, and the model URL,
+    which points to the cloud storage of real model files. The shared volume enables
+    model file sharing between the frontend service and the backend predictor. You
+    can see an end-to-end overview of the model serving process in figure 7.1.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/07-01.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.1 A system overview and model serving end-to-end workflow
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Going through the system design of the sample model serving service shown in
+    figure 7.1, you can see it takes six steps to complete a prediction request. Let’s
+    go through each step numbered in the figure:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The user sends a prediction request to the prediction service (frontend component)
+    with a specified model ID and a text string—namely, `document`. The model ID is
+    a unique identifier produced by the training service to identify each model it
+    produces.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The frontend service fetches the model metadata from the metadata store by searching
+    the model ID. For each successful model training, the training service will save
+    the model files to cloud storage and also save the model metadata (model ID, model
+    version, name, and URL) to the metadata store; this is why we can find the model
+    information in the metadata store.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: If the model file is not already downloaded, the frontend component will download
+    it to the shared disk volume.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The frontend component forwards the inference request to the backend predictor.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The backend predictor loads the intent classification model to memory by reading
+    model files from the shared disk volume.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The backend predictor executes the model to make a prediction on the given text
+    string and returns the prediction result to the frontend component.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 7.1.3 The frontend service
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Now, let’s focus on the frontend service. The frontend service has three main
+    components: a web interface, a predictor management, and a predictor backend client
+    (`CustomGrpcPredictorBackend`). These components respond to the host public gRPC
+    model serving the API and manage the backend predictors’ connection and communication.
+    Figure 7.2 shows the internal structure of the frontend service and its inner
+    workflow when receiving a prediction request.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/07-02.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.2 The frontend service design and the model serving workflow
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s consider the intent prediction scenario in the model serving workflow
+    described in figure 7.2, applying the six steps we just reviewed:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: T he user sends an intent prediction request with model ID A to the web interface.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The web interface calls the predictor connection manager to serve this request.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The predictor connection manager queries the metadata store to get model metadata
+    by searching model IDs that equal A; the returned model metadata contains the
+    model algorithm type and model file URL.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Based on the model algorithm type, the predictor manager picks the right predictor
+    backend client to handle the request. In this case, it chooses `CustomGrpcPredictorBackend`
+    because we are demoing a self-built model serving container for intent classification.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The `CustomGrpcPredictorBackend` client first checks the existence of the model
+    file in the shared model file disk for model A. If the model hasn’t been downloaded
+    before, it uses the model URL (from model metadata) to download model files from
+    cloud storage to the shared file disk.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The `CustomGrpcPredictorBackend` client then calls the model predictor that
+    is preregistered with this backend client in the service configuration file. In
+    this example, the `CustomGrpcPredictorBackend` will call our self-built predictor,
+    the intent predictor, which will be discussed in section 7.1.4.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Now that we have reviewed the system design and workflow, let’s consider the
+    actual code implementation of the main components, including the web interface
+    (prediction API), predictor connection manager, predictor backend clients, and
+    intent predictor.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Frontend service model serving code walkthrough
+  prefs: []
+  type: TYPE_NORMAL
+- en: The following code listing highlights the core implementation of the prediction
+    workflow mentioned in figure 7.2\. You can also find the full implementation at
+    `src/main/` `java/org/orca3/miniAutoML/prediction/PredictionService.java.`
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 7.2 Frontend service prediction workflow
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Obtains the required model ID
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Fetches the model metadata from the metadata store
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Chooses the backend predictor based on the model algorithm type
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Downloads the model file
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Calls the backend predictor to run model inference
+  prefs: []
+  type: TYPE_NORMAL
+- en: Prediction API
+  prefs: []
+  type: TYPE_NORMAL
+- en: The frontend service offers only one API—`Predict`—for issuing a prediction
+    request. The request has two parameters, `runId` and `document`. The `runId` not
+    only is used for referencing a model training run in the training service (chapter
+    3), but it also can be used as the model ID to reference a model. The `document`
+    is the text on which the customer wants to run predictions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: By using the `Predict` API, users can specify an intent model (with `runId`)
+    to predict the intent of a given text string (`document`). The following listing
+    shows the gRPC contract of the `Predict` API (`grpc-contract/src/main/proto/prediction_service
+    .proto`).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 7.3 Prediction service gRPC interface
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: Predictor connection manager
+  prefs: []
+  type: TYPE_NORMAL
+- en: One important role of the frontend service is routing prediction requests. Given
+    a prediction request, the frontend service needs to find the right backend predictor
+    based on the model algorithm type required in the request. This routing is done
+    in the `PredictorConnectionManager`. In our design, the mapping of model algorithms
+    and predictors is predefined in environment properties. When the service starts,
+    `PredictorConnectionManager` will read the mapping, so the service knows which
+    backend predictor to use for which model algorithm type.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Although we are only demoing our self-built intent classification predictor
+    in this example, `PredictorConnectionManager` can support any other type of backend
+    predictors. Let’s look at the following listing (`config/config-docker-docker.properties`)
+    to see how the model algorithm and predictor mapping are configured.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 7.4 Model algorithm and predictor mapping configuration
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Maps the intent-classification predictor to the intent-classification algorithm
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now, let’s review code listing 7.5 to see how the predictor manager reads the
+    algorithm and predictor mapping and uses that information to initialize the predictor
+    backend client to send prediction requests. The full implementation is located
+    at `prediction-service/src/main/java/org/orca3/miniAutoML/prediction/PredictorConnectionManager.java.`
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 7.5 Predictor manager load algorithm and predictor mapping
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ The algorithm for the predictor backend mapping
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ The model metadata cache; the key string is the model ID.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Reads the algorithm and predictor mapping from the configuration
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Creates the predictor backend client and saves it in the memory
+  prefs: []
+  type: TYPE_NORMAL
+- en: In listing 7.5, we see the `PredictorConnectionManager` class offers the `registerPredictor`
+    function to register predictors. It first reads the algorithm and predictor mapping
+    information from the properties, and then it creates the actual predictor backend
+    client—`CustomGrpcPredictorBackend`—to communicate with the backend intent predictor
+    container.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You may also notice `PredictorConnectionManager` class has several caches, such
+    as the model metadata cache (`artifactCache`) and the model backend predictor
+    clients (`clients)`. These caches can greatly improve the model serving efficiency.
+    For example, the model metadata cache (`artifactCache`) can reduce the serving
+    request response time by avoiding calling the metadata store service for the model
+    that has already been downloaded.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Predictor backend clients
+  prefs: []
+  type: TYPE_NORMAL
+- en: Predictor clients are the objects that the frontend service uses to talk to
+    different predictor backends. By design, each type of predictor backend supports
+    its own kind of model, and it has its own client for communication, which is created
+    and stored in `PredictorConnectionManager`. Every predictor backend client inherits
+    an interface `PredictorBackend`, as in the following listing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 7.6 Predictor backend interface
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: The three methods, `downloadMode`, `predict``,` and `registerModel``,` are self-explanatory.
+    Each client implements these methods to download models and send prediction requests
+    to its registered backend service. The parameter `GetArtifactResponse` is a model’s
+    metadata object that is fetched from the metadata store.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this (intent predictor) example, the predictor backend client is `CustomGrpcPredictorBackend`.
+    You can find the detailed implementation in `prediction-service/ src/main/java/org/orca3/miniAutoML/prediction/CustomGrpcPredictorBackend.java`.
+    The following code snippet shows how this client sends prediction requests to
+    the self-built intent predictor container by using gRPC protocol:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Text input for the model
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Model ID
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.1.4 Intent classification predictor
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'We have seen the frontend service and its internal routing logic, so now let’s
+    look at the last piece of this sample prediction service: the backend predictor.
+    To show you a complete deep learning use case, we implement a predictor container
+    to execute the intent classification models trained in chapter 3.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We can see this self-built intent classification predictor as an independent
+    microservice, which can serve multiple intent models simultaneously. It has a
+    gRPC web interface and a model manager. The model manager is the heart of the
+    predictor; it does multiple things, including loading model files, initializing
+    the model, caching the model in memory, and executing the model with user input.
+    Figure 7.3 shows the predictor’s design graph and the prediction workflow within
+    the predictor.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s use an intent prediction request for model A to consider the workflow
+    in figure 7.3\. It runs in the following steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The predictor client in the frontend service calls the predictor’s web gRPC
+    interface to run an intent prediction with model A.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The model manager is invoked for the request.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The model manager loads the model files of model A from the shared disk volume,
+    initializes the model, and puts it into the model cache. The model file should
+    be placed at the shared disk volume by the frontend service already.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The model manager executes model A with the transformer’s help to preprocess
+    and postprocess the input and output data.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The predicted result is returned.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![](../Images/07-03.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.3 The backend intent predictor design and prediction workflow
+  prefs: []
+  type: TYPE_NORMAL
+- en: Next, let’s look at the actual implementation of the components mentioned in
+    the workflow.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Prediction API
+  prefs: []
+  type: TYPE_NORMAL
+- en: Intent predictor has one API—`PredictorPredict` (see code listing 7.7). It accepts
+    two parameters, `runId` and `document`. The `runId` is the model ID, and the `document`
+    is a text string. You can find the full gRPC contract at `grpc-contract/src/main/proto/`
+    `prediction_service.proto.`
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 7.7 Intent predictor gRPC interface
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: You may notice the predictor API is the same as the frontend API (code listing
+    7.2); this is for simplicity. But in real-world applications, they are normally
+    different, mostly because they are designed for different purposes. The predictor’s
+    predict API is designed in favor of model execution, whereas the frontend predict
+    API is designed in favor of the customer’s and business’s requirements.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Model files
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Each intent classification model produced in our model training service (chapter
+    3) has three files. The `manifest.json` file contains both model metadata and
+    dataset labels; the predictor needs this information to translate the model prediction
+    result from an integer to a meaningful text string. The `model.pth` is the model’s
+    learned parameters; the predictor will read these network parameters to set up
+    the model’s neural network for model serving. The `vocab.pth` is the vocabulary
+    file used in model training, which is also necessary for serving because we need
+    it to transform user input (string) to model input (decimal number). Let’s review
+    the sample intent model:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Model metadata and dataset labels
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Model weights file
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Vocabulary file
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Model metadata
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Dataset labels
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When saving a PyTorch model, there are two choices: serialize the entire model
+    or serialize only the learned parameters. The first option serializes the entire
+    model object, including its classes and directory structure, whereas the second
+    option only saves the learnable parameters of the model network.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'From Matthew Inkawhich’s article “PyTorch: Saving and Loading Models” ([http://mng.bz/zm9B](http://mng.bz/zm9B)),
+    the PyTorch team recommends only saving the model’s learned parameters (a model’s
+    `state_dict`). If we save the entire model, the serialized data is bound to the
+    specific classes and the exact directory structure used when the model is saved.
+    The model class itself is not saved; rather, the file containing the class is
+    saved. Consequently, during loading time, the serialized model code can break
+    in various ways when used in other projects or after refactors.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For this reason, we only save the model `state_dict` (learned parameters) as
+    the model file after training; in this example, it is the `model.pth` file. We
+    use the following code to save it: `torch.save(model.state_dict(),` `model_local_path)`.
+    As a result, the predictor needs to know the model’s neural network architecture
+    (see code listing 7.8) to load the model file because the model file is just `state_dict`—the
+    model network’s parameters.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 7.8 (`predictor/predict.py`) shows the model architecture that we use
+    to load the model file—`model.pth` (parameters only)—in the predictor. The model
+    execution code in serving is derived from the model training code. If you compare
+    the model definition in the following listing with the `TextClassificationModel`
+    class in our training code (`training-code/text-classification/train.py`), you
+    will find they are identical. This is because model serving is essentially a model
+    training run.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 7.8 The model’s neural network (architecture)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Defines model architecture
+  prefs: []
+  type: TYPE_NORMAL
+- en: You might wonder whether the training code and the model serving code are now
+    combined. When the training code changes, it seems the model serving code in the
+    predictor also needs to be adjusted. This is only partially true; the context
+    tends to dictate how model serving is affected by changes to the model training
+    algorithm. The following are some nuances of that relationship.
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, the training code and the serving code will only need to sync on the
+    neural network architecture and input/output data schema. Other model training
+    changes, such as training strategy, hyperparameter tuning, dataset splitting,
+    and enhancements, will not affect serving because they result in model weights
+    and bias files. Second, model versioning should be introduced when neural network
+    architecture changes in training. In practice, every model training or retraining
+    assigns a new model version to the output model. So the problem to address is
+    how to serve different versions of a model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This sample service does not handle model version management. However, in section
+    7.5 and chapter 8, we will discuss metadata management for the model version in
+    depth. We just describe the rough idea here.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you are using a similar model service approach with a customized predictor
+    backend, you need to prepare multiple versions of the predictor backend to match
+    the models that are trained with different neural network architectures. When
+    releasing a model, the versions of the training code, serving code, and model
+    file need to be related as part of the model metadata and saved in the metadata
+    store. So, at the serving time, the prediction service (frontend service) can
+    search the metadata store to determine which predictor version it should route
+    a request to for the given model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you are using a model server approach, serving models with different versions
+    becomes a lot easier because this approach breaks the dependency between the serving
+    code (model execution code) and training code. You can see a concrete example
+    in section 7.2.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Note As we mentioned in chapter 6 (section 6.1.3), model training and serving
+    both utilize the same machine learning algorithm but in different execution modes:
+    learning and evaluation. However, we would like to clarify this concept once more.
+    Understanding the relationship between training code, serving code, and model
+    files is the foundation of a serving system design.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Model manager
+  prefs: []
+  type: TYPE_NORMAL
+- en: The model manager is the key component of this intent predictor. It hosts a
+    memory model cache, loads the model file, and executes the model. The following
+    listing (`predictor/predict.py`) shows the core code of the model manager.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 7.9 Intent predictor model manager
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Hosts the model in memory
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Caches model graph; dependencies and classes in memory
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Runs the model to obtain prediction results
+  prefs: []
+  type: TYPE_NORMAL
+- en: Intent predictor prediction request workflow
+  prefs: []
+  type: TYPE_NORMAL
+- en: You’ve met the main components of the intent predictor, so let’s see an end-to-end
+    workflow inside this predictor. First, we expose the prediction API by registering
+    `PredictorServicer` to the gRPC server, so the frontend service can talk to the
+    predictor remotely. Second, when the frontend service calls the `PredictorPredict`
+    API, the model manager will load the model into memory, run the model, and return
+    the prediction result. Code listing 7.10 highlights the aforementioned workflow’s
+    code implementation. You can find the full implementation at `predictor/predict.py`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 7.10 Intent predictor prediction workflow
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Starts the gRPC server
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Registers the model serving logic to the public API
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Makes the prediction
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.1.5 Model eviction
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The sample code did not cover model eviction—that is, evicting infrequently
+    used model files from the prediction service’s memory space. In the design, for
+    every prediction request, the prediction service will query and download the request
+    model from the metadata store and then read and initialize the model from the
+    local disk to memory. For some models, these operations are time-consuming.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To reduce the latency for each model prediction request, our design caches model
+    graphs in the model manager component (in memory) to avoid model loading a used
+    model. But imagine that we could continue training new intent classification models
+    and running predictions on them. These newly produced models will keep loading
+    into the model manager’s model cache in memory. Eventually, the predictor will
+    run out of memory.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To address such problems, the model manager needs to be upgraded to include
+    a model eviction feature. For example, we could introduce the LRU (least recently
+    used) algorithm to rebuild the model manager’s model cache. With the help of the
+    LRU, we can keep only the recently visited model in the model cache and evict
+    the least visited models when the currently loaded model exceeds the memory threshold.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.2 TorchServe model server sample
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In this section, we will show you an example of building a prediction service
+    with the model server approach. More specifically, we use the TorchServe backend
+    (a model serving tool built for the PyTorch model) to replace the self-built predictor
+    discussed in the previous section (7.1.4).
+  prefs: []
+  type: TYPE_NORMAL
+- en: To make a fair comparison to the model service approach in section 7.1, we develop
+    this model server approach example by reusing the frontend service shown in the
+    previous section. More precisely, we add only another predictor backend and still
+    use the frontend service, gRPC API, and intent classification models to demo the
+    same end-to-end prediction workflow.
+  prefs: []
+  type: TYPE_NORMAL
+- en: There is one big difference between the intent predictor in section 7.1.4 and
+    the TorchServe predictor (model server approach). The same predictor can serve
+    any PyTorch model, regardless of its prediction algorithm.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.2.1 Playing with the service
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Because this model server sample is developed on top of the previous sample
+    service, we interact with the prediction service in the same way. The only difference
+    is we launch a TorchServe backend (container) instead of launching a self-built
+    intent predictor container. Code listing 7.11 shows only the key steps to starting
+    the service and sending intent prediction requests. To run the lab locally, please
+    complete the lab in appendix A (section A.2), and refer to the `scripts/lab-006-model-serving-torchserve.sh`
+    file ([http://mng.bz/0yEN](http://mng.bz/0yEN)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 7.11 Starting the prediction service and making a prediction call
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Mounts local dir to the TorchServe container
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Starts TorchServe
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Sets TorchServe to load the model from /models dir
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Sets local model dir for the prediction service to download the model
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.2.2 Service design
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This sample service follows the same system design in figure 7.1; the only difference
+    is the predictor backend becomes the TorchServe server. See figure 7.4 for the
+    updated system design.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/07-04.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.4 The system overview and model serving end-to-end workflow
+  prefs: []
+  type: TYPE_NORMAL
+- en: From figure 7.4, we see the model serving workflow remains the same as the model
+    service sample in figure 7.1\. The user calls the prediction service’s frontend
+    API to send model serving requests; the frontend service then downloads the model
+    files and forwards the prediction request to the TorchServe backend.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.2.3 The frontend service
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: In section 7.1.3, we established that the frontend service can support different
+    predictor backends by registering predictors in the predictor connection manager.
+    When a prediction request comes in, the predictor connection manager will route
+    the request to the proper predictor backend by checking the model algorithm type
+    of the request.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Following the previous design, to support our new TorchServe backend, we add
+    a new predictor client (`TorchGrpcPredictorBackend`) to the frontend service to
+    represent the TorchServe backend; see figure 7.5 for the updated system design.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/07-05.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.5 The frontend service design and the model serving workflow
+  prefs: []
+  type: TYPE_NORMAL
+- en: In figure 7.5, two gray boxes are added; they are the TorchServe gRPC predictor
+    backend client (`TorchGrpcPredictorBackend`) and the backend TorchServe server.
+    `TorchGrpcPredictorBackend` responds by downloading the model files and then sending
+    prediction requests to the TorchServe container. The TorchServe backend will be
+    chosen by the predictor connection manager in this example because the requested
+    model’s metadata (in the metadata store) defines TorchServe as its predictor.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.2.4 TorchServe backend
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: TorchServe is a tool built by the PyTorch team to serve PyTorch models. TorchServe
+    runs as a black box, and it provides HTTP and gRPC interfaces for model prediction
+    and internal resource management. Figure 7.6 visualizes the workflow for how we
+    use TorchServe in this sample.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/07-06.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.6 The model serving workflow in the TorchServe backend: the TorchServe
+    application runs as a black box.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In our sample code, we run TorchServe as a Docker container, which is provided
+    by the PyTorch team, and then mount a local file directory to the container. This
+    file directory runs as the model store for the TorchServe process. In figure 7.6,
+    we take three steps to run a model prediction. First, we copy PyTorch model files
+    to the model store directory. Second, we call the TorchServe management API to
+    register the model to the TorchServe process. Finally, we call the TorchServe
+    API to run the model prediction for the model—in our case, the intent classification
+    model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Compared to the self-built intent predictor in section 7.1.4, TorchServe is
+    much simpler. We can make the model serving work without writing any code; we
+    just need to set up a Docker container with disk sharing. Also, unlike the intent
+    predictor that only works for intent classification algorithms, TorchServe is
+    not tied to any specific training algorithm; it can serve any model as long as
+    it’s trained with the PyTorch framework.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The great flexibility and convenience offered by TorchServe come with requirements.
+    TorchServe requires operators to use their own set of APIs to send model serving
+    requests, and it also requires that the model files are packaged in the TorchServe
+    format. Let’s look at these mandates in the next two subsections.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.2.5 TorchServe API
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'TorchServe offers many types of APIs, such as health checks, model explanation,
+    model serving, worker management, and model registration. Each API has two types
+    of implementations: HTTP and gRPC. Because TorchServe has very detailed explanations
+    of its API contract and usage on its official website ([https://pytorch.org/serve/](https://pytorch.org/serve/))
+    and GitHub repo ([https://github.com/pytorch/serve](https://github.com/pytorch/serve)),
+    you can find the details there. In this section, we will focus on the model registration
+    and model inference APIs that we use in our sample service.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Model registration API
+  prefs: []
+  type: TYPE_NORMAL
+- en: Because TorchServe takes a black-box approach to model serving, it requires
+    a model to be registered first before using it. More specifically, after we place
+    model files in TorchServe’s model store (a local file directory), TorchServe won’t
+    load the model automatically. We need to register the model file and the model’s
+    execution method to TorchServe, so TorchServe knows how to work with this model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In our code example, we use the TorchServe’s gRPC model registration API to
+    register our intent model from the prediction service, as in the following snippet:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Registers the model to TorchServe by providing the model file and model name
+  prefs: []
+  type: TYPE_NORMAL
+- en: The TorchServe model file already contains the model’s metadata—including the
+    model version, model runtime, and model serving entry point. So when registering
+    models, we normally just set the model file name in the `registerModel` API. In
+    addition to model registration, we can also use the `scaleWorker` API to control
+    how much compute resources we allocate to this model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Model inference API
+  prefs: []
+  type: TYPE_NORMAL
+- en: TorchServe provides a unified model serving API for diverse models; this makes
+    TorchServe simple to use. To run predictions for the default version of a model,
+    make a REST call to `POST` `/predictions/{model_name}`. To run predictions for
+    a specific version of a loaded model, make a REST call to `POST` `/predictions/{model_name}/
+    {version}`. The content to be predicted in the prediction request is entered in
+    binary format. For example,
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: In our sample service, we use the gRPC interface to send prediction requests
+    to TorchServe. Code listing 7.12 shows the `TorchGrpcPredictorBackend` client
+    translating a prediction request from a frontend API call to a TorchServe backend
+    gRPC call. You can find the full source ode of `TorchGrpcPredictorBackend` at
+    `prediction-service/` `src/main/java/org/orca3/miniAutoML/prediction/TorchGrpcPredictorBackend.java.`
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 7.12 Calling the TorchServe prediction API from the frontend service
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Converts text input to binary format for calling TorchServe
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.2.6 TorchServe model files
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: So far, you have seen the TorchServe model serving workflow and API. You may
+    wonder how model serving works in TorchServe when it knows nothing about the model
+    it serves. In chapter 6, we learned that to serve a model, the prediction service
+    needs to know the model algorithm and model input/output schema. Counterintuitively,
+    TorchServe runs model serving without knowing the model algorithm and model input/output
+    data format. The trick lies in the TorchServe model file.
+  prefs: []
+  type: TYPE_NORMAL
+- en: TorchServe requires models to be packed into a special .mar file. We can use
+    the `torch-model-archiver` CLI or `model_archiver` Python library to package PyTorch
+    model files into a .mar file.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To archive a TorchServe .mar file, we need to provide the model name, model
+    files (.pt or .pth), and a handler file. The handler file is the key piece; it
+    is a Python code file that defines the logic for handling custom TorchServe inference
+    logic. Because TorchServe’s model package (.mar file) contains the model algorithm,
+    model data, and model execution code and the model execution code follows TorchServe’s
+    prediction interface (protocol), TorchServe can execute any model (.mar file)
+    by using its generic prediction API without knowing the model algorithm.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When TorchServe receives a prediction request, it will first find the internal
+    worker process that hosts the model and then trigger the model’s handler file
+    to process the request. The handler file contains four pieces of logic: model
+    network initialization, input data preprocess, model inference, and prediction
+    result postprocess. To make the previous explanation more concrete, let’s look
+    at our intent model file as an example.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Intent classification .mar file
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If we open the .mar file of an intent model in our sample service, we will
+    see that two additional files—`MANIFEST.json` and `torchserve_handler.py`—are
+    added, compared with the model files we see in section 7.1.4\. The following is
+    the folder structure of an intent .mar file:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ TorchServe .mar file metadata
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Contains label information
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Model weights file
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Model architecture and model serving logic
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Vocabulary file, required by the intent algorithm
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `MANIFEST.json` file defines the metadata of a model, including the model
+    version, model weights, model name, and handler file. By having a `MANIFEST.json`
+    file, TorchServe knows how to load and run prediction on arbitrary models without
+    knowing their implementation details.
+  prefs: []
+  type: TYPE_NORMAL
+- en: TorchServe handler file
+  prefs: []
+  type: TYPE_NORMAL
+- en: Once a model is registered in TorchServe, TorchServe will use the `handle(self`,
+    `data`, `context)` function in the model’s handler file as the entry point for
+    model prediction. The handler file manages the entire process of model serving,
+    including model initialization, preprocess on input request, model execution,
+    and postprocess on the predicted outcome.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Code listing 7.13 highlights the key pieces of the handler file defined for
+    the intent classification .mar file used in this sample service. You can find
+    this file in our Git repository at `training-code/text-classification/torchserve_handler.py`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 7.13 Intent model TorchServe handler file
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: By starting from the `handle` function in listing 7.13, you will have a clear
+    view of how model serving is executed by the handler file. The `initialize` function
+    loads all the model files (weights, labels, and vocabulary) and initializes the
+    model. The `handle` function is the entry point of model serving; it preprocesses
+    the binary model input, runs the model inference, postprocesses the model output,
+    and returns the result.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Packaging .mar file in training
+  prefs: []
+  type: TYPE_NORMAL
+- en: When we decide to use TorchServe for model serving, it’s better to produce the
+    .mar file at training time. Also, because the TorchServe handler file contains
+    the model architecture and model execution logic, it is usually a part of the
+    model training code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There are two methods of packaging a .mar file. First, when model training
+    completes, we can run the `torch-model-archiver` CLI tool to package model weights
+    as serialized files and dependent files as extra files. Second, we can use the
+    `model_ archiver` Python library to produce the .mar file as the last step of
+    the model training code. The following code snippets are the examples we used
+    for packaging intent classification models:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 7.2.7 Scaling up in Kubernetes
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'In our sample service, for demo purposes, we run a single TorchServe container
+    as the prediction backend, but this is not the case for the production environment.
+    The challenges for scaling up TorchServe are as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The load balancer makes TorchServe model registration difficult. In TorchServe,
+    model files need to be registered to the TorchServe server first before they can
+    be used. But in production, the TorchServe instances are put behind a network
+    load balancer, so we can only send prediction requests to the load balancer and
+    let it route the request to a random TorchServe instance. In this case, it’s difficult
+    to register models because we can’t specify which TorchServe instance serves which
+    model. The load balancer hides the TorchServe instances from us.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Each TorchServe instance needs to have a model store directory for loading models,
+    and model files need to be put in the model store directory before they can be
+    registered. Having multiple TorchServe instances makes model file copying difficult
+    to manage because we need to know every TorchServe instance’s IP address or DNS
+    to copy the model files.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: We need to balance the models among the TorchServe instances. Letting every
+    TorchServe instance load every model file is a bad idea; it would be a great waste
+    of compute resources. We should spread the load evenly across different TorchServe
+    instances.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: To address these challenges and scale up the TorchServe backend, we can introduce
+    the “sidecar” pattern in Kubernetes. Figure 7.7 illustrates the overall concept.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/07-07.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.7 Add a proxy container in the TorchServe pod to scale up TorchServe
+    in Kubernetes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The proposal in figure 7.7 is to add a proxy container (as a sidecar) along
+    with the TorchServe container in each TorchServe pod. Instead of calling the TorchServe
+    API directly, we send the prediction requests to the proxy container. The proxy
+    API in the proxy container will hide the TorchServe model management details,
+    including model downloading and model registration. It will prepare the TorchServe
+    container to serve arbitrary models.
+  prefs: []
+  type: TYPE_NORMAL
+- en: After adding a proxy container, the model serving workflow (figure 7.7) occurs
+    as follows. First, the prediction request lands on the proxy container. Second,
+    the proxy downloads the model file and inputs the shared disk (model store). Third,
+    the proxy registers the model to the TorchServe container and converts the inference
+    request to the TorchServe format. Fourth, the TorchServe container runs model
+    serving and returns the result to the proxy. Finally, the proxy container returns
+    the prediction response to the user.
+  prefs: []
+  type: TYPE_NORMAL
+- en: By having a proxy container, we don’t need to worry about sending a prediction
+    request to a TorchServe instance that doesn’t have that model registered. The
+    proxy container (sidecar) will get the TorchServe container ready for any prediction
+    request by copying model files to the model store and registering the model. It
+    also simplifies the resource management effort because now we can simply rely
+    on the load balancer to spread the prediction workload (models) across the TorchServe
+    pods. Also, by sharing a disk across all TorchServe pods, we can share the model
+    store for all the TorchServe instances, which reduces model downloading time and
+    saves network bandwidth.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The sidecar pattern: A common approach to running the model server'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In section 7.4, we will introduce several other model server approaches, such
+    as TensorFlow serving and Triton. Although the implementation of these model servers
+    is different, their design ideas are similar. They all take a black-box approach
+    and require certain model formats and some model management to enable model serving.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The sidecar pattern in figure 7.7 is a common solution to running these different
+    model server containers in a Kubernetes pod. The proxy container encapsulates
+    all the special requirements of the model server and only exposes a general model
+    serving API.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.3 Model server vs. model service
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Choosing between the model server approach and the model service approach is
+    the first decision we need to make when designing a model serving application.
+    When we choose improperly, our serving application either is hard to use and maintain
+    or takes an unnecessarily long time to build.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We’ve already reviewed the differences between these two approaches in chapter
+    6 (sections 6.2 and 6.3), but this is such a crucial choice that it’s worth examining
+    again. Now that you’ve seen concrete examples of each approach in action, these
+    ideas may make more intuitive sense.
+  prefs: []
+  type: TYPE_NORMAL
+- en: From working through the two sample services in sections 7.1 and 7.2, it’s clear
+    that the model server approach avoids the effort of building dedicated backend
+    predictors for specific model types. Instead, it works out of the box and can
+    serve arbitrary models regardless of which algorithm the model is implementing.
+    So, it might seem like the model server approach should always be the best choice.
+    But this is not true; the choice between the model server or model service should
+    depend on the use case and business requirements.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For single-application scenarios, the model service approach is simpler to build
+    and maintain in practice. Model service backend predictors are quite straightforward
+    to build because model serving code is a simplified version of the training code.
+    This means we can easily convert a model training container to a model serving
+    container. Once it is built, the model service approach is easier to maintain
+    because we own the code end to end and the workflow is simple. For the model server
+    approach, whether we choose open source, prebuilt model servers, or build our
+    own server, the process of setting up the system is complicated. It takes a lot
+    of effort to learn the system well enough to operate and maintain it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For model serving platform scenarios, where the system needs to support many
+    different types of models, the model server approach is unquestionably the best.
+    When you are building a model serving system for 500 different types of models,
+    if you choose the model server approach, you only need to have one single type
+    of predictor backend for all the models. In contrast, using the model service
+    approach, you would need to have 500 different model predictors! It is incredibly
+    hard to manage the compute resources and perform the maintenance work for all
+    those predictors.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Our recommendation is to use the model service approach when you are first learning
+    because it is simpler and easier. You can move to the model server approach when
+    you need to support more than 5 to 10 types of models or applications in your
+    serving system.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.4 Touring open source model serving tools
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: There are plenty of open source model serving tools available. It’s great to
+    have options, but having so many of them can be overwhelming. To help make that
+    choice easier for you, we will introduce you to some popular model serving tools,
+    including TensorFlow Serving, TorchServe, Triton, and KServe. All of these can
+    work out of the box and are applicable to production use cases.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Because each of the tools we describe here has thorough documentation, we will
+    keep the discussion at a general level, looking just at their overall design,
+    main features, and suitable use cases. This information should be enough to act
+    as a starting point from which to explore further on your own.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.4.1 TensorFlow Serving
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: TensorFlow Serving ([https://www.tensorflow.org/tfx/guide/serving](https://www.tensorflow.org/tfx/guide/serving))
+    is a customizable, standalone web system for serving TensorFlow models in production
+    environments. TensorFlow Serving takes a model server approach; it can serve all
+    types of TensorFlow models with the same server architecture and APIs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Features
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'TensorFlow Serving offers the following features:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Can serve multiple models or multiple versions of the same model
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Has out-of-the-box integration with TensorFlow models
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Automatically discovers new model versions and supports different model file
+    sources
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Has unified gRPC and HTTP endpoints for model inference
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Supports batching prediction requests and performance tuning
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Has an extensible design, which is customizable on version policy and model
+    loading
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: high-level architecture
+  prefs: []
+  type: TYPE_NORMAL
+- en: In TensorFlow Serving, a model is composed of one or more servables. A servable
+    is the underlying object to perform computation (for example, a lookup or inference);
+    it is the central abstraction in TensorFlow Serving. Sources are plugin modules
+    that find and provide servables. Loader standards are the API for loading and
+    unloading a servable. The manager handles the full lifecycle of servables, including
+    loading, unloading, and serving servables.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/07-08.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.8 TensorFlow Serving architecture and model serving life cycle. Blue
+    = darkest gray; green = lighter gray; yellow = lightest gray. (Source: TensorFlow;
+    [http://mng.bz/KlNj](http://mng.bz/KlNj))'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 7.8 illustrates the workflow of presenting a servable to the customer.
+    First, the source plugin creates a loader for a specific servable; the loader
+    contains the metadata to load the servable. Second, the source finds a servable
+    in the filesystem (a model repository); it notifies the servable’s version and
+    loader to DynamicManager. Third, based on the predefined version policy, DynamicManager
+    determines whether to load the model. Finally, the client sends a prediction request
+    for a servable, and DynamicManager returns a handle, so the client can execute
+    the model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: TensorFlow Serving model file
+  prefs: []
+  type: TYPE_NORMAL
+- en: TensorFlow Serving requires models to be saved in SavedModel ([http://mng.bz/9197](http://mng.bz/9197))
+    format. We could use the `tf.saved_model.save(model,` `save_path)` API for this
+    purpose. A saved model is a directory containing serialized signatures and the
+    state needed to run them, including variable values and vocabularies. For example,
+    a saved model directory has two subdirectories, `assets` and `variables`, and
+    one file, `saved_model.pb`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The assets folder contains files used by TensorFlow graphs, such as text files
+    for initializing vocabulary tables. The variables folder contains training checkpoints.
+    The `saved_model.pb` file stores the actual TensorFlow program, or model, and
+    a set of named signatures, each identifying a function that accepts tensor inputs
+    and produces tensor outputs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Model serving
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Because TensorFlow’s SavedModel files can be directly loaded into the TensorFlow
+    Serving process, running model serving is straightforward. Once the serving process
+    starts, we can copy model files to TensorFlow Serving’s model directory and then
+    send gRPC or REST prediction requests right away. Let’s review the following prediction
+    example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'For loading multiple models and multiple versions of the same model into the
+    serving server, we can configure the model’s versions in the model config as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Finds model v2 at /models/model_a/versions/2
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Finds model v3 at /models/model_a/versions/3
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this config, we defined two models, `model_a` and `model_b`. Because `model_a`
+    has a `model_version_policy`, both the two versions (v2 and v3) are loaded and
+    can serve requests. By default, the latest version of the model will be served,
+    so when a new version of `model_b` is detected, the previous one will be replaced
+    by the new one.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Review
+  prefs: []
+  type: TYPE_NORMAL
+- en: TensorFlow Serving is a production-level model serving solution for TensorFlow
+    models; it supports REST, gRPC, GPU acceleration, minibatching, and model serving
+    on edge devices. Although TensorFlow Serving falls short on advanced metrics,
+    flexible model management, and deployment strategies, it’s still a good choice
+    if you only have TensorFlow models.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The main disadvantage of TensorFlow Serving is that it’s a vendor lock-in solution;
+    it only supports TensorFlow models. If you are looking for a training framework
+    agnostic approach, TensorFlow Serving wouldn’t be your choice.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.4.2 TorchServe
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: TorchServe ([https://pytorch.org/serve/](https://pytorch.org/serve/)) is a performant,
+    flexible, and easy-to-use tool for serving PyTorch eager mode and torchscripted
+    models (an intermediate representation of a PyTorch model that can be run in a
+    high-performance environment such as C++). Similar to TensorFlow Serving, TorchServe
+    takes a model server approach to serving all kinds of PyTorch models with a unified
+    API. The difference is TorchServe provides a set of management APIs that makes
+    model management very convenient and flexible. For example, we can programmatically
+    register and unregister models or different versions of a model. And we can also
+    scale up and scale down serving workers for models and different versions of a
+    model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: High-level architecture
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A TorchServe server is composed of three components: the frontend, backend,
+    and model store. The frontend handles TorchServe’s request/response. It also manages
+    the life cycles of the models. The backend is a list of model workers that are
+    responsible for running the actual inference on the models. The model store is
+    a directory in which all the loadable models exist; it can be a cloud storage
+    folder or a local host folder. Figure 7.9 shows the high-level architecture of
+    a TorchServing instance.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/07-09.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.9 A TorchServe architecture diagram (Source: Kuldeep Singh, “Deploying
+    Named Entity Recognition model to production using TorchServe,” Analytics Vidhya,
+    2020)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Figure 7.9 draws two workflows: model inference and model management. For model
+    inference, first, the user sends a prediction request to the inference endpoint
+    of a model, such as `/predictions/{model_name}/{version}`. Next, the inference
+    request is routed to one of the worker processes that already loaded the model.
+    Then, the worker process will read model files from the model store and let the
+    model handler load the model, preprocess the input data, and run the model to
+    obtain a prediction result.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: For model management, a model needs to be registered before users can access
+    it. This is done by using the management API. We can also scale up and down the
+    worker process count for a model. We will see an example in the upcoming sample
+    usage section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Features
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'TorchServe offers the following features:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Can serve multiple models or multiple versions of the same model
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Has unified gRPC and HTTP endpoints for model inference
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Supports batching prediction requests and performance tuning
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Supports workflow to compose PyTorch models and Python functions in sequential
+    and parallel pipelines
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Provides management API to register/unregister models and scale up/down workers
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Handles model versioning for A/B testing and experimentation
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Torch serving model file
+  prefs: []
+  type: TYPE_NORMAL
+- en: Pure PyTorch models cannot be loaded to the Torch serving server directly. TorchServe
+    requires all its models to be packaged into a .mar file. Please refer to section
+    7.2.6 for a detailed example of how a .mar file is created.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Model serving
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following code snippet lists five general steps to running model inference
+    with TorchServe. For a concrete example, you can check out the README doc of our
+    sample intent classification predictor ([http://mng.bz/WA8a](http://mng.bz/WA8a)):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Creates local model dir and copies the intent classification model
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Binds local model dir as the model store dir for TorchServe
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Intent_1.mar contains the model file and model metadata, such as the model
+    version.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Besides using management API to register models, we can also use the scale
+    worker API to dynamically adjust the number of workers for any version of a model
+    to better serve different inference request loads, as in the following example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: Review
+  prefs: []
+  type: TYPE_NORMAL
+- en: TorchServe is a production-level model serving solution for PyTorch models;
+    it’s designed for high-performance inference and production use cases. TorchServe’s
+    management API adds a lot of flexibility for customizing model deployment strategy,
+    and it allows us to manage compute resources at the per-model level.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Similar to TensorFlow Serving, the main disadvantage of TorchServe is that it’s
+    a vendor lock-in solution; it only supports PyTorch models. So, if you are looking
+    for a training framework agnostic approach, TorchServe wouldn’t be your choice.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.4.3 Triton Inference Server
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Triton Inference Server ([https://developer.nvidia.com/nvidia-triton-inference-server](https://developer.nvidia.com/nvidia-triton-inference-server))
+    is an open source inference server developed by NVIDIA. It provides a cloud and
+    edge inferencing solution optimized for both CPUs and GPUs. Triton supports an
+    HTTP/ REST and gRPC protocol that allows remote clients to request inferencing
+    for any model being managed by the server. For edge deployments, Triton is available
+    as a shared library with a C API that allows the full functionality of Triton
+    to be included directly in an application.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Training framework compatibility is one of Triton’s main advantages when compared
+    with other serving tools. Unlike TensorFlow Serving, which only works with the
+    TensorFlow model, and Torch serving, which only works with the PyTorch model,
+    the Triton server can serve models trained from almost any framework, including
+    TensorFlow, TensorRT, PyTorch, ONNX, and XGBoost. Triton server can load model
+    files from local storage, Google Cloud Platform, or Amazon Simple Storage Service
+    (Amazon S3) on any GPU- or CPU-based infrastructure (cloud, data center, or edge).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Inference performance is also an advantage for Triton. Triton runs models concurrently
+    on GPUs to maximize throughput and utilization; supports x86 and ARM CPU-based
+    inferencing; and offers features like dynamic batching, model analyzer, model
+    ensemble, and audio streaming. These features make model serving memory efficient
+    and robust.
+  prefs: []
+  type: TYPE_NORMAL
+- en: High-level architecture
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 7.10 shows the Triton Inference Server’s high-level architecture. All
+    the inference requests are sent as REST or gRPC requests, and then they are converted
+    to C API calls internally. Models are loaded from the model repository, which
+    is a filesystem-based repository that we can see as folders/directories.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/07-10.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.10 Triton Inference Server high-level architecture (Source: NVIDIA
+    Developer, [https://developer.nvidia.com/nvidia-triton-inference-server](https://developer.nvidia.com/nvidia-triton-inference-server))'
+  prefs: []
+  type: TYPE_NORMAL
+- en: For each model, Triton prepares a scheduler. The scheduling and batching algorithms
+    are configurable on a model-by-model basis. Each model’s scheduler optionally
+    performs batching of inference requests and then passes the requests to the backend
+    corresponding to the model type, such as PyTorch backend for the PyTorch model.
+    A Triton backend is the implementation that executes a model. It can be a wrapper
+    around a deep learning framework, like PyTorch, TensorFlow, TensorRT, or ONNX
+    Runtime. Once the backend performs inferencing using the inputs provided in the
+    batched requests to produce the requested outputs, the outputs are returned.
+  prefs: []
+  type: TYPE_NORMAL
+- en: One thing worth noting is that Triton supports a backend C API that allows Triton
+    to be extended with new functionality, such as custom pre- and postprocessing
+    operations or even a new deep learning framework. This is how we can extend the
+    Triton server. You can check out the triton-inference-server/backend GitHub repo
+    ([https://github.com/triton-inference-server/backend](https://github.com/triton-inference-server/backend))
+    to find all Triton backend implementations. As a bonus, the models being served
+    by Triton can be queried and controlled by a dedicated model management API that
+    is available by HTTP/REST, gRPC protocol, or the C API.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Features
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Triton offers the following features:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Supports all major deep learning and machine learning framework backends.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Runs multiple models from the same or different frameworks concurrently on a
+    single GPU or CPU. In a multi-GPU server, Triton automatically creates an instance
+    of each model on each GPU to increase utilization.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Optimizes inference serving for real-time inferencing, batch inferencing to
+    maximize GPU/CPU utilization, and streaming inference with built-in support for
+    audio streaming input. Triton also supports model ensembles for use cases that
+    require multiple models to perform end-to-end inference, such as conversational
+    AI.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Handles dynamic batching of input requests for high throughput and utilization
+    under strict latency constraints.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Updates models live in production without restarting the inference server or
+    disrupting the application.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Uses model analyzer to automatically find the optimal model configuration and
+    maximize performance.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Supports multi-GPU, multinode inference of large models.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Triton model file
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Each model in Triton must include a model configuration that provides required
+    and optional information about the model. Typically, it’s a config.pbtxt file
+    specified as ModelConfig protobuf ([http://mng.bz/81Kz](http://mng.bz/81Kz)).
+    See a simple model config (config.pbtxt) for a PyTorch model as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Specifies the PyTorch serving backend for this model
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Indicates this is a PyTorch backend config
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Defines the maximum batch size that the model supports
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Models input data schema
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Models output data schema
+  prefs: []
+  type: TYPE_NORMAL
+- en: Normally, the training application creates this config.pbtxt file when training
+    completes at the training service and then uploads this config as part of the
+    model files to the model repository. For more detail on Triton model configs,
+    please check out the Triton model configuration documentation at [http://mng.bz/Y6mA](http://mng.bz/Y6mA).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Besides a unified config file, the Triton model file format is different per
+    training framework. For example, TensorFlow models in SavedModel format ([http://mng.bz/El4d](http://mng.bz/El4d))
+    can be loaded with Triton directly. But PyTorch models need to be saved by the
+    TorchScript program.
+  prefs: []
+  type: TYPE_NORMAL
+- en: TorchScript
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'TorchScript is a way to create serializable and optimizable models from PyTorch
+    code. The reason Triton requires PyTorch models to be serialized as TorchScript
+    is that TorchScript can be used as an intermediate representation of a PyTorch
+    model. It can run independently from Python, such as in a standalone C++ program.
+    See the following code snippet for creating a TorchScript model from a PyTorch
+    model:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: For the model format requirement of other training frameworks, please check
+    out the triton-inference-server/backend GitHub repo ([http://mng.bz/NmOn](http://mng.bz/NmOn)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Model serving
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Model serving in Triton involves the following three steps: first, copy the
+    model file to the model repository; second, call the management API `(POST` `v2/repository/
+    models/${MODEL_NAME}/load`) to register the model; and third, send an inference
+    request `(POST` `v2/models/${MODEL_NAME}/versions/${MODEL_VERSION})`. For more
+    information on the Triton management API, you can check the Triton HTTP/REST and
+    gRPC protocol documentation ([http://mng.bz/DZvR](http://mng.bz/DZvR)). For inference
+    API, you can check the KServe community standard inference protocols documentation
+    ([https://kserve.github.io/website/0.10/modelserving/data_plane/v2_protocol/](https://kserve.github.io/website/0.10/modelserving/data_plane/v2_protocol/)).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Review
+  prefs: []
+  type: TYPE_NORMAL
+- en: As we write this book, we consider Triton the best model serving approach for
+    three reasons. First, Triton is training-framework agnostic; it provides a well-designed
+    and extensible backend framework, which allows it to execute the models built
+    by almost any training framework. Second, Triton offers better model serving performance,
+    such as serving throughput. Triton has multiple mechanisms to improve its serving
+    performance, such as dynamic batching, GPU optimization, and model analyzing tools.
+    Third, Triton supports advanced model serving use cases such as model ensembles
+    and audio streaming.
+  prefs: []
+  type: TYPE_NORMAL
+- en: WARNING Be cautious! Triton may not be free. Triton is under BSD 3-Clause “new”
+    or “revised” licensing, meaning it can be modified and distributed for commercial
+    purposes for free. But what about troubleshooting and bug fixing? The project
+    is complex, with a large code base, so you’ll have a hard time debugging and fixing
+    performance concerns, such as memory leaks. If you look for the NVIDIA AI-enterprise
+    license to get the support, as this book is being written, it would cost you several
+    thousand dollars per GPU per year. So be sure that you understand the Triton codebase
+    before signing up.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.4.4 KServe and other tools
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The list of open source serving tools is extensive and includes KServe ([https://www.kubeflow.org/docs/external-add-ons/kserve/](https://www.kubeflow.org/docs/external-add-ons/kserve/)),
+    Seldon Core ([https://www.seldon.io/solutions/open-source-projects/core](https://www.seldon.io/solutions/open-source-projects/core)),
+    and BentoML ([https://github.com/bentoml/BentoML](https://github.com/bentoml/BentoML)).
+    Each of these tools has some unique strengths. They either run lightweight and
+    are easy to use, like BentoML, or they make model deployment easy and fast in
+    Kubernetes, as do Seldon Core and KServe. Despite the diversity of the serving
+    tools, they have a lot in common: they all need to pack models in a certain format,
+    define a model wrapper and configuration file to execute the model, upload models
+    to a repository, and send prediction requests via a gRPC or HTTP/REST endpoint.
+    By reading the TorchServe, TensorFlow, and Triton examples in this chapter, you
+    should be able to explore other tools on your own.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Before we end the serving tools discussion, we want to call out KServe specifically.
+    KServe is a collaboration on model serving between several established high-tech
+    companies, including Seldon, Google, Bloomberg, NVIDIA, Microsoft, and IBM. This
+    open source project is worth your attention because it is designed to create a
+    standardized solution for common machine learning serving problems.
+  prefs: []
+  type: TYPE_NORMAL
+- en: KServe aims to provide a serverless inference solution on Kubernetes. It provides
+    an abstract model serving interface that works for common machine learning frameworks
+    like TensorFlow, XGBoost, scikit-learn, PyTorch, and ONNX.
+  prefs: []
+  type: TYPE_NORMAL
+- en: From our point of view, KServe’s main contribution is that it creates a standard
+    serving interface that works for all major serving tools. For example, all the
+    serving tools we mentioned previously now support the KServe model inference protocol.
+    This means we can use only one set of inference APIs (the KServe API) to query
+    any model hosted by different serving tools, such as Triton, TorchServe, and TensorFlow.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Another strength of KServe is that it is designed to provide a serverless solution
+    natively on Kubernetes. KServe uses Knative to take care of the network routing,
+    model worker autoscaling (even to zero), and model revision tracking. With a simple
+    config (see the following example), you can deploy a model to your Kubernetes
+    cluster and then use the standardized API to query it:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ A sample model deployment config for KServe
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ A backend server type
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ A model file location
+  prefs: []
+  type: TYPE_NORMAL
+- en: Behind the scenes, KServe uses different serving tools to run inference, such
+    as TensorFlow Serving and Triton. KServe provides the benefit of hiding all the
+    details behind a simple Kubernetes CRD config. In the previous example, the `InferenceService`
+    CRD config hides the work, including prediction server setup, model copy, model
+    version tracking, and prediction request routing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As the book is being written, KServe’s newer version (v2) is still in beta.
+    Although it’s not quite mature, its unique advantage of a standardized inference
+    protocol across platform support and serverless model deployment makes it stand
+    out among other approaches. If you want to set up a large serving platform that
+    works for all major training frameworks on Kubernetes, KServe is worth your attention.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.4.5 Integrating a serving tool into an existing serving system
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: In many cases, replacing an existing prediction service with a new serving backend
+    is not an option. Each serving tool has its own requirements for model storage,
+    model registration, and inference request format. These requirements sometimes
+    conflict with the existing system’s prediction interface and the internal model
+    metadata and file systems. To introduce new technology without disrupting the
+    business, we usually take an integration approach instead of completely replacing
+    it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here, we use the Triton server as an example to show how to integrate a serving
+    tool into an existing prediction service. In this example, we assume three things:
+    first, the existing prediction service runs in Kubernetes; second, the existing
+    prediction service’s web inference interface is not allowed to change; and third,
+    there is a model storage system that stores model files in cloud storage, such
+    as Amazon S3\. Figure 7.11 shows the process.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/07-11.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.11 A proposal to integrate a list of Triton server instances into an
+    existing serving system
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 7.11 (A) illustrates the system overview. A list of Triton server Kubernetes
+    pods is added behind the existing prediction API. With the Kubernetes load balancer,
+    a prediction request can land on any Triton pod. We also add a shared volume that
+    all Triton pods can access; this shared volume acts as a shared Triton model repository
+    for all Triton instances.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Figure 7.11 (B) shows what’s inside a Triton server Kubernetes pod. Each Triton
+    pod has two Docker containers: a Triton Server Container and a sidecar container.
+    The Triton server container is the Triton inference server we discussed in section
+    7.4.3\. The model prediction happens in this container, and we can simply treat
+    this container as a black box. The sidecar container acts as an adapter/proxy
+    to prepare what Triton needs before forwarding the prediction request to the Triton
+    container. This sidecar container downloads the model from cloud storage to the
+    Triton local model repository (the shared volume), calls Triton to register the
+    model, and converts the prediction request to the Triton API call.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: By using this integration approach, all the changes happen inside the prediction
+    service. The public prediction API and the external model storage system remain
+    untouched, and our users won’t be affected when we switch to a Triton backend.
+    Although we use a specific tool (Triton) and a specific infrastructure (Kubernetes)
+    to demo the idea, you can apply this pattern to any other system as long as they
+    use Docker.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note Because the Triton server supports major training frameworks and KServe
+    provides a standardized serving protocol, we can combine them to produce a serving
+    system that works for all kinds of models trained by different frameworks.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.5 Releasing models
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Releasing a model is the act of deploying the newly trained model to the prediction
+    service and exposing it to users. Automating the model deployment and supporting
+    model evaluation are the two main problems we need to address when building model
+    serving systems in production.
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, when the training service finishes the model building, the model should
+    be published to the prediction service in the production environment automatically.
+    Second, the newly published model and its previous versions should all be accessible
+    in the prediction service, so we can evaluate them in the same environment and
+    make a fair comparison. In this section, we propose a three-step model release
+    process to address these challenges.
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, the data scientist (Alex) or training service registers the recently
+    produced model (consisting of the model’s files and its metadata) to a metadata
+    store—a cloud metadata and artifact storage system that will be discussed in the
+    next chapter. Second, Alex runs the model evaluation on the newly registered models.
+    He can test the performance of these models by sending prediction requests with
+    their specific model versions to the prediction service. The prediction service
+    has a built-in mechanism to load any specific version of a model from the metadata
+    store.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Third, Alex sets the best-performing model version as the release model version
+    in the metadata store. Once this is set, the selected version of the model will
+    go public! Customer applications will unknowingly start using the new release
+    version of the model from the prediction service. Figure 7.12 illustrates this
+    three-step process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/07-12.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.12 The model release process workflow: (1) registers models in the
+    model metadata store; (2) loads arbitrary versions of a model to serve prediction
+    requests; and (3) releases the model in the metadata store'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next three sections, we will delve into the three model release steps
+    (pictured in figure 7.12) one by one. As we do this, we will also explore the
+    details of the metadata store and its interactions with storage and with the prediction
+    service. Let’s get started!
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.5.1 Registering a model
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: In most deep learning systems, there is a storage service to store models. In
+    our example, this service is called the *metadata* *store*; it is used to manage
+    the metadata of the artifacts produced by the deep learning system, such as models.
+    The metadata and artifact store service will be discussed in detail in the next
+    chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To register a model to the metadata store, we usually need to provide model
+    files and model metadata. Model files can be model weights, embeddings, and other
+    dependent files to execute the model. Model metadata can be any data that describes
+    the fact of the model, such as the model name, model ID, model version, training
+    algorithm, dataset info, and training execution metrics. Figure 7.13 illustrates
+    how metadata stores model metadata and model files internally.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/07-13.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.13 The internal storage design of the metadata store; model metadata
+    are stored as object files with lookup tables in front of them.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In figure 7.13, we can see the metadata store has two sections: the model lookup
+    table and the model metadata list. The model metadata list is just pure metadata
+    storage; all the model metadata objects are stored in this list. The model lookup
+    table is used as an index table for quick searches. Each record in the lookup
+    table points to an actual metadata object in the metadata list.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Training service can register models automatically to the metadata store after
+    training completes. Data scientists can also register models manually, which often
+    happens when data scientists want to deploy the model they build locally (without
+    using the deep learning system).
+  prefs: []
+  type: TYPE_NORMAL
+- en: When the metadata store receives a model register request, first, it creates
+    a metadata object for this model. Second, it updates the model lookup table by
+    adding a new search record; the record enables us to find that model metadata
+    object by using the model name and version. Besides searching the lookup table
+    by using the model name and version, the metadata store also allows a model metadata
+    search by using the model ID.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The actual model files are stored in the artifact store—a cloud object storage,
+    such as Amazon S3\. A model’s storage location in the artifact store is saved
+    in the model’s metadata object as a pointer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Figure 7.13 shows two search records in the model lookup table for model A:
+    versions 1.0.0 and 1.1.0\. Each search record maps to a different model metadata
+    object (respectively, ID = 12345 and ID = 12346). With this storage structure,
+    we can find any model metadata by using the model name and model version; for
+    example, we can find model metadata object ID = 12346 by searching “model A” and
+    version “1.1.0.”'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using the model’s canonical names and versions to find the actual metadata and
+    model files is foundational to the prediction service’s ability to serve different
+    model versions at the same time. Let’s see how the metadata store is used in the
+    prediction service in the next section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.5.2 Loading an arbitrary version of a model in real time with a prediction
+    service
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: To make decisions on which model version to use in production, we want to evaluate
+    the model performance of each model version fairly (in the same environment) and
+    easily (using the same API). To do so, we can call the prediction service to run
+    prediction requests with different model versions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In our proposal, the prediction service loads a model in real time from the
+    metadata store when it receives a prediction request. Data scientists can allow
+    the prediction services to use any model version to run the prediction by defining
+    the model name and version in the prediction request. Figure 7.14 illustrates
+    the process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/07-14.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.14 Model serving in prediction service with the metadata store
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Figure 7.14 shows the prediction service loads models specified in the serving
+    request in real time. When receiving a prediction request, the routing layer first
+    finds the requested model in the metadata store, downloads the model files, and
+    then passes the request to the backend predictor. Here is a detailed explanation
+    of the seven steps of the runtime model loading and serving process:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The user sends prediction requests to the prediction service. In the request,
+    they can specify which model to use by providing the model name and version (`/predict/{model_name}/{version}`)
+    or model ID (`/predict/{model_id}`).
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The routing layer inside the prediction service searches the metadata store
+    and finds the model metadata object.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The routing layer then downloads the model files to a shared disk that all the
+    predictors can access.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: By checking the model metadata, such as the algorithm type, the routing layer
+    routes the prediction request to the correct backend predictor.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The predictor loads the model from the shared disk.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The predictor handles data preprocessing, executes the model, performs postprocessing,
+    and returns the result to the routing layer.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The routing layer returns prediction results to the caller.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 7.5.3 Releasing the model by updating the default model version
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: After model evaluation, the last step of the model release is letting the customers
+    consume the newly verified model version in the prediction service. We want the
+    model release process to happen unknowingly, so customers aren’t aware of the
+    underlying model version changes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In step 1 of the previous section (7.5.2), users can request a model serving
+    on any specified model version by using the `/predict/{model_name}/{version}`
+    API. This capability is crucial to evaluating multiple versions of the same model,
+    so we can prevent model performance regression.
+  prefs: []
+  type: TYPE_NORMAL
+- en: But in the production scenario, we don’t expect our customers to track the model
+    versions and model IDs. Alternatively, we can define a few static version strings
+    as variables to represent the newly released models and let customers use them
+    in the prediction request instead of using the real model version.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For example, we can define two special static model versions or tags, such as
+    `STG` and `PROD`, which represent the preproduction and production environments,
+    respectively. If the model version associated with the `PROD` tag for model A
+    is `1.0.0`, a user can call `/predict/model_A/PROD` and the prediction service
+    will load model A and version `1.0.0` to run model serving. When we upgrade the
+    newly released model version to `1.2.0`—by associating the `PROD` tag to version
+    1.2.0—the `/predict/model_A/PROD` request will land on model version `1.2.0`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: With the special static version/tag strings, prediction users don’t need to
+    remember model ID or versions; they can just use `/predict/{model_name}/PROD`
+    to send prediction requests to consume the newly released model. Behind the scenes,
+    we (data scientists or engineers) maintain the mapping between these special strings
+    and the actual version in the metadata store’s lookup table, so the prediction
+    service knows which model version to download for a `/STG` or `/PROD` request.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In our proposal, we named the operation of mapping a specific model version
+    to the static model version the *model release operation*. Figure 7.15 illustrates
+    the model release process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/07-15.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.15 Model serving in prediction service with the metadata store
+  prefs: []
+  type: TYPE_NORMAL
+- en: In figure 7.15, data scientists first register model A, version 1.0.0 to model
+    A, version `PROD` in the metadata store. Then in the model lookup table, the (`Model`
+    `A,` `PROD)` record changes to point to the actual model object record (`ModelA,`
+    `version:` `1.0.0)`. So when users call `/predict/ModelA/PROD` in the prediction
+    service, they are actually calling `/predict/ModelA/1.0.0`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Next, when the prediction service receives a prediction request with a model
+    version equal to `STG` or `PROD`, the service will search the lookup table in
+    the metadata store and use the actual model version, which is registered to `PROD`,
+    to download model files. In figure 7.15, the prediction service will load model
+    `ModelA,version:` 1.0.0 for the `/ModelA/PROD` `request`, and it will load model
+    `ModelA,version:` 1.1.0 for the `/ModelA/STG` `request`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For future model releases, data scientists only need to update the model records
+    to map the latest model version to `STG` and `PROD` in the metadata store’s lookup
+    table. The prediction service will load the new model version automatically for
+    new prediction requests. All of these operations happen automatically and are
+    imperceptible to users.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note The proposed release workflow is not the only way to release models. Model
+    release approaches are highly dependent on a company’s internal DevOps process
+    and the prediction service design, so there is no single best design on this topic.
+    We hope by reading the problem analysis and the proposed solution in section 7.5,
+    you can derive a model release process that suits your situation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.6 Postproduction model monitoring
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Compared with monitoring other services, such as data management, in machine
+    learning systems, the job is still not complete after the model goes into production.
+    We need not only to monitor and maintain the prediction service itself but also
+    look at *the performance of models* that the service serves. Model drifting is
+    a shift in the knowledge domain distribution that no longer matches the training
+    dataset and leads to the deterioration of the model performance. This can happen
+    while the prediction service is completely healthy because model inference runs
+    independently from the prediction service.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To battle model drifting, data scientists need to retrain the model with new
+    data or rebuild the model with an improved training algorithm. This sounds like
+    a data science project on the surface, but it requires a lot of underlying engineering
+    work, such as collecting and analyzing the model metrics from the prediction service
+    to detect model drifting. In this section, we discuss model monitoring from an
+    engineering perspective and look at the role that engineers can play in the monitoring
+    process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.6.1 Metric collection and quality gate
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The two most important areas where engineers can contribute are *model metric
+    collection* and *model quality gate setup*. Let us explain.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To run an analysis to detect model drift, data scientists need data to analyze,
+    and engineers can find ways to deliver the necessary data (metrics). Although
+    engineers would have to create a separate data pipeline to collect model performance
+    metrics, it would be overkill in most cases. Normally, model performance metrics
+    can be collected and visualized with the existing telemetry system (like Datadog)
+    and logging system (like Sumo and Splunk). So do yourself a favor and try to fully
+    utilize the existing logging and metric systems you already have, instead of doing
+    the heavy lifting of building a new metric system.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Engineers can also help with building model-quality gates. Engineers can work
+    with data scientists to automate their troubleshooting steps, such as checking
+    data quality and generating model inference analysis reports. With a given threshold,
+    these checks will eventually form a model quality gate.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.6.2 Metrics to collect
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Theoretically, we need to collect at least five kinds of metrics to support
+    model performance measurements. They are prediction tracing, the date of the prediction,
+    model versions, observation, and observation rate and date. Let’s look at them
+    one by one:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Prediction tracing*—We normally track each prediction request by assigning
+    it a unique request ID, but this is not enough. For some complicated scenarios,
+    such as PDF scanning, we composite different types of model predictions together
+    to produce a final result. For example, we first send a PDF doc to an OCR (optical
+    character recognition) model to extract text information and then send the text
+    to an NLP (natural language processing) model to recognize the targeted entities.
+    In this case, besides assigning a unique request ID for a parent prediction request,
+    we can also assign a `groupRequestID` to each sub/child prediction request, so
+    we can group all the associated prediction requests when troubleshooting.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Date of the prediction*—Normally, a prediction request completes within a
+    second. To track the date of a prediction, we can either use prediction start
+    time or complete time because there is not much difference. But for cases like
+    fraud detection, the prediction’s completion timestamp might be a lot different
+    from the prediction start timestamp because it can take multiple days of user
+    activities as input.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Model version*—To map model performance data to the exact model file, we need
+    to know the model version. Furthermore, when we combine multiple models to serve
+    one prediction request, the version of every model needs to be tracked in logs.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Observation*—The prediction result needs to be logged along with prediction
+    input for future comparison. Additionally, we can provide a feedback or investigation
+    API for customers to report model performance concerns. By using the feedback
+    API, customers can report the model ID, expected prediction result, and current
+    prediction result.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Observation date and rate*—Many times, observations are collected manually,
+    and the frequency of observation needs to be logged as well. Data scientists need
+    the date and rate to decide whether the data can statistically represent the model’s
+    overall performance.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: It is great that you have read this far! Model serving is an essential component
+    of a machine learning system because external business applications depend on
+    it. As types of models, numbers of prediction requests, and types of inference
+    (online/offline) increase, many model serving frameworks/systems are invented,
+    and they become increasingly complex. If you follow the serving mental model introduced
+    in chapters 6 and 7, starting with how a model is loaded and executed, you can
+    easily navigate these serving systems, regardless of how large the codebase or
+    the number of components is.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The model service sample in this chapter is made of a frontend API component
+    and a backend model predictor container. Because the predictor is built on top
+    of the intent model training code in chapter 3, it can only serve intent classification
+    models.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The model server sample is composed of the same frontend API as in chapter 3
+    and a different backend—TorchServe predictor. The TorchServe backend is not limited
+    to intent classification models; it can serve arbitrary PyTorch models. This is
+    a great advantage for the model server approach over the model service approach.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: For implementing model server approaches, we recommend using existing tools—for
+    example, the Triton server—instead of building your own.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The model service approach works for single application scenarios; it can be
+    implemented quickly, and you have full control of the code implementation of the
+    end-to-end workflow.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The model server approach fits platform scenarios; it can greatly reduce development
+    and maintenance efforts when the serving system needs to support five or more
+    different types of models.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: TorchServe, TensorFlow Serving, and Triton are all solid open source model serving
+    tools, and they all take a model server approach. If applicable, we recommend
+    Triton because it is compatible with most model training frameworks and has a
+    performance advantage in terms of GPU acceleration.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: KServe provides a standard serving interface that works for all major serving
+    tools, including TensorFlow Serving, TorchServe, and Triton. KServe can greatly
+    improve the compatibility of our serving system because we can use a single set
+    API to run model serving with different backends.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Releasing a new model or new version of the model serving system in production
+    shouldn’t be an afterthought; we need to consider it properly in the design phase.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Model metric collection and model quality gates are the two areas on which engineers
+    need to focus for model performance monitoring.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL

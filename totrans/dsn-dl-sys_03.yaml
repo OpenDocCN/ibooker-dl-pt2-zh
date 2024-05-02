@@ -1,0 +1,1510 @@
+- en: 3 Model training service
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter covers
+  prefs: []
+  type: TYPE_NORMAL
+- en: Designing principles for building a training service
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Explaining the deep learning training code pattern
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Touring a sample training service
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using an open source training service, such as Kubeflow
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Deciding when to use a public cloud training service
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The task of model training in machine learning is not the exclusive responsibility
+    of researchers and data scientists. Yes, their work on training the algorithms
+    is crucial because they define the model architecture and the training plan. But
+    just like physicists need a software system to control the electron-positron collider
+    to test their particle theories, data scientists need an effective software system
+    to manage the expensive computation resources, such as GPU, CPU, and memory, to
+    execute the training code. This system of managing compute resources and executing
+    training code is known as the *model training service*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Building a high-quality model depends not only on the training algorithm but
+    also on the compute resources and the system that executes the training. A good
+    training service can make model training much faster and more reliable and can
+    also reduce the average model-building cost. When the dataset or model architecture
+    is massive, using a training service to manage the distributed computation is
+    your only option.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this chapter, we first examine the training service’s value proposition and
+    design principles, and then we meet our sample training service. This sample service
+    not only shows you how to apply the design principles in practice but also teaches
+    you how the training service interacts with arbitrary training code. Next, we
+    introduce several open source training applications that you can use to set up
+    your own training service quickly. We end with a discussion on when to use a public
+    cloud training system.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This chapter focuses on designing and building effective training services *from
+    a software engineer’s perspective, not a data scientist’s*. So we don’t expect
+    you to be familiar with any deep learning theories or frameworks. Section 3.2,
+    on the deep learning algorithm code pattern, is all the preparation you need to
+    understand the training code in this chapter. The training code is not our main
+    focus here; we wrote it only for demonstration purposes, so we have something
+    on which to demonstrate the sample training service.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Model training topics often intimidate engineers. One common misunderstanding
+    is that model training is all about training algorithms and research. By reading
+    this chapter, I hope you will not only learn how to design and build training
+    services but also absorb this message: the success of model training is built
+    on two pillars, algorithms and system engineering. The model training activities
+    in an organization cannot scale without a good training system. So we, as software
+    engineers, have a lot to contribute to this field.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '3.1 Model training service: Design overview'
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'In an enterprise environment, there are two roles involved in deep learning
+    model training: data scientists, who develop model training algorithms (in TensorFlow,
+    PyTorch, or other frameworks), and platform engineers, who build and maintain
+    the system that runs the model training code in remote and shared server farms.
+    We call this system the model training service.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A model training service works as a training infrastructure to execute the model
+    training code (algorithm) in a dedicated environment; it handles both training
+    job scheduling and compute resource management. Figure 3.1 shows a high-level
+    workflow in which the model training service runs a model training code to produce
+    a model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/03-01.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 3.1 A high-level workflow for executing model training via a training
+    service. In step 1, the data scientist submits a training request with training
+    code to the training service, which creates a job in the job queue. In step 2,
+    the model training service allocates compute resources to execute the training
+    job (training code). In step 3, the job produces a model when the training execution
+    completes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The most common question asked about this component is why we would need to
+    write a service to do model training. For many people, it seems much easier to
+    write a simple bash script to execute the training code (algorithm) locally or
+    remotely, such as with an Amazon Elastic Cloud Computing (Amazon EC2) instance.
+    The rationale behind building a training service, however, goes beyond just launching
+    a training computation. We will discuss it in detail in the next section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 3.1.1 Why use a service for model training?
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Imagine you lead a data science team, and you need to assign the team’s precious
+    compute resources wisely to the team members Alex, Bob, and Kevin. The computing
+    resource needs to be allocated in a way that all team members can complete their
+    model training tasks within a time limit and a budget. Figure 3.2 paints two approaches
+    for allocating the compute resources: dedicated and shared.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/03-02.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 3.2 Different compute resource allocation strategies: dedicated vs.
+    shared'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The first option, dedicated, is to exclusively assign a powerful workstation
+    to each member of the team. This is the simplest approach but clearly not an economic
+    one because when Alex is not running his training code, his server sits idle and
+    neither Bob nor Kevin can use it. So, in this approach, our budget is underutilized.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Another problem with the dedicated approach is that it cannot scale. When Alex
+    wants to train a large model or a model with a large dataset, he will need multiple
+    machines. And training machines are normally expensive; because of the complexity
+    of the deep learning model architecture, even a decent size neural network requires
+    a GPU with large memory. In this case, we must assign more dedicated servers to
+    Alex, which exacerbates the inefficient resource allocation problem.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The second option, shared compute resources, is to build an elastic server group
+    (the size of the group is adjustable) and share it with all members. This approach
+    is obviously more economical because we use fewer servers to achieve the same
+    result, which maximizes our resource utilization.
+  prefs: []
+  type: TYPE_NORMAL
+- en: It’s not a hard decision to choose a sharing strategy because it greatly reduces
+    the cost of our training cluster. But the sharing approach requires proper management,
+    such as queuing user requests if there is a sudden burst of training requests,
+    babysitting each training execution and intervening (restarting or aborting) when
+    necessary (training progress is stuck), and scaling up or scaling down our cluster
+    according to the real-time system usage.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Script vs. service
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now let’s revisit the previous script versus service discussion. In a model
+    training context, *training script* refers to using shell scripts to orchestrate
+    different training activities in a shared server cluster. A training service is
+    a remote process that communicates over the network using HTTP (hypertext transfer
+    protocol) or gRPC (gRPC Remote Procedure Call). As data scientists, Alex and Bob
+    send training requests to the service, and the service orchestrates these requests
+    and manages the training executions on the shared servers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The script approach may work for a single-person scenario but will prove difficult
+    in a shared-resource environment. Besides executing training code, we need to
+    take care of other important elements, such as setting up the environment, ensuring
+    data compliance, and troubleshooting model performance. For example, environment
+    setup requires that the library dependencies of the training framework and training
+    code are installed properly on the training server before starting model training.
+    Data compliance requires that the sensitive training data (user credit card numbers,
+    payment records) is protected with restricted access. And performance troubleshooting
+    requires that everything used in training, including dataset IDs and versions,
+    training code versions, and hyperparameters, is tracked for model reproduction
+    purposes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: It’s hard to imagine addressing these requirements in shell scripts and having
+    the model training executed in a reliable, repeatable, and scalable fashion. This
+    is why most models trained in production nowadays are produced by thoughtfully
+    designed model training services.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Benefits of having a model training service
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'From the previous discussion, we can imagine a model training service’s value
+    proposition as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Saturates computing resources and reduces model training costs
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Expedites model development by building models in a fast (more resources available)
+    and reliable way
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Enforces data compliance by executing training in a confined environment
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Facilitates model performance troubleshooting
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 3.1.2 Training service design principles
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Before we look at our sample training service, let’s look at the four design
+    principles we can use to evaluate a model training system.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Principle 1: Provides a unified API and is agnostic about actual training code'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Having only one public API to train models with different kinds of training
+    algorithms makes the training service easy to use. Whether it’s object detection
+    training, voice recognition training, or text-intent classification training,
+    we can use sample APIs to trigger the model training execution. Future algorithm
+    performance A/B tests can also be easily implemented by having a single training
+    API.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Training code-agnostic means that the training service defines a clear mechanism
+    or protocol for how it executes a training algorithm (code). It establishes, for
+    instance, how the service passes in variables to the training code/process, how
+    the training code obtains the training dataset, and where the trained model and
+    metrics are uploaded. As long as training code follows this protocol, it doesn’t
+    matter how it’s implemented, what its model architecture is, or which training
+    libraries it uses.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Principle 2: Builds a model with high performance and low costs'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A good training service should set cost-effectiveness as a priority. Cost-effectiveness
+    can provide methods to shorten the model training execution time and improve the
+    utilization rate of the compute resources. For instance, a modern training service
+    can reduce time and hardware costs by supporting various distributed training
+    methods, offering good job-schedule management to saturate the server farm, and
+    alerting users when a training process goes off the original plan so it can be
+    terminated early.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Principle 3: Supports model reproducibility'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A service should produce the same model if given the same inputs. This is not
+    only important for debugging and performance troubleshooting but also builds trustworthiness
+    in the system. Remember, we will build business logic based on the model prediction
+    result. We might, for instance, employ a classification model to predict a user’s
+    credibility and then make loan-approval decisions based on it. We can’t trust
+    the entire loan-approval application unless we can repeatedly produce models of
+    the same quality.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Principle 4: Supports robust, isolated, and elastic compute management'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Modern deep learning models, such as language understanding models, take a long
+    time to train (more than a week). If the training process is interrupted or gets
+    aborted in the middle for some random OS failures, all the time and computation
+    expenses are wasted. A matured training service should handle the training job
+    robustness (failover, failure recovery), resource isolation, and elastic resource
+    management (ability to adjust the number of resources), so it can make sure its
+    training job execution will complete successfully in a variety of situations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: After discussing all the important abstract concepts, let’s tackle how to design
+    and build a model training service. In the next two sections, we will learn a
+    general code pattern for deep learning code and an example of a model training
+    service.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 3.2 Deep learning training code pattern
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Deep learning algorithms can be complicated and often intimidating for engineers.
+    Fortunately, as software engineers designing the platform for deep learning systems,
+    we don’t need to master these algorithms for our daily work. We do, however, need
+    to be familiar with the general code pattern of these algorithms. With a high-level
+    understanding of the model training code pattern, we can comfortably treat model
+    training code as a black box. In this section, we’ll introduce you to the general
+    pattern.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 3.2.1 Model training workflow
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: In a nutshell, most deep learning models are trained through an iterative learning
+    process. The process repeats the same set of computation steps in many iterations,
+    and in every iteration, it tries to update the weights and biases of the neural
+    network to get the algorithm output (prediction result) closer to the training
+    targets in the dataset.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To measure how well a neural network models the given data and uses it to update
+    the weights of the neural network to get better results, a loss function is defined
+    to calculate the deviations of the algorithm output from the actual results. The
+    output of the loss function is named LOSS.
+  prefs: []
+  type: TYPE_NORMAL
+- en: So, you can see the entire iterative training process as a repeating effort
+    to reduce the loss value. Eventually, when the loss value meets our training goal
+    or it can’t be reduced any further, then the training completes. The training
+    output is the neural network and its weights, but we generally refer to it simply
+    as a model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/03-03.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 3.3 General steps of a deep learning model training workflow
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Figure 3.3 illustrates the general model training steps. Because neural networks
+    cannot load the entire dataset at once due to memory limitations, we usually regroup
+    the dataset into small batches (mini-batches) before training begins. In step
+    1, the mini-batch examples are fed to the neural network, and the network calculates
+    the prediction result for each example. In step 2, we pass in the predicted results
+    and the expected value (training labels) to the loss function to compute the loss
+    value, which indicates the deviation between the current learning and the target
+    data pattern. In step 3, a process called backpropagation calculates gradients
+    for each of the neural network’s parameters with the loss value. These gradients
+    are used to update the model parameters, so the model can get a better prediction
+    accuracy in the next training loop. In step 4, The neural network’s parameters
+    (weights and biases) are updated by a selected optimization algorithm, such as
+    stochastic gradient descent and its variants. The gradients (from step 3) and
+    learning rate are the input parameters for the optimization algorithm. The model
+    accuracy is supposed to improve after this model update step. Finally, in step
+    5, training completes and the network and its parameters are saved as the final
+    model file. The training is completed under either of the two following conditions:
+    finishing the expected training runs or reaching the expected model accuracy.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Although there are different types of model architectures, including recurrent
+    neural networks (RNNs), convolutional neural networks (CNNs), and autoencoders,
+    their model training processes all follow this same pattern; only the model network
+    differs. Also, abstracting model training code to the previously repeated general
+    steps is the foundation for running distributed training. This is because, no
+    matter how the model architecture is different, we can train them in a common
+    training strategy. We will discuss distributed training in detail in the next
+    chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 3.2.2 Dockerize model training code as a black box
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: With the previously discussed training pattern in mind, we can view deep learning
+    training code as a black box. No matter what model architecture and training algorithm
+    a training code implements, we can execute it the same way in a training service.
+    To run the training code anywhere in the training cluster and create isolation
+    for each training execution, we can pack the training code and its dependent libraries
+    into a Docker image and run it as a container (figure 3.4).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/03-04.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 3.4 A training service launches a Docker container to perform model training
+    instead of running the training code directly as a process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In figure 3.4, by Dockerizing the training code, the training service can execute
+    a model training by simply launching a Docker container. Because the service is
+    agnostic about what’s inside the container, the training service can execute all
+    different code in this standard method. This is much simpler than letting the
+    training service spawn a process to execute model training because the training
+    service needs to set up the various environments and dependent packages for each
+    training code. Another benefit of Dockerization is it decouples the training service
+    and training code, which enables data scientists and platform engineers to focus
+    on model algorithm development and training execution performance, respectively.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You may wonder how a training service communicates with training code if they
+    are agnostic to each other. The key is to define a communication protocol; this
+    protocol delineates which parameters and their data format a training service
+    passes to training code. These parameters include dataset, hyperparameters, model
+    saving location, metrics saving location, and more. We will see a concrete example
+    in the next section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 3.3 A sample model training service
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: As we now know, most deep learning training codes follow the same pattern (figure
+    3.3), and they can be Dockerized and executed in a unified fashion (figure 3.4).
+    Let’s take a closer look at a concrete example.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To demonstrate the concept and design principles we introduced so far, we built
+    a sample service that implements the basic production scenarios of model training—receiving
+    a training request, launching a training execution in a Docker container, and
+    tracking its execution progress. Although the scenarios are quite simple—a few
+    hundred lines of code—they demonstrate the key concepts we discussed in previous
+    sections, including using a unified API, Dockerized training code, and communication
+    protocol between the training service and training container.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Note To show the key pieces clearly, the service is built in a slim fashion.
+    Model training metadata (such as running jobs and waiting jobs) is tracked in
+    memory instead of a database, and the training jobs are executed in the local
+    Docker engine directly. By removing lots of intermediate layers, you will have
+    a straight view of two key areas: training job management and the communication
+    between the training service and training code (Docker container).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 3.3.1 Play with the service
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Before we look at service design and implementation, let’s see how we can play
+    with it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note Please follow the GitHub instructions to run this lab. We highlight only
+    the major steps and key commands for how to run the sample service to avoid the
+    lengthy pages of code and execution outputs, so the concept can be demonstrated
+    clearly. To run this lab, follow the instructions in the “single trainer demo”
+    doc (`training-service/single_trainer_demo.md`) in the orca3/MiniAutoML Git repository,
+    which also captures the desired outputs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, we start the service with `scripts/ts-001-start-server.sh`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: After launching the training service Docker container, we can send a gRPC request
+    to kick off a model training execution (`scripts/ts-002-start-run.sh` `<dataset`
+    `id>`). See a sample gRPC request as follows.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Listing 3.1 Calling training service API: Submitting a training job'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Training algorithm; also the name of the training Docker image
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Version hash of the training dataset
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Training hyperparameters
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Once the job is submitted successfully, we can use the returned job ID from
+    the `train` API to query the progress of the training execution (`scripts/ts-003-check-run.sh`
+    `<job` `id>`); see the following example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Uses the job ID returned by the train API
+  prefs: []
+  type: TYPE_NORMAL
+- en: As you can see, by calling two gRPC APIs, we can kick off deep learning training
+    and track its progress. Now, let’s look at the design and implementation of this
+    sample training service.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note Check out appendix A if you encounter any problems. Scripts in section
+    A.2 automate both dataset preparation and model training. If you want to see a
+    working model training example, read the lab portion of that section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 3.3.2 Service design overview
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Let’s use Alex (a data scientist) and Tang (a developer) to show how the service
+    functions. To use the training service to train a model, Alex needs to write training
+    code (for example, a neural network algorithm) and build the code into a Docker
+    image. This Docker image needs to be published to an artifact repository, so the
+    training service can pull the image and run it as a container. Inside the Docker
+    container, the training code will be executed by a bash script.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To provide an example, we wrote a sample intent classification training code
+    in PyTorch, built the code into a Docker image, and pushed it to the Docker hub
+    ([https://hub.docker.com/u/orca3](https://hub.docker.com/u/orca3)). We will explain
+    it again in section 3.3.6.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'note In real-world scenarios, the training Docker image creation, publication,
+    and consumption are done automatically. A sample scenario could be as follows:
+    step 1, Alex checks his training code into a Git repository; step 2, a preconfigured
+    program—for example, a Jenkins pipeline—is triggered to build a Docker image from
+    this repo; step 3, the pipeline also publishes the Docker image to a Docker image
+    artifactory, for example, JFrog Artifactory; and step 4, Alex sends a training
+    request, and then the training service pulls the training images from the artifactory
+    and begins model training.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When Alex finishes the training code development, he can start to use the service
+    to run his training code. The entire workflow is as follows: step 1.a, Alex submits
+    a training request to our sample training service. The request defines the training
+    code—a Docker image and tag. When the training service receives a training request,
+    it creates a job in the queue and returns the job ID to Alex for future job tracking;
+    step 1.b, Alex can query the training service to get the training progress in
+    realtime; step 2, the service launches a training job as a Docker container in
+    the local Docker engine to execute the model training; and step 3, the training
+    code in the Docker container uploads training metrics to the metadata store during
+    training and the final model when training completes.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note Model evaluation is the step we did not mention in the aforementioned model
+    training workflow. After the model is trained, Alex (data scientist) will look
+    at the training metrics, reported by the training service, to validate the model's
+    quality. To evaluate the model quality, Alex can check the prediction failure
+    rate, gradients, and loss-value graphs. As model evaluation is usually a data
+    scientist’s responsibility, we will not cover it in this book, but we will discuss
+    in chapter 8 how model training metrics are collected and stored.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The entire training workflow is self-serve; Alex can manage the model training
+    entirely by himself. Tang develops the training service and maintains the system,
+    but the system is agnostic about the training code developed by Alex. Tang’s focus
+    is not the model’s accuracy but the availability and efficiency of the system.
+    See figure 3.5 for the user workflow we just described.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/03-05.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 3.5 A high-level service design and user workflow: user training requests
+    are queued, and the Docker job tracker picks up jobs from the queue and launches
+    Docker containers to run model training.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Having seen the user workflow, let’s look at two key components: memory store
+    and Docker job tracker. The memory store uses the following four data structures
+    (maps) to organize requests (jobs): job queue, job launch list, running list,
+    and finalized list. Each of these maps represents jobs in a different running
+    status. We implement the job tracking store in memory just for simplicity; ideally,
+    we should use a database.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The Docker job tracker handles the actual job execution in the Docker engine;
+    it periodically monitors the job queue in the memory store. When there is capacity
+    in the Docker engine, the tracker will launch a Docker container from the job
+    queue and keep monitoring the container execution. In our example, we use the
+    local Docker engine, so the service can run on your local. But it can be easily
+    configured to a remote Docker engine as well.
+  prefs: []
+  type: TYPE_NORMAL
+- en: After launching a training container, based on the execution status, the Docker
+    job tracker moves the job object from the job queue to other job lists, such as
+    the job launching list, running list, and `finalizedJobs` list. In section 3.4.4,
+    we will discuss this process in detail.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note Consider that a dataset will be split in a training container (at training
+    time). It is valid to split datasets during dataset building or model training,
+    and both processes have pros and cons. But either way, it will not affect the
+    design of the training service significantly. For simplicity, we assume in this
+    sample training service that the algorithm code will split the dataset into train,
+    validate, and test subsets.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 3.3.3 Training service API
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Having seen the overview, let’s dive into the public gRPC APIs (`grpc-contract/
+    src/main/proto/training_service.proto`) to gain a deeper understanding of the
+    service. There are two APIs in the training service: `Train` and `GetTrainingStatus`.
+    The `Train` API is for submitting training requests, and the `GetTrainingStatus`
+    API is for fetching the training execution status. See the API definition in the
+    following listing.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 3.2 A model training service gRPC interface
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Defines the dataset, training algorithm, and extra parameters for the model-building
+    request
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'From the gRPC interface in listing 3.2, to use the `Train` API, we need to
+    provide the following information as `TrainingJobMetadata`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`dataset_id`—The dataset ID in the dataset management service'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`train_data_version_hash`—The hash version of the dataset that is used in training'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`name`—Training job name'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`algorithm`—Specify which training algorithm to use to train the dataset. This
+    algorithm string needs to be one of our predefined algorithms. Internally, the
+    training service will find the Docker image associated with this algorithm to
+    execute training.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`parameters`—Training hyperparameters that we pass directly to the training
+    container, such as number of epochs, batch size, etc.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Once the `Train` API receives a training request, the service puts the request
+    to the job queue and returns an ID (`job_id`) for the caller to reference the
+    job. This `job_id` can be used with the `GetTrainingStatus` API to check the training
+    status. Now that we have seen the API definitions, let’s look at their implementations
+    in the next two sections.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 3.3.4 Launching a new training job
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: When a user calls the `Train` API, a training request is added to the job queue
+    of the memory store, and then the Docker job tracker handles the actual job execution
+    in another thread. This logic will be explained in the next three listings (3.3–3.5).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Receiving training requests
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, a new training request will be added to the job-waiting queue and will
+    be assigned a job ID for future reference; see code (`training-service/src/main/`
+    `java/org/orca3/miniAutoML/training/TrainingService.java`) as follows.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 3.3 Submitting training request implementation
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Implements train API
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Enqueues the training request
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Returns the job ID
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Four different job lists to track job status
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Generates job ID
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❻ Starts the job at the waiting queue
+  prefs: []
+  type: TYPE_NORMAL
+- en: Launching a training job (container)
+  prefs: []
+  type: TYPE_NORMAL
+- en: Once the job is in the waiting queue, the Docker job tracker will process it
+    when there are enough system resources. Figure 3.6 shows the entire process. The
+    Docker job tracker monitors the job-waiting queue and picks up the first available
+    job when there is enough capacity in the local Docker engine (step 1 in figure
+    3.6). Then the Docker job tracker executes the model training the job by launching
+    a Docker container (step 2). After the container launches successfully, the tracker
+    moves the job object from the job queue to the launching list queue (step 3).
+    The code implementation for figure 3.6 (`training-service/src/main/java/org/orca3/miniAutoML/training/
+    tracker/DockerTracker.java`) is highlighted in listing 3.4.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/03-06.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 3.6 The training job launching workflow: the Docker job tracker launches
+    training containers from the job queue when it has the capacity.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 3.4 Launching a training container with DockerTracker
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Checks the system’s capacity
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Launches the training Docker container
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Converts training parameters into environment variables
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Builds the Docker launch command
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Sets the Docker image name; the value is from the algorithm name parameter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❻ Passes the training parameter to the Docker container as environment variables
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❼ Runs the Docker container
+  prefs: []
+  type: TYPE_NORMAL
+- en: It is important to note that the training parameters defined in the `train`
+    API request are passed to the training container (training code) as environment
+    variables by the `launch` function in code listing 3.4.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tracking training progress
+  prefs: []
+  type: TYPE_NORMAL
+- en: During the last step, the Docker job tracker continues tracking each job by
+    monitoring its container’s execution status. When it detects a container status
+    change, the job tracker moves the container’s job object to the corresponding
+    job list in the memory store.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The job tracker will query the Docker runtime to fetch the container’s status.
+    For example, if a job’s Docker container starts running, the job tracker will
+    detect the change and put the job in the “running job list”; if a job’s Docker
+    container finishes, the job is then moved to the “finalized jobs list” by the
+    job tracker. The job tracker will stop checking the job status once it’s placed
+    on the “finalized jobs list,” which means the training is completed. Figure 3.7
+    depicts this job tracking workflow. Code listing 3.5 highlights the implementation
+    of this job tracking process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/03-07.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 3.7 The Docker job tracker monitors the Docker container execution status
+    and updates the job queues.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 3.5 DockerTracker monitoring Docker and updating the job status
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Checks container status for all jobs in the launching job list
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Queries the container’s execution status
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Checks the container status for all jobs in the running job list
+  prefs: []
+  type: TYPE_NORMAL
+- en: 3.3.5 Updating and fetching job status
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Now that you have seen how a training request is executed in the training service,
+    let’s move on to the last stop of the code tour: obtaining the training execution
+    status. After launching a training job, we can query the `GetTrainingStatus` API
+    to get the training status. As a reminder, we are reposting figure 3.5, presented
+    here as figure 3.8, which shows the service’s high-level design, as follows.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/03-08.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 3.8 A high-level service design and user workflow
+  prefs: []
+  type: TYPE_NORMAL
+- en: Based on figure 3.8, we can see that obtaining the training status needs only
+    one step, 1.b. Also, the latest status of a training job can be determined by
+    finding which job list (in the memory store) contains the `jobId`. See the following
+    code for querying the status of a training job/request (`training-service/src/main/java/org/orca3/miniAutoML/training/TrainingService.java`).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 3.6 Training status implementation
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Searches the job in the finalized job list
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Searches the job in the launching job list
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Searches the job in the running job list
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ The job is still in the waiting job queue.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Because the Docker job tracker moves the job to the corresponding job list in
+    real time, we can rely on using the job queue type to determine a training job
+    status.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 3.3.6 The intent classification model training code
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Until now, we have been working with the training service code. Now let’s look
+    at the last piece, the model training code. Please do not be intimidated by the
+    deep learning algorithms here. The purpose of this code example is to show you
+    a concrete example of how a training service interacts with the model training
+    code. Figure 3.9 draws the workflow of the sample intent classification training
+    code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/03-09.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 3.9 The intent classification training code workflow first reads all
+    the input parameters from environment variables and then downloads the dataset,
+    processes it, and starts the training loop. At the end, it uploads the output
+    model file.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Our sample training code trains a three-layer neural network to perform intent
+    classification. It first obtains all the input parameters from environment variables
+    that are passed by our training service (see section 3.3.4). The input parameters
+    include hyperparameters (epoch number, learning rate, etc.), dataset download
+    settings (MinIO server address, dataset ID, version hash), and model upload settings.
+    Next, the training code downloads and parses the dataset and starts the iterative
+    learning process. In the last step, the code uploads the generated model and training
+    metrics to the metadata store. The following code listing highlights the major
+    steps mentioned previously (`train-service/text-classification/train.py` and `train-service/text-classification/Dockerfile`).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 3.7 Intent classification model training code and Docker file
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note We hope our sample training code demonstrates how a deep learning training
+    code follows a common pattern. With Dockerization and a clear protocol to pass
+    in parameters, a training service can execute varieties of training code, regardless
+    of the training framework or model architecture.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 3.3.7 Training job management
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'In section 3.1.2, we mentioned that a good training service should address
+    computation isolation and provide on-demand computing resources (principle 4).
+    This isolation has two meanings: training process execution isolation and resource
+    consumption isolation. Because we Dockerize the training process, the process
+    execution isolation is guaranteed by the Docker engine. But we still have to handle
+    the resource consumption isolation ourselves.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Imagine three users (A, B, and C) from different teams submitting training
+    requests to our training service. If user A submits 100 training requests and
+    then users B and C both submit one request each, user B’s and C’s requests will
+    sit in the waiting job queue for a while until all of user A’s training requests
+    complete. This is what happens when we treat the training cluster as a playing
+    field for everyone: one heavy-use case will dominate the job scheduling and resource
+    consumption.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: To solve this resource competition problem, we need to set boundaries within
+    the training cluster for different teams and users. We could create machine pools
+    inside the training cluster to create resource consumption isolation. Each team
+    or user can be assigned to a dedicated machine pool, each pool has its own GPU
+    and machines, and the pool size depends on the project needs and training usage.
+    Also, each machine pool can have a dedicated job queue, so the heavy users won’t
+    affect other users. Figure 3.9 shows this approach at work.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note The resource segregation approach, like the server pools method we just
+    mentioned, may not be efficient on the resource utilization front. For example,
+    server pool A may be extremely busy, whereas server pool B may be idle. It is
+    possible to define the size of each server pool in a range instead of a fixed
+    number, such as a minimum of 5 servers and a maximum of 10 to improve resource
+    utilization. Additional logic that either shuffles servers between pools or provisions
+    new servers can then be applied.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The ideal approach for implementing figure 3.10 is to use Kubernetes. Kubernetes
+    allows you to create multiple virtual clusters backed by the same physical cluster,
+    which is called a namespace. Kubernetes namespace is a lightweight machine pool
+    that consumes very few system resources.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/03-10.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 3.10 Creating machine pools within the training cluster to set up the
+    resource consumption boundary for different users.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you are using Kubernetes to manage your service environment and your computing
+    cluster, setting up such isolation is fairly easy. First, you create a namespace
+    with a resource quota, such as the number of CPUs, memory size, and GPU counts;
+    then, define the user and its namespace mapping in the training service.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now, when a user submits a training request, the training service first finds
+    the right namespace for the user by checking the user information from the request
+    and then calls the Kubernetes API to place the training executable in the namespace.
+    Because Kubernetes tracks the system usage in real time, it knows whether a namespace
+    has enough capacity, and it will reject the job launch request if the namespace
+    is fully loaded.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As you can see, by using Kubernetes to manage training clusters, we can offload
+    the resource capacity tracking and resource isolation management from the training
+    service. This is one of the reasons why Kubernetes is a good choice for building
+    training cluster management for deep learning.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 3.3.8 Troubleshooting metrics
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'What we didn’t demo in this sample service is metrics. In general, metrics
+    are measures of quantitative assessment commonly used for assessing, comparing,
+    and tracking performance or production. For deep learning training specifically,
+    we usually define two types of metrics: model training execution metrics and model
+    performance metrics.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Model training execution metrics include resource saturation rate, training
+    jobs’ execution availability, average training job execution time, and job failure
+    rate. We check these metrics to make sure the training service is healthy and
+    functioning and that our user’s daily activities are healthy. As an example, we
+    expect service availability to exceed 99.99% and training job failure rate to
+    be less than 0.1%.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Model performance metrics measure the quality of the model learning. It includes
+    a loss value and evaluation score for each training iteration (epoch) and the
+    final model evaluation results, such as accuracy, precision, and F1 score.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For model performance–related metrics, we need to store the metrics in a more
+    organized way, so we can use a unified method to search for information and compare
+    performance between different training runs easily. We will discuss this in more
+    detail in chapter 8.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 3.3.9 Supporting new algorithm or new version
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Now let’s discuss how to onboard more training code to our sample training service.
+    In the current implementation, we define a naive mapping between the user training
+    request and the training code, using the `algorithm` variable in the request to
+    find the training image. The underlying rule is the `algorithm` variable must
+    equal a Docker image name; otherwise, the training service can’t find the right
+    image to run model training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Use our intent classification training as an example. First, we need to Dockerize
+    our intent training Python code to a Docker image and name it “intent-classification.”
+    Then, when the user sends a training request with the parameter `algorithm='intent-classification'`,
+    the Docker job tracker will use the algorithm name (intent-classification) to
+    search local Docker repository for the “intent-classification” training image
+    and run the image as a training container.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This approach is definitely oversimplified, but it exemplifies how we work with
+    data scientists to define a formal contract for mapping user training requests
+    to the actual training code. In practice, the training service should provide
+    a set of APIs to allow data scientists to register training code in a self-serve
+    manner.
+  prefs: []
+  type: TYPE_NORMAL
+- en: One possible approach is to define an algorithm name and training code mapping
+    in a database and add some API to manage this mapping. The proposed APIs can be
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`createAlgorithmMapping(string` `algorithmName,` `string` `image,` `string`
+    `version)`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`updateAlgorithmVersion(string` `algorithmName,` `string` `image,` `string`
+    `version)`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If data scientists want to add a new algorithm type, they would call the `createAlgorithmMapping`
+    API to register the new training image with a new algorithm name into the training
+    service. Our users just need to use this new algorithm name in the training request
+    to kick off model training with this new algorithm.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If data scientists want to release a newer version of an existing algorithm,
+    they can call the `updateAlgorithmVersion` API to update the mapping. Our users
+    will still have the same algorithm name (such as intent-classification) to send
+    requests, but they won’t be aware that the training code has upgraded to a different
+    version behind the scenes. Also, it is worth pointing out that the service’s public
+    API won’t be affected by adding new training algorithms; only a new parameter
+    value is used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '3.4 Kubeflow training operators: An open source approach'
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: After seeing our sample training service, let’s look at an open source training
+    service. In this section, we will discuss a set of open source training operators
+    from the Kubeflow project. These training operators work out of the box and can
+    be set up independently in any Kubernetes cluster.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Kubeflow is a mature, open source machine learning system built for production
+    use cases. We briefly discuss it in appendix B.4 along with Amazon SageMaker and
+    Google Vertex AI. We recommend Kubeflow training operators because they are well
+    designed and offer high-quality training that’s scalable, distributable, and robust.
+    We will first talk about the high-level system design and then discuss how to
+    integrate these training operators into your own deep learning system.
+  prefs: []
+  type: TYPE_NORMAL
+- en: What Is Kubeflow?
+  prefs: []
+  type: TYPE_NORMAL
+- en: Kubeflow is an open source machine learning platform (originated from Google)
+    for developing and deploying production-level machine learning models. You can
+    view Kubeflow as the open source version of Amazon SageMaker, but it runs natively
+    on Kubernetes, so it’s cloud agnostic. Kubeflow integrates a full list of machine
+    learning features into one system—from notebooks and pipelines to training and
+    serving.
+  prefs: []
+  type: TYPE_NORMAL
+- en: I highly recommend that you pay attention to Kubeflow projects, even if you
+    have no interest in using it. Kubeflow is a well-designed and fairly advanced
+    deep learning platform; its feature list covers the entire machine learning life
+    cycle. By reviewing its use cases, design, and code, you will gain a deep understanding
+    of modern deep learning platforms.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Also, because Kubeflow is built natively on top of Kubernetes, you can easily
+    set up the whole system on your local or production environment. If you are not
+    interested in borrowing the entire system, you can also port some of its components—such
+    as training operators or hyperparameter optimization services—which can work by
+    themselves in any Kubernetes environment out of the box.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 3.4.1 Kubeflow training operators
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Kubeflow offers a set of training operators, such as TensorFlow operator, PyTorch
+    operator, MXNet operator, and MPI operator. These operators cover all the major
+    training frameworks. Each operator has the knowledge to launch and monitor the
+    training code (container) written in a specific type of training framework.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If you plan to run model training in Kubernetes cluster and want to set up
+    your own training service to reduce the operation cost, Kubeflow training operators
+    are the perfect choice. Here are the three reasons:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Easy install and low maintenance*—Kubeflow operators work out of the box;
+    you can make them work in your cluster by issuing a few lines of Kubernetes commands.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Compatible with most training algorithms and frameworks*—As long as you containerize
+    your training code, you can use Kubeflow operators to execute it.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Easy integration to existing systems*—Because Kubeflow training operators
+    follow the Kubernetes operator design pattern, you can use Kubernetes’s declarative
+    HTTP API to submit the training job request and check the job running status and
+    result. You can also use RESTful queries to interact with these operators.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 3.4.2 Kubernetes operator/controller pattern
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Kubeflow training operators follow the Kubernetes operator (controller) design
+    pattern. If we understand this pattern, running Kubeflow training operators and
+    reading their source code is straightforward. Figure 3.11 shows the controller
+    pattern design graph.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/03-11.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 3.11 The Kubernetes operator/controller pattern runs an infinite control
+    loop that watches the actual state (on the right) and desired state (on the left)
+    of certain Kubernetes resources and tries to move the actual state to the desired
+    one.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Everything in Kubernetes is built around resource objects and controllers. Kubernetes’
+    resource objects such as Pods, Namespaces, and ConfigMaps are conceptual objects
+    that persist entities (data structures) that represent the state (desired and
+    current) of your cluster. A controller is a control loop that makes changes to
+    the actual system resources to bring your cluster from the current state closer
+    to the desired one, which is defined in resource objects.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Note Kubernetes pods are the smallest deployable units of computing that you
+    can create and manage in Kubernetes. Pods can be viewed as “logical hosts” that
+    run one or more Docker containers. A detailed explanation of the Kubernetes concepts,
+    such as Namespaces and ConfigMaps, can be found at the official website: [https://kubernetes.io/docs/concepts/](https://kubernetes.io/docs/concepts/).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example, when a user applies the Kubernetes command to create a pod, it
+    will create a pod resource object (a data structure) in the cluster, which contains
+    the desired states: two Docker containers and one disk volume. When the controller
+    detects this new resource object, it will provision the actual resource in the
+    cluster and run the two Docker containers and attach the disk. Next, it will update
+    the pod resource object with the latest actual status. Users can query the Kubernetes
+    API to get the updated information from this pod resource object. When the user
+    deletes this pod resource object, the controller will remove the actual Docker
+    containers because the desired state is changed to zero.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: To extend Kubernetes easily, Kubernetes allows users to define customer resource
+    definition (CRD) objects and register customized controllers to handle these CRD
+    objects, which are called operators. If you want to learn more about controllers/
+    operators, you can read the “Kubernetes/sample-controller” GitHub repository,
+    which implements a simple controller for watching a CRD object. This sample controller
+    code can help you to understand operator/controller patterns, and this understanding
+    is very useful for reading the Kubeflow training operator source code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note The terms *controller* and *operator* are used interchangeably in this
+    section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 3.4.3 Kubeflow training operator design
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Kubeflow training operators (TensorFlow operator, PyTorch operator, MPI operator)
+    follow the Kubernetes operator design. Each training operator watches its own
+    kind of customer resource definition object—such as `TFJob`, `PyTorchJob`, and
+    `MPIJob`—and creates the actual Kubernetes resources to run the training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For example, the TensorFlow operator processes any `TFJob` CRD object generated
+    in the cluster and creates the actual services/pods based on the `TFJob` spec.
+    It synchronizes `TFJob` objects’ resource requests with the actual Kubernetes
+    resources, such as services and pods, and continuously strives to make the observed
+    state match the desired state. See a visual workflow in figure 3.12.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/03-12.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 3.12 The Kubeflow training operator workflow. A user first creates a
+    `TFJob` CRD object that defines a training request, and then the TensorFlow operator
+    detects this object and creates actual pods to execute the TensorFlow training
+    image. The TensorFlow operator also monitors the pod status and updates its status
+    to the `TFJob` CRD object. The same workflow applies to the PyTorch operator.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Each operator can run training pods for its own type of training framework.
+    For example, the TensorFlow operator knows how to set up a distributed training
+    pod group for training code written in TensorFlow. The operator reads the user
+    request from the CRD definition, creates training pods, and passes the correct
+    environment variables and command-line arguments to each training pod/container.
+    You can check out the `reconcileJobs` and `reconcilePods` functions in each operator’s
+    code for further details.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Each Kubeflow operator also handles job queue management. Because Kubeflow operators
+    follow the Kubernetes operator pattern and create Kubernetes resources at the
+    pod level, the training pod failover is handled nicely. For example, when a pod
+    fails unexpectedly, the current pod number becomes one less than the desired pod
+    number. In this situation, the `reconcilePods` logic in the operator will create
+    a new pod in the cluster to make sure the actual pod number is equal to the desired
+    number defined in the CRD object, thus addressing failover.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note At the time of writing this book, the TensorFlow operator was becoming
+    the all-in-one Kubeflow operator. It aims to simplify running distributed or nondistributed
+    TensorFlow/PyTorch/MXNet/XGBoost jobs on Kubernetes. No matter how it ends up,
+    it will be built on top of the design we mention here but simply more convenient
+    to use.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 3.4.4 How to use Kubeflow training operators
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: In this section, we will use the PyTorch operator as an example for training
+    a PyTorch model in four steps. Because all Kubeflow training operators follow
+    the same usage pattern, these steps are applicable to other operators as well.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, install the stand-alone PyTorch operator and `PyTorchJob` CRD in your
+    Kubernetes cluster. You can find detailed instructions in the developer guide
+    from the PyTorch operator Git repository. After installation, you can find a training
+    operator pod running and a CRD definition created in your Kubernetes cluster.
+    See the CRD query command as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Lists all CRD definitions
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ PyTorchJob CRD is created in Kubernetes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note The training operator installation can be confusing because the README
+    suggests that you install the entire Kubeflow to run these operators, but this
+    isn’t necessary. Each training operator can be installed individually, which is
+    how we recommend handling it. Please check the development guide or the setup
+    script at [https://github.com/kubeflow/pytorch-operator/blob/master/scripts/setup-pytorch-operator.sh](https://github.com/kubeflow/pytorch-operator/blob/master/scripts/setup-pytorch-operator.sh).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Next, update your training container to read the parameter input from environment
+    variables and command-line arguments. You can pass in these parameters later in
+    the CRD object.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Third, create a `PyTorchJob` CRD object to define our training request. You
+    can create this CRD object by first writing a YAML file (e.g., pytorchCRD.yaml)
+    and then running `kubectl` `create` `-f` `pytorchCRD.yaml` in your Kubernetes
+    cluster. The PT-operator will detect this newly created CRD object, put it into
+    the controller’s job queue, and try to allocate resources (Kubernetes pods) to
+    run the training. Listing 3.8 shows a sample `PyTorchJob` CRD.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 3.8 A sample PyTorch CRD object
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ The name of the CRD
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Trains job name
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Defines training group specs
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Numbers of master pods
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Numbers of worker pods
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❻ Defines training container configuration
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❼ Defines environment variable for each training pod
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❽ Defines the command-line parameters
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The last step is monitoring. You can obtain the training status by using the
+    `kubectl` `get` `-o` `yaml` `pytorchjobs` command, which will list the details
+    of all the `pytorchjobs` types of CRD objects. Because the controller of the PyTorch
+    operator will continue updating the latest training information back to the CRD
+    object, we can read the current status from it. For example, the following command
+    will make the `PyTorchJob` type CRD object with the name equal to `pytorch-demo`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note In the previous sample, we used the Kubernetes command `kubectl` to interact
+    with the PyTorch operator. But we could also send RESTful requests to the cluster’s
+    Kubernetes API to create a training job CRD object and query its status. The newly
+    created CRD object will then trigger training actions in the controller. This
+    means Kubeflow training operators can be easily integrated into other systems.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 3.4.5 How to integrate these operators into an existing system
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'From section 3.4.3, we see that the operators’ CRD objects act as the gateway
+    APIs to trigger training operations and the source of truth of the training status.
+    Therefore, we can integrate these training operators into any system by building
+    a web service as a wrapper on top of the operator CRD objects. This wrapper service
+    has two responsibilities: first, it converts training requests in your system
+    to the CRUD (create, read, update, and delete) operation on the CRD (training
+    job) objects; second, it queries training status by reading the CRD objects. See
+    the main workflow in figure 3.13.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/03-13.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 3.13 Integrating Kubeflow training operators into an existing deep learning
+    system as training backend. The wrapper service can transform training requests
+    to CRD objects and fetch the training status from the CRD objects.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In figure 3.13, the front part of the existing system is untouched—for example,
+    the front door website. At the computation backend, we changed the internal components
+    and talked to the wrapper training service to execute model training. The wrapper
+    service does three things: first, it manages the job queue; second, it translates
+    the training request from the existing format to the Kubeflow training operators’
+    CRD objects; and third, it fetches the training status from CRD objects. With
+    this approach, by adding the wrapper service, we can adopt Kubeflow training operators
+    easily as the training backend for any existing deep learning platform/systems.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Building a production-quality training system from scratch requires a lot of
+    effort. You need to know not only every nuance of different training frameworks
+    but also how to handle the reliability and scalability challenges on the engineering
+    side. Therefore, we highly recommend adopting Kubeflow training operators if you
+    decide to run model training in Kubernetes. It’s an out-of-the-box solution and
+    can be ported to an existing system easily.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 3.5 When to use the public cloud
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Major public cloud vendors like Amazon, Google, and Microsoft provide their
+    deep learning platforms such as Amazon SageMaker, Google Vertex AI, and Azure
+    Machine Learning Studio out of the box. All these systems claim to offer fully
+    managed services that support the entire machine learning workflow to train and
+    deploy machine learning models quickly. In fact, they cover not only model training
+    but also data processing and storage, versioning, troubleshooting, operating,
+    and more.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this section, we’re not going to talk about which cloud solution is the best;
+    instead, we want to share our thoughts on when to use them. When we propose building
+    services inside our company, such as training services or hyperparameter tuning
+    services, we often hear questions like “Can we use SageMaker? I heard they have
+    a feature . . .” or “Can you build a wrapper on top of Google Vertex AI? I heard. . . .”
+    These questions are sometimes valid and sometimes not. What you can afford really
+    depends on the stage of your business.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 3.5.1 When to use a public cloud solution
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: If you run a startup or want to validate your business idea quickly, using the
+    public cloud AI platform is a good option. It handles all the underlying infrastructure
+    management and provides a standard workflow for you to follow. As long as the
+    predefined methods work for you, you can focus on developing your business logic,
+    collecting data, and implementing model algorithms. The real benefit is the time
+    saved on building your own infrastructure, so you can “fail early and learn fast.”
+  prefs: []
+  type: TYPE_NORMAL
+- en: Another reason to use the public cloud AI platforms is that you have only a
+    few deep learning scenarios, and they fit the public cloud’s standard-use case
+    well. In this event, it isn’t worth the resources to build a complicated deep
+    learning system for just a few applications.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 3.5.2 When to build your own training service
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Now, let’s talk about situations when you need to build your own training approach.
+    If you have any of the following five requirements for your system, building your
+    own training service is the way to go.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Being cloud agnostic
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can’t use Amazon SageMaker or Google Vertex AI platforms if you want your
+    application to be cloud agnostic because these systems are cloud specific. Being
+    cloud agnostic is important when your service stores customer data because some
+    potential customers have specific requirements on which cloud they *don’t* want
+    to put their data in. You want your application to have the capability of running
+    on various cloud infrastructures seamlessly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The common method of building a cloud-agnostic system on public clouds is to
+    *only* use the foundation services, such as virtual machines (VM) and storage,
+    and build your application logic on top of it. Using model training as an example,
+    when using Amazon Web Services, we first set up a Kubernetes cluster (Amazon Elastic
+    Kubernetes Service (Amazon EKS)) by using Amazon EC2 service to manage the computing
+    resources and then build our own training service with the Kubernetes interfaces
+    to launch training jobs. In this way, when we need to migrate to Google Cloud
+    (GCP), we can simply apply our training service to the GCP Kubernetes cluster
+    (Google Kubernetes Engine) instead of Amazon EKS, and most of the service remains
+    unchanged.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Reducing infrastructure cost
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using the cloud provider’s AI platform will charge you premium dollars compared
+    to operating on your own services. You may not care so much about your bill at
+    the prototyping phase, but after the product is released, you certainly should.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using Amazon SageMaker as an example, at the time this book was written (2022),
+    SageMaker charged $0.461 per hour for an m5.2xlarge type (eight virtual CPUs,
+    32 GB memory) machine. If you launch an Amazon EC2 instance (VM) on this hardware
+    spec directly, it charges $0.384 per hour. By building your own training service
+    and operating on the Amazon EC2 instances directly, you save nearly 20% on average
+    for model building. If a company has multiple teams doing model training on a
+    daily basis, a self-built training system will give you an edge over your competitors.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Customization
+  prefs: []
+  type: TYPE_NORMAL
+- en: Although the cloud AI platform gives you a lot of options for the workflow configuration,
+    they are still black-box approaches. Because they are the one-for-all approach,
+    these AI platforms focus on the most common scenarios. But there are always exceptions
+    that you need to customize for your business; it won’t be a good experience when
+    there aren’t many choices.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Another problem for the cloud AI platform is it always has a delay in adopting
+    new technologies. For example, you have to wait for the SageMaker team’s decision
+    on whether to support a training method and when to support it, and sometimes
+    that decision is not agreeable to you. Deep learning is a rapidly developing space.
+    Building your own training service can help you to adopt the latest research and
+    pivot quickly, which will give you an edge over the fierce competition.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Passing compliance audits
+  prefs: []
+  type: TYPE_NORMAL
+- en: To be qualified to run some businesses, you need to obtain certificates for
+    compliance laws and regulations—for example, HIPAA (Healthcare Insurance Portability
+    and Accountability Act) or CCPA (California Consumer Privacy Act). These certifications
+    require that you provide evidence not only that your code meets these requirements
+    but also that the infrastructure on which your application runs is compliant.
+    If your application is built on Amazon SageMaker and Google Vertex AI platforms,
+    they also need to be in compliance. As cloud vendors are a black box, running
+    through compliance checklists and providing evidence is an unpleasant task.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Authentication and authorization
+  prefs: []
+  type: TYPE_NORMAL
+- en: Integrating authentication and authorization functionality into cloud AI platforms
+    and in-house auth services (on-premises) requires a lot of effort. Many companies
+    have their own version of auth services to authenticate and authorize user requests.
+    If we adopt SageMaker as the AI platform and expose it to different internal services
+    for various business purposes, bridging SageMaker auth management with the in-house
+    user auth management services is not going to be easy. Instead, building on-premises
+    training services is a lot easier because we can change our API freely and simply
+    integrate it into existing auth services.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The primary goal of the training service is to manage the computing resources
+    and training executions.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'A sophisticated training service follows four principles: it supports all kinds
+    of model training code through a unified interface; it reduces training cost;
+    it supports model reproducibility; and it has high scalability and availability
+    and handles compute isolation.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Understanding the general model training code pattern allows us to treat the
+    code as a black box from the perspective of the training service.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Containerization is the key to using a generic method to handle the diversities
+    of deep learning training methods and frameworks.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: By Dockerizing training code and defining clear communication protocol, a training
+    service can treat training code as a black box and execute the training on a single
+    device or distributively. This also benefits data scientists because they can
+    focus on model algorithm development without worrying about training execution.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Kubeflow training operators are a set of Kubernetes-based open source training
+    applications. These operators work out of the box, and they can be easily integrated
+    into any existing systems as a model training backend. Kubeflow training operators
+    support both distributed and nondistributed training.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using public cloud training services can help to build deep learning applications
+    quickly. On the other hand, building your own training services can reduce training
+    operation costs, provide more customized options, and remain cloud agnostic.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL

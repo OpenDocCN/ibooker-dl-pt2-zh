@@ -1,0 +1,1254 @@
+- en: 9 Workflow orchestration
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter covers
+  prefs: []
+  type: TYPE_NORMAL
+- en: Defining workflow and workflow orchestration
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Why deep learning systems need to support workflows
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Designing a general workflow orchestration system
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Introducing three open source orchestration systems: Airflow, Argo Workflows,
+    and Metaflow'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'In this chapter, we will discuss the last but critical piece of a deep learning
+    system: workflow orchestration—a service that manages, executes, and monitors
+    workflow automation. Workflow is an abstract and broad concept; it is essentially
+    a sequence of operations that are part of some larger task. If you can devise
+    a plan with a set of tasks to complete a work, this plan is a workflow. For example,
+    we can define a sequential workflow for training a machine learning (ML) model.
+    This workflow can be composed of the following tasks: fetching raw data, rebuilding
+    the training dataset, training the model, evaluating the model, and deploying
+    the model.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Because a workflow is an execution plan, it can be performed manually. For instance,
+    a data scientist can manually complete the tasks of the model training workflow
+    we just described. For example, to complete the “fetching raw data” task, the
+    data scientist can craft web requests and send them to the dataset management
+    (DM) service to fetch a dataset—all with no help from the engineers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: However, executing a workflow manually is not ideal. We want to automate the
+    workflow execution. When there are numerous workflows developed for different
+    purposes, we need a dedicated system to handle the complexity of workflow executions.
+    We call this kind of system a *workflow orchestration system*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A workflow orchestration system is built to manage workflow life cycles, including
+    workflow creation, execution, and troubleshooting. It provides not only the pulse
+    to keep all the scheduled code running but also a control plane for data scientists
+    to manage all the automation in a deep learning system.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this chapter, we will discuss workflow orchestration system design and the
+    most popular open source orchestration systems used in the deep learning field.
+    By reading this chapter, you will not only gain a solid understanding of the system
+    requirements and the design options, but you will also learn how to choose the
+    right open source orchestration system that works best for your own situation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 9.1 Introducing workflow orchestration
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Before we dive into the details of designing workflow orchestration systems,
+    let’s have a quick discussion on the basic concept of workflow orchestration,
+    especially about the special workflow challenges from a deep learning/ML perspective.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note Because the requirements of using workflow orchestration for deep learning
+    projects and ML projects are almost identical, we will use the word *deep learning*
+    and *machine learning* interchangeably in this chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 9.1.1 What is workflow?
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: In general, a workflow is a sequence of operations that are part of some larger
+    task. A workflow can be viewed as a directed acyclic graph (DAG) of steps.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A step is the smallest resumable unit of computation that describes an action;
+    this task could be fetching data or triggering a service, for example. A step
+    either succeeds or fails as a whole. In this chapter, we use the word *task* and
+    *step* interchangeably.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A DAG specifies the dependencies between steps and the order in which to execute
+    them. Figure 9.1 shows a sample workflow for training natural language processing
+    (NLP) models.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/09-01.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 9.1 A DAG of a sample model training workflow with multiple steps. Both
+    ovals and diamonds are steps, but different types. The solid arrows indicate the
+    dependencies between steps, and the dotted-line arrows represent the external
+    web requests sent from steps.
+  prefs: []
+  type: TYPE_NORMAL
+- en: From the sample DAG in figure 9.1, we see a workflow that consists of many steps.
+    Every step depends on another, and the solid arrows show the dependencies between
+    steps. These arrows and steps form a workflow DAG with no loops.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you follow the arrows in the DAG (from left to right) and complete the tasks,
+    you can train and release an NLP model to production. For example, when an incoming
+    request triggers the workflow, the auth (authorization) step will be executed
+    first, and then the dataset-building step and the embedding fetching step will
+    both be executed simultaneously. The steps on the other side of the arrows will
+    be executed after these two steps have been completed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Workflows are used everywhere in the IT industry. As long as you can define
+    a process as a DAG of single tasks/steps, this process can be considered a workflow.
+    Workflows are critical to deep learning model development. In fact, in production
+    environments, most of the deep learning model–building activities are presented
+    and executed as workflows.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note A workflow should not have a loop. To guarantee a workflow can be completed
+    under any condition, its execution graph needs to be a DAG, which prevents the
+    workflow execution from falling into a dead loop.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 9.1.2 What is workflow orchestration?
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Once we define a workflow, the next step is to run the workflow. Running a workflow
+    means executing the workflow steps based on the sequence defined in the workflow’s
+    DAG. *Workflow orchestration* is the term we use to describe the execution and
+    monitoring of the workflow.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The goal of workflow orchestration is to automate the execution of tasks defined
+    in workflows. In practice, the concept of workflow orchestration often extends
+    to workflow management as a whole—that is, creating, scheduling, executing, and
+    monitoring multiple workflows in an automated manner.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Why do deep learning systems need workflow orchestration? Ideally, we should
+    be able to code an entire deep learning project as one piece. And that’s exactly
+    what we do in the prototyping phase of a project, putting all the code in a Jupyter
+    notebook. So, why do we need to transform the prototyping code into a workflow
+    and run it in a workflow orchestration system? The answer is twofold: automation
+    and work sharing. To understand these reasons, let’s look at three sample training
+    workflows in figure 9.2.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/09-02.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 9.2 Deep learning workflows are composed of many reusable tasks.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A great benefit of using a workflow is that it turns a large chunk of code into
+    a group of sharable and reusable components. In figure 9.2, we imagined three
+    data scientists working on three model training projects (A, B, and C). Because
+    each project’s training logic is different, data scientists developed three different
+    workflows (A, B, and C) to automate their model training processes. Although each
+    workflow has different DAGs, the steps in each DAG are highly overlapped. The
+    total six steps are sharable and reusable. For example, the auth step (step 1)
+    is the first step for all three workflows.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Having reusable steps can greatly improve data scientists’ productivity. For
+    example, to pull data from a DM service (step 2 in figure 9.2), data scientists
+    need to learn how the DM web API works. But if someone already built a DM data
+    pull method as a step function, scientists can just reuse this step in their workflow
+    without learning how to interact with the DM service. If everyone writes their
+    project in the form of a workflow, we will have lots of reusable steps, which
+    will save lots of duplicate effort at an organizational level!
+  prefs: []
+  type: TYPE_NORMAL
+- en: Another reason that a workflow is well adapted to deep learning development
+    is that it facilitates collaboration. Model development requires teamwork; a dedicated
+    team might work on data while another team works on the training algorithm. By
+    defining a complex model-building process in the workflow, we can dispatch a big
+    complex project in pieces (or steps) and assign them to different teams while
+    still keeping the project organized and the components in proper order. The workflow
+    DAG shows the task dependencies clearly for all the project participants to see.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In short, a good workflow orchestration system encourages work sharing, facilitates
+    team collaboration, and automates complicated development scenarios. All these
+    merits make workflow orchestration a crucial component of deep learning project
+    development.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 9.1.3 The challenges for using workflow orchestration in deep learning
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'In the previous section, we saw how a workflow system can provide a lot of
+    benefits to deep learning project development. But there is one caveat: using
+    workflows to prototype deep learning algorithm ideas is cumbersome.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: To understand how and why it is cumbersome, let’s look at a deep learning development
+    process diagram (figure 9.3). This diagram should set the foundation for you to
+    understand the challenges that workflow presents in the deep learning context.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/09-03.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 9.3 A data scientist’s view of deep learning project development
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In figure 9.3, we see a typical deep learning project development process from
+    a data scientist’s perspective. The process can be divided into two phases: the
+    local incubation phase and the production phase.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the local incubation phase, data scientists work on data exploration and
+    model training prototyping at their local/dev environment. When the prototyping
+    is done and the project looks promising, data scientists start to work on production
+    onboarding: moving the prototyping code to the production system.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the production phase, data scientists convert the prototyping code to a workflow.
+    They break the code down into multiple steps and define a workflow DAG and then
+    submit the workflow to the workflow orchestration system. After that, the orchestration
+    system takes over and runs the workflow based on its schedule.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Gaps between prototyping and production
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If you ask an engineer who works on workflow orchestration systems how they
+    feel about the development process in figure 9.3, the answer most likely is: It’s
+    pretty good! But in practice, this process is problematic for data scientists.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'From the data scientists’ point of view, once an algorithm is tested locally,
+    its prototyping code should be shipped to production right away. But in figure
+    9.3, we see the prototyping phase and production phase are *not* smoothly connected.
+    Shipping incubation code to production is not straightforward; data scientists
+    have to do extra work to construct a workflow to run their code in production.
+    The gap between prototyping code and production workflow jeopardizes development
+    velocity for two reasons:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Workflow building and debugging aren’t straightforward*—Data scientists normally
+    face a huge learning curve when authoring model training workflows in orchestration
+    systems. Learning the workflow DAG syntax, workflow libraries, coding paradigms,
+    and troubleshooting is a huge burden to data scientists. The workflow troubleshooting
+    is the most painful part. The majority of the orchestration system doesn’t support
+    local execution, which means data scientists have to test their workflow in the
+    remote orchestration system. This is hard because both the workflow environment
+    and workflow execution logs are remote, so data scientists cannot easily figure
+    out the root cause when a workflow execution goes wrong.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Workflow construction happens not once but frequently*—The common misperception
+    is that because workflow construction only happens once, it’s fine if it is time-consuming
+    and cumbersome. But the fact is, workflow construction happens continuously because
+    deep learning development is an iterative process. As figure 9.3 shows, data scientists
+    work on prototyping and production experimentation iteratively, so the workflow
+    needs to be updated frequently to test new improvements from local to production.
+    Therefore, the unpleasant and time-consuming workflow construction happens repeatedly,
+    which hinders the development velocity.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Smoothing the transition from prototyping to production
+  prefs: []
+  type: TYPE_NORMAL
+- en: Although there are gaps, the process in figure 9.3 is good. Data scientists
+    start prototyping locally with a straightforward script, and then they keep working
+    on it. If the results after each iteration seem promising enough, the “straightforward
+    local script” is converted to a workflow and runs in the orchestration system
+    in production.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The key improvement is to make the transition step from prototyping code to
+    a production workflow seamless. If an orchestration system is designed for deep
+    learning use cases, it should provide tools to help data scientists build workflows
+    from their code with minimum effort. For example, Metaflow, an open source library
+    that will be discussed in section 9.3.3, allows data scientists to authorize workflow
+    by writing Python code with Python annotations. Data scientists can obtain a workflow
+    from their prototyping code directly without making any changes. Metaflow also
+    provides a unified user experience on model execution between local and cloud
+    production environments. This eliminates the friction in workflow testing because
+    Metaflow operates workflows the same way in both local and production environments.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A deep learning system should be humancentric
+  prefs: []
+  type: TYPE_NORMAL
+- en: When we introduce a general-purpose tool—like workflow orchestration—to deep
+    learning systems, don’t be satisfied with only enabling the functionality. Try
+    to reduce human time in the system. Customization work is always possible to help
+    our users be more productive.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Metaflow (section 9.3.3) is a good example of what happens when engineers aren't
+    satisfied with just building an orchestration system to automate deep learning
+    workflows. Instead, they went a step further to optimize the workflow construction
+    and management to address the way data scientists work.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 9.2 Designing a workflow orchestration system
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In this section, we will approach the design of workflow orchestration systems
+    in three steps. First, we use a typical data scientist user scenario to show how
+    an orchestration system works from a user perspective. Second, we learn a generic
+    orchestration system design. Third, we summarize the key design principles for
+    building or evaluating an orchestration system. By reading this section, you will
+    understand how orchestration systems work, in general, so you can be confident
+    evaluating or working on any orchestration system.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 9.2.1 User scenarios
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Although the process of workflows varies a lot from one scenario to another,
+    the user scenarios for data scientists are quite standard. Most workflow usage
+    can be divided into two phases: the development phase and the execution phase.
+    See figure 9.4 for a data scientist’s (Vena’s) workflow user experience. Let’s
+    follow through with Vena’s user scenario in figure 9.4 step by step.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/09-04.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 9.4 A general deep learning user scenario of a workflow orchestration
+    system
+  prefs: []
+  type: TYPE_NORMAL
+- en: Development phase
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'During the development phase, data scientists convert their training code into
+    a workflow. See Vena’s example as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Vena, a data scientist, prototypes her model training algorithm in a Jupyter
+    notebook or pure Python in her local environment. After local testing and evaluation,
+    Vena thinks it’s time to deploy the code to production for online experiments
+    with real customer data.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Because everything running in production is a workflow, Vena needs to convert
+    her prototype code to a workflow. So Vena uses the syntax provided by the orchestration
+    system to rebuild her work into a DAG of tasks in a YAML (a text configuration)
+    file. For example, data parsing -> data augmentation -> dataset building -> training
+    -> [online evaluation, offline evaluation] -> model release.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Vena then sets the input/output parameters and actions for each step in the
+    DAG. Using the training step as an example, Vena sets the step action as a RESTful
+    HTTP request. This step will send a RESTful request to the model training service
+    to start a training job. The payload and parameters of this request come from
+    the step input parameters.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Once the workflow is defined, Vena sets the workflow’s execution schedule in
+    the DAG YAML file. For example, Vena can schedule the workflow to run on the first
+    day of every month, and she also sets the workflow to be triggered by an external
+    event.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Vena runs the workflow local validation and submits the workflow to the orchestration
+    service.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'To give you an idea of what a workflow means in reality, the following code
+    shows a pseudo workflow for Vena (in section 9.3, we will discuss the actual workflow
+    systems):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ DAG definition; defines the body of the workflow, including steps and dependencies
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Executes a bash command for data augmentation
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ A sequential execution flow
+  prefs: []
+  type: TYPE_NORMAL
+- en: Execution phase
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the execution phase, the orchestration service executes the model training
+    workflow, as illustrated by Vena’s example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Once Vena’s workflow is submitted, the orchestration service saves the workflow
+    DAG into a database.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The orchestration service’s scheduler component detects Vena’s workflow and
+    dispatches the tasks of the workflow to backend workers. The scheduler will make
+    sure the tasks are executed in the sequence that is defined in the workflow DAG.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Vena uses the orchestration service’s web UI to check the workflow’s execution
+    progress and results in real time.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: If the workflow produces a good model, Vena can promote it to the staging and
+    production environments. If not, Vena starts another iteration of prototyping.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: A critical indicator of whether an orchestration system is a good fit for deep
+    learning is how easy it is to convert the prototyping code into a workflow. In
+    figure 9.4, we see that Vena needs to transform her training code into a workflow
+    every time she prototypes a new idea. We can imagine how much human time it would
+    save if we eased the friction of converting the deep learning code to a workflow.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note A workflow should always be lightweight. The workflow is used to automate
+    a process; its goal is to group and connect a series of tasks and execute them
+    in a defined sequence. The great benefit of using a workflow is that people can
+    share and reuse the tasks, so they can automate their process faster. Therefore,
+    the workflow itself shouldn’t do any heavy computation, the real work should be
+    done by the tasks of the workflow.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 9.2.2 A general orchestration system design
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Let’s now turn to a generic workflow orchestration system. To help you understand
+    how an orchestration system works and how to research open source orchestration
+    systems, we prepared a high-level system design. By zooming out of the detailed
+    implementation and only keeping the core components, this design is applicable
+    to most orchestration systems, including open source systems, which will be discussed
+    in section 9.3\. See figure 9.5 for the design proposal.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/09-05.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 9.5 A design overview for a generic workflow orchestration service
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A workflow orchestration system generally consists of the following five components:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Web server*—The web server presents a web user interface and a set of web
+    APIs for users to create, inspect, trigger, and debug the behavior of a workflow.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Scheduler and controller*—The scheduler and controller component does two
+    things. First, the scheduler watches every active workflow in the system, and
+    it schedules the workflow to run when the time is right. Second, the controller
+    dispatches the workflow tasks to workers. Although the scheduler and controller
+    are two different function units, they usually are implemented together because
+    they are all related to workflow execution.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Metadata database*—The metadata database stores the workflows’ configuration,
+    DAG, editing and execution history, and the tasks’ execution state.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Worker group*—The worker group provides the compute resource to run workflow
+    tasks. The worker abstracts the infrastructure and is agnostic to the task that’s
+    running. For example, we might have different types of workers, such as a Kubernetes
+    worker and an Amazon Elastic Compute Cloud (EC2) worker, but they can all execute
+    the same task, albeit on different infrastructures.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Object store*—The object store is shared file storage for all other components;
+    it’s normally built on top of cloud object storage, such as Amazon Simple Storage
+    Service (S3). One usage of an object store is task output sharing. When a worker
+    runs a task, it reads the output value of the previous task from the object store
+    as the task input; the worker also saves the task output to the object store for
+    its successor tasks.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Both the object store and the metadata database are accessible to all the components
+    of the orchestration system, including the scheduler, web server, and workers’
+    components. Having centralized data storage decouples the core components, so
+    the web server, scheduler, and workers can work independently.
+  prefs: []
+  type: TYPE_NORMAL
+- en: How is a workflow executed?
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, Vena defines the DAG for the workflow. Inside the DAG, Vena declares
+    a set of tasks and defines the control flow of the task execution sequence. For
+    each task, Vena either uses the system’s default operator, such as a Shell command
+    operator or Python operator, or builds her own operator to execute tasks.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Second, Vena submits the workflow—DAG with dependent code—to the web server
+    through the web UI or command line. The workflow is saved in the metadata database.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Third, the scheduler periodically (every few seconds or minutes) scans the metadata
+    database and detects the new workflow; it then kicks off the workflow at the scheduled
+    time. To execute a workflow, the scheduler calls the controller component to dispatch
+    the workflow’s tasks to the worker queue based on the task sequence defined in
+    DAG.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Fourth, a worker picks up a task from the shared job queue; it reads the task
+    definition from the metadata database and executes the task by running the task’s
+    operator. During the execution, the worker saves the task’s output value to the
+    object store and reports the task’s execution status back to the metadata database.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Last but not least, Vena uses the web UI hosted on the web server component
+    to monitor the workflow execution. Because both the scheduler/controller components
+    and the workers report the status to the metadata database in real time, the web
+    UI always displays the latest workflow status.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 9.2.3 Workflow orchestration design principles
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Because we have seen how a workflow orchestration system works internally and
+    externally, now it’s time to examine the design principles that make an orchestration
+    system outstanding for deep learning scenarios. We hope you can use the principles
+    here as a guide to evolving your system or for evaluating open source approaches.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note The workflow orchestration system is one of the most complicated components
+    in a deep learning system in terms of engineering effort, so don't worry too much
+    about making your system match perfectly with these principles in the first few
+    versions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Principle 1: Criticality'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Workflow orchestration is essentially a job scheduling challenge, so the bottom
+    line for any orchestration system is to provide a solid workflow execution experience.
+    A valid workflow should always be executed correctly, repeatedly, and on schedule.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Principle 2: Usability'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The usability measurement of an orchestration system in a deep learning context
+    is whether it optimizes data scientists’ productivity. Most data scientist interactions
+    in an orchestration system are workflow creation, testing, and monitoring. So
+    a user-friendly orchestration system should let users create, monitor, and troubleshoot
+    workflows easily.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Principle 3: Extensibility'
+  prefs: []
+  type: TYPE_NORMAL
+- en: To cater to the wide variety of deep learning infrastructures, people should
+    easily define their own task operators and executors without worrying about where
+    they are deployed to. The orchestration system should provide the level of abstraction
+    that suits your environment, whether if it’s Amazon EC2 or Kubernetes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Principle 4: Isolation'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Two types of isolations can occur that are critical: workflow creation isolation
+    and workflow execution isolation. Workflow creation isolation means people can
+    not interfere with each other when creating workflows. For example, if Vena submits
+    an invalid workflow DAG or releases a new version of a common shared library that’s
+    referenced in other workflows, the existing workflows shouldn’t be affected.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Workflow execution isolation means that each workflow is running in an isolated
+    environment. There should be no resource competition between workflows, and failure
+    of a workflow won’t affect other workflow’s executions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Principle 5: Scaling'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A good orchestration system should address the following two scaling problems:
+    handling large numbers of concurrent workflows and handling large expansive workflows.
+    Concurrent workflow scaling generally means that given enough compute resources—for
+    example, adding more workers to the worker group—the orchestration system can
+    cater to an infinite concurrent number of workflow executions. Also, the system
+    should always keep the service-level agreement (SLA) for every workflow. For example,
+    a workflow should be executed at its scheduled time and no later than 2 seconds,
+    regardless of how many other workflows are executing.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: For single, large workflow scaling, the system should encourage users not to
+    worry about performance, so they can focus on readable, straightforward code,
+    and easy operations. When the workflow execution hits a limit—for example, the
+    training operators take too long to execute—the orchestration system should provide
+    some horizontal parallelism operators, such as distributed training operators,
+    to address single workflow performance problems.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The main scaling idea for deep learning orchestration is that we should solve
+    the performance problem at the system level and avoid asking users to write code
+    with scalability in mind. This can lead to worse readability, harder debuggability,
+    and increased operational burden.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Principle 6: Human-centric support for both prototyping and production'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The capability of connecting the data scientist’s local prototyping code to
+    the production workflow is a requirement specific to deep learning. It’s a key
+    indicator that we use to evaluate whether an orchestration system is a good fit
+    for deep learning systems.
+  prefs: []
+  type: TYPE_NORMAL
+- en: An orchestration system designed for deep learning will respect that deep learning
+    project development is an iterative, ongoing effort from prototyping to production.
+    Therefore, it will make a dedicated effort to help data scientists convert their
+    local prototype code to production workflow in a seamless fashion.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 9.3 Touring open source workflow orchestration systems
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'In this section, we will introduce three battle-tested workflow orchestration
+    systems: Airflow, Argo Workflows, and Metaflow. These three open source systems
+    are widely adopted in the IT industry and backed by active communities. In addition
+    to introducing them generally, we also evaluate these workflow systems from the
+    perspective of deep learning project development.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: To make a fair comparison, we implement pseudocode for the same workflow in
+    Airflow, Argo Workflows, and Metaflow. Basically, if there is new data, we initially
+    transform the data and save it to a new table in the database, and then we notify
+    the data science team. Also, we expect the workflow to run daily.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 9.3.1 Airflow
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Airflow ([https://airflow.apache.org/docs/apache-airflow/stable/index.html](https://airflow.apache.org/docs/apache-airflow/stable/index.html))
+    was created in 2014 at Airbnb and is now a part of the Apache Foundation. Airflow
+    is a platform to programmatically author, schedule, and monitor workflows. Airflow
+    is not designed for deep learning use cases; it was originally built to orchestrate
+    the increasingly complex ETL (extract, transform, load) pipelines (or data pipelines).
+    But because of Airflow’s good extensibility, production quality, and GUI support,
+    it’s widely used in many other domains, including deep learning. As this book
+    is written, Airflow is the most adopted orchestration system.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A typical use case
+  prefs: []
+  type: TYPE_NORMAL
+- en: Building a workflow in Airflow takes two steps. First, define the workflow DAG
+    and tasks. Second, declare the task dependencies in the DAG. An Airflow DAG is
+    essentially Python code. See the following listing for how our sample workflow
+    is implemented in Airflow.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 9.1 A sample Airflow workflow definition
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Checks whether a new file arrives
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ The actual logic is implemented in the "transform_data" function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ The PostgresOperator is a predefined airflow operator for interacting with
+    postgres db.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In code listing 9.1, we see the sample workflow DAG consists of multiple tasks,
+    such as `create_table` and `save_into_db`. A task in Airflow is implemented as
+    an operator. There are lots of predefined and community-managed operators, such
+    as MySqlOperator, SimpleHttpOperator, and Docker operator.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Airflow’s predefined operators help users implement tasks without coding. You
+    can also use the PythonOperator to run your customized Python functions. Once
+    the workflow DAG is constructed and all the code is deployed to Airflow, we can
+    use the UI or the following CLI command to check workflow execution status; see
+    some sample shell commands as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Prints all active DAG
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Prints the list of tasks in the "data_process_dag" DAG
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Prints the hierarchy of tasks in the "data_process_dag" DAG
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you want to learn more about Airflow, you can check out its architecture
+    overview doc and tutorials ([http://mng.bz/Blpw](http://mng.bz/Blpw)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Key Features
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Airflow offers the following key features:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*DAGs*—Airflow abstracts complex workflow using DAGs, and the workflow DAG
+    is implemented through a Python library.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Programmatic workflow management*—Airflow supports creating tasks on the fly
+    and allows the creation of complex dynamic workflows.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Great built-in operators to help build automation*—Airflow offers lots of
+    predefined operators that help users achieve tasks without coding.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Solid task dependency and execution management*—Airflow has an auto-retry
+    policy built into every task, and it provides different types of sensors to handle
+    run-time dependencies, such as detecting task completion, workflow run status
+    change, and file presence.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Extensibility*—Airflow makes its sensors, hooks, and operators fully extendable,
+    which allows it to benefit from a large amount of community-contributed operators.
+    Airflow can also be easily integrated into different systems by adding customized
+    operators.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Monitoring and management interface*—Airflow provides a powerful UI so users
+    can get a quick overview of workflow/task execution status and history. Users
+    can also trigger and clear tasks or workflow runs from the UI.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Production quality*—Airflow provides many useful tools for maintaining the
+    service in production environments, such as task log searching, scaling, alerting,
+    and restful APIs.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Limitations
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Although Airflow is a great workflow orchestration, we still see several disadvantages
+    when using it for deep learning scenarios:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*High upfront cost for data scientists to onboard*—Airflow has a steep learning
+    curve to achieve tasks that are not supported by the built-in operators. Also,
+    there is no easy way to do workflow local testing.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*High friction when moving deep learning prototyping code to production*—When
+    we apply Airflow to deep learning, data scientists have to convert their local
+    model training code into Airflow DAG. This is extra work, and it’s an unpleasant
+    experience for data scientists, especially when considering that this is avoidable
+    if we build workflow DAG from the model training code directly.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*High complexity when operating on Kubernetes* —Deploying and operating Airflow
+    on Kubernetes is not straightforward. If you are looking to adopt an orchestration
+    system to run on Kubernetes, Argo Workflows is a better choice.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 9.3.2 Argo Workflows
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Argo Workflows is an open source, container-native workflow engine for orchestrating
+    parallel workflows/tasks on Kubernetes. Argo Workflows solves the same problem
+    that Airflow addresses but in a different way; it takes a Kubernetes-native approach.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The biggest difference between Argo Workflows and Airflow is that Argo Workflows
+    is built natively on Kubernetes. More specifically, the workflows and tasks in
+    Argo Workflows are implemented as Kubernetes custom resource definition (CRD)
+    objects, and each task (step) is executed as a Kubernetes pod. See figure 9.6
+    for a high-level system overview.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/09-06.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 9.6 The workflow and its steps in Argo Workflows are executed as Kubernetes
+    pods.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In figure 9.6, Vena (the data scientist) first defines a workflow and its steps/tasks
+    as a Kubernetes CRD object, which is usually presented as a YAML file. Then she
+    submits the workflow to Argo Workflows, and its controller creates CRD objects
+    inside the Kubernetes cluster. Next, Kubernetes pods are launched dynamically
+    to run the workflow steps/tasks in the workflow sequence.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You may also notice that each step’s execution is completely isolated by container
+    and pod; each step uses files to present its input and output values. Argo Workflows
+    will magically mount the dependent file into the step’s container.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The task isolation created by the Kubernetes pod is a great advantage of Argo
+    Workflows. Simplicity is also another reason people choose Argo Workflows. If
+    you understand Kubernetes, Argo’s installation and troubleshooting are straightforward.
+    We can use either Argo Workflows commands or the standard Kubernetes CLI commands
+    to debug the system.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A typical use case
+  prefs: []
+  type: TYPE_NORMAL
+- en: For a better understanding, let’s look at an Argo Workflows example. In this
+    section, we use Argo Workflows to automate the same data processing work we saw
+    in the previous Airflow section. The workflow includes checking new data first,
+    transforming the data, saving it to a new table in the database, and then notifying
+    the data scientist team by Slack. See the following code listing for the Argo
+    Workflows definition.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 9.2 A sample workflow for Argo Workflows with a series of steps
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Claims the CRD object type as workflow
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Declares the steps of the workflow
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ The step body is defined as another template, similar to a function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Declares the data-paths artifact is from the new-data-paths artifact generated
+    by the check-new-data step
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ This is how steps pass parameters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❻ The actual step definition, similar to a function implementation
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❼ Declares an output artifact (generates new-data-paths) for this step; the
+    artifact is from /tmp/data_paths.txt, which can also be a directory.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❽ Unpacks the data_paths input artifact and puts it at /tmp/raw_data/data_paths.txt
+  prefs: []
+  type: TYPE_NORMAL
+- en: The most fundamental concepts in Argo Workflows are the workflow and template.
+    A workflow object represents a single instance of a workflow; it contains the
+    workflow’s definition and execution state. We should treat a workflow as a “live”
+    object. A template can be thought of as *functions*; they define instructions
+    to be executed. The `entrypoint` field defines what the main function will be,
+    meaning the template that will be executed first.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In code listing 9.2, we see a four-step sequential workflow: `check-new-data`
+    -> `transform_data` -> `save-into-db` -> `notify-data-science-team`. Each step
+    can reference a template, and steps pass parameters via artifacts (files). For
+    example, the `check-new-data` references the `data-checker` template, which defines
+    the Docker image for checking whether there is new data. The `data-checker` template
+    also declares that the step output—the newly arrived data file path—will be saved
+    to `/tmp/data_paths.txt` as its output value.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, the step `transform_data` binds the output of the `check-new-data` to
+    the input of the data-converter template. This is how variables move around between
+    steps and templates. Once you submit the workflow—for example, `argo` `submit`
+    `-n` `argo` `sample_workflow.yaml`—you can either use the Argo Workflows UI or
+    the following commands to review the details of the workflow run:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Besides using the `argo` command, we can also use the Kubernetes CLI command
+    to check the workflow execution because Argo Workflows runs natively on Kubernetes;
+    see the following example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: To learn more about Argo Workflows, you can check out Argo Workflows user guide
+    ([http://mng.bz/WAG0](http://mng.bz/WAG0)) and Argo Workflows architecture graph
+    ([https://argoproj.github.io/argo-workflows/architecture](https://argoproj.github.io/argo-workflows/architecture)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Code Dockerization: Easy production deployment'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Argo Workflows is essentially a Kubernetes pod (Docker images) scheduling system.
+    Although it forces people to write their code into a series of Docker images,
+    it creates great flexibility and isolation inside the orchestration system. Because
+    the code is in Docker form, it can be executed by any worker without worrying
+    about configuring the worker environments.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Another advantage to Argo Workflows is its low cost of production deployment.
+    When you test your code locally in Docker, the Docker image (prototyping code)
+    can be used directly in Argo Workflows. Unlike Airflow, Argo Workflows has almost
+    no conversion effort from prototyping code to production workflow.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Key Features
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Argo Workflows offers the following key features:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Low cost of installation and maintenance*—Argo Workflows runs natively on
+    Kubernetes, so you can just use the Kubernetes process to troubleshoot any problems;
+    no need to learn other tools. Also, its installation is very straightforward;
+    with a few `kubectl` commands, you can get Argo Workflows running in a Kubernetes
+    environment.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Robust workflow execution*—The Kubernetes pod creates great isolation for
+    Argo Workflows’ task execution. Argo Workflows also supports cron workflow and
+    task retry.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Templating and composability*—Argo Workflows templates are like functions.
+    When building a workflow, Argo Workflows supports composing different templates
+    (step functions). This composability encourages sharing the common work across
+    teams, thus greatly improving productivity.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Fully featured UI*—Argo Workflows offers a convenient UI to manage the entire
+    life cycle of a workflow, such as submitting/stopping a workflow, listing all
+    workflows, and viewing workflow definitions.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Highly flexible and applicable*—Argo Workflows defines REST APIs to manage
+    the system and add new capabilities (plugins), and workflow tasks are defined
+    as Docker images. These features make Argo Workflows highly customizable and used
+    widely in many domains, such as ML, ETL, batch/data processing, and CI/CD (continuous
+    integration and continuous delivery/continuous deployment).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Production quality*—Argo Workflows is designed to run in a serious production
+    environment. Kubeflow pipeline and Argo CD are great examples of productionizing
+    Argo Workflows.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Limitations
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The downsides of using Argo Workflows in deep learning systems are as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Everyone will write and maintain YAML files*—Argo Workflows demands that the
+    workflow is defined as a Kubernetes CRD in a YAML file. A short YAML file for
+    a single project is manageable, but once the number of workflows starts increasing
+    and workflow logic becomes more complex, the YAML file can become long and confusing.
+    Argo Workflows offers templates to keep the workflow definition simple, but it’s
+    still not very intuitive unless you are accustomed to working with Kubernetes
+    YAML configurations.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Must be an expert on Kubernetes*—You will feel like it’s second nature if
+    you are an expert on Kubernetes. But a novice user may need to spend quite some
+    time learning Kubernetes concepts and practices.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Task execution latency*—In Argo Workflows, for every new task, Argo will launch
+    a new Kubernetes pod to execute it. The pod launching can introduce seconds or
+    minutes to every single task execution, which limits Argo when supporting time-sensitive
+    workflows. For example, Argoflow is not a good fit for real-time model prediction
+    workflow, which runs model prediction requests with millisecond SLAs.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 9.3.3 Metaflow
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Metaflow is a human-friendly Python library that focuses on MLOps. It was originally
+    developed at Netflix and open-sourced in 2019\. Metaflow is special in that it
+    follows a humancentric design; it’s not only built for automating workflows but
+    also aims to reduce the human time (operational cost) spent in deep learning project
+    development.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In section 9.1.3, we pointed out that the conversion from prototyping code
+    to production workflow generates a lot of friction in ML development. Data scientists
+    have to construct and test a new version of the workflow for each model development
+    iteration. To bridge the gap between prototyping and production, Metaflow made
+    two improvements: first, it simplifies workflow construction, and second, it unifies
+    the workflow execution experience between the local and production environments
+    (see figure 9.7).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/09-07.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 9.7 Metaflow offers a unified development experience between prototyping
+    and production.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In figure 9.7, we can see that Metaflow treats both prototyping and production
+    environments as first-class execution environments. Because the Metaflow library
+    offers a set of unified APIs to abstract the actual infrastructure, a workflow
+    can be executed in the same way regardless of which environment it runs on. For
+    example, a workflow can be run by both a local scheduler and a production scheduler
+    without any change. The local scheduler executes workflows locally whereas the
+    production scheduler integrates into other production orchestration systems, such
+    as AWS Step Functions or Argo Workflows.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Metaflow lets users annotate a Python code—a DAG Python class—to define the
+    workflow. The Metaflow library then creates/packages the workflow automatically
+    from the Python annotations. With Metaflow Python annotation, Vena can build a
+    workflow without changing any of her prototyping code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Besides seamless workflow creation and testing, Metaflow offers other useful
+    features that are key to model reproducibility, such as workflow/steps versioning
+    and step input/output saving. To learn more about Metaflow, you can check out
+    Metaflow’s official website ([https://docs.metaflow.org/](https://docs.metaflow.org/))
+    and a great Metaflow book, *Effective Data Science Infrastructure*, written by
+    Ville Tuulos (Manning, 2022; [https://www.manning.com/books/effective-data-science-infrastructure](https://www.manning.com/books/effective-data-science-infrastructure)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: A typical use case
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s use Metaflow to automate the same data process work we saw in sections
+    9.3.1 and 9.3.2\. See the following listing for the pseudocode.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 9.3 A sample Metaflow workflow
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: In code listing 9.3, we see Metaflow takes a novel approach to building a workflow
+    by using code annotations. By annotating `@step` on the functions and using `self.next`
+    function to connect steps, we can easily construct a workflow DAG (figure 9.8)
+    from our prototyping code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/09-08.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 9.8 Workflow DAG constructed from listing 9.3
+  prefs: []
+  type: TYPE_NORMAL
+- en: One of the beauties here is that we don’t have to define the workflow DAG in
+    a separate system and repackage code to a different format, such as a Docker image.
+    The Metaflow workflow is immersed in our code. Workflow development and prototyping
+    code development happen at the same place and can be tested together from the
+    very beginning to the end of the entire ML development cycle.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Once the code is ready, we can validate and run the workflow locally. See the
+    following sample commands:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Once we finish local development and testing, it’s time to push the workflow
+    to production, which can be achieved by the following two commands:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: These commands will export our data process workflow defined in code listing
+    9.3 to AWS Step Functions and Argo Workflows. You can then also search for the
+    flow by name within the AWS Step Functions UI or Argo Workflows UI and hence see
+    the exported flow.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note Metaflow offers a unified development experience between local and production
+    environments. Thanks to the unified API provided by Metaflow, we have a seamless
+    experience when testing our code and workflow locally and in production. Regardless
+    of the backend workflow orchestration system used, whether Metaflow local scheduler,
+    Argo Workflows, or AWS Step Functions, the Metaflow user experience on the workflow
+    development remains the same!
+  prefs: []
+  type: TYPE_NORMAL
+- en: Key Features
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Metaflow offers the following key features:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Structures code as workflow*—Metaflow lets users create a workflow by annotating
+    Python code, which greatly simplifies workflow construction.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Reproducibility*—Metaflow preserves an immutable snapshot of the data, code,
+    and external dependencies required to execute each workflow step. Metaflow also
+    records the metadata of each workflow execution.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Versioning*—Metaflow addresses the version control requirement of an ML project
+    by hashing all the code and data in a workflow.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Robust workflow execution*—Metadata provides dependency management mechanisms
+    at both the workflow level and step level by using the @conda decorator. It also
+    offers task retries.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Usability design for ML*—Metaflow treats prototyping and production as equally
+    important. It provides a set of unified APIs to abstract the infrastructure, so
+    the same code can run in both the prototyping environment and the production environment
+    without any changes.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Seamless scalability*—Metaflow integrates with Kubernetes and AWS Batch, which
+    allows users to define the required computing resource easily, and can parallel
+    the workflow steps over an arbitrarily large number of instances. For example,
+    by applying an annotation like `@batch(cpu=1,` `memory=500)` to a step function,
+    Metaflow will work with AWS Batch to allocate the required resource to compute
+    this step.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Limitations
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The downsides of using Metaflow in deep learning systems are as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*No conditional branching support*—Metaflow step annotation doesn’t support
+    conditional branching (only executing a step when a condition is met). This is
+    not a red flag, but it’s a nice feature to have.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*No job scheduler*—Metaflow itself doesn’t come with a job scheduler, so you
+    can’t use a cron workflow. This is not a big problem because Metaflow can integrate
+    with other orchestration systems that support job scheduling, such as AWS Step
+    Functions and Argo Workflows.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Tightly coupled to AWS*—the most important features of Metaflow are tightly
+    coupled to AWS—for example, Amazon S3 and AWS Batch. Luckily, Metaflow is an open
+    source project, so it’s possible to extend it to non-AWS alternatives.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 9.3.4 When to use
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: If you are looking for an orchestration system to automate workflow execution
+    for non-ML projects, both Airflow and Argo Workflows are great choices. They have
+    excellent community support and have been used widely in the IT industry. If your
+    system runs on Kubernetes and your team feels comfortable working with Docker,
+    then Argo Workflows would be a good fit; otherwise, Airflow won’t disappoint you.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you are looking for a system to streamline your ML project development, Metaflow
+    is highly recommended. Metaflow is not just an orchestration tool; it’s an MLOps
+    tool that focuses on saving data scientists’ time in the ML development cycle.
+    Because Metaflow abstracts the backend infrastructure part of a ML project, data
+    scientists can focus on model development without worrying about production conversion
+    and deployment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: A workflow is a sequence of operations that are part of some larger task. A
+    workflow can be viewed as a DAG of steps. A step is the smallest resumable unit
+    of computation that describes what to do; a step either succeeds or fails as a
+    whole. A DAG specifies the dependencies between steps and the order in which to
+    execute them.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Workflow orchestration means executing the workflow steps based on the sequence
+    defined in the workflow’s DAG.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Adopting a workflow encourages work sharing, team collaboration, and automation.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The main challenge of applying a workflow on deep learning projects is to reduce
+    workflow construction costs and simplify workflow testing and debugging.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The six recommended design principles for building/evaluating workflow orchestration
+    systems are criticality, usability, extensibility, task isolation, scalability,
+    and human centricity.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: When choosing an orchestration system for non-ML projects, both Airflow and
+    Argo Workflows are great choices. Argo Workflows is a better option if the project
+    runs on Kubernetes and Docker.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: When selecting an orchestration system for ML projects, Metaflow is so far the
+    best option.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL

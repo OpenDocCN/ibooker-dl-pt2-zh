@@ -1,0 +1,1335 @@
+- en: 4 Distributed training
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter covers
+  prefs: []
+  type: TYPE_NORMAL
+- en: Understanding data parallelism, model parallelism, and pipeline parallelism
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using a sample training service that supports data parallel training in Kubernetes
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Training large models with multiple GPUs
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'One obvious trend in the deep learning research field is to improve model performance
+    with larger datasets and bigger models with increasingly more complex architecture.
+    But more data and bulkier models have consequences: they slow down the model training
+    process as well as the model development process. As is often the case in computing,
+    performance is pitted against speed. For example, it can cost several months to
+    train a BERT (Bidirectional Encoder Representations from Transformers) natural
+    language processing model with a single GPU.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: To address the problem of ever-growing datasets and model parameter size, researchers
+    have created various distributed training strategies. And major training frameworks,
+    such as TensorFlow and PyTorch, provide SDKs that implement these training strategies.
+    With the help of these training SDKs, data scientists can write training code
+    that runs across multiple devices (CPU or GPU) and in parallel.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this chapter, we will explore how to support distributed training from a
+    software engineer’s perspective. More specifically, we will see how to write a
+    training service to execute different distributed training codes (developed by
+    data scientists) in a group of machines.
+  prefs: []
+  type: TYPE_NORMAL
+- en: After reading this chapter, you will have a holistic view of how distributed
+    training can work from the perspectives of both a data scientist and a developer.
+    You will know several distributed training strategies and distributed training
+    code patterns, as well as how a training service facilitates different distributed
+    training codes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.1 Types of distributed training methods
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'There are three major types of distributed training methods: model parallelism,
+    data parallelism, and pipeline parallelism. *Model parallelism* is a strategy
+    to split a neural network into several sequential subnetworks and run each subnetwork
+    on different devices (GPU or CPU). In this way, we can train a large model with
+    a group of GPUs.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Pipeline parallelism* is an advanced version of model parallelism. A major
+    problem with model parallelism is that only one GPU is active during training;
+    the others are idle. By dividing each training example batch into small microbatches,
+    pipeline parallelism overlaps computations between layers to maximize GPU performance.
+    This allows different GPUs to work on various microbatches at the same time. The
+    GPUs’ training throughput and device utilization improve, resulting in a much
+    faster model training speed than model parallelism.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Data parallelism* partitions the dataset into smaller pieces and lets each
+    device train these subdatasets separately. Because each device now trains a smaller
+    dataset, the training speed improves.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Converting a single-device training code to model parallelism or pipeline parallelism
+    training requires lots of code changes, including splitting the neural network
+    into multiple subnetworks, running subnetworks on different GPUs, and copying
+    the subnetworks’ compute output on different GPUs. The sheer quantity, as well
+    as the complexity of these changes, makes them problematic and hard to debug.
+    Each model algorithm might have a dramatically different model architecture, so
+    no standardized method exists for splitting a model for model parallelism or pipeline
+    parallelism. Data scientists must build the code case by case.
+  prefs: []
+  type: TYPE_NORMAL
+- en: On the contrary, data parallelism requires only minimal code changes on a single-device
+    training code. And there are standardized patterns for converting a nondistributed
+    training code to data parallelism without changing the model algorithm or architecture.
+    Also, data parallelism code is relatively easy to both understand and debug. These
+    merits make data parallelism our primary choice for distributed training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Although data parallelism has a lot of advantages, model parallelism and pipeline
+    parallelism have their own strengths and uses as well. When you have large models
+    that can’t fit into one GPU, for instance, they are the best-distributed solution.
+    We will talk about them more in section 4.4.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.2 Data parallelism
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In this section, we will look at data parallelism theories and their parallel
+    execution challenges, along with sample training codes in PyTorch, TensorFlow,
+    and Horovod.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.2.1 Understanding data parallelism
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Data parallelism involves a group of training devices working together on a
+    large dataset. By having each device process a subset of the dataset, we can greatly
+    reduce the training time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Synchronous data parallelism is the most adopted data parallelism method. It
+    replicates the model network to every device in the training group, whether it
+    is a GPU or CPU. The dataset is split into minibatches, and these batches are
+    distributed across all devices (again, either CPU or GPU). The training steps
+    occur simultaneously, using a different minibatch on each of the devices; therefore,
+    the devices act as their own data partition. When calculating gradients to update
+    the neural network, the algorithm calculates the final gradients by aggregating
+    them from each device. Then it dispatches the aggregated gradients back to each
+    device to update their local neural network. Although the training dataset on
+    each device is different, the neural networks local to these devices are the same
+    because they are updated by the same gradients in each training iteration. As
+    a result, this process is called synchronous data parallelism.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can visualize this process in figure 4.1\. The figure compares the process
+    of deep learning training on a single GPU, in graph (a) on the left, with the
+    setup for synchronous data parallel training using three GPUs, in graph (b) on
+    the right.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/04-01.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.1 A synchronous data parallelism concept graph. (a) Deep learning training
+    on a single GPU. (b) Synchronous data parallel training with three GPUs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: By comparing graphs (a) and (b), you can see that synchronous data parallelism
+    introduces two extra steps compared with single-device training. The first extra
+    step is to divide one training batch into three minibatches, so each device can
+    work on its own minibatch. The second step is to synchronize the gradients aggregated
+    from all the machines, so they are all operating with the same gradients when
+    updating their local model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note To aggregate gradients computed by different workers, you can use the algorithm
+    all-reduce. This is a popular algorithm that independently combines arrays of
+    data from all processes into a single array. In “Writing Distributed Applications
+    with PyTorch” ([https://pytorch.org/tutorials/intermediate/dist_tuto.html](https://pytorch.org/tutorials/intermediate/dist_tuto.html)),
+    you can find an example of how PyTorch supports the all-reduce algorithm.
+  prefs: []
+  type: TYPE_NORMAL
+- en: From an implementation perspective, data parallelism requires minimal changes
+    in a single-device model training process. Its main overhead is the added step
+    of synchronizing the gradient aggregation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Model parameter updates: Synchronous vs. Asynchronous'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There are two schools of thought on aggregating gradients across workers in
+    data parallelism: synchronous updates and asynchronous updates. Let’s review how
+    each of these works, along with their advantages and drawbacks, so you can choose
+    for yourself:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Synchronous model update*—As demonstrated in figure 4.1, a synchronous model
+    update pauses the training iteration at the gradient sync step until all devices
+    receive the aggregated gradients. Then it proceeds to the next step, updating
+    the model parameters. In this way, all devices get the same gradient updates at
+    the same time, thus ensuring that the model of each worker is on the same page
+    in every training iteration. The problem with synchronous model updates is obvious:
+    the training iteration is blocked while the gradients are being synchronized among
+    the workers, so none of the workers can begin processing the next minibatch of
+    data. If there are some slow machines or network problems, the entire distributed
+    working group is stuck, and the faster workers are idle.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Asynchronous model update*—In contrast, the asynchronous model update approach
+    does not force each training device or worker to wait to receive gradients from
+    the other devices. Instead, whenever a device has finished computing the gradients,
+    it immediately updates its local model without checking other devices. Every device
+    works independently, and although its gradients still need to be copied to every
+    other device, synchronization of these updates is not necessary. The asynchronous
+    method may seem very appealing; it’s simple and can run more training steps per
+    minute than the synchronous method. A downside to the asynchronous method is that
+    it takes a longer time to train and produces less-accurate models than the synchronous
+    model update method.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: When we use the asynchronous method, gradients are calculated independently
+    on different devices. Some machines run faster while others run slower; consequently,
+    these gradients can be produced from different training iterations of each device.
+    So there is no guarantee that the aggregated gradients will point in the optimal
+    direction. For example, say the gradients from a slow machine are calculated from
+    training iteration 5, while other, faster machines have already moved to training
+    iteration 20\. When we aggregate the gradients from all the workers, the gradients
+    from the lower iteration are applied to those from the higher iteration; this
+    degrades the gradient quality.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In addition, the asynchronous method often converges slowly and has a higher
+    accuracy loss than the synchronous method. Thus, most data parallelism libraries
+    today are doing synchronous model updates. In this chapter, when we mention data
+    parallelism and its code implementation, we mean synchronous data parallelism.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Memory constraint for dataset and model
+  prefs: []
+  type: TYPE_NORMAL
+- en: In deep learning, datasets and models consume the most memory of the compute
+    instance during training. The training process will be terminated by an out-of-memory
+    (OOM) error if the training data or neural network (model) exceeds the memory
+    limits of the local device. Data parallelism is designed to improve training speed
+    but not to solve memory constraint problems.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For OOM caused by loading a dataset, we can reduce the batch size of the training
+    data, so the training process loads a smaller amount of data into local memory
+    in each training loop. In the data parallelism context, we need to make sure the
+    minibatch training data can fit into the memory of every worker device.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For OOM caused by the model size, we need to adopt model parallelism or pipeline
+    parallelism (see section 4.4). Data parallelism simply won’t work when the size
+    of a neural network (model) exceeds the memory limits of a single device.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.2.2 Multiworker training challenges
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Fault tolerance and bandwidth saturation are the two challenges we, as software
+    developers, need to address when executing data parallelism code in the training
+    service. Meeting these two challenges is critical to reducing operating costs
+    and improving training performance for data parallelism–distributed training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Fault tolerance
+  prefs: []
+  type: TYPE_NORMAL
+- en: We don’t want the entire distributed training group to fail just because one
+    of the workers fails unexpectedly. This not only causes a problem for service
+    availability but also increases our training cost because all other workers’ efforts
+    are wasted if one fails.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To improve fault tolerance, we can preserve the training state (i.e., the model
+    parameters) of each training step in a remote filesystem for each worker. Then,
+    if one worker fails or takes too long to complete one training iteration, we can
+    restart that worker and load its most recent previous state.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Both TensorFlow and PyTorch frameworks have features to back up and restore.
+    As training service developers, we can set up the remote disk or backup storage
+    system and pass the access configuration to the training container. Then, during
+    the training, the training code can use the external filesystem to backup or restore
+    states.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Bandwidth saturation
+  prefs: []
+  type: TYPE_NORMAL
+- en: Adding more GPUs and more machines to the distributed training group doesn’t
+    always improve performance. Whether we use synchronous or asynchronous model updates,
+    the algorithm must communicate the gradients or model parameters between the training
+    workers at the end of each training iteration. The time spent on moving data in
+    and out of GPU RAM and across the network will eventually outweigh the speedup
+    obtained by splitting the training workload.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Therefore, a cap exists for how many parallel instances can occur before data
+    parallelism reaches its peak performance. This cap is determined by the number
+    of model parameters and the density of the model (how many nonzero values are
+    in model weights). If it’s a large, dense model with lots of parameters and gradients
+    to transfer, its saturation is greater than either a smaller model or a large,
+    sparse model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: There are some recommended parallel instance numbers, such as a 6× speedup on
+    8 GPUs for neural machine translations and a 32× speedup on 50 GPUs for ImageNet
+    models. But we need to determine the sweet spot with our own experiments because
+    both GPU and model architectures evolve rapidly, and standard recommendations
+    will quickly become outdated. As platform developers, besides choosing the perfect
+    number of parallel workers, we have three additional methods for mitigating bandwidth
+    saturation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, we can group the parallel workers (i.e., the containers or pods) into
+    fewer machines to reduce the network hops. For example, in Kubernetes, you can
+    set `nodeSelector` with affinity and anti-affinity rules ([http://mng.bz/qo76](http://mng.bz/qo76))
+    to provision training instances (Kubernetes pods) on a few selected servers that
+    have a better network and more computational power.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A second option is to always upgrade the training image to use the latest version
+    of the training framework. Popular frameworks such as PyTorch, TensorFlow, and
+    others are constantly evolving to reduce the data volume transferred within the
+    network for distributed training. Pay attention to the release note and take advantage
+    of these improvements.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Finally, don’t underestimate the gains that can result from doing small tweaks
+    when initializing the distributed group. Consider using PyTorch, for example.
+    The PyTorch data parallel library partitions the neural network parameter gradients
+    into buckets and then sends the buckets around to the workers during the gradient
+    synchronization step. The bucket size determines how much data is transferred
+    between different devices at one time. So by choosing the right bucket size, we
+    can determine a sweet spot between device saturation and network saturation, thus
+    reaching the best training speed. The bucket size can be configured in the constructor
+    of the PyTorch distributed data parallel (DDP) component ([http://mng.bz/7ZB7](http://mng.bz/7ZB7)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.2.3 Writing distributed training (data parallelism) code for different training
+    frameworks
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'In this section, you will see some training code snippets for data parallel
+    distributed training in three training frameworks: TensorFlow, PyTorch, and Horovod.
+    Don’t worry if the code samples here are difficult to parse. The purpose is to
+    experience how data scientists handle distributed training on their side. This
+    will give you a sense of how training services enable distributed training.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: PyTorch
+  prefs: []
+  type: TYPE_NORMAL
+- en: The PyTorch framework has a DDP library that implements data parallelism at
+    the module level. The DDP wraps the model object so that it can run the object
+    across multiple machines seamlessly. Its training processes can be placed on the
+    same machine or across machines.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To convert a single device/process training code to a data parallel–distributed
+    training code, we need to make the following two modifications. First, we must
+    initialize the training group by allowing each training process to register itself
+    with the master process. One of the processes claims to be the master while the
+    others claim to be the workers. Each training process will be pending at this
+    registration stage until all workers join the distributed group.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To register a process, we need to know the total number of training processes
+    (`world_size`), a unique ID for this process (`rank`), and the master process’s
+    address (define `MASTER_ADDR` and `MASTER_PORT` in environment variables). See
+    the code sample as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Second, we use the DDP class to wrap the model object. The PyTorch DDP class
+    will handle the distributed data communication, gradient aggregation, and local
+    model parameter updates:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ The DDP wrapper takes care of the distributed training execution.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For advanced use cases, the PyTorch library provides the API so you can implement
+    your own gradient synchronization function at a lower level. You can check the
+    details at the official tutorial, “Writing Distributed Applications with Pytorch”
+    ([http://mng.bz/m27W](http://mng.bz/m27W)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: TensorFlow/Keras
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'TensorFlow supports distributed training in a very similar way to PyTorch;
+    it first defines a distributed training strategy (such as `MultiWorkerMirroredStrategy`)
+    and then initializes the model with this strategy. To let the strategy identify
+    the workers in the distributed group, we need to define a `TF_CONFIG` environment
+    variable in each training process. `TF_CONFIG` contains a worker’s unique ID and
+    the addresses of all other workers in the group. See the code as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: Horovod
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Horovod is a single-purpose distributed framework. Compared to TensorFlow and
+    PyTorch, which can be used across a range of tasks, such as data processing, model
+    training, and model serving, Horovod can only focus on one task: making distributed
+    deep learning training fast and easy to use.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Horovod’s greatest advantage is that it works with different training frameworks,
+    such as TensorFlow, Keras, PyTorch, and Apache MXNet. Therefore, we can configure
+    our training cluster in one manner (the Horovod way) to run distributed training
+    for PyTorch, TensorFlow, and other frameworks. Here, we only list two code snippets
+    for using Horovod with TensorFlow and PyTorch, but you can check examples of other
+    frameworks on Horovod’s website.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s look at the TensorFlow example. To set up data parallelism–distributed
+    training, first we initialize the Horovod training group, which will find other
+    Horovod nodes in your cluster automatically. Next, we broadcast the rank 0’s (master
+    worker’s) initial variable states to all other processes. This will ensure the
+    consistent initialization of all workers. Then we wrap the gradient tape with
+    distributed gradient tape, which will average gradients on all workers. The remaining
+    code is simply normal TensorFlow training code. As such, please see the code that
+    follows ([https://github.com/horovod/horovod/blob/master/examples](https://github.com/horovod/horovod/blob/master/examples)):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Initializes Horovod
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Adjusts the number of steps based on the number of GPUs
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following code is an example of using Horovod with PyTorch. Some PyTorch
+    Horovod APIs are different than TensorFlow—for example, `hvd.DistributedOptimizer`
+    versus `hvd.DistributedGradientTape`. But these APIs are from the same Horovod
+    SDK and share the same interworker mechanism under the hood. Let’s look at the
+    PyTorch code snippet:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: Although the model is defined in two different frameworks—TensorFlow 2 and PyTorch—we
+    can see from these two code snippets that they use the same Horovod SDK to run
+    distributed training. The benefit here is that we can use a standard method (the
+    Horovod way) to set up the distributed worker group in our training cluster, and
+    it can still function for the training code written in different training frameworks.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Two takeaways on training code
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'It’s fine if you are confused when reading those training code snippets. As
+    a training service developer, you don’t need to write these pieces of code. We
+    want to emphasize two points from this discussion:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Although the code samples in this section implement distributed training in
+    different frameworks with different APIs, the code follows the same data parallelism
+    paradigm described in section 4.2.1\. That is, the code always (1) sets up the
+    communication group for each parallel training process and (2) configures the
+    model object to aggregate gradients across all workers. So, as developers, we
+    can use a unified method to set up and manage distributed training processes for
+    different training frameworks.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The work of extending model training code from single-device training to data
+    parallelism–distributed training is relatively trivial. Nowadays, the distributed
+    training frameworks/SDKs are so powerful that we don’t need to implement every
+    detail of data parallelism, such as the gradient synchronization that synchronizes
+    the gradients across the network. The training frameworks and SDKs handle these
+    processes so they run seamlessly. The distributed data parallel training code
+    is almost identical to the single-device training code, except when configuring
+    training groups.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 4.2.4 Engineering effort in data parallel–distributed training
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: So what does the work look like for enabling data parallel–distributed training
+    in production? First, it requires a joint engineering effort between data scientists
+    and service developers. For their part, data scientists need to upgrade the single-device
+    training code to run distributedly, using code like the snippets in the previous
+    section. Meanwhile, service developers must enhance the training service to automatically
+    set up distributed worker groups that allow distributed training to happen.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To make the training service user friendly, the service should incorporate the
+    setup details for different distributed training frameworks. Therefore, data scientists
+    have to define only the number of parallel instances they need for the training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s use TensorFlow distributed training as an example. From our discussion
+    in section 4.2.3, the TensorFlow training code on each device must have `tf_config`
+    (see the following example) as an environment variable. So the underlying TensorFlow-distributed
+    library in the training process knows how to communicate with other training processes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: From a usability perspective, we can’t expect data scientists to figure out
+    the setup value—server IP address and task indexes—for every distributed training
+    process, especially if the entire training group is provisioned dynamically. A
+    training service should automatically create the group of compute resources for
+    a distributed training request, initialize the distributed training libraries
+    with the correct IP addresses, and kick off the training process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 4.2 is a conceptual diagram of a training service that supports distributed
+    training. From the diagram, you can see that Alex, a data scientist, sends a training
+    request to kick off a distributed training run. The service (built by Tang, the
+    service developer) then spawns two worker machines and executes the training code
+    distributedly. Besides preparing the training code, Alex can specify configurations
+    for the training run, such as the number of parallel workers and the type of distributed
+    training framework (TensorFlow, PyTorch, or Horovod).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/04-02.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.2 An overview of a distributed training system
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s take a slow walk through this diagram to better understand how the system
+    is set up and who does what job. We see that Tang, as the engineer, needs to make
+    three enhancements—numbered 1, 2, and 3 in figure 4.2—to change the training service
+    from a single-device trainer (as we saw in chapter 3) to a data parallel–distributed
+    trainer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The first step is to update the training service to build a distributed training
+    group on demand (at the runtime). When the service receives the request for distributed
+    training, it allocates multiple workers from the training cluster for the training
+    job and distributes the training code to each worker.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The second step is to programmatically initialize each training process with
+    the correct server IP, port number, and training process ID. This ensures that
+    the distributed libraries (collectively known as the framework, such as TensorFlow)
+    have enough information to set up interworker communication for the training group.
+    As we saw in the previous section, the setup configuration varies for each distributed
+    training framework. The training service should know how to set up interworker
+    communication for various frameworks, so data scientists can focus only on the
+    algorithm development and not worry about the infrastructure underneath.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The third step is to provide remote storage to back up and restore each worker’s
+    training state. In distributed training, if a single worker fails, the entire
+    training group fails, and a great deal of computation is wasted. Thus, giving
+    distributed training groups the capability to recover from a hardware failure
+    or network problem is crucial. By providing remote storage and a backup API, the
+    distributed training processes can save their training state (neural network)
+    after each training iteration. When a training process fails in the middle of
+    the training and can restore its previous state and start over, the entire training
+    group continues.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Note If you want to learn more about data parallelism, you can start with the
+    following two articles: a blog post from O’Reilly, “Distributed TensorFlow: Reduce
+    both experimentation time and training time for neural networks by using many
+    GPU servers,” by Jim Dowling ([www.oreilly.com/content/distributed-tensorflow/](http://www.oreilly.com/content/distributed-tensorflow/)),
+    and a paper from Google Brain, “Revisiting Distributed Synchronous SGD,” by Chen
+    et al.([https://arxiv.org/pdf/1604.00981.pdf](https://arxiv.org/pdf/1604.00981.pdf)).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.3 A sample service supporting data parallel–distributed training
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In this section, we will extend the sample service introduced in the previous
+    chapter (section 3.3) to support data parallelism–distributed training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.3.1 Service overview
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Compared to the single-device training discussed in section 3.3, the user workflow
+    remains the same. Alex, the data scientist, first builds the model training code
+    and sends a training request to the training service. Then, the service runs the
+    actual training and produces the model at the end.
+  prefs: []
+  type: TYPE_NORMAL
+- en: However, there are some crucial differences. First, Alex upgrades the intent
+    classification training code to enable it for both a single device and multiple
+    devices. Second, Tang, the service developer, modifies the training service API
+    to offer a new parameter, `PARALLEL_INSTANCES`. This parameter allows Alex to
+    define the size of the worker group for his distributed training run.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To manage a cluster of servers properly, we need help from Kubernetes. Kubernetes
+    can save us a lot of effort on worker resource allocation and interworker communication.
+    So we introduce a new component—the *Kubernetes job tracker*—to manage training
+    jobs in Kubernetes. You can see the updated service design graph and user workflow
+    in figure 4.3.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/04-03.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.3 (a) The previous training service design introduced in figure 3.5;
+    (b) the updated service design with distributed training support in Kubernetes
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 4.3 (a) repeats the training service’s system diagram we discussed in
+    section 3.3, which uses a Docker job tracker to run the training jobs in the Docker
+    engine. Figure 4.3 (b) visualizes the updated training service that now supports
+    distributed training—including both Kubernetes and Docker engine backends. The
+    Kubernetes job tracker is added to run training jobs in the Kubernetes cluster
+    for distributed training jobs. This component executes training jobs by launching
+    Kubernetes pods and monitors and updates the job-execution status in the memory
+    store.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We also made some changes to the intent classification PyTorch training code
+    so it can run distributedly. We’ll review this shortly, in section 4.3.5.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'One great timesaver is that we don’t need to change the service API interface
+    that we’ve already created (section 3.3.3). Our users can simply work the same
+    API to train models in both Docker engines and Kubernetes clusters. This follows
+    training service principle number one, which we introduced in chapter 3 (section
+    3.1.2): using unified APIs and keeping them agnostic on the backend implementation.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.3.2 Playing with the service
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'First, let’s run the training service with the Kubernetes backend; see the
+    commands as follows (`scripts/ts-001-start-server-kube.sh`):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Local Kubernetes config
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note This section contains only the main steps and key commands necessary to
+    run the sample service. As a result, the concept can be demonstrated clearly without
+    lengthy pages of code and execution output. Please follow the instructions in
+    the “Distributed trainer training demo” ([github.com/orca3/MiniAutoML/blob/main/training-service/distributed_trainer_demo.md](http://github.com/orca3/MiniAutoML/blob/main/training-service/distributed_trainer_demo.md))
+    document at the orca3/MiniAutoML git repository if you want to run the lab in
+    this section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Once the training service container is running, we can submit a training gRPC
+    request. Although the service is now running on the Kubernetes backend, the training
+    API is still the same. Compared to the training request we sent to the Docker
+    backend demo (see section 3.3.1), only one more parameter—`PARALLEL_INSTANCES=3`—is
+    added in the request payload. This tells the training service to create a distributed
+    training group with three workers to train the model. If we set this parameter
+    to 1, it will be a single-device training request. See the following code snippet
+    to submit a distributed training request with three parallel instances (`scripts/ts-004-start-parallel-run.sh`
+    `1`):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Requires a training group with three workers
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To check the progress of the training execution, we can use the `GetTrainingStatus`
+    API:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Provides job ID to query status
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Besides querying the training service API to obtain job-execution status, we
+    can also check the training progress in Kubernetes. By using the Kubernetes command
+    `kubectl` `get` `all`, we see three worker pods are created in the local Kubernetes
+    environment. One is the master worker, and the other two are normal workers. A
+    Kubernetes service object `intent-classification-1-master-service` is also created
+    for the master worker/pod, which enables the network connectivity between master
+    pods and worker pods. See the code snippet as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ One of the worker pods
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Mastering the training pod
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ The Kubernetes service for training pods communication
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.3.3 Launching training jobs
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Now, let’s look at the workflow for launching training jobs with the Kubernetes
+    backend. When receiving a training request, the request will be added to the job
+    queue. Meanwhile, the Kubernetes job tracker monitors the job queue. When the
+    tracker finds jobs waiting and the system has available capacity, it will start
+    to process these jobs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To launch a PyTorch-distributed training job, the tracker first creates the
+    required numbers of Kubernetes pods. Each pod hosts one training process. The
+    tracker also passes separate parameters to each pod, and it then moves the job
+    from the job queue to the launching list (figure 4.4).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/04-04.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 4.4 The workflow for launching a training job in Kubernetes: step 1,
+    detects the waiting job in the job queue; step 2, creates Kubernetes pods to run
+    training; and step 3, moves the job from the job queue to the launching list.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In figure 4.4, the Kubernetes job tracker can handle both single-device training
+    and distributed training. It creates one Kubernetes pod for single-device training
+    and multiple pods for distributed training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A Kubernetes job tracker runs one training pod similarly to a Docker job tracker.
+    It wraps up all the user-defined parameters in the environment variables and passes
+    them to the Kubernetes pod.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To set up PyTorch distributed training with multiple pods, the service handles
+    two more functions. First, it creates a Kubernetes service object to talk to the
+    master pod. From the PyTorch distributed training algorithm section (4.2.3), we
+    know that each PyTorch training process needs the IP address of the master process
+    (pod) to initialize the distributed training group. For example, each PyTorch
+    code needs to have the following code snippet before the training logic starts:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Joins the current process to a distributed group by seeking the master pod
+  prefs: []
+  type: TYPE_NORMAL
+- en: But in Kubernetes, a pod is an ephemeral resource, so we can’t rely on the pod
+    IP address to locate a pod. Instead, we use the Kubernetes domain name service
+    (DNS) as a permanent address to locate pods. Even if the pod is destroyed and
+    recreated in a different node and the IP is different, we can always use the same
+    DNS to reach it. So, to enable the training group’s initialization, we first create
+    a Kubernetes service for the master pod and then pass the DNS to all worker pods
+    as the master pod address.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Second, it passes four environment variables to each pod. The four variables
+    required by each training pod are `WORLD_SIZE`, `RANK`, `MASTER_ADDR`, and `MASTER_PORT`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`WORLD_SIZE` means the total number of pods of the training group, including
+    master and workers.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`RANK` is the unique ID of one training process; the master process’s rank
+    must be 0.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`MASTER_ADDR` and `MASTER_PORT` define the host address and port number of
+    the master process, so each worker can use them to reach the master pod.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'For example, when running distributed training with three instances, we create
+    three pods (one master, two workers) with the following environment variables
+    for each pod:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: In light of all the explanations, let’s take a look at how the actual code is
+    implemented. The following listing highlights how launching distributed training
+    in Kubernetes is implemented.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.1 Launching a distributed training job
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: '❶ World size >1: indicates it’s a distributed training'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Creates a Kubernetes service and points to the master pod
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Sets the distributed training–related config as the environment variable
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Defines pod configuration; passes in training parameters as environment variables
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Creates actual training pods
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**RANK** values do not neccesarily map to pods one to one'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`RANK` is a tricky variable in distributed training. Please be aware that `RANK`
+    is the unique ID of a training process, not a pod. A pod can run multiple training
+    processes if it has multiple GPUs. In the example here, because we run one training
+    process per pod, we assign a different `RANK` value to each pod.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: When we run multiple training processes in one pod, then we need to assign multiple
+    `RANK` values to a pod. For example, when we run two processes in a pod, this
+    pod needs two `RANK` values, one for each process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You may notice that the Kubernetes pods and services created in this sample
+    are customized for PyTorch distributed training library. In fact, the sample service
+    is not limited to PyTorch. To support training code written in other frameworks,
+    such as TensorFlow 2, we can extend the Kubernetes job tracker to support the
+    settings for TensorFlow distributed training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For example, we can collect all the IPs or DNSs of the worker pods, put them
+    together, and broadcast them back to each worker pod. During the broadcasting,
+    we set worker group information to the `TF_CONFIG` environment variable in every
+    pod to start the distributed training group. The `TF_CONFIG` environment variable
+    is a special requirement for the TensorFlow distributed library.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.3.4 Updating and fetching the job status
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: After creating training pods, the Kubernetes job tracker will continue querying
+    the pod execution status and move the job to other job lists when its status changes.
+    For example, if the pod is created successfully and starts running, the tracker
+    moves the job from the launching list to the running list. If the pod execution
+    is completed, the tracker moves the job from the running list to the finalized
+    jobs list. Figure 4.5 depicts this process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/04-05.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 4.5 Track the Kubernetes training job status: step 1, obtains the jobs
+    in the running list; step 2, queries the pod execution status of each of the jobs
+    running in the Kubernetes cluster; and step 3, moves the job to the finalized
+    job list if the pod execution is complete (success or failure).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: When a user submits a job status query, the training service will search the
+    job ID in all four job queues in the memory store and return the job object. Interestingly,
+    although there are multiple training pods, we only need to check the status of
+    the master pod to track the distributed training progress. This is because, for
+    synchronous data parallel training, all workers have to sync with each other in
+    every training cycle, so the master pod can represent the other worker pods.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The code for querying and updating job execution status is very similar to the
+    Docker job tracker that we see in section 3.3.5\. The only difference is that
+    we query the Kubernetes cluster instead of the Docker engine to obtain the training
+    status. We leave the code for you to explore; you can find it in the `updateContainerStatus`
+    method of the `KubectlTracker` class.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.3.5 Converting the training code to run distributedly
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: We made two changes to our intent classification training code (introduced in
+    the previous chapter, section 3.3.6) to support both distributed mode and single-device
+    mode.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First change: Initialize the training group'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We use the `WORLD_SIZE` environment variable to check whether the training code
+    should run in distributed training. If the world size equals 1, then we use the
+    same single-device training code that we saw in section 3.3.6.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'But if the value is greater than 1, we initialize the training process to join
+    the distributed group. Please also notice that a unique `RANK` value for each
+    pod is passed from the training service (Kubernetes job tracker), which is needed
+    for distributed group initialization. After self-registering to the distributed
+    group, we declare the model and data sampler to be distributed as well. See the
+    following code for the changes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Second change: Only upload the final model from the master pod'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the second change, we only allow the master pod (rank = 0) to upload the
+    final model. This is to prevent each worker from uploading the same models multiple
+    times:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Rank 0 is the master pod.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.3.6 Improvements
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: If we continue the path to making this sample service production ready, we can
+    follow the thoughts in section 4.2.2 to work on improving fault tolerance and
+    reducing network bandwidth saturation. We can also extend the Kubernetes job tracker
+    to support TensorFlow and Horovod distributed training. From a training service
+    perspective, they are not very different because the configuration that the training
+    service passes to the training code is very generic; this information is needed
+    for all frameworks but with different names. As long as the protocol between the
+    training service and the training code is clear and stable, we can still treat
+    the training code as a black box, even in the distributed setting.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.4 Training large models that can’t load on one GPU
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The neural network size (defined by the number of parameters) is growing rapidly
+    in the research field, and we cannot ignore this trend. Using the ImageNet challenge
+    as an example, the winner in 2014 (GoogleNet) had 4 million parameters; the winner
+    in 2017 (Squeeze-and-Excitation Networks) had 145.8 million parameters; and the
+    current leading approaches have more than 1 billion parameters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Although our neural network size grew nearly 300×, GPU memory has only increased
+    4×. You will see cases more often in the future in which we can’t train a model
+    because it can’t be loaded onto one GPU.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this section, we will discuss common strategies for training large models.
+    Unlike the data parallelism strategy described in section 4.2, the method introduced
+    here requires effortful work on training code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note Although the methods introduced in this section are normally implemented
+    by data scientists, we hope you can still follow them. Understanding the strategies
+    behind these training techniques is very helpful for designing communication protocols
+    between training services and training codes. It also provides insight into troubleshooting
+    or fine-tuning the training performance in training service. To keep it simple,
+    we will only describe algorithms at the concept level and focus on the necessary
+    work from an engineering perspective.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '4.4.1 Traditional methods: Memory saving'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Let’s say your data science team wants to train a model that can load to the
+    largest GPU in your training cluster; for example, they want to train a 24 GB
+    BERT model in a 10 GB memory GPU. There are several memory-saving techniques the
+    team can use to train the model in this situation, including gradient accumulation
+    and memory swap. This work is generally implemented by data scientists. As a platform
+    developer, you just need to be aware of these options. We’ll describe them briefly,
+    so you will know when to suggest each of their use.
+  prefs: []
+  type: TYPE_NORMAL
+- en: note There are several other memory-saving methods, such as OpenAI’s gradient
+    checkpointing ([https://github.com/cybertronai/gradient-checkpointing](https://github.com/cybertronai/gradient-checkpointing))
+    and NVIDIA’s vDNN ([https://arxiv.org/abs/1602.08124](https://arxiv.org/abs/1602.08124)),
+    but because this book is not about deep learning algorithms, we will leave them
+    for independent study.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Gradient accumulation
+  prefs: []
+  type: TYPE_NORMAL
+- en: In deep learning training, the dataset is split into batches. In each training
+    step, for loss calculation, gradient computation, and model parameter updating,
+    we take the whole batch of examples (training data) into memory and handle the
+    computations all at once.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We can mitigate the memory pressure by reducing the batch size—for example,
+    training 16 examples in a batch rather than 32 examples in a batch. But reducing
+    batch size can cause the model to converge a lot more slowly. And this is where
+    gradient accumulation can be helpful.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Gradient accumulation cuts batch examples into configurable numbers of minibatches
+    and then calculates the loss and gradients after each minibatch. But instead of
+    updating the model parameters, it waits and accumulates the gradients over all
+    the minibatches. And then, ultimately, it updates the model parameters based on
+    the cumulative gradient.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s look at an example to see how this speeds up the process. Imagine that,
+    because of GPU memory constraints, we can’t run training with a batch size of
+    32\. With gradient accumulation, we can split each batch into four minibatches,
+    each with a size of 8\. Because we accumulate the gradients for all four minibatches
+    and only update the model after all four are complete, the process is almost equal
+    to training with a batch size of 32\. The difference is that we only compute 8
+    examples at a time in GPU instead of 32, so the cost is 4× *slower* than it would
+    be with a batch of 32.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Memory swap (GPU and CPU)
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The memory swap method is very simple: it copies activations between CPU and
+    GPU, back and forth. If you are unaccustomed to deep learning terms, think of
+    *activation* as the computation output from each node of the neural network. The
+    idea is to only keep the necessary data for the current computation step in GPU
+    and swap the compute result out to CPU memory for future steps.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Building on this idea, a new relay-style execution technique called L2L (layer
+    to layer) keeps only the executing layers and transit buffers on the GPU. The
+    whole model and the optimizer—which holds the state—are stored in the CPU space.
+    L2L can greatly increase the GPU throughput and allow us to develop large models
+    on affordable devices. If you are interested in this method, you can check out
+    the paper “Training Large Neural Networks with Constant Memory Using a New Execution
+    Algorithm,” by Pudipeddi et al. ([https://arxiv.org/abs/2002.05645](https://arxiv.org/abs/2002.05645)),
+    which also has a PyTorch implementation in GitHub.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Both gradient accumulation and memory swap are effective ways to train a large
+    model on a smaller GPU. But, like most things, they come with a cost: they tend
+    to slow down the training. Because of this drawback, we normally use them only
+    for prototyping ideas.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To obtain workable training speeds, we really need to train models distributedly
+    on multiple GPUs. So, in the next section, we will introduce a more production-like
+    approach: pipeline parallelism. It can train a large model distributedly with
+    impressive training speed.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.4.2 Pipeline model parallelism
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'In section 4.2, we discussed the most commonly used distributed training method:
+    data parallelism. This approach keeps a copy of the whole model on each device
+    and partitions data into multiple devices. Then it aggregates the gradients and
+    updates the model in each training step. The whole approach of data parallelism
+    works well, as long as the entire model can be loaded into one GPU. As we see
+    in this section, however, we are not always able to do this. And that is where
+    pipeline parallelism can be useful. In this section, we will learn about pipeline
+    parallelism, a training method that trains large models distributedly on multiple
+    GPUs.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: To understand pipeline parallelism, let’s first take a brief look at model parallelism.
+    This little detour will make the jump to pipeline parallelism easier.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Model parallelism
+  prefs: []
+  type: TYPE_NORMAL
+- en: The idea of model parallelism is to split a neural network into smaller subnets
+    and run each subnet on different GPUs. Figure 4.6 illustrates the model parallelism
+    approach.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/04-06.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.6 Split a four-layer, fully connected deep learning network into four
+    subgroups; each group has one layer, and each subgroup runs on one GPU.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 4.6 visualizes the model parallel process. It first converts a neural
+    network (four layers) into four sub–neural networks (single layer) and then assigns
+    each single-layer network a dedicated GPU. By doing so, we run a model distributedly
+    on four GPUs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The concept of model parallelism is straightforward, but the actual implementation
+    can be tricky; it depends on the architecture of the network. To give you an idea,
+    the following listing is a piece of dummy PyTorch code that makes a network run
+    on two GPUs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.2 A sample model parallelism implementation in PyTorch
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: As you can see in listing 4.2, two subnetworks are initialized and assigned
+    to two GPUs in the `__init__` function, and then they are connected in the `forward`
+    function. Because of the variety of structures of deep learning networks, no general
+    method (paradigm) exists to split the network. We must implement model parallelism
+    case by case.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Another problem with model parallelism is its severe underutilization of GPU
+    resources. Because all the devices in the training group have sequential dependency,
+    only one device can work at a time, which wastes a lot of GPU cycles. Figure 4.7
+    visualizes the GPU utilization situation for model parallel training with three
+    GPUs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/04-07.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.7 Model parallel training can have severely low GPU usage. In this
+    approach, the network is split into three subnets and runs on three GPUs. Because
+    of the sequential dependency among the three GPUs, each GPU is idle 66% of the
+    training time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s walk through this figure to see why GPU usage is so low. On the left,
+    in figure 4.7 (a), we see the model parallel design. We split a model network
+    into three subnetworks and let each subnetwork run on a different GPU. In each
+    training iteration, when running the forward pass, we first compute subnet 1 and
+    then subnet 2 and subnet 3; when running the backward pass, the gradient update
+    happens reversely.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In figure 4.7 (b), on the right, you can see the resource utilization of the
+    three GPUs during the training. The time axis is divided into two parts: the forward
+    pass and the backward pass. The forward pass means the computation of the model
+    inference, from GPU 1 to GPU 2 and GPU3, whereas the backward pass means backpropagation
+    for the model weights update, from GPU 3 to GPU 2 and GPU 1.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you look vertically at the time bar, regardless of whether it’s a forward
+    pass or a backward pass, you see only one GPU active at a time. This is because
+    of the sequential dependency between each subnet. For instance, in the forward
+    pass, subnet 2 needs to wait for subnet 1’s output to fulfill its own forward
+    calculation, so GPU 2 will be idle in the forward pass until the calculation on
+    GPU 1 completes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: No matter how many GPUs you add, only one GPU can work at one time, which is
+    a huge waste. This is when pipeline parallelism comes in handy. Pipeline parallelism
+    makes model training more efficient by eliminating that waste and fully saturating
+    the GPUs. Let’s see how it works.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Pipeline parallelism
+  prefs: []
+  type: TYPE_NORMAL
+- en: Pipeline parallelism is essentially an improved version of model parallelism.
+    In addition to partitioning a network to different GPUs, it also divides each
+    training example batch into small minibatches and overlaps computations of these
+    minibatches between layers. By doing so, it keeps all GPUs busy most of the time,
+    thus improving GPU utilization.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There are two major implementations of this approach: PipeDream (Microsoft)
+    and GPipe (Google). We use GPipe as the demo example here because it optimizes
+    the gradients’ update in each training step and has better training throughput.
+    You can find further details about GPipe from “GPipe: Easy scaling with micro-batch
+    pipeline parallelism,” by Huang et al. ([https://arxiv.org/abs/1811.06965](https://arxiv.org/abs/1811.06965)).
+    Let’s look, in figure 4.8, at how GPipe works at a high level.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/04-08.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 4.8 (a) An example neural network with sequential layers is partitioned
+    across four accelerators. F[k] is the composite forward computation function of
+    the *k*th cell. Bk is the backpropagation function, which depends on both B[k+1],
+    from the upper layer, and F[k]. (b) The naive model parallelism strategy leads
+    to severe under utilization due to the sequential dependency of the network. (c)
+    Pipeline parallelism divides the input minibatch into smaller microbatches, enabling
+    different accelerators to work on different microbatches simultaneously. Gradients
+    are applied synchronously at the end. (Source: figure 2, “GPipe: Easy Scaling
+    with Micro-Batch Pipeline Parallelism,” Huang et al., 2019, arXiv:1811.06965)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 4.8 (a) depicts a neural network made of four subnetworks; each subnetwork
+    is loaded on one GPU. F means forward pass, B means backward pass, and F[k] and
+    B[k] run on GPUk. The training sequence is first, forward pass, F[0] -> F[1] ->
+    F[2] -> F[3], and second, backward pass, F[3] -> (B[3], F[2]) -> (B[2], F[2])
+    -> (B[1], F[1]) -> B[0].
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 4.8 (b) displays the training flow for naive model parallelism. We can
+    see that the GPU is seriously underutilized; only one GPU is activated in the
+    forward- and backward pass; thus, each GPU is idle 75% of the time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 4.8 (c) shows the GPipe improvements in the sequence of training operations.
+    GPipe first divides every training example batch into four equal microbatches,
+    which are pipelined through the four GPUs. F[(0,2)] in the graph means forward
+    pass computation at GPU 0 with minibatch 2\. During the backward pass, gradients
+    for each microbatch are computed based on the same model parameters used for the
+    forward pass. The key is that it doesn’t update model parameters immediately;
+    instead, it accumulates all the gradients for each microbatch. At the end of each
+    training batch, we use the accumulated gradients from all four microbatches to
+    update the model parameters across all four GPUs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'By comparing figure 4.8 (b) and (c), we see the GPU utilization increase greatly;
+    now each GPU is idle 47% of the time. Let’s see a code example using PyTorch GPipe
+    implementation to train a transformer model on two GPUs (see following listing).
+    To demo the idea clearly, we keep only the pipeline-related code and partition
+    them into four parts. You can check out the tutorial “PyTorch: Training transformer
+    models using pipeline parallelism,” by Pritam Damania, for the full code ([http://mng.bz/5mD8](http://mng.bz/5mD8)).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.3 Training transformer models using pipeline parallelism
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: As we can see from listing 4.3, pipeline parallelism code is much more complicated
+    than distributed data parallelism. Besides setting up the communication group,
+    we also need to consider how to divide our model network and transfer gradients
+    and activation (model the subnetwork’s forward output) in interworker communication.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.4.3 How software engineers can support pipeline parallelism
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: You may have noticed that all the methods we talk about in this section are
+    techniques for writing training code. Because data scientists normally write the
+    training code, you may be wondering what we, as software developers, can do to
+    support pipeline parallel training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, we can work on building the training service to automate the pipeline
+    training execution and improve resource utilization (for example, always keeping
+    the GPU busy). This automation includes matters like allocating worker resources,
+    enabling interworker communication, and distributing the pipeline training code
+    with corresponding initialized parameters to each worker (such as worker IP address,
+    process ID, GPU ID, and worker group size).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Second, we can alert the data scientist team about the new distributed training
+    options. Sometimes the data scientist team isn’t aware of the new engineering
+    methods that can improve the model training experience, so communication is key
+    here. We can collaborate with members of the team and lead the conversation about
+    experimenting with the pipeline parallelism method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Third, we can work on improving the availability of model training. In section
+    4.2.4, we discussed that distributed training is fragile; it requires every worker
+    to perform consistently. If one worker fails, the entire training group fails,
+    which is a huge waste of time and budget. The effort spent on training-process
+    monitoring, failover, and failure recovery would be much appreciated by data scientists.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Data parallelism or pipeline parallelism?
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now we know that there are two major strategies for distributed training: data
+    parallelism and pipeline parallelism. You might understand these concepts, but
+    you might still be uncertain about when to use them.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We would suggest always starting with model training on a single machine. If
+    you have a large dataset and the training takes a long time, then consider distributed
+    training. We always prefer data parallelism over pipeline parallelism merely because
+    data parallelism is simpler to implement and we can obtain results quicker. If
+    the model is so big that it can’t load on one GPU, then pipeline parallelism is
+    the right choice.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Distributed training has two schools of thought: data parallelism and model
+    parallelism. Pipeline parallelism is an improved version of model parallelism.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If a model can be loaded into one GPU, data parallelism is the primary method
+    to implement distributed training; it’s simple to use and provides great speed
+    improvements.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using Kubernetes to manage the computing cluster can greatly reduce the complexity
+    of compute resource management.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Although each training framework (TensorFlow, PyTorch) offers different configurations
+    and APIs to write distributed training code, their code pattern and execution
+    workflow are very similar. Thus, a training service can support the various distributed
+    training codes with a unified approach.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: After encapsulating the setup configuration of various training frameworks,
+    a training service can still treat training code as a black box, even in the distributed
+    training setting.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: To obtain data parallelism training progress/status, you only need to check
+    the master worker because all workers are always in sync with each other. Also,
+    to avoid saving duplicated models from all workers when their training jobs complete,
+    you can set the training code to persist model and checkpoint files only when
+    the code is executed by the master worker.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Horovod is a great distributed training framework. It offers a unified method
+    to run distributed training for code written in various frameworks: PyTorch, TensorFlow,
+    MXNet, and PySpark. If a training code uses Horovod to implement distributed training,
+    a training service can use a single method (the Horovod method) to execute it,
+    regardless of the training frame with which it’s written.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Availability, resilience, and failure recovery are important engineering concerns
+    for distributed training.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'There are two strategies for training a model that does not fit into one GPU:
+    the memory-saving method and the model parallelism method.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The memory-saving method loads only a portion of the model or a small data batch
+    to GPU at a time—for instance, gradient accumulation and memory swap. These methods
+    are easy to implement but slow down the model training process.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The model parallelism method divides a large model into a group of sub–neural
+    networks and distributes them onto multiple GPUs. The downside of this approach
+    is low GPU utilization. To overcome that, pipeline model parallelism was invented.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL

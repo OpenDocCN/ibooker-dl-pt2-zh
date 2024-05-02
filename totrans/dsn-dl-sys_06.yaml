@@ -1,0 +1,1039 @@
+- en: 6 Model serving design
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter covers
+  prefs: []
+  type: TYPE_NORMAL
+- en: Defining model serving
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Common model serving challenges and approaches
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Designing model serving systems for different user scenarios
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Model serving* is the process of executing a model with user input data. Among
+    all the activities in a deep learning system, model serving is the closest to
+    the end customers. After all the hard work of dataset preparation, training algorithm
+    development, hyperparameter tuning, and testing results in models is completed,
+    these models are presented to customers by model serving services.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Take speech translation as an example. After training a sequence-to-sequence
+    model for voice translation, the team is ready to present it to the world. For
+    people to use this model remotely, the model is usually hosted in a web service
+    and exposed by a web API. Then we (the customers) can send our voice audio file
+    over the web API and get back a translated voice audio file. All the model loading
+    and execution happens at the web service backend. Everything included in this
+    user workflow—service, model files, and model execution—is called *model serving*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Building model serving applications is another special deep learning domain
+    for which software engineers are particularly well suited. Model serving uses
+    request latency, scalability, availability, and operability—all areas that engineers
+    know inside and out. With some introduction to the concepts of deep learning model
+    serving, developers who have some experience with distributed computing can play
+    a significant role in building the model serving element.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Serving models in production can be challenging because models are trained by
+    various frameworks and algorithms, so the methods and libraries to execute the
+    model vary. Also, the terminology used in the model serving field is confusing,
+    with too many terms, like *model prediction* and *model inference*, that sound
+    different but mean the same thing in the serving context. Furthermore, there are
+    many model serving options from which to choose. On the one hand, we have black-box
+    solutions like TensorFlow Serving, TorchServe, and NVIDIA Triton Inference Server.
+    On the other, we have customized approaches like building your own predictor service
+    or embedding models directly into your applications. These approaches all seem
+    very similar and capable, so it is hard to select one over another. Therefore,
+    if you are new to this domain, you can quickly become lost.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Our goal here is to help you find your way. We hope to empower you to design
+    and build the model serving solution that best fits your situation. To achieve
+    this goal, we have lots of content to cover, from the conceptual understanding
+    of model serving and service-design considerations to concrete examples and model
+    deployment workflow. To avoid exhausting you with a super-long chapter, we divide
+    this content into two chapters: chapter 6 focuses on concepts, definitions, and
+    design, and chapter 7 puts those concepts into practice, including building a
+    sample prediction service and addressing open source tools as well as deploying
+    and monitoring model production.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this chapter, we start by clarifying the terminology and providing our own
+    definitions of the elements used in model serving. We also describe the main challenges
+    facing us in the model serving field. Then we will move to the design aspect,
+    explaining the three common strategies of model serving and designing a model
+    serving system that fits different use cases.
+  prefs: []
+  type: TYPE_NORMAL
+- en: By reading this chapter, you will not only gain a solid understanding of how
+    model serving works, but you will also know the common design patterns that can
+    address most of the model serving use cases. With the concepts and terminology
+    clear in your mind, you should be comfortable joining any model serving–related
+    discussion or reading articles and papers on the topic. And, of course, this chapter
+    builds the foundation so you can follow the practical work addressed in the next
+    chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 6.1 Explaining model serving
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In the engineering of model serving, the terminology is a major problem. For
+    example, *model*, *model architecture*, *inference graph*, *prediction*, and *inference*
+    are all terms people use without clearly defining them, so they can have the same
+    meaning or refer to different concepts depending on the context (model serving
+    or model training). When we work with data scientists to build model serving solutions,
+    the confusion around model serving terms causes a lot of miscommunication. In
+    this section, we will explain the core concepts of model serving and interpret
+    commonly used terminologies from an engineering perspective to help you avoid
+    falling into the terminology trap.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 6.1.1 What is a machine learning model?
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: There are multiple definitions of machine learning models in academia, from
+    distilled representations of learnings of datasets to mathematical representations
+    for recognizing certain patterns or making decisions based on previously unseen
+    information. Nevertheless, as model serving developers, we can understand a model
+    simply as a collection of files that are produced during training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The idea of a model is simple, but many people misunderstand that models are
+    just static files. Although models are saved as files, they aren’t static; they’re
+    essentially executable programs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s take apart that statement and determine what it means. A model consists
+    of a machine learning algorithm, model data, and a model executor. A *model executor*
+    is a wrapper code of the machine learning algorithm; it takes user input and runs
+    the algorithm to compute and return prediction results. A *machine learning algorithm*
+    refers to the algorithm used in model training, sometimes also called *model architecture*.
+    Using speech translation as an example again, if the translation model is trained
+    by a sequence-to-sequence network as its training algorithm, the machine learning
+    algorithm in the model is the same sequence-to-sequence network. *Model data*
+    is the data required to run the machine learning algorithm, such as the neural
+    network’s learned parameters (weights and biases), embeddings, and label classes.
+    Figure 6.1 illustrates a generic model structure.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/06-01.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 6.1 A model is composed of a machine learning algorithm, model executor,
+    and model data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note We often refer to machine learning algorithms as *model algorithms* in
+    this chapter for simplicity.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The most important takeaway in this section is that the output of a model training
+    execution—or simply, a model—isn’t just a set of static data. In contrast, deep
+    learning models are executable programs that include a machine learning algorithm
+    and its dependent data, so the models can make predictions based on input data
+    at run time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note Models are not only weights and biases. Sometimes data scientists save
+    a neural network’s trained parameters—weights and biases—to a file and name it
+    “model file.” This confuses people into thinking a model is just a data file that
+    contains only weights and biases. Weights and biases are the model *data*, but
+    we also need the algorithm and the wrapper code to run the prediction.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 6.1.2 Model prediction and inference
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Academics may consider model inference and prediction to be two separate concepts.
+    A model inference can refer to learning about how data is generated and understanding
+    its causes and effects, whereas a model prediction might refer to predicting future
+    events.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A sample model prediction scenario might include using sales records to train
+    a model to predict which individuals are likely to respond to the next marketing
+    campaign. And a sample model inference scenario would include using sales records
+    to train a model to understand the sales effect from the product price and customer
+    income. The predictive accuracy on previously unseen data for model inference
+    is not very important because the main focus is on learning the data generation
+    process. Model training is designed to fit the full dataset.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'From an engineering perspective, model prediction and model inference mean
+    the same. Although models can be built and used for different purposes, both model
+    prediction and model inference in the context of model serving refer to the same
+    action: executing the model with given data points to obtain a set of output values.
+    Figure 6.2 illustrates the model serving workflow for the prediction model and
+    the inference model; as you can see, there is no difference between them.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/06-02.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 6.2 Model prediction and model inference are the same in model serving
+    engineering.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To simplify the text in the illustrations of this chapter, starting from figure
+    6.2, we use the word *model* to represent model data, model executor, and machine
+    learning (model) algorithm. This is not only to keep the text short but also to
+    emphasize that the machine learning model is an executable program.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 6.1.3 What is model serving?
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '*Model* *serving* simply means executing a model with input data to make predictions,
+    which includes fetching the expected model, setting up the model’s execution environment,
+    executing the model to make a prediction with given data points, and returning
+    the prediction result. The most used method for model serving is to host models
+    in a web service and expose the model’s predict function through a web API.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Suppose we build an object detection model to detect sharks in seacoast images;
+    we can build a web service to host this model and expose a shark detection web
+    API. This web API can then be used by beach hotels anywhere in the world to detect
+    sharks with their own coast images. Conventionally, we call the model serving
+    web service the prediction service.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A typical model prediction workflow in a prediction service has four steps:
+    receiving a user request; loading the model from an artifact store to memory or
+    GPU; executing the model’s algorithm; and, finally, returning the prediction results.
+    Figure 6.3 shows this workflow.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/06-03.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 6.3 A typical model prediction workflow in a prediction service
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Besides the four-step prediction workflow, figure 6.3 also mentions three main
+    components of the model serving: the prediction service (A), the model artifactory
+    store (B), and the prediction web API (C). The model artifactory store (component
+    B) holds all the models produced by the model training. The web API (component
+    C) receives prediction requests. The prediction service (component A) responds
+    to the prediction request, loads the model from the artifactory store, runs the
+    model, and returns the prediction result.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Although the four steps of the prediction workflow are generally applicable
+    to all kinds of models, the actual implementation of the steps depends on the
+    business needs, model training algorithm, and model training framework. We will
+    discuss design options for prediction services in section 6.3, and we will present
+    two sample prediction services in chapter 7.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Model serving runs machine learning algorithms in a special mode
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Model training and model serving execute the same machine learning algorithm
+    but in two different models: learning mode and evaluation mode.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the learning mode, we run the algorithm in an *open loop*, meaning in each
+    training iteration, we first run the neural network (algorithm) with an input
+    data sample to calculate prediction results. Based on the difference between the
+    prediction results and the expected results, the network’s parameters (weights
+    and bias) are updated to fit the dataset closer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the evaluation model, the neural network (algorithm) is run in a closed loop,
+    which means that the network’s parameters will not be updated. The neural network
+    is run solely to obtain the prediction results. So from a code implementation
+    perspective, model serving is essentially running the machine learning algorithm
+    (neural network) in the evaluation mode.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 6.1.4 Model serving challenges
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Building a web service to serve models cost-effectively is a lot more complicated
+    than running models locally on our laptops. Following are the six common challenges
+    for serving models in web services.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The model prediction API differs per model algorithm. Different deep learning
+    algorithms (such as recurrent neural networks and convolutional neural networks
+    [CNN]) require different input data formats, and their output format can also
+    vary. When designing the web prediction API, it’s quite challenging to design
+    a unified web API that meets the input data requirements for every model algorithm.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Model executing environments are different per training framework. Models can
+    be trained in different frameworks, such as TensorFlow and PyTorch. And each training
+    framework has its special setup and configuration to execute its models. The prediction
+    service should encapsulate the model execution environment setup at its backend,
+    so customers can focus on using the model prediction API, not the framework with
+    which this model is trained.
+  prefs: []
+  type: TYPE_NORMAL
+- en: There are too many model serving tools, libraries, and systems from which to
+    choose. If we decide to use existing open source approaches to model serving,
+    the immediate question becomes which approach we should choose. There are 20+
+    different options, such as TorchServe, TensorFlow Serving, NVIDIA Triton Inference
+    Server, Seldon Core, and KFServing. How do we know which approach works best for
+    our situation?
+  prefs: []
+  type: TYPE_NORMAL
+- en: There is no universal, most cost-effective model serving design; we need to
+    tailor a model serving approach that fits our own use case. Unlike model training
+    and hyperparameter tuning service, which both have a one-fits-all approach—prediction
+    service design heavily depends on concrete user scenarios. For example, designing
+    a prediction service that supports just one model, such as a flower recognition
+    model, is a lot different than designing a prediction service that supports 10
+    different types of models, such as PDF scanning, text intent classification, and
+    image classification.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Reduce model prediction latency while maintaining resource saturation. From
+    a cost-efficiency perspective, we want our compute resources to be fully saturated
+    with model prediction workloads. In addition, we would like to provide our customers
+    with a real-time model prediction experience, so we don’t want the prediction
+    latency to drop because of the rigid infrastructure budget. To accomplish this,
+    we need to reduce the time cost at every step of the prediction workflow innovatively,
+    such as loading the model faster or preheating the model before serving.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Model deployment and post-deployment model monitoring are things we should consider
+    on day one. Model deployment—progressing a model from training to production—is
+    critical for successful model development. We want to advance the model to production
+    quickly, and we want to have multiple versions of the model in production, so
+    we can evaluate different training algorithms quickly and choose the best model.
+    Post-deployment model monitoring can help detect model performance regression;
+    it’s a crucial protection mechanism for models in fraud detection and loan approval,
+    for instance.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The good news is that these six challenges are all engineering problems, so
+    you will be able to handle them! We will discuss how to address them here and
+    in the next chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 6.1.5 Model serving terminology
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: As we proceed through the chapter, we’d like to refresh your memory of the model
+    serving terms. Many terms have various definitions in academia but are interchangeable
+    in practice when talking about model serving. The following definitions should
+    help you and your colleagues avoid confusion when they are mentioned.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Model serving, model scoring**, model inference*, and *model prediction* are
+    interchangeable terminologies in the deep learning context. They all refer to
+    executing a model with given data points. In this book, we will use *model serving*.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Prediction service**, scoring service**, inference service*, and *model serving
+    service* are interchangeable; they refer to the web service that allows remote
+    model execution. In this book, we use the prediction service.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Predict* and *inference* are interchangeable in the model serving context;
+    they are the entry function related to running the model algorithm. In this book,
+    we use *predict*.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Prediction request*, *scoring request**,* and *inference request* are interchangeable;
+    they refer to the web API request that executes a model to make a prediction.
+    In this book, we use *prediction request*.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Machine learning algorithm*, *training algorithm*, and *model algorithm* are
+    interchangeable, as we state in section 6.1.3; the algorithm that runs in model
+    training and serving is the same machine learning algorithm (same neural network)
+    but in a different execution mode.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Model deployment* and *model release* are interchangeable; they indicate the
+    process of deploying/copying a trained model (files) to the production environment
+    where the business is running, so the customer can benefit from this new model.
+    Typically, this refers to loading the model files into the prediction service.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 6.2 Common model serving strategies
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Before we review the concrete model serving use cases and prediction service
+    designs in section 6.3, let’s first check out the three common model serving strategies:
+    direct model embedding, model service, and model server. No matter what you need
+    to do for your specific use cases, you can usually take one of the following three
+    approaches to build your prediction service.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 6.2.1 Direct model embedding
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Direct model embedding means loading the model and running model prediction
+    inside the user application’s process. For example, a flower identity–check mobile
+    app can load an image classification model directly in its local process and predict
+    plant identity from the given photos. The entire model loading and serving happen
+    within the model app locally (on the phone), without talking to other processes
+    or remote servers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Most user applications, like mobile apps, are written in strongly typed languages,
+    such as Go, Java, and C#, but most deep learning modeling code is written in Python.
+    It is therefore difficult to embed model code into application code, and even
+    if you do, the process can take a while. To facilitate model prediction across
+    non-Python processes, deep learning frameworks such as PyTorch and TensorFlow
+    provide C++ libraries. Additionally, TensorFlow offers Java ([https://github.com/tensorflow/java](https://github.com/tensorflow/java))
+    and JavaScript ([https://github.com/tensorflow/tfjs](https://github.com/tensorflow/tfjs))
+    libraries for loading and executing TensorFlow models directly from Java or JavaScript
+    applications.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Another disadvantage of direct embedding is resource consumption. If the model
+    runs on client devices, users without high-end devices may not have a good experience.
+    Running big deep learning models requires a lot of computation, and this can cause
+    slower apps.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Lastly, direct embedding involves mixing model serving code with application
+    business logic, which poses a challenge for backward compatibility. Therefore,
+    because it is rarely used, we only describe it briefly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 6.2.2 Model service
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '*Model* *service* refers to running model serving on the server side. For each
+    model, each version of a model, or each type of model, we build a dedicated web
+    service for it. This web service exposes the model prediction API over HTTP or
+    gRPC interfaces.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The model service manages the full life cycle of model serving, including fetching
+    the model file from the model artifact store, loading the model, executing the
+    model algorithm for a customer request, and unloading the model to reclaim the
+    server resources. Using the documents classification use case as an example, to
+    automatically sort documents in images and PDF by their content, we can train
+    a CNN model for OCR (optical character recognition) to extract text from document
+    images or PDF. To serve this model in a model service approach, we build a web
+    service exclusively for this CNN model, and the web API is only designed for this
+    CNN model’s prediction function. Sometimes we build a dedicated web service for
+    each major model version update.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The common pattern of model service is to build the model execution logic into
+    a Docker image and use gRPC or HTTP interface to expose the model’s predict function.
+    For service setup, we can host multiple service instances and employ a load balancer
+    to distribute customers’ prediction requests to these instances.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The biggest advantage of the model service approach is simplicity. We can easily
+    convert a model’s training container to a model serving container because, essentially,
+    a model prediction execution entails running the trained model neural network.
+    The model training code can turn into a prediction web service quickly by adding
+    an HTTP or gRPC interface and setting the neural network to evaluation mode. We
+    will see a model service’s design and use case in sections 6.3.1 and 6.3.2 and
+    a concrete code example in chapter 7.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Because model service is specific to the model algorithm, we need to build separate
+    services for different model types or versions. If you have several different
+    models to serve, this one service-per-model approach can spawn many services,
+    and the maintenance work for these services—such as patching, deploying, and monitoring—can
+    be exhausting. If you are facing this situation, the model server approach is
+    the right choice.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 6.2.3 Model server
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The model server approach is designed to handle multiple types of models in
+    a black-box manner. Regardless of the model algorithm and model version, the model
+    server can operate these models with a unified web prediction API. The model server
+    is the next stage; we no longer need to make code changes or deploy new services
+    with a new type of model or new version of the model. This saves a lot of duplicate
+    development and maintenance work from the model service approach.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Yet, the model server approach is a lot more complicated to implement and manage
+    than the model service approach. Handling model serving for various types of models
+    in one service and one unified API is complicated. The model algorithms and model
+    data are different; their predict functions are also different. For example, an
+    image classification model can be trained with a CNN network, whereas a text classification
+    model can be trained with a long short-term memory (LSTM) network. Their input
+    data is different (text vs. image), and their algorithms are different (CNN vs.
+    LSTM). Their model data also varies; text classification models require embedding
+    files to encode input text whereas CNN models don’t require embedding files. These
+    differences present many challenges to finding a low-maintenance, low-cost, and
+    unified serving approach.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Although building a model server approach is difficult, it’s definitely possible.
+    Many open source model serving libraries and services—such as TensorFlow Serving,
+    TorchServe, and NVIDIA Triton Inference Server—offer model server solutions. We
+    simply need to build customized integration logic to incorporate these tools into
+    our existing systems to solve business needs—for example, integrating TorchServe
+    into our model storage, monitoring, and alerting system.
+  prefs: []
+  type: TYPE_NORMAL
+- en: From a model deployment perspective, the model server is a black-box approach.
+    As long as we save the model file following the model server standards, the model
+    prediction should function when we upload the model-to-model server through its
+    management API. The complexity of model serving implementation and maintenance
+    can be greatly reduced. We will see a model server design and use case in section
+    6.3.3 and a code example with TorchServe in chapter 7.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note Should we always consider a model server approach? Not always. If we don’t
+    think of service development cost and maintenance cost, the model server approach
+    is the most powerful because it’s designed to cover all types of models. But if
+    we care about model serving cost efficiency—and we should!—then the ideal approach
+    depends on the use cases. In the next section, we will discuss the common model
+    serving use cases and the applied design.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 6.3 Designing a prediction service
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: A common mistake in software system design is aiming to build an omnipotent
+    system without considering the concrete user scenario. Overdesign will redirect
+    our focus from the immediate customer needs to the features that might be useful
+    in the future. As a result, the system either takes an unnecessarily long time
+    to build or is difficult to use. This is especially true for model serving.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Deep learning is an expensive business, both in terms of human and computational
+    resources. We should build only the necessities to move models into production
+    as quickly as possible and minimize the operation costs. To do so, we need to
+    begin with user scenarios.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this section, we will present three typical model serving scenarios, from
+    simple to complex. For each use case, we explain the scenario and illustrate a
+    suitable high-level design. By reading the following three subsections sequentially,
+    you will see how the prediction service’s design evolves when use cases become
+    more and more complicated.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note The goal of prediction service design is not to build a powerful system
+    that works for various models but to build a system that suits the circumstances
+    in a cost-efficient manner.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 6.3.1 Single model application
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Imagine building a mobile app that can swap people’s faces between two pictures.
+    The consumer expects the app UI to upload photos, select sources and target pictures,
+    and execute a deepfake model ([https://arxiv.org/abs/1909.11573](https://arxiv.org/abs/1909.11573))
+    for swapping faces between the two selected images. For an application like this
+    that only needs to work with one model, the serving approach can be either model
+    service (6.2.2) or direct model embedding (6.2.1).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Model service approach
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'From the discussion in section 6.2.2, the model service approach involves building
+    a web service for each model. So we can build the face-swap model app with the
+    following three components: a front UI app (component A) that runs on our phone;
+    an application backend to handle user operation (component B); and a backend service,
+    or *predictor* (component C), to host a deepfake model and expose a web API to
+    execute the model for each face-swap request.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: When a user uploads a source image and a target image and clicks the face-swap
+    button on the mobile app, the mobile backend application will receive the request
+    and call the predictor’s web API for face-swapping. Then the predictor preprocesses
+    the user request data (the images), executes the model algorithm, and postprocesses
+    the model output (the images) to the application backend. Ultimately, the mobile
+    app will display the source and target images with swapped faces. Figure 6.4 illustrates
+    a general design that suits the face-swap use case.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/06-04.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 6.4 A single model predictor design in a client/server setup
+  prefs: []
+  type: TYPE_NORMAL
+- en: If we zoom into the predictor (component C), we see that the model serving logic
+    works the same as the general model prediction workflow that we introduced in
+    figure 6.3\. The predictor (model serving service) loads the model file from the
+    model artifactory and runs the model to respond to the request received by the
+    web interface.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The design in figure 6.4 generally works for any application that has a web
+    backend and only one model. The key component in this design is the predictor;
+    it is a web service and often runs as a Docker container. We can implement this
+    approach quickly because this predictor container can be easily converted from
+    the model training container that builds the model. The two main work items that
+    transform a training container to a predictor container are the web predict API
+    and the evaluation mode in the training neural network. We will present a concrete
+    predictor container example in section 7.1.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Direct model embedding approach
+  prefs: []
+  type: TYPE_NORMAL
+- en: Another design approach for building a single model application is combining
+    the model execution code with the application’s user logic code. There is no server
+    backend, so everything happens locally on the user’s computer or phone. Using
+    the face swap app as an example, the deepfake model file is in the application’s
+    deployment package, and when the application starts, the model is loaded into
+    the application’s process space. Figure 6.5 illustrates this concept.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/06-05.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 6.5 In the direct model embedding design, the model is executed in the
+    same process as the application logic.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Model serving doesn’t have to run in a separate service. In figure 6.5, we see
+    that the model serving code (the single model box) and the data transformation
+    code can run with the user logic code in the same application. Nowadays, many
+    deep learning frameworks provide libraries to run models in non-Python applications.
+    For example, TensorFlow offers Java, C++, and JavaScript SDK to load and execute
+    models. With SDK’s help, we can train and execute models directly in Java/C++/
+    JavaScript applications.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note Why should we consider direct model embedding? By using model embedding,
+    we can directly integrate model serving logic with application logic and run them
+    together in the same process space. This provides two advantages over the predictor
+    service approach in figure 6.4\. First, it reduces one network hop; there is no
+    web request to the predictor, and model execution happens locally. Second, it
+    improves service debuggability because we can run the application as one piece
+    locally.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Why is the model service approach more popular?
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Although the direct model embedding approach looks simple and saves one network
+    hop, it is still not a popular choice for building model serving. Here are the
+    four reasons:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The model algorithm has to be reimplemented in a different language. A model’s
+    algorithm and execution code is usually written in Python. If we choose a model
+    service approach, implementing the model serving as a web service (predictor in
+    figure 6.4), we can reuse most of the training code and build it quickly. But
+    if we choose to embed model serving in a non-Python application, we must reimplement
+    model loading, model execution, and data process logic in the application’s language
+    (such as Java or C++). This work is nontrivial, and not many developers have the
+    depth of knowledge to rewrite the training algorithms.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The ownership boundary is blurred. When embedding a model into an application,
+    the business logic code can mingle with the serving code. When the codebase becomes
+    complicated, it’s difficult to draw a boundary between the serving code (owned
+    by the data scientist) and other application code (owned by the developer). When
+    data scientists and developers are from two different teams but work on the same
+    code repo, the shipping velocity will drop significantly because the cross-team
+    code review and deployment takes longer than usual.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Performance problems can occur on the client’s devices. Usually, apps are run
+    on the customer’s mobiles, tablets, or lower-end laptops. On these devices, capturing
+    features from raw user data and then preprocessing model input data and running
+    model prediction can lead to performance problems such as CPU usage spikes, app
+    slowdown, and high memory usage.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A memory leak can occur easily. For example, when executing a TensorFlow model
+    in Java, the algorithm execution and input/output parameter objects are all created
+    in the native space. These objects won’t be recycled by Java GC (Garbage Collection)
+    automatically; we have to manually depose them. It’s very easy to overlook recycling
+    the native resources claimed by the model, and because the native objects’ memory
+    allocations are not tracked in Java heap, their memory usage is difficult to observe
+    and measure. So the memory leak can happen and is hard to fix.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Note To troubleshoot native memory leaks, Jemalloc ([https://github.com/jemalloc/jemalloc/wiki/Background](https://github.com/jemalloc/jemalloc/wiki/Background))
+    is a very handy tool. You can check out my blog post “Fix Memory Issues in Your
+    Java Apps” ([http://mng.bz/lJ8o](http://mng.bz/lJ8o)) for further details.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For the previously listed reasons, we highly recommend you adopt the model service
+    approach for single model application use cases.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 6.3.2 Multitenant application
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: We will use a chatbot application as an example to explain multitenant use cases.
+    First, let’s set the context. A *tenant* is a company or organization (such as
+    a school or a retail store) that uses the chatbot application to communicate with
+    its customers. The tenants use the same software/service—the chatbot application—but
+    have separate accounts with their data segregated. A *chat user* is the customer
+    of a tenant and uses the chatbot to do business with the tenant.
+  prefs: []
+  type: TYPE_NORMAL
+- en: By design, the chatbot application relies on an intent classification model
+    to identify the user’s intention from his conversation, and then the chatbot redirects
+    the user request to the correct service department of the tenant. Currently, this
+    chatbot is taking a single model application approach, meaning it’s using a single
+    intent classification model for every user and tenant.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now, because of customer feedback from tenants on the low prediction accuracy
+    of the single intent classification model, we decide to let tenants use our training
+    algorithm to build their own model with their own dataset. This way, the model
+    can fit better with each tenant’s business situation. For model serving, we will
+    let tenants use their own model for intent classification prediction requests.
+    When a chatbot user now speaks to the chatbot application, the application will
+    find the tenant’s specific model to answer the user’s question. The chatbot is
+    changed to a multitenant application.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this chatbot multitenant use case, although the models belong to different
+    tenants and are trained with different datasets, they are the same type of model.
+    Because these models are trained with the same algorithm, their model’s algorithm
+    and predict function are all the same. We can extend the model service design
+    in figure 6.4 to support multitenancy by adding a model cache. By caching model
+    graphs and their dependent data in memory, we can perform multitenancy model serving
+    in one service. Figure 6.6 illustrates this concept.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Compared with the model service design in figure 6.4, the design in figure 6.6
+    adds a model cache (component A) and a model file server (component B). Because
+    we want to support multiple models in one service, we need a model cache in memory
+    to host and execute different models. The model file server stores the model files
+    that can be loaded into the prediction service’s model cache. The model server
+    can also be shared among prediction service instances.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To build a good model cache, we need to consider model cache management and
+    memory resource management. For the model cache, we need to assign a unique model
+    ID as a cache key to identify each model in the cache. For example, we can use
+    the model training run ID as the model ID; the benefit is, for each model in the
+    cache, we can trace which training run produced it. Another more flexible way
+    of constructing the model ID is combining the model name (a customized string)
+    and the model version. No matter which model ID style we choose, the ID has to
+    be unique, and it must be provided in the prediction request.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/06-06.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 6.6 A prediction service with model caching for multitenant applications
+  prefs: []
+  type: TYPE_NORMAL
+- en: For memory resource management, because each server has limited memory and GPU
+    resources, we can’t load all the required models into memory. So we need to build
+    model-swapping logic to the model cache. When the resource capacity is reached—for
+    instance, the process is about to run out of memory—some models need to be evicted
+    from the model cache to free some resources for new model prediction requests.
+    Methods like LRU (least recently used) algorithm and model partition across different
+    instances can help reduce the cache missing rate (the request model is not in
+    the cache) and make model swapping less disruptive. The sample intent classification
+    prediction service we build in section 7.1 demonstrates the model caching concept;
+    you can explore the details there.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Can we extend the model caching design to multiple model types?
+  prefs: []
+  type: TYPE_NORMAL
+- en: We don’t recommend extending the model caching design to multiple model types.
+    The input/output data format and data process logic of various model types, such
+    as the image classification model and intent classification model, are very different,
+    so it’s hard to host and execute different types of models in the same model cache.
+    To do that, we would need to build separate web interfaces and separate data preprocess
+    and postprocess code for each type of model. At this point, you will find it’s
+    easier to build separate prediction services for each model type—with each service
+    having its own type of web interface and data process logic and managing the model
+    cache for its own model type. For example, we can build an image classification
+    prediction service and an intent classification prediction service for these two
+    different model types separately.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This one service per model type approach works well when you only have a few
+    model types. But if you have 20+ types of models, then it can’t scale. Building
+    and maintaining web services—such as setting up a CI/CD pipeline, networking,
+    and deployment—is costly. Also, the work of monitoring a service is nontrivial;
+    we need to build monitoring and alerting mechanisms to ensure the service is running
+    24/7\. Consider the costs of onboarding and maintenance work if we follow this
+    design to support 100+ model types for the entire company. To scale up and serve
+    lots of different model types in one system, we need to take the model server
+    approach (section 6.2.3), which we will discuss further in the next section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 6.3.3 Supporting multiple applications in one system
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'You have successfully built multiple model serving services to support different
+    applications, such as multitenant chatbot, face-swapping, flower recognition,
+    and PDF document scanning. Now, you are given two more tasks: (1) building the
+    model serving support for a new application that uses a voice recognition model
+    and (2) reducing model serving costs for all applications.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: So far, all the model serving implementations have been built with the model
+    service approach. From previous discussions in sections 6.3.1 and 6.3.2, we know
+    this approach can’t scale when we have more and more model types. When many products
+    and applications have model serving requirements, it’s better to build just one
+    centralized prediction service to address all the serving needs. We name this
+    type of prediction service a *prediction platform*. It takes the model server
+    approach (section 6.2.3) and handles all kinds of model serving in one place.
+    This is the most cost-efficient approach for multiple application situations because
+    the model onboarding and maintenance cost is limited to one system, which is much
+    less than one prediction service per application approach (section 6.2.2).
+  prefs: []
+  type: TYPE_NORMAL
+- en: To build such an omnipotent model serving system, we need to consider lots of
+    elements, such as model file format, model libraries, model training frameworks,
+    model caching, model versioning, model flow execution, model data processing,
+    model management, and a unified prediction API that suits all model types. Figure
+    6.7 illustrates the design and workflow of the prediction platform.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The prediction platform design in figure 6.7 is much more complicated than the
+    model service approach in figure 6.6\. This is because we need to combine multiple
+    components and services to support arbitrary models. Let’s look at each component
+    of the system and then the model prediction workflow.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../Images/06-07.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 6.7 A general prediction service (platform) design that works with arbitrary
+    model types
+  prefs: []
+  type: TYPE_NORMAL
+- en: Unified web API
+  prefs: []
+  type: TYPE_NORMAL
+- en: To support arbitrary models, we expect the public prediction APIs to be generic.
+    No matter which model is called, the API’s spec—for instance, its payload schema
+    of the prediction request and response—should be generic enough to satisfy the
+    model’s algorithm requirement. One example of this kind of unified API is the
+    KFServing predict protocol ([http://mng.bz/BlB2](http://mng.bz/BlB2)), which aims
+    to standardize the prediction protocol that works for any models and various prediction
+    backends.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The web APIs are also expected to be simple, so we can reduce the customer
+    onboarding and maintenance effort. The prediction APIs can be categorized into
+    three buckets: model prediction requests API, model metadata fetching API, and
+    model deployment API. The model metadata fetching API and deployment API are very
+    useful because they are agnostic about the model they are serving. We need these
+    methods to check the model metadata, such as the model version and algorithm info,
+    and to check the model deployment status.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Routing component
+  prefs: []
+  type: TYPE_NORMAL
+- en: Normally, each type of serving backend can only handle a few types of models.
+    To support arbitrary models, we need to have different kinds of serving backends,
+    such as TensorFlow Serving backend for TensorFlow models and TorchServe backend
+    for PyTorch models. When receiving a model prediction request, the system needs
+    to know which backend can handle it. This is done with the routing component.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The routing component responds to route the prediction request to the correct
+    backend inference server. For a given request, the routing component first fetches
+    the model’s metadata; the metadata includes the model algorithm name and version,
+    the model version, and the training framework. Then, by matching the model metadata
+    with the routing config, it determines to which inference backend it should route
+    the prediction request.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Graph execution component
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The graph execution component handles the type of prediction that needs to
+    execute a series of model predictions. For example, to automate the mortgage approval
+    process, we have to run a loan approval prediction request following three models
+    in a sequence: a PDF scanning model to parse the text from the PDF loan application,
+    a named entity recognition model to recognize the keywords, and a loan-scoring
+    model to score the loan application. To support such requirements, we can define
+    a directed acyclic graph (DAG) to describe the model execution chain and build
+    a graph execution engine to execute in one go.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Inference server
+  prefs: []
+  type: TYPE_NORMAL
+- en: The inference (model) server does the actual work to compute model prediction
+    by managing model caching and model prediction execution. It’s similar to the
+    prediction service shown in figure 6.6 but more sophisticated because it needs
+    to support arbitrary model algorithms. Besides the predict API, the inference
+    server should also offer model management API to register new models and remove
+    models programmatically.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Building an inference server is much more complicated than building a predictor
+    service; not many engineers want to try that. But luckily, there are multiple
+    black-box, open source approaches that work out of the box, such as TensorFlow
+    Serving, TorchServe, and NVIDIA Triton Inference Server. In practice, we often
+    reuse these existing open source inference servers and integrate them into our
+    own routing component and graph execution component. We will discuss more on the
+    open source model server tools in chapter 7.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Applications
+  prefs: []
+  type: TYPE_NORMAL
+- en: In figure 6.7, we see applications A, B, and C are sharing the same model serving
+    backend. The model serving for different applications occurs at the same place.
+    Compared with the model service design in figure 6.6, the prediction platform
+    is more scalable and more cost-efficient because there is almost no onboarding
+    cost to add new application D.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For example, if we want to onboard new application D—a voice-to-text scripting
+    application—we just need to upload the voice scripting model to the model file
+    server and then let the application use the unified prediction web API of the
+    prediction platform. There is no code change on the prediction platform side for
+    supporting a new application.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Model prediction workflow
+  prefs: []
+  type: TYPE_NORMAL
+- en: After explaining each key component, let’s look at a typical model prediction
+    workflow (figure 6.7). First, we publish our model files to the model file server
+    and update the config in the routing component, so the routing component knows
+    to which inference server it should route the prediction request for this type
+    of model. Second, applications send prediction requests to the prediction system’s
+    web APIs, and then the request is routed by the routing component to the correct
+    inference server. Third, the inference server will load the model from the model
+    file server, convert the request payload to model input, run the model algorithm,
+    and return the prediction result with a postprocess.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note Prediction platform design is not always the best serving approach! In
+    theory, the design in figure 6.7 can work for any model, but it does come with
+    some extra cost. Its setup, maintenance, and debugging are way more complicated
+    than the model service approach. This design is overkill for scenarios introduced
+    in sections 6.3.1 and 6.3.2\. Because each design has its merits, we recommend
+    not adhering to one serving approach but choosing the serving method based on
+    your actual user scenarios.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 6.3.4 Common prediction service requirements
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Although we state that designing prediction services should start from concrete
+    use cases, different situations lead to different designs. Three common requirements
+    exist among all model serving designs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Model deployment safety*—No matter what model rollout strategy and version
+    strategy we choose, we must have a way to roll back a model to the previous state
+    or version.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Latency*—Web request latency is a crucial factor in the success of many online
+    businesses. Once we build the model serving support, the next step is to try our
+    best to reduce the average prediction response time.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Monitoring and alerting*—Model serving is the most critical service in a deep
+    learning system; if it goes down, the business stops. Remember, actual businesses
+    run on top of the model prediction in realtime. Customers are affected immediately
+    if the service is down or serving latency increases. Prediction service should
+    be the most-equipped service among other deep learning services in monitoring
+    and alerting.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In this chapter, we have reviewed concepts, definitions, and abstract high-level
+    system designs of model serving. We hope you gain a clear picture of what model
+    serving is and what to consider when designing model serving systems. In the next
+    chapter, we will demo two sample prediction services and discuss the commonly
+    used prediction open source tools. These examples will show you how the design
+    concepts in this chapter are applied in real life.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'A model can be several files; it is composed of three elements: machine learning
+    algorithm, model executor (wrapper), and model data.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Model prediction and model inference have the same meaning in the model serving
+    context.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Direct model embedding, model service, and model server are the three common
+    types of model serving strategies.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The model service approach involves building a prediction service for each model,
+    each version of a model, or each type of model.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The model server approach consists of building only one prediction service,
+    but it can run models trained with different algorithms and frameworks and can
+    run different versions of each model.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: When designing a model serving system, the first component to understand is
+    the use case, so we can decide which serving approach is most appropriate.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Cost efficiency is the primary goal for designing model serving systems; the
+    cost includes service deployment, maintenance, monitoring, infrastructure, and
+    service development.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: For single model applications, we recommend the model service approach.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: For multitenant applications, we recommend the model service approach with an
+    in-memory model cache.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: For supporting multiple applications with different types of models, the model
+    server and prediction platform are the most suitable approaches. They include
+    a unified prediction API, a routing component, a graph execution component, and
+    multiple model server backends.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
