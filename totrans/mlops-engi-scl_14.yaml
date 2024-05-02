@@ -1,19 +1,24 @@
 - en: 11 Hyperparameter optimization
+  id: totrans-0
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
 - en: This chapter covers
+  id: totrans-1
   prefs: []
   type: TYPE_NORMAL
 - en: Understanding machine learning with hyperparameter optimization
+  id: totrans-2
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Introducing hyperparameter optimization for the DC taxi model
+  id: totrans-3
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Visualizing the outcomes of hyperparameter optimization trials
+  id: totrans-4
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -26,14 +31,17 @@
     Tree-Structured Parzen Estimator(TPE) that fits a Gaussian mixture model (GMM)
     to the hyperparameters in your machine learning system. The performance of these
     model instances is compared using various Optuna visualization plots.
+  id: totrans-5
   prefs: []
   type: TYPE_NORMAL
 - en: 11.1 Hyperparameter optimization with Optuna
+  id: totrans-6
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
 - en: This section teaches about Optuna for hyperparameter optimization (HPO) and
     how to add support for HPO to the DC taxi fare estimation model.
+  id: totrans-7
   prefs: []
   type: TYPE_NORMAL
 - en: Optuna is one of many open source HPO frameworks available for PyTorch. Like
@@ -43,6 +51,7 @@
     to compute the value of a loss function, for example an instance of an experiment
     on the DcTaxiModel model to compute its test loss based on a set of hyperparameter
     values.
+  id: totrans-8
   prefs: []
   type: TYPE_NORMAL
 - en: In Optuna, a trial must produce a value for the loss function that you seek
@@ -50,24 +59,32 @@
     value is usually captured in an objective function. Note that the implementation
     is intentionally incomplete ❸ to explain just the parts relevant to understanding
     the Optuna API.
+  id: totrans-9
   prefs: []
   type: TYPE_NORMAL
 - en: Listing 11.1 A starter for DC taxi HPO with objective function
+  id: totrans-10
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE0]'
+  id: totrans-11
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE0]'
 - en: ❶ An objective function is a standard interface to the Optuna trial.
+  id: totrans-12
   prefs: []
   type: TYPE_NORMAL
 - en: ❷ suggest_int returns integers chosen by Optuna to optimize the objective function.
+  id: totrans-13
   prefs: []
   type: TYPE_NORMAL
 - en: ❸ hparams’s implementation is completed later in this chapter.
+  id: totrans-14
   prefs: []
   type: TYPE_NORMAL
 - en: ❹ Optuna suggests hyperparameters for each trial to reduce the value of train_val_rmse.
+  id: totrans-15
   prefs: []
   type: TYPE_NORMAL
 - en: 'Notice that, in the hparams dictionary, there is a single int hyperparameter
@@ -77,6 +94,7 @@
     In the example, the suggest_int(''seed'', 0, pt.iinfo(pt.int32).max - 1) method
     call specifies that Optuna should recommend values for the pseudorandom number
     seed generator from 0 up to and excluding the maximum positive 32-bit integer.'
+  id: totrans-16
   prefs: []
   type: TYPE_NORMAL
 - en: Recall that the implementation of the DcTaxiModel depends on additional hyperparameter
@@ -86,15 +104,18 @@
     for the other hyperparameter values. Since the strategies for sampling these hyperparameters
     are more complex than suggest_int, the next section explains some foundational
     concepts.
+  id: totrans-17
   prefs: []
   type: TYPE_NORMAL
 - en: 11.1.1 Understanding loguniform hyperparameters
+  id: totrans-18
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
 - en: This section puts forward the rationale for using log-uniform hyperameters during
     training and proposes the hyperparameters that should be set as log-uniform for
     the DC taxi model.
+  id: totrans-19
   prefs: []
   type: TYPE_NORMAL
 - en: 'For many continuous valued hyperparameters such as the learning rate, it is
@@ -106,43 +127,57 @@
     a range where the upper bound is more than one order of magnitude larger than
     the lower bound. The rationale has to do with how the base-10 numeric system works
     and is illustrated in the following example:'
+  id: totrans-20
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE1]'
+  id: totrans-21
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE1]'
 - en: which outputs
+  id: totrans-22
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE2]'
+  id: totrans-23
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE2]'
 - en: Since x is assigned to contain 300 floating point values from 0 to 1,000 (three
     orders of magnitude), the print statement outputs the count of values that appears
     within a range for each of the orders of magnitude (i.e., 0 to 10, 10 to 100,
     and 100 to 1,000). In this example, there is approximately a 100-times difference
     in the number of values of x that fall in the 0 to 10 range versus the number
     of the values in the 100 to 1,000 range, or more precisely 3 versus 269.
+  id: totrans-24
   prefs: []
   type: TYPE_NORMAL
 - en: 'In general, when sampling with uniform likelihood from a linear range that
     is 10*N* larger, you can expect to obtain on average 10*N* times more samples
     from the larger range. Application of the log function eliminates this unintended
     skew due to the base-10 numeric system, as evidenced by the following example:'
+  id: totrans-25
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE3]'
+  id: totrans-26
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE3]'
 - en: which outputs
+  id: totrans-27
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE4]'
+  id: totrans-28
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE4]'
 - en: illustrating a roughly equal distribution of the 300 samples across the entire
     range from 1 to 1,000 due to the use of the log-base 10 scale as opposed to the
     regular unit scale.
+  id: totrans-29
   prefs: []
   type: TYPE_NORMAL
 - en: The concept of using the sampling hyperparameter values over log-scaled ranges
@@ -151,15 +186,18 @@
     Trial API function call suggest_int('max_batches', 40, 4000, log = True) since
     the lower and upper boundary values in the call span a range greater than an order
     of magnitude.
+  id: totrans-30
   prefs: []
   type: TYPE_NORMAL
 - en: 11.1.2 Using categorical and log-uniform hyperparameters
+  id: totrans-31
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
 - en: This section builds on what you learned about log-uniform hyperparameters to
     explain how the optimizer learning rate can be initialized using a hyperparameter
     sampled from a log-uniform scale by Optuna.
+  id: totrans-32
   prefs: []
   type: TYPE_NORMAL
 - en: 'The optimizer and the corresponding learning rate are some of the other hyperparameters
@@ -168,12 +206,16 @@
     magnitude, it should be optimized in the trial using the suggest_loguniform method.
     This can be implemented as follows, for values of candidate learning rates in
     the range [0.001, 0.1):'
+  id: totrans-33
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE5]'
+  id: totrans-34
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE5]'
 - en: ❶ Use an optimizer learning rate from the log-uniform range [0.001, 0.1).
+  id: totrans-35
   prefs: []
   type: TYPE_NORMAL
 - en: 'Since the existing implementation of the configure_optimizers method of the
@@ -181,12 +223,16 @@
     you can have Optuna suggest the choice of these values (SGD or Adam) in the implementation
     of the objective method. This requires the use of the suggest_categorical method
     of the trial object as shown:'
+  id: totrans-36
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE6]'
+  id: totrans-37
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE6]'
 - en: ❶ Use Adam and SGD as optimizer options in each HPO trial.
+  id: totrans-38
   prefs: []
   type: TYPE_NORMAL
 - en: 'The arguments for the trial API are computed at program runtime, which means
@@ -195,32 +241,42 @@
     specified using a list of integers, where the integers are generated dynamically,
     resolving to powers of two from 2^(16) up to and including 2^(21)—in other words,
     the values [65536, 131072, 262144, 524288, 1048576, 2097152]:'
+  id: totrans-39
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE7]'
+  id: totrans-40
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE7]'
 - en: ❶ Pre-compute a Python list of hyperparameter values before using suggest_categorical.
+  id: totrans-41
   prefs: []
   type: TYPE_NORMAL
 - en: A more interesting application of suggest_categorical is shown, with implementation
     of the specification for the num_hidden_neurons hyperparameter.
+  id: totrans-42
   prefs: []
   type: TYPE_NORMAL
 - en: Listing 11.2 Optuna trials to discover the neural net architecture
+  id: totrans-43
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE8]'
+  id: totrans-44
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE8]'
 - en: ❶ Specify the network architecture as a hyperparameter (for example, [5, 11,
     7]).
+  id: totrans-45
   prefs: []
   type: TYPE_NORMAL
 - en: The DcTaxiModel can use a string representation of the number of neurons in
     hidden layers to build its model layers. For example, a string representation
     [3, 5, 7, 8] can represent four hidden torch.nn.Linear layers with three neurons
     in the first layer, five in the second, and so on.
+  id: totrans-46
   prefs: []
   type: TYPE_NORMAL
 - en: This type of a specification can be implemented as an Optuna hyperparameter
@@ -238,16 +294,21 @@
     layer) is assigned from a different suggest_categorical list, specified as [7,
     11, 13, 19, 23]. Ultimately, num_hidden_neurons resolves to a Python list with
     an Optuna-proposed configuration of hidden layers and neurons.
+  id: totrans-47
   prefs: []
   type: TYPE_NORMAL
 - en: 'Combining these hyperparameters with the an entire implementation of the objective
     function results in the following:'
+  id: totrans-48
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE9]'
+  id: totrans-49
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE9]'
 - en: 11.2 Neural network layers configuration as a hyperparameter
+  id: totrans-50
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
@@ -255,6 +316,7 @@
     learning models, with an arbitrary number of hidden layers and neurons per layer.
     The section also describes how a hyperparameter value can be used to specify this
     configuration.
+  id: totrans-51
   prefs: []
   type: TYPE_NORMAL
 - en: 'Instead of arbitrarily choosing the configuration of the neural network parameters
@@ -269,41 +331,55 @@
     utility method shown in the following code snippet implements this conversion
     from a string to the torch.nn.Linear instances along with an arbitrary activation
     function:'
+  id: totrans-52
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE10]'
+  id: totrans-53
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE10]'
 - en: ❶ Create a Python list of the linear (feedforward) layers . . .
+  id: totrans-54
   prefs: []
   type: TYPE_NORMAL
 - en: ❷ . . . and create a list of matching length consisting of activation classes.
+  id: totrans-55
   prefs: []
   type: TYPE_NORMAL
 - en: ❸ Convert activation classes to activation instances.
+  id: totrans-56
   prefs: []
   type: TYPE_NORMAL
 - en: ❹ Zip the linear layers with the activation function instances.
+  id: totrans-57
   prefs: []
   type: TYPE_NORMAL
 - en: ❺ Return the result as a flat Python list.
+  id: totrans-58
   prefs: []
   type: TYPE_NORMAL
 - en: 'With the build_hidden_layers utility method added to the implementation of
     DcTaxiModel, you are ready to modify the __init__ method to use the build_hidden_
     layers as follows:'
+  id: totrans-59
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE11]'
+  id: totrans-60
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE11]'
 - en: ❶ Create a list of hidden layer neurons (for example, [3, 5, 8]).
+  id: totrans-61
   prefs: []
   type: TYPE_NORMAL
 - en: ❷ Use sequences of feed-forward hidden layers for the model.
+  id: totrans-62
   prefs: []
   type: TYPE_NORMAL
 - en: ❸ Specify the hidden layers using a string format.
+  id: totrans-63
   prefs: []
   type: TYPE_NORMAL
 - en: In the example, the json.loads method is used to convert the hidden layer string
@@ -312,9 +388,11 @@
     input features and one output value, the hidden values are specified by unrolling
     the list of the torch.nn.Linear instances from the build_hidden_layers method
     as individual objects passed to the torch.nn.Sequential initializer.
+  id: totrans-64
   prefs: []
   type: TYPE_NORMAL
 - en: 11.3 Experimenting with the batch normalization hyperparameter
+  id: totrans-65
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
@@ -322,6 +400,7 @@
     descent convergence.[²](#pgfId-1014577) Despite the widespread use of batch normalization,
     it is useful to collect data that demonstrates it can help create more effective
     DC taxi models.
+  id: totrans-66
   prefs: []
   type: TYPE_NORMAL
 - en: 'Since the batch normalization feature should be enabled or disabled depending
@@ -332,63 +411,83 @@
     implementation also correctly configures each of the BatchNorm1d instances to
     have the right number of inputs, matching the number of inputs in the corresponding
     Linear layer, which should follow the BatchNorm1d:'
+  id: totrans-67
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE12]'
+  id: totrans-68
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE12]'
 - en: ❶ Build a list with the positional index of the Linear classes in the model.
+  id: totrans-69
   prefs: []
   type: TYPE_NORMAL
 - en: ❷ Use the maximum int value as the last element of the list to represent an
     infinite value.
+  id: totrans-70
   prefs: []
   type: TYPE_NORMAL
 - en: ❸ Create sublists with s as an index of each Linear and e as an index before
     each Linear.
+  id: totrans-71
   prefs: []
   type: TYPE_NORMAL
 - en: ❹ Instantiate BatchNorm1d with inputs matching the inputs of the corresponding
     Linear.
+  id: totrans-72
   prefs: []
   type: TYPE_NORMAL
 - en: ❺ Insert the BatchNorm1d instances before the corresponding Linear.
+  id: totrans-73
   prefs: []
   type: TYPE_NORMAL
 - en: ❻ Package the entire sequence of BatchNorm1d and Linear layers into Sequential.
+  id: totrans-74
   prefs: []
   type: TYPE_NORMAL
 - en: Once the batch_norm_linear method is added to the DcTaxiModel class, the __init__
     method of the class should be modified (listing 11.3 ❶) to apply batch normalization
     depending on the value of the batch_norm_linear_layers hyperparameter.
+  id: totrans-75
   prefs: []
   type: TYPE_NORMAL
 - en: Listing 11.3 Using optional batch normalization
+  id: totrans-76
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE13]'
+  id: totrans-77
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE13]'
 - en: ❶ Batch normalize Linear layers if batch_norm_linear_layers is True.
+  id: totrans-78
   prefs: []
   type: TYPE_NORMAL
 - en: With the batch normalization in place, DcTaxiModel and the matching build method
     are ready for HPO.
+  id: totrans-79
   prefs: []
   type: TYPE_NORMAL
 - en: Listing 11.4 DcTaxiModel implementation with HPO support
+  id: totrans-80
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE14]'
+  id: totrans-81
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE14]'
 - en: 11.3.1 Using Optuna study for hyperparameter optimization
+  id: totrans-82
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
 - en: This section introduces the concept of an Optuna study, describes its relationship
     to the Optuna trials, and helps you use a study instance to run and analyze a
     collection of trials in your HPO implementation.
+  id: totrans-83
   prefs: []
   type: TYPE_NORMAL
 - en: The objective function in Optuna is responsible for the execution of a single
@@ -401,6 +500,7 @@
     compare their outcomes, and analyze the hyperparameters involved in the trials.
     In Optuna, a study serves the role of a container for related trials and provides
     tabular as well as visual data about the trial outcomes and associated hyperparameters.
+  id: totrans-84
   prefs: []
   type: TYPE_NORMAL
 - en: As shown in listing 11.5, with an objective function in place, a study is defined
@@ -413,67 +513,88 @@
     useless from the standpoint of the optimization of the DcTaxiModel machine learning
     performance, it serves the important purpose of ensuring the reproducibility of
     the HPO trials.
+  id: totrans-85
   prefs: []
   type: TYPE_NORMAL
 - en: The entire HPO implementation for the DcTaxiModel from listing 11.4 is shown.
+  id: totrans-86
   prefs: []
   type: TYPE_NORMAL
 - en: Listing 11.5 An Optuna study used to execute HPO
+  id: totrans-87
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE15]'
+  id: totrans-88
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE15]'
 - en: ❶ Configure the study to minimize MSE loss of the DcTaxiModel.
+  id: totrans-89
   prefs: []
   type: TYPE_NORMAL
 - en: ❷ Use the TPE algorithm for HPO.
+  id: totrans-90
   prefs: []
   type: TYPE_NORMAL
 - en: ❸ Start the HPO using 100 trials.
+  id: totrans-91
   prefs: []
   type: TYPE_NORMAL
 - en: After executing the code in listing 11.5, the study.optimize method completes
     100 trials of HPO. The details of the individual trials are made available using
+  id: totrans-92
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE16]'
+  id: totrans-93
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE16]'
 - en: 'which should return a pandas data frame with the values resembling the following:'
+  id: totrans-94
   prefs: []
   type: TYPE_NORMAL
 - en: '| number | value | params_seed |'
+  id: totrans-95
   prefs: []
   type: TYPE_TB
 - en: '| 96 | 2.390541 | 1372300804 |'
+  id: totrans-96
   prefs: []
   type: TYPE_TB
 - en: '| 56 | 7.403345 | 1017301131 |'
+  id: totrans-97
   prefs: []
   type: TYPE_TB
 - en: '| 71 | 9.006614 | 939699871 |'
+  id: totrans-98
   prefs: []
   type: TYPE_TB
 - en: '| 74 | 9.139935 | 973536326 |'
+  id: totrans-99
   prefs: []
   type: TYPE_TB
 - en: '| 94 | 9.817746 | 1075268021 |'
+  id: totrans-100
   prefs: []
   type: TYPE_TB
 - en: where the number column specifies the index of the trial suggested by Optuna,
     the value is the corresponding value of the loss function returned by trainer.callback_
     metrics['train_val_rmse'].item() in the objective method, and the params_seed
     is the seed value used to initialize the model parameters (weights) of the DcTaxiModel.
+  id: totrans-101
   prefs: []
   type: TYPE_NORMAL
 - en: 11.3.2 Visualizing an HPO study in Optuna
+  id: totrans-102
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
 - en: This section illustrates the HPO study executed in this chapter using three
     different Optuna visualizations and compares the visualizations in terms of their
     relevance to HPO.
+  id: totrans-103
   prefs: []
   type: TYPE_NORMAL
 - en: A completed study instance can also be visualized using the Optuna visualization
@@ -481,6 +602,7 @@
     is outside the scope of this book, I found myself reusing just three visualizations
     consistently across a range of machine learning models. These visualizations are
     explained in the rest of this section in the order of declining importance.
+  id: totrans-104
   prefs: []
   type: TYPE_NORMAL
 - en: The hyperparameter importance plot reveals surprising information about the
@@ -490,31 +612,41 @@
     random variable used for model initialization. The hyperparameters that are more
     important than the random seed deserve further study, while the hyperparameters
     that are less important than a random variable should be de-prioritized.
+  id: totrans-105
   prefs: []
   type: TYPE_NORMAL
 - en: To create an importance plot you can use
+  id: totrans-106
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE17]'
+  id: totrans-107
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE17]'
 - en: which should render a bar graph resembling the one in figure 11.1.
+  id: totrans-108
   prefs: []
   type: TYPE_NORMAL
 - en: '![11-01](Images/11-01.png)'
+  id: totrans-109
   prefs: []
   type: TYPE_IMG
 - en: Figure 11.1 The importances plot assists in guiding later HPO iterations.
+  id: totrans-110
   prefs: []
   type: TYPE_NORMAL
 - en: Once you have identified a subset of hyperparameters that you wish to explore
     in more detail, the next step is to plot them on a parallel coordinates chart.
     You can instantiate this plot using
+  id: totrans-111
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE18]'
+  id: totrans-112
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE18]'
 - en: which plots the relationship between the lr (learning rate), batch_size, and
     num_hidden_layer_0_neurons hyperparameters. Notice that in figure 11.2, the lines
     represent the individual trial configurations, with those of the darker shade
@@ -522,13 +654,16 @@
     a collection of the darker lines that pass though a certain interval for a hyperparameter
     indicate that the hyperparameter interval deserves closer inspection and may warrant
     another iteration of HPO.
+  id: totrans-113
   prefs: []
   type: TYPE_NORMAL
 - en: '![11-02](Images/11-02.png)'
+  id: totrans-114
   prefs: []
   type: TYPE_IMG
 - en: Figure 11.2 The parallel coordinate plot is useful in pinpointing the impactful
     intervals for hyperparameter values.
+  id: totrans-115
   prefs: []
   type: TYPE_NORMAL
 - en: Out of the plots described so far, the contour plot comes in last in terms of
@@ -538,50 +673,68 @@
     from either the importance or the parallel coordinate plots. As an example, to
     contour plot the relationship among batch_size, lr, and the objective function,
     you can run
+  id: totrans-116
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE19]'
+  id: totrans-117
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE19]'
 - en: which should produce a plot resembling the one in figure 11.3.
+  id: totrans-118
   prefs: []
   type: TYPE_NORMAL
 - en: '![11-03](Images/11-03.png)'
+  id: totrans-119
   prefs: []
   type: TYPE_IMG
 - en: Figure 11.3 The contour plot helps in the analysis of hyperparameter pairs relative
     to the loss function.
+  id: totrans-120
   prefs: []
   type: TYPE_NORMAL
 - en: Summary
+  id: totrans-121
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
 - en: Optuna is a hyperparameter optimization framework with the native Python integration
     to support nontrivial hyperparameter configurations for your machine learning
     model experiments.
+  id: totrans-122
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: Optuna 是一个超参数优化框架，具有与本机 Python 集成，可支持机器学习模型实验中的复杂超参数配置。
 - en: When using HPO for hyperparameters with ranges that span orders of magnitude,
     it is useful to adopt log-uniform sampling to ensure even (not skewed) distribution
     of samples over the range.
+  id: totrans-123
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 当使用 HPO 用于跨量级的超参数范围时，采用对数均匀采样是有用的，以确保样本在范围内均匀分布而不是倾斜分布。
 - en: After the execution of HPO trials, Optuna visualization features help with the
     analysis of the trial outcomes and the associated hyperparameters.
+  id: totrans-124
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 在执行 HPO 试验之后，Optuna 的可视化功能有助于分析试验结果和相关的超参数。
 - en: ^(1.)Gradient-free algorithms do not require computation of the gradient of
     a loss (or any objective) function to optimize the function parameters. In other
     words, gradient-free hyperparameter optimization can optimize an objective function
     even when the function does not have computable gradients.
+  id: totrans-125
   prefs: []
   type: TYPE_NORMAL
+  zh: ^(1.)无梯度算法不需要计算损失（或任何目标）函数的梯度来优化函数参数。换句话说，无梯度的超参数优化可以在目标函数没有可计算梯度的情况下进行优化。
 - en: '^(2.)The original, widely cited paper “Batch Normalization: Accelerating Deep
     Network Training by Reducing Internal Covariate Shift” that introduced batch normalization
     is available from [https://arxiv.org/abs/1502.03167](https://arxiv.org/abs/1502.03167).'
+  id: totrans-126
   prefs: []
   type: TYPE_NORMAL
+  zh: '^(2.)最初广泛引用的论文《Batch Normalization: Accelerating Deep Network Training by Reducing
+    Internal Covariate Shift》介绍了批归一化，并可从[https://arxiv.org/abs/1502.03167](https://arxiv.org/abs/1502.03167)获取。'
