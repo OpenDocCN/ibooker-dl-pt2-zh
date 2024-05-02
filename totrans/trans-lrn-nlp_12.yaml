@@ -85,6 +85,9 @@
   id: totrans-9
   prefs: []
   type: TYPE_NORMAL
+  zh: 在本节中，我们将在代码中实现 ULMFiT 方法，将语言模型适应于新的数据领域和任务。我们首先在第 6 章的最后讨论了这种方法的概念，因为从历史上看，它首先是在递归神经网络（RNNs）的背景下引入的。然而，我们将实际的编码练习推迟到现在，以强调在其核心，ULMFiT
+    是一组与架构无关的适应技术。这意味着它们也可以应用于基于 transformer 的模型。然而，为了与源材料保持一致，我们在 RNN-based 语言模型的背景下进行练习编码。我们将编码练习集中在我们在第
+    6 章中看到的假新闻检测示例上。
 - en: As a reminder, discriminative fine-tuning specifies a variable learning rate
     for each layer in the network. Additionally, the learning rates are not constant
     during learning. Instead they are *slanted triangular*—linearly increasing in
@@ -95,10 +98,13 @@
   id: totrans-10
   prefs: []
   type: TYPE_NORMAL
+  zh: 作为提醒，辨别微调指定网络中每一层的可变学习率。此外，学习率在学习过程中不是恒定的。相反，它们是*倾斜三角形*的——在开始时线性增加到一定程度，然后线性衰减。换句话说，这意味着快速增加学习率，直到达到最大速率，然后以较慢的速度减小。这个概念在图
+    6.8 中有所说明，我们在这里为了您的方便重复了它。
 - en: '![06_08](../Images/06_08.png)'
   id: totrans-11
   prefs: []
   type: TYPE_IMG
+  zh: '![06_08](../Images/06_08.png)'
 - en: Figure 6.8 (Duplicated from Chapter 6) Suggested slanted triangular ULMFiT rate
     schedule for the case of 10,000 total iterations. The rate increases linearly
     for 10% of the total number of iterations (i.e., 1,000) up to a maximum of 0.01
@@ -106,6 +112,8 @@
   id: totrans-12
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 6.8（从第 6 章复制）建议的倾斜三角形 ULMFiT 学习率时间表，对于总迭代次数为 10,000 的情况。学习率在总迭代次数的 10%（即 1,000）上线性增加，最高达
+    0.01，然后线性减少到 0。
 - en: Note that the point in the figure labeled as “maximum learning rate” will be
     something different in our case (not 0.01). The total number of iterations will
     also be different from the 10,000 cases shown in the figure. This schedule results
@@ -113,6 +121,7 @@
   id: totrans-13
   prefs: []
   type: TYPE_NORMAL
+  zh: 请注意，图中标有“最大学习率”的点在我们的情况下会有所不同（不是 0.01）。迭代的总数也将与图中显示的 10,000 次不同。这个时间表会产生更有效的转移和更具一般性的模型。
 - en: Gradual unfreezing, on the other hand, progressively increases the number of
     sublayers of the network that are *unfrozen*, which reduces overfitting and also
     results in a more effective transfer and a more generalizable model. All these
@@ -122,6 +131,7 @@
   id: totrans-14
   prefs: []
   type: TYPE_NORMAL
+  zh: 渐进解冻，另一方面，逐渐增加网络的子层的数量*解冻*，这样可以减少过拟合，同时也会产生更有效的转移和更具一般性的模型。所有这些技术在第 6 章的最后一节中都有详细讨论，可能在着手本节其余部分之前，简要回顾该讨论会有益处。
 - en: 'We will use the illustrative example from section 5.2—the fact-checking example—here
     as well. Recall that this dataset contains more than 40,000 articles divided into
     two categories: “fake” and “true.” The true articles were collected from reuters.com,
@@ -135,6 +145,10 @@
   id: totrans-15
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们将在这里使用第 5.2 节的说明性示例——事实核查示例。回想一下，这个数据集包含超过 40,000 篇文章，分为两类：“假”和“真”。真实文章是从
+    reuters.com，一个声誉良好的新闻网站收集来的。另一方面，假文章则是从 PolitiFact 标记为不可靠的各种来源收集来的。在第 6.2 节，我们在预训练的
+    ELMo 模型导出的特征向量上训练了一个二元分类器。这个分类器预测一篇给定的文章是真实的（1）还是假的（0）。使用由每个类别的 1,000 篇文章组成的数据集，获得了
+    98%+ 的准确率。在这里，我们将看看是否可以通过 ULMFiT 方法取得更好的效果。
 - en: In this section, we split the method into two subsections. The first subsection
     addresses the first ULMFiT stage of fine-tuning a pretrained language model on
     the target task data. The slanted triangular learning rates come into play here,
@@ -147,6 +161,7 @@
   id: totrans-16
   prefs: []
   type: TYPE_NORMAL
+  zh: 在本节中，我们将该方法分为两个小节。第一个小节涉及在目标任务数据上微调预训练语言模型的第一阶段 ULMFiT。斜三角形学习率在这里发挥作用，以及分层微调的概念。一些数据预处理和模型架构讨论也自然地融入到这个第一个小节中。第二个小节涵盖了第二阶段，涉及在目标任务数据上微调目标任务分类器——它位于微调语言模型之上——的阶段。逐步解冻程序的有效性由此得到证明。
 - en: Please note that the code presented in this section is written in version 1
     syntax of fast.ai. The reason for this choice is that version 2 of the library
     changed the handling of input data, providing internal functions to split it into
@@ -160,11 +175,16 @@
   id: totrans-17
   prefs: []
   type: TYPE_NORMAL
+  zh: 请注意，本节中呈现的代码采用 fast.ai 版本 1 语法编写。选择这样做的原因是该库的第 2 版更改了输入数据的处理方式，提供了将其分割为训练集和验证集的内部函数，而不是允许您自己指定。为了与我们在前几章中的工作保持一致，在那里我们自己分割了数据，我们在这里坚持使用版本
+    1。我们还在 Kaggle 笔记本中提供了等效的 fast.ai 版本 2 语法代码[³](#pgfId-1110478)，您应该运行并与此处呈现的版本 1
+    代码进行比较。最后，请注意，版本 1 的文档托管在 [https://fastai1.fast.ai/](https://fastai1.fast.ai/)，而版本
+    2 的文档托管在 [https://docs.fast.ai/](https://docs.fast.ai/)。
 - en: 9.1.1 Pretrained language model fine-tuning
   id: totrans-18
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 9.1.1 预训练语言模型微调
 - en: Section 5.2 already described the initial data preprocessing steps that we need
     to carry out on the fact-checking example dataset. In particular, we shuffle the
     article text data and load it into the NumPy arrays `train_x` and `test_x`. We
@@ -175,6 +195,10 @@
   id: totrans-19
   prefs: []
   type: TYPE_NORMAL
+  zh: 第 5.2 节已经描述了我们需要对事实核查示例数据集进行的初始数据预处理步骤。特别地，我们对文章文本数据进行了洗牌，并将其加载到 NumPy 数组`train_x`和`test_x`中。我们还构建了相应的标签
+    NumPy 数组`train_y`和`test_y`，其中包含每篇文章是否为真实的信息，当文章为真时标记为 1，否则为 0。如同第 5.2 节一样，保持 1,000
+    个样本和测试/验证比例为 30%，得到的训练数组——`train_x`，`train_y`——长度为 1,400，测试数组——`test_x`，`test_y`——长度为
+    600。
 - en: 'The first thing we need to do is prepare data in the form that the fast.ai
     library expects. One such data format is a two-column Pandas DataFrame, with the
     first column containing labels and the second column containing the data. We can
@@ -296,10 +320,12 @@
   id: totrans-37
   prefs: []
   type: TYPE_NORMAL
+  zh: 结果的损失与学习率曲线，突出显示了最佳率，如图 9.1 所示。
 - en: '![09_01](../Images/09_01.png)'
   id: totrans-38
   prefs: []
   type: TYPE_IMG
+  zh: '![09_01](../Images/09_01.png)'
 - en: Figure 9.1 The result of the optimal learning rate-finding procedure from the
     fast.ai library for the language model fine-tuning step on the fake news detection
     example. Several learning rates are iterated through, and the optimal one is selected
@@ -307,11 +333,13 @@
   id: totrans-39
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 9.1 fast.ai 库用于语言模型微调步骤中的最佳学习率找寻过程的结果，用于虚假新闻检测示例。通过多次迭代不同的学习率，并选择在曲线上损失下降最快的点作为最佳学习率。
 - en: 'We can programmatically retrieve this learning rate and display it using the
     following commands:'
   id: totrans-40
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们可以通过以下命令程序化地检索这个学习率，并显示它：
 - en: '[PRE6]'
   id: totrans-41
   prefs: []
@@ -321,21 +349,25 @@
   id: totrans-42
   prefs: []
   type: TYPE_NORMAL
+  zh: ❶ 检索最佳率
 - en: ❷ Displays it
   id: totrans-43
   prefs: []
   type: TYPE_NORMAL
+  zh: ❷ 显示它
 - en: In our execution of the code, the optimal learning rate returned was approximately
     4.0e-2.
   id: totrans-44
   prefs: []
   type: TYPE_NORMAL
+  zh: 在我们执行代码时，返回的最佳学习率约为 4.0e-2。
 - en: 'Having found the optimal rate, we can now fine-tune our pretrained weight-dropped
     LSTM model with a slanted triangular learning rate using the `fit_one_cycle` fast.ai
     command as shown next:'
   id: totrans-45
   prefs: []
   type: TYPE_NORMAL
+  zh: 找到最佳学习率后，我们现在可以使用下面的命令对我们的预训练的权重丢弃 LSTM 模型进行微调，使用 `fit_one_cycle` fast.ai 命令如下所示：
 - en: '[PRE7]'
   id: totrans-46
   prefs: []
@@ -346,11 +378,13 @@
   id: totrans-47
   prefs: []
   type: TYPE_NORMAL
+  zh: ❶ 这个命令在底层使用了斜三角形学习率。它以 epochs 的数量和期望的最大学习率作为输入。
 - en: Executing the command yields an accuracy of 0.334 in about 26 seconds of fine-tuning
     on a single Kaggle GPU.
   id: totrans-48
   prefs: []
   type: TYPE_NORMAL
+  zh: 执行命令，在单个 Kaggle GPU 上进行大约 26 秒的微调，得到了 0.334 的准确度。
 - en: 'Having obtained that baseline value, we would like to find out whether discriminative
     fine-tuning can lead to an improvement. We do this by first unfreezing all layers
     with the `unfreeze` command and then using the `slice` method to specify the upper
@@ -361,6 +395,7 @@
   id: totrans-49
   prefs: []
   type: TYPE_NORMAL
+  zh: 获得了基准值后，我们想要找出是否差异化微调能够带来改善。我们首先通过使用 `unfreeze` 命令解冻所有层，然后使用 `slice` 方法指定学习率范围的上限和下限。这个命令将最接近输出的层的最大学习率设置为上限，并通过除以一个常数因子几何地减少每个后续层的最大学习率到下限。下面展示了执行这个操作的确切代码：
 - en: '[PRE8]'
   id: totrans-50
   prefs: []
@@ -370,11 +405,13 @@
   id: totrans-51
   prefs: []
   type: TYPE_NORMAL
+  zh: ❶ 确保所有层都解冻以进行微调
 - en: ❷ Varies the maximum learning rate geometrically between the optimal rate in
     the final layer and a value that is two orders of magnitude smaller
   id: totrans-52
   prefs: []
   type: TYPE_NORMAL
+  zh: ❷ 在最终层中的最佳率和比该最佳率小两个数量级的值之间以几何方式变化
 - en: As can be seen from the code, we arbitrarily chose to vary the learning rate
     from the maximum optimal value down to a value that is two orders of magnitude
     smaller. The intuition behind this schedule is that the subsequent layers contain
@@ -383,12 +420,14 @@
   id: totrans-53
   prefs: []
   type: TYPE_NORMAL
+  zh: 从代码可以看出，我们任意选择了将学习率从最大最优值变化到比该值小两个数量级的值。这个调度背后的直觉是，随后的层包含的信息更为一般化，与任务无关，因此它应该比最接近输出的层从这个特定目标数据集中学到的更少。
 - en: 'Executing the discriminative fine-tuning code presented yields an accuracy
     score of 0.353, a clear improvement over the 0.334 value we obtained without it.
     Save the fine-tuned language model for later use with the following command:'
   id: totrans-54
   prefs: []
   type: TYPE_NORMAL
+  zh: 执行所提出的差异化微调代码，得到了一个准确度分数为 0.353，明显优于我们在没有使用它时得到的 0.334 的值。使用以下命令保存微调后的语言模型以供以后使用：
 - en: '[PRE9]'
   id: totrans-55
   prefs: []
@@ -401,11 +440,13 @@
   id: totrans-56
   prefs: []
   type: TYPE_NORMAL
+  zh: 通过斜三角形学习率和差异化微调调整了我们的预训练语言模型后，让我们看看我们能得到多好的目标任务分类器——也就是虚假新闻检测器。我们在下一小节对微调后的语言模型之上微调一个分类器。
 - en: 9.1.2 Target task classifier fine-tuning
   id: totrans-57
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 9.1.2 目标任务分类器微调
 - en: 'Recall that in the previous subsection, we created an object for consumption
     of data by the target task classifier. We called this variable `data_clas`. As
     a next step for fine-tuning our target task classifier, we need to instantiate
@@ -675,6 +716,7 @@
   id: totrans-91
   prefs: []
   type: TYPE_NORMAL
+  zh: 执行实际蒸馏的脚本可在官方transformers存储库中找到。[^(11)](#pgfId-1110628) 要训练自己的DistilBERT模型，你需要创建一个每行一个文本样本的文件，并执行该页面提供的一系列命令，这些命令准备数据并蒸馏模型。因为作者已经提供了各种检查点可供直接加载——所有检查点都列在了该页面上——而我们的重点是迁移学习，我们在这里不重复从头开始训练的步骤。相反，我们使用了一个类似于我们在第8章中用于跨语言迁移学习实验的mBERT检查点。这样可以直接比较使用蒸馏架构与原始mBERT的性能和好处，同时还教会你如何开始在自己的项目中使用这个架构。这也为你提供了另一个机会，即在自定义语料库上微调预训练的基于transformer的模型——直接修改具有不同架构、预训练检查点和自定义数据集的代码应该适用于你自己的用例。
 - en: More specifically, we will be repeating the experiment we carried out in section
     8.2.2, where we transferred the knowledge contained in mBERT—trained on over 100
     languages simultaneously—to a monolingual Twi scenario by fine-tuning on a corpus
@@ -684,11 +726,13 @@
   id: totrans-92
   prefs: []
   type: TYPE_NORMAL
+  zh: 更具体地说，我们将重复我们在第8.2.2节中进行的实验，即通过在来自JW300数据集的语料库上进行微调，将mBERT中包含的知识转移到单语Twi场景中。我们执行使用检查点中包含的预训练tokenizer的实验变体，而不是从头开始训练一个新的，为了简单起见。
 - en: 9.2.1 Transfer DistilmBERT to monolingual Twi data with pretrained tokenizer
   id: totrans-93
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 9.2.1 使用预训练tokenizer将DistilmBERT转移到单语Twi数据
 - en: Our goal in this subsection is to generate a DistilBERT model for the Ghanaian
     language Twi from a model trained on more than 100 languages, not including Twi,
     simultaneously. The multilingual equivalent of BERT is called mBERT; therefore,
@@ -704,12 +748,14 @@
   id: totrans-94
   prefs: []
   type: TYPE_NORMAL
+  zh: 在本小节中，我们的目标是从一个在超过100种语言上训练过的模型中生成一个用于加纳语Twi的DistilBERT模型，不包括Twi在内。BERT的多语言等效版本称为mBERT；因此，DistilBERT的多语言等效版本可预见地称为DistilmBERT。这个DistilmBERT模型直接类比于我们在第8章中实验过的mBERT模型。我们当时发现，即使Twi没有包含在原始训练中，从这个检查点开始是有益的。在这里，我们基本上会复制相同的步骤序列，将每个mBERT实例替换为DistilmBERT。这样可以直接比较两者，并因此直观地了解知识蒸馏的好处，同时学习如何在自己的项目中使用DistilBERT。与之前一样，我们会在JW300数据集的单语Twi子集上对模型进行微调。[^(12)](#pgfId-1110637)
 - en: 'We start by initializing a DistilBERT tokenizer to the pretrained checkpoint
     from the DistilmBERT model. We use the cased version this time, as shown by the
     following code:'
   id: totrans-95
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们首先初始化一个DistilBERT tokenizer，使用DistilmBERT模型的预训练检查点。这次我们使用cased版本，如下所示：
 - en: '[PRE14]'
   id: totrans-96
   prefs: []
@@ -720,10 +766,12 @@
   id: totrans-97
   prefs: []
   type: TYPE_NORMAL
+  zh: ❶ 这只是DistilBertTokenizer的一个更快的版本，你可以用它来代替。
 - en: ❷ Uses the pretrained DistilmBERT tokenizer
   id: totrans-98
   prefs: []
   type: TYPE_NORMAL
+  zh: ❷ 使用预训练的DistilmBERT tokenizer
 - en: 'Having prepared the tokenizer, load the DistilmBERT checkpoint into a DistilBERT
     masked language model, and display the number of parameters as follows:'
   id: totrans-99
@@ -905,6 +953,7 @@
   id: totrans-128
   prefs: []
   type: TYPE_NORMAL
+  zh: 这确实是可信的完成。值得注意的是，我们在第8.2.2节中看到的结果中的宗教偏见似乎已经在模型中得到了缓解。像“以色列”和“伊甸园”这样的完成，在第8.2.2节的mBERT等价模型中建议，现在已经不再存在了。这可以通过两者之间参数数量的显著差异来解释。由于这一点，DistilBERT不太可能过拟合，而BERT则更有可能这样做。
 - en: And now you know how to use DistilBERT in your own projects! We again stress
     that the exercise you just carried out taught you how to fine-tune a pretrained
     transformer-based model on a custom corpus—simply modify the code with a different
@@ -913,6 +962,7 @@
   id: totrans-129
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在你知道如何在自己的项目中使用DistilBERT了！我们再次强调，你刚刚进行的练习教会了你如何在自定义语料库上微调预训练的基于transformer的模型——只需修改代码以应用于你自己的用例，包括不同的架构、预训练检查点和自定义数据集。
 - en: In the first section of the next chapter, we will get another opportunity to
     fine-tune a transformer-based model on a custom corpus, this time in English!
     We will discuss the adaptation ideas behind the architecture ALBERT—A Lite BERT—and
@@ -923,69 +973,84 @@
   id: totrans-130
   prefs: []
   type: TYPE_NORMAL
+  zh: 在下一章的第一节中，我们将有机会在英语中再次微调一个基于transformer的模型，这次是在自定义语料库上进行！我们将讨论ALBERT架构背后的适应性思想——一种轻量级的BERT——并将其微调到来自Multi-Domain
+    Sentiment Dataset的一些评论中。回想一下，在第4章我们玩过这个数据集。这是亚马逊25个产品类别的评论数据集，我们将重点关注书评，就像第4章一样。
 - en: Summary
   id: totrans-131
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 摘要
 - en: ULMFiT strategies of slanted triangular learning rates, *discriminative fine-tuning,*
     and *gradual unfreezing* can lead to noticeably more effective transfer.
   id: totrans-132
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: ULMFiT的策略，如倾斜三角形学习率、*差异微调*和*逐步解冻*，可以导致明显更有效的迁移。
 - en: Executing *knowledge distillation* of a larger *teacher* BERT model yields a
     significantly *smaller student* BERT model with minimal sacrifice of performance.
   id: totrans-133
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 执行*知识蒸馏*一个较大的*教师*BERT模型会产生一个明显*更小的学生*BERT模型，性能损失最小。
 - en: 1. [http://nlp.fast.ai/ulmfit](http://nlp.fast.ai/ulmfit)
   id: totrans-134
   prefs: []
   type: TYPE_NORMAL
+  zh: 1. [http://nlp.fast.ai/ulmfit](http://nlp.fast.ai/ulmfit)
 - en: '2. V. Sanh et al., “DistilBERT, a Distilled Version of BERT: Smaller, Faster,
     Cheaper and Lighter,” EMC^2: 5th Edition Co-located with NeurIPS (2019).'
   id: totrans-135
   prefs: []
   type: TYPE_NORMAL
+  zh: 2. V. Sanh 等人，“DistilBERT，BERT的精简版本：更小、更快、更便宜、更轻”，EMC^2：与NeurIPS合办的第5版（2019年）。
 - en: 3. [https://www.kaggle.com/azunre/tlfornlp-chapter9-ulmfit-adaptation-fast-aiv2](https://www.kaggle.com/azunre/tlfornlp-chapter9-ulmfit-adaptation-fast-aiv2)
   id: totrans-136
   prefs: []
   type: TYPE_NORMAL
+  zh: 3. [https://www.kaggle.com/azunre/tlfornlp-chapter9-ulmfit-adaptation-fast-aiv2](https://www.kaggle.com/azunre/tlfornlp-chapter9-ulmfit-adaptation-fast-aiv2)
 - en: 4. S. Merity et al., “Regularizing and Optimizing LSTM Language Models,” ICLR
     (2018).
   id: totrans-137
   prefs: []
   type: TYPE_NORMAL
+  zh: 4. S. Merity 等人，“正则化和优化LSTM语言模型”，ICLR（2018年）。
 - en: 5. [http://nlp.fast.ai/ulmfit](http://nlp.fast.ai/ulmfit)
   id: totrans-138
   prefs: []
   type: TYPE_NORMAL
+  zh: 5. [http://nlp.fast.ai/ulmfit](http://nlp.fast.ai/ulmfit)
 - en: 6. [https://www.salesforce.com/ca/products/einstein/ai-research/the-wikitext-dependency-language-modeling-dataset/](https://www.salesforce.com/ca/products/einstein/ai-research/the-wikitext-dependency-language-modeling-dataset/)
   id: totrans-139
   prefs: []
   type: TYPE_NORMAL
+  zh: 6. [https://www.salesforce.com/ca/products/einstein/ai-research/the-wikitext-dependency-language-modeling-dataset/](https://www.salesforce.com/ca/products/einstein/ai-research/the-wikitext-dependency-language-modeling-dataset/)
 - en: '7. L. Smith et al., “A Disciplined Approach to Neural Network Hyper-Parameters:
     Part 1—Learning Rate, Batch Size, Momentum, and Weight Decay,” arXiv (2018).'
   id: totrans-140
   prefs: []
   type: TYPE_NORMAL
+  zh: 7. L. Smith 等人，“神经网络超参数的一种纪律方法：第1部分——学习率、批大小、动量和权重衰减”，arXiv（2018年）。
 - en: 8. R. Tang et al., “Distilling Task-Specific Knowledge from BERT into Simple
     Neural Networks,” arXiv (2018).
   id: totrans-141
   prefs: []
   type: TYPE_NORMAL
+  zh: 8. R. Tang 等人，“从BERT中提炼任务特定知识到简单神经网络”，arXiv（2018年）。
 - en: '9. X. Jiao et al., “TinyBERT: Distilling BERT for Natural Language Understanding,”
     arXiv (2020).'
   id: totrans-142
   prefs: []
   type: TYPE_NORMAL
+  zh: 9. X. Jiao 等人，“TinyBERT：BERT的精炼”，arXiv（2020年）。
 - en: '10. V. Sanh et al., “DistilBERT, a Distilled Version of BERT: Smaller, Faster,
     Cheaper and Lighter,” EMC^2: 5th Edition Co-located with NeurIPS (2019).'
   id: totrans-143
   prefs: []
   type: TYPE_NORMAL
+  zh: 10. V. Sanh 等人，“DistilBERT，BERT的精简版本：更小、更快、更便宜、更轻”，EMC^2：与NeurIPS合办的第5版（2019年）。
 - en: 11. [https://github.com/huggingface/transformers/blob/master/examples/research_projects/distillation](https://github.com/huggingface/transformers/blob/master/examples/research_projects/distillation)
   id: totrans-144
   prefs: []
