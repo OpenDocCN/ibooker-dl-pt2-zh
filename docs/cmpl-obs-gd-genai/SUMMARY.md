@@ -1,3 +1,4 @@
++   [生成式人工智能的完整过时指南（MEAP）](README.md)
 +   [第一章：了解生成式人工智能基础](cmpl-obs-gd-genai_01.md)
 +   [第二章：管理生成型 AI](cmpl-obs-gd-genai_02.md)
 +   [第三章：创建生成式 AI：文本和代码](cmpl-obs-gd-genai_03.md)
