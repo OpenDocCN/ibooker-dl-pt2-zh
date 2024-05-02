@@ -1,19 +1,24 @@
 - en: 8 Satisfying extra constraints with constrained optimization
+  id: totrans-0
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
 - en: This chapter covers
+  id: totrans-1
   prefs: []
   type: TYPE_NORMAL
 - en: The problem of black box optimization with constraints
+  id: totrans-2
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Taking constraints into account when making decisions in BayesOpt
+  id: totrans-3
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Implementing constraint-aware BayesOpt policies
+  id: totrans-4
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -24,6 +29,7 @@
     real-life situations do not follow this unconstrained formulation, however, and
     there might be a cost associated with the objective function’s global optimum
     that makes the optimum infeasible to achieve in practice.
+  id: totrans-5
   prefs: []
   type: TYPE_NORMAL
 - en: For example, when tuning the architecture of a neural network, you might find
@@ -35,6 +41,7 @@
     optimum of the objective function in this hyperparameter tuning task. We, therefore,
     need to take this computational cost into account while tuning this neural network
     and only look for architectures that are actually feasible to implement in practice.
+  id: totrans-6
   prefs: []
   type: TYPE_NORMAL
 - en: Another black-box optimization problem in which we need to consider additional
@@ -45,6 +52,7 @@
     easy to manipulate. Unfortunately, the drugs that are the most effective against
     a disease might have many side effects that make them dangerous to use, or the
     most resilient type of glass might be too expensive to produce on a large scale.
+  id: totrans-7
   prefs: []
   type: TYPE_NORMAL
 - en: These are examples of *constrained* optimization problems, where we need to
@@ -53,6 +61,7 @@
     important constraints, rendering the solutions we find useless in practice. Instead,
     we need to identify other regions in the search space that both yield high objective
     values and satisfy these important constraints.
+  id: totrans-8
   prefs: []
   type: TYPE_NORMAL
 - en: In this chapter, we learn about the constrained optimization problem and see
@@ -65,53 +74,76 @@
     and see that the constraint-aware policy we use performs much better than constraint-agnostic
     ones. What we learn in this chapter will help us tackle more practical BayesOpt
     problems in real life and, thus, make more effective decisions.
+  id: totrans-9
   prefs: []
   type: TYPE_NORMAL
+  zh: 在本章中，我们了解约束优化问题，并看到在某些情况下，额外的约束可能会完全改变优化问题的解。考虑到这些约束的需要引发了 BayesOpt 中的约束感知优化策略。我们介绍了一种考虑约束的预期改进（EI）策略的变体，并学习了如何在
+    BoTorch 中实现它。到本章结束时，您将了解约束优化问题，学习如何使用 BayesOpt 解决它，并看到我们使用的约束感知策略要比不考虑约束的策略表现得更好。本章所学将帮助我们在现实生活中解决更多实际的
+    BayesOpt 问题，并因此做出更有效的决策。
 - en: 8.1 Accounting for constraints in a constrained optimization problem
+  id: totrans-10
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 8.1 在约束优化问题中考虑约束
 - en: 'As mentioned in the introduction, many constrained optimization problems exist
     in the real world: making drugs with high efficacy and minimal side effects, finding
     materials that maximize desirable characteristics and are cheap to produce, or
     hyperparameter tuning while keeping the computational cost low.'
+  id: totrans-11
   prefs: []
   type: TYPE_NORMAL
+  zh: 正如介绍中提到的，现实世界中存在许多约束优化问题：制造具有高效性和最小副作用的药物，寻找最大化理想特性并且廉价生产的材料，或者在保持计算成本低的同时进行超参数调整。
 - en: Note We focus on *inequality constraints*, where we require a result *y* to
     be inside a predetermined numerical range *a* ≤ *y* ≤ *b*.
+  id: totrans-12
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意 我们关注*不等式约束*，其中我们要求结果*y*在预定的数值范围*a* ≤ *y* ≤ *b*内。
 - en: We first take a closer look at the constrained optimization problem in the next
     section and see why it’s mathematically different from the unconstrained problem
     we see in previous chapters. We then redefine the BayesOpt framework we have been
     working with so far to account for extra constraints.
+  id: totrans-13
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们首先在接下来的一节中更仔细地看看约束优化问题，并了解为什么它在数学上与我们在前几章中看到的无约束问题不同。然后，我们重新定义了迄今为止一直使用的 BayesOpt
+    框架以考虑额外的约束条件。
 - en: 8.1.1 Constraints can change the solution of an optimization problem
+  id: totrans-14
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 8.1.1 约束条件可能改变优化问题的解
 - en: How do constraints complicate the optimization of a black box function? In many
     cases, regions within the search space that give high objective values might violate
     the constraints that come with the optimization problem.
+  id: totrans-15
   prefs: []
   type: TYPE_NORMAL
+  zh: 约束如何使黑盒函数的优化变得复杂？在许多情况下，搜索空间内部给出高目标值的区域可能会违反随优化问题而来的约束条件。
 - en: Note In an optimization problem, we aim to find regions that give high objective
     values since we want to maximize the value of the objective function.
+  id: totrans-16
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意 在优化问题中，我们的目标是找到给出高目标值的区域，因为我们想要最大化目标函数的值。
 - en: If it is the case that regions with high objective values violate the given
     constraints, we need to rule out these regions that violate the constraints and
     only conduct our search within other regions that satisfy the constraints.
+  id: totrans-17
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果高目标值区域违反给定的约束条件，我们需要排除这些违反约束的区域，并仅在满足约束的其他区域内进行搜索。
 - en: Definition A data point that violates the predefined constraints in a constrained
     optimization problem is called an *infeasible* point, as it’s infeasible to use
     the point as the solution to the optimization problem. On the other hand, a data
     point that satisfies the constraints is called a *feasible* point. Our goal is
     to find the feasible point that maximizes the value of the objective function.
+  id: totrans-18
   prefs: []
   type: TYPE_NORMAL
+  zh: 违反预定义约束条件的数据点在约束优化问题中被称为*不可行*点，因为将该点作为优化问题的解是不可行的。另一方面，满足约束条件的数据点被称为*可行*点。我们的目标是找到最大化目标函数值的可行点。
 - en: Constraints can affect the quality of the optimal solution of the unconstrained
     optimization problem or change the optimal solution altogether. Consider the example
     in figure 8.1, where our objective function (the solid line) is the Forrester
@@ -121,23 +153,33 @@
     zero—that is, the cost *c* ≤ 0\. This constraint means only the feasible points
     in the shaded regions in the right panel of figure 8.1 can be used as the optimization
     result.
+  id: totrans-19
   prefs: []
   type: TYPE_NORMAL
+  zh: 约束条件可能会影响无约束优化问题的最优解质量，或者完全改变最优解。考虑图 8.1 中的示例，我们的目标函数（实线）是我们在前几章中使用过的福雷斯特函数。除了这个目标函数之外，我们还有一个成本函数，如虚线所示。假设在这个约束优化问题中，约束是成本需要最大为零——也就是说，成本
+    *c* ≤ 0\. 这个约束意味着只有图 8.1 右侧面板中阴影区域内的可行点可以作为优化结果使用。
 - en: '![](../../OEBPS/Images/08-01.png)'
+  id: totrans-20
   prefs: []
   type: TYPE_IMG
+  zh: '![](../../OEBPS/Images/08-01.png)'
 - en: Figure 8.1 An example of a one-dimensional constrained optimization problem.
     The solid line is the objective function we aim to maximize, and the dashed line
     is the cost function that constrains the optimization problem. Only the shaded
     regions (right panel) that yield negative costs are feasible. Here, the constraint
     of nonpositive cost causes the highest objective value to decrease from more than
     8 to 4.
+  id: totrans-21
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 8.1 一维约束优化问题的示例。实线是我们希望最大化的目标函数，虚线是约束优化问题的成本函数。只有产生负成本的阴影区域（右侧面板）是可行的。在这里，非正成本的约束导致最高目标值从超过
+    8 减少到 4 左右。
 - en: Note We first used the Forrester function as an example objective function in
     BayesOpt in section 2.4.1.
+  id: totrans-22
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意：我们在 BayesOpt 的 2.4.1 节中首次使用了福雷斯特函数作为示例目标函数。
 - en: As a result, the region where *x* > 4, which contains the true global optimum
     of the objective value (denoted as the diamond marker in the right panel), is
     cut off. That is, the global optimum that yields an objective value of more than
@@ -146,8 +188,11 @@
     is when an effective drug has too severe of a side effect, so the drug company
     decides to use a less effective variant of the same chemical to make the product
     safe.
+  id: totrans-23
   prefs: []
   type: TYPE_NORMAL
+  zh: 因此，包含 *x* > 4 的区域，其中包含目标值的真实全局最优解（在右侧面板中用钻石标记）被切断。也就是说，产生目标值超过 8 的全局最优解是不可行的，而约束最优解（用星号标记）只能达到大约
+    4 的目标值。这种“截断”情况的一个例子是当有效药物有太严重的副作用时，药品公司决定使用同一化学成分的效果较差的变体来使产品安全。
 - en: Another example of the same objective function and a slightly different cost
     function is shown in figure 8.2, where having this extra cost constraint changes
     the optimal solution of our optimization problem. Without the constraint, the
@@ -157,32 +202,44 @@
     This phenomenon can happen, for example, when the entire family of some highly
     effective drug is dangerous to patients and cannot be produced, so we need to
     look for other solutions that are chemically different from the dangerous drug.
+  id: totrans-24
   prefs: []
   type: TYPE_NORMAL
+  zh: 另一个具有相同目标函数但成本函数略有不同的示例显示在图 8.2 中，这个额外的成本约束改变了我们优化问题的最优解。在没有约束的情况下，目标函数的全局最优解位于
+    *x* = 4.6\. 然而，这个点是一个不可行的点，会产生正成本，因此违反了我们的约束。约束问题的最优解在 *x* = 1.6\. 这种现象可能会发生，例如当某种高效药物的整个家族对患者有危险而不能生产时，因此我们需要寻找与危险药物化学成分不同的其他解决方案。
 - en: '![](../../OEBPS/Images/08-02.png)'
+  id: totrans-25
   prefs: []
   type: TYPE_IMG
+  zh: '![](../../OEBPS/Images/08-02.png)'
 - en: Figure 8.2 An example of a one-dimensional constrained optimization problem.
     Here, the optimal solution changes to a different local optimum, as the nonpositive
     cost constraint rules out the region where *x* > 3.
+  id: totrans-26
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 8.2 一维约束优化问题的示例。在这里，由于非正成本约束排除了 *x* > 3 的区域，最优解变为不同的局部最优解。
 - en: 'Overall, inequality constraints may impose complex requirements on an optimization
     problem and change its optimal solution. That is, constraints may rule out the
     global optimum of a function as an infeasible point—a common scenario in the real
     world:'
+  id: totrans-27
   prefs: []
   type: TYPE_NORMAL
+  zh: 总的来说，不等式约束可能对优化问题施加复杂的要求，并改变其最优解。也就是说，约束可能排除函数的全局最优解作为不可行点——这在现实世界中是常见的情况：
 - en: The prohibitively large neural networks tend to achieve good predictive performance
     but are infeasible to implement in practice.
+  id: totrans-28
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: The most effective drugs are often too aggressive and dangerous to produce.
+  id: totrans-29
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: The best materials are too expensive to use.
+  id: totrans-30
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -193,18 +250,22 @@
     the objective function without accounting for the constraints will lead to infeasible
     solutions that are not usable in practice. Instead, we need to find points that
     both yield high objective values and satisfy the constraints.'
+  id: totrans-31
   prefs: []
   type: TYPE_NORMAL
 - en: '![](../../OEBPS/Images/08-02-unnumb.png)'
+  id: totrans-32
   prefs: []
   type: TYPE_IMG
 - en: 8.1.2 The constraint-aware BayesOpt framework
+  id: totrans-33
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
 - en: How should we approach this constrained optimization problem from the BayesOpt
     angle? In this section, we learn how to modify our BayesOpt framework to account
     for the constraints that are given in a constrained optimization problem.
+  id: totrans-34
   prefs: []
   type: TYPE_NORMAL
 - en: Remember in BayesOpt that we use a Gaussian process (GP) to train on the data
@@ -213,10 +274,12 @@
     that define the constraints we need to satisfy. For example, in section 8.1.1,
     the cost function shown as the dashed line in figures 8.1 and 8.2 defines the
     constraints that the solution needs to have a nonpositive cost.
+  id: totrans-35
   prefs: []
   type: TYPE_NORMAL
 - en: Note You can refer to sections 1.2.3 and 4.1.1 for a refresher on the BayesOpt
     framework.
+  id: totrans-36
   prefs: []
   type: TYPE_NORMAL
 - en: We assume that, just like the objective function, we don’t know what the true
@@ -224,12 +287,14 @@
     only get to observe the cost values at the data points we query the objective
     function with, and from there, we determine whether those data points satisfy
     the constraints or not.
+  id: totrans-37
   prefs: []
   type: TYPE_NORMAL
 - en: Note If we did know what the functions that define our constraints look like,
     we could simply identify the feasible regions and restrict our search space to
     be within those feasible regions. In our constrained optimization problem, we
     assume our constraints are also black boxes.
+  id: totrans-38
   prefs: []
   type: TYPE_NORMAL
 - en: 'Since we only have black box access to the functions that define our constraints,
@@ -238,28 +303,34 @@
     that defines a constraint, to inform our decisions about where to query the objective
     function next. We follow the same procedure to train each of these GPs—it’s just
     a matter of using the appropriate training set for each GP:'
+  id: totrans-39
   prefs: []
   type: TYPE_NORMAL
 - en: The GP that models the objective function trains on the observed objective values.
+  id: totrans-40
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: A GP that models a constraint-defining function trains on the observed cost
     values.
+  id: totrans-41
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: 'Our constrained BayesOpt framework, which is a modified version of figure 1.6,
     is visualized in figure 8.3:'
+  id: totrans-42
   prefs: []
   type: TYPE_NORMAL
 - en: At step 1, we train a GP on data from the objective function and another GP
     on data from each function that defines a constraint.
+  id: totrans-43
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: At step 3, we use the point identified by a BayesOpt policy to query both the
     objective function and the constraint-defining functions.
+  id: totrans-44
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -269,9 +340,11 @@
     decision-making. That is, how should we design a BayesOpt policy that can guide
     us toward feasible regions that yield high objective values? This is the topic
     of our discussion in the next section.'
+  id: totrans-45
   prefs: []
   type: TYPE_NORMAL
 - en: 8.2 Constraint-aware decision-making in BayesOpt
+  id: totrans-46
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
@@ -281,6 +354,7 @@
     its decisions. That is, we wish to modify a policy we already know to take into
     account constraints in a constrained optimization problem and derive a constraint-aware
     decision-making procedure.
+  id: totrans-47
   prefs: []
   type: TYPE_NORMAL
 - en: The policy we choose for this modification is EI, which we learned about in
@@ -288,20 +362,24 @@
     that the EI policy scores each unseen data point with the expected value of how
     much improvement from the current incumbent we observe if we query the objective
     function at this unseen point.
+  id: totrans-48
   prefs: []
   type: TYPE_NORMAL
 - en: '![](../../OEBPS/Images/08-03.png)'
+  id: totrans-49
   prefs: []
   type: TYPE_IMG
 - en: Figure 8.3 The constrained BayesOpt loop. A separate GP models either the objective
     function or a function that defines a constraint. A BayesOpt policy recommends
     the next point for us to query both the objective function and the constraint-defining
     functions.
+  id: totrans-50
   prefs: []
   type: TYPE_NORMAL
 - en: Definition The term *incumbent* refers to the point having the highest objective
     value within our training set, which is what we need to “beat” to make progress
     with optimization.
+  id: totrans-51
   prefs: []
   type: TYPE_NORMAL
 - en: 'The acquisition score EI uses, which, again, computes the average value of
@@ -311,80 +389,106 @@
     for these constraints: we can scale the EI acquisition score of each unseen point
     by how likely the data point is to satisfy the constraints—that is, the probability
     that the data point is a feasible point:'
+  id: totrans-52
   prefs: []
   type: TYPE_NORMAL
 - en: If the data point is likely to satisfy the constraints, then its EI score will
     be multiplied by a large number (a high probability of feasibility), thus keeping
     the EI score high.
+  id: totrans-53
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: If the data point is unlikely to satisfy the constraints, its EI score will
     be multiplied by a small number (a low probability of feasibility), thus de-prioritizing
     that data point.
+  id: totrans-54
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 如果数据点不太可能满足约束条件，那么它的EI得分将乘以一个较小的值（较低的可行性概率），从而降低该数据点的优先级。
 - en: Tip The acquisition score of the constrained variant of EI is the product of
     the regular EI score and the probability that a data point satisfies the constraints.
+  id: totrans-55
   prefs: []
   type: TYPE_NORMAL
+  zh: 提示 约束变种的EI获取得分是正常的EI得分和数据点满足约束条件的概率的乘积。
 - en: 'The formula for the acquisition score of this constraint-aware variant of EI
     is shown in figure 8.4\. This acquisition score is the product of two terms: the
     EI score encourages optimization of the objective function, and the probability
     of feasibility encourages staying within the feasible regions. This balance between
     optimizing the objective function and satisfying the constraints is exactly what
     we want to achieve, as noted in section 8.1.1.'
+  id: totrans-56
   prefs: []
   type: TYPE_NORMAL
+  zh: 约束感知的EI获取得分的公式如图8.4所示。这个获取得分是两个术语的乘积：EI得分鼓励优化目标函数，而可行性概率鼓励停留在可行区域内。正是这种在优化目标函数和满足约束条件之间平衡的方式，正如8.1.1节所述，我们希望实现的。
 - en: '![](../../OEBPS/Images/08-04.png)'
+  id: totrans-57
   prefs: []
   type: TYPE_IMG
+  zh: '![](../../OEBPS/Images/08-04.png)'
 - en: Figure 8.4 Formula for the acquisition score of constrained EI, which is the
     product of the regular EI score and the probability of feasibility. This policy
     aims to optimize the objective value and satisfy the constraints at the same time.
+  id: totrans-58
   prefs: []
   type: TYPE_NORMAL
+  zh: 图8.4所示的公式是约束EI获取得分的公式，它是正常的EI得分和可行性概率的乘积。这个策略旨在同时优化目标值并满足约束条件。
 - en: We already know how to compute the EI score, but how can we calculate the second
     term—the probability that a given data point is a feasible point? As noted in
     figure 8.4, we do this with the GPs modeling the constraints. Specifically, each
     GP provides a probabilistic belief about the shape of a function defining a constraint.
     From this probabilistic belief, we can calculate the probability that an unseen
     data point will satisfy the corresponding inequality constraint.
+  id: totrans-59
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们已经知道如何计算EI得分，但是如何计算第二个术语-给定数据点是可行点的概率？正如图8.4所述，我们使用对约束进行建模的高斯过程完成此操作。具体而言，每个高斯过程提供有关定义约束函数形状的概率信念。从这种概率信念中，我们可以计算未见过数据点满足相应不等式约束的概率。
 - en: As an example, let’s say when solving the constrained optimization problem defined
     in figure 8.2 that we have observed the objective function and the cost function
     at *x* = 0, *x* = 3, and *x* = 4\. From this training set, we train two GPs, one
     for the objective function and the other for the cost function, and obtain the
     predictions visualized in figure 8.5.
+  id: totrans-60
   prefs: []
   type: TYPE_NORMAL
+  zh: 例如，当解决图8.2中定义的约束优化问题时，假设我们已经在*x*=0，*x*=3和*x*=4处观察到了目标函数和成本函数。从此培训集中，我们训练了一个用于目标函数和另一个用于成本函数的高斯过程，并获得了图8.5中可视化的预测结果。
 - en: '![](../../OEBPS/Images/08-05.png)'
+  id: totrans-61
   prefs: []
   type: TYPE_IMG
+  zh: '![](../../OEBPS/Images/08-05.png)'
 - en: Figure 8.5 Predictions about the objective function and the cost function made
     by corresponding GPs. Each GP allows us to reason about the shape of the corresponding
     function in a probabilistic manner.
+  id: totrans-62
   prefs: []
   type: TYPE_NORMAL
+  zh: 图8.5所示的是相应高斯过程的目标函数和成本函数的预测。每个高斯过程都可以让我们以概率方式推理相应函数的形状。
 - en: Now, say we’d like to compute the constrained EI score for *x* = 1\. We already
     have a way to compute the regular EI score for any data point, so all we need
     to do now is calculate the probability that *x* = 1 is a feasible data point.
     To do this, we look at the normal distribution representing our prediction about
     the cost value of *x* = 1, as illustrated in figure 8.6.
+  id: totrans-63
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，假设我们想计算*x*=1的约束EI得分。我们已经找到了计算任何数据点的正常EI得分的方法，现在我们需要做的就是计算*x*=1是可行数据点的概率。为了做到这一点，我们查看表示我们对*x*=1成本值的预测的正态分布，如图8.6所示。
 - en: '![](../../OEBPS/Images/08-06.png)'
+  id: totrans-64
   prefs: []
   type: TYPE_IMG
+  zh: '![](../../OEBPS/Images/08-06.png)'
 - en: Figure 8.6 Probability of *x* = 1 being a feasible point, highlighted in a darker
     shade. The left panel shows the entire GP, while the right panel only shows the
     normal distribution corresponding to the prediction at *x* = 1 (the error bars
     are the same across the two panels). Here, feasibility follows a truncated normal
     distribution.
+  id: totrans-65
   prefs: []
   type: TYPE_NORMAL
+  zh: 图8.6展示了*x*=1是可行点的概率，用较深的颜色突出显示。左侧显示整个高斯过程，右侧则仅显示与*x*=1（误差条在两个面板中相同）预测相对应的正态分布。在此，可行性遵循一个被截断的正态分布。
 - en: The left panel of figure 8.6 contains the same GP as in the bottom panel of
     figure 8.5 that is cut off at the constraint threshold 0, additionally showing
     the CI of the normal distribution prediction at *x* = 1\. Slicing the GP vertically
@@ -395,16 +499,19 @@
     GP prediction at *x* = 1, which is a normal distribution. We see that only the
     highlighted portion of the normal distribution in the right panel represents the
     probability that *x* = 1 obeys the cost constraint, which is what we care about.
+  id: totrans-66
   prefs: []
   type: TYPE_NORMAL
 - en: 'If figure 8.6 reminds you of figures 4.9 and 4.10, covering the PoI policy,
     that’s because our thought process is the same in the two cases:'
+  id: totrans-67
   prefs: []
   type: TYPE_NORMAL
 - en: With PoI, we compute the probability that a given data point yields an objective
     value *higher* than the incumbent. We, therefore, use the incumbent value as a
     *lower* bound, specifying that we only care about scenarios in which the objective
     value is *higher* than the incumbent.
+  id: totrans-68
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -412,10 +519,12 @@
     data point yields a cost value *lower* than the cost threshold at 0\. We use 0
     as an *upper* bound to specify that we target scenarios in which the cost value
     is *lower* than the threshold (to obey our cost constraint).
+  id: totrans-69
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Handling different inequality constraints
+  id: totrans-70
   prefs: []
   type: TYPE_NORMAL
 - en: The constraint in our current example requires the cost to be less than 0\.
@@ -423,11 +532,13 @@
     then the probability of feasibility would be the probability that a given point
     yields a function value higher than some threshold, and the shaded region in figure
     8.6 would be to the right of the cutoff.
+  id: totrans-71
   prefs: []
   type: TYPE_NORMAL
 - en: If there was a constraint requiring the value to be inside a range (*a* ≤ *y*
     ≤ *b*), then the probability of feasibility would be the probability that the
     data point gives a value between the lower and upper bounds of the range.
+  id: totrans-72
   prefs: []
   type: TYPE_NORMAL
 - en: In our case, we want to compute the probability that the cost value at *x* =
@@ -437,6 +548,7 @@
     density function (CDF). In figure 8.6, the probability that *x* = 1 is feasible
     is roughly 84%—this is the second term in figure 8.4 that we use to compute the
     constrained EI acquisition score.
+  id: totrans-73
   prefs: []
   type: TYPE_NORMAL
 - en: 'Further, we can compute this probability-of-feasibility quantity at any point
@@ -444,21 +556,25 @@
     for *x* = –1 (center panel) and *x* = 2 (right panel). As we can see, the probability
     that a given point is feasible depends on the predictive normal distribution at
     that point:'
+  id: totrans-74
   prefs: []
   type: TYPE_NORMAL
 - en: At *x* = –1, almost the entire predictive normal distribution lies below the
     cost threshold at 0, so the probability of feasibility here is high, at almost
     98%.
+  id: totrans-75
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: At *x* = 2, only a small portion of the normal distribution falls below the
     cost threshold, causing the probability of feasibility to be much lower, roughly
     6%.
+  id: totrans-76
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '![](../../OEBPS/Images/08-07.png)'
+  id: totrans-77
   prefs: []
   type: TYPE_IMG
 - en: Figure 8.7 Probability of feasibility at *x* = –1 and *x* = 2, highlighted in
@@ -466,6 +582,7 @@
     prediction at *x* = –1, and the right panel shows the prediction at *x* = 2\.
     The highlighted portions show the probability of feasibility, which depends on
     the normal distribution at a given point.
+  id: totrans-78
   prefs: []
   type: TYPE_NORMAL
 - en: With the ability to compute the probability of feasibility for any given point
@@ -473,6 +590,7 @@
     figure 8.4\. Again, this score balances between a potentially high objective value,
     quantified by the regular EI score, and satisfying the inequality constraint(s),
     quantified by the probability of feasibility.
+  id: totrans-79
   prefs: []
   type: TYPE_NORMAL
 - en: Figure 8.8 shows this score in the bottom right panel, along with the regular
@@ -483,9 +601,11 @@
     the regular EI policy recommends the objective function with the infeasible point
     *x* = 4 as the next point to query. Constrained EI, on the other hand, recommends
     *x* = –0.8, which, indeed, satisfies our cost constraint.
+  id: totrans-80
   prefs: []
   type: TYPE_NORMAL
 - en: '![](../../OEBPS/Images/08-08.png)'
+  id: totrans-81
   prefs: []
   type: TYPE_IMG
 - en: Figure 8.8 The acquisition score of EI (bottom left) and that of constrained
@@ -493,6 +613,7 @@
     (top left) and about the cost function (top right). By being aware of the cost
     constraint, constrained EI can avoid the infeasible region and recommend an entirely
     different point to query from regular EI.
+  id: totrans-82
   prefs: []
   type: TYPE_NORMAL
 - en: 'We have found a good heuristic of deriving a constraint-aware BayesOpt policy
@@ -502,6 +623,7 @@
     in figure 8.4 can be obtained from a heuristic-free, more mathematically rigorous
     procedure. The interested reader can refer to a research paper that defines the
     constrained EI policy for more details ([http://proceedings.mlr.press/v32/gardner14.pdf](http://proceedings.mlr.press/v32/gardner14.pdf)).'
+  id: totrans-83
   prefs: []
   type: TYPE_NORMAL
 - en: While we can use the same heuristic on other BayesOpt policies we have learned,
@@ -510,9 +632,11 @@
     EI, which is also widely used to solve constrained optimization problems in practice.
     We, therefore, only focus on constrained EI and its optimization results for the
     rest of this chapter.
+  id: totrans-84
   prefs: []
   type: TYPE_NORMAL
 - en: '8.3 Exercise 1: Manual computation of constrained EI'
+  id: totrans-85
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
@@ -523,27 +647,32 @@
     In this exercise, we explore this manual computation and verify our result against
     that of the `ConstrainedExpectedImprovement` class. The solution to this exercise
     is in the CH08/02 - Exercise 1.ipynb notebook:'
+  id: totrans-86
   prefs: []
   type: TYPE_NORMAL
 - en: Recreate the constrained BayesOpt problem used in CH08/01 - Constrained optimization.ipynb,
     including the objective function, the cost function, the GP implementation, and
     the helper function that trains a GP on some training data `fit_gp_model()`.
+  id: totrans-87
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: Create a PyTorch tensor that is a dense grid between -5 and 5 by using, for
     example, the `torch.linspace()` method. This tensor will act as our test set.
+  id: totrans-88
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: Create a toy training data set by randomly sampling 3 data points from our search
     space (between –5 and 5), and evaluate the objective and cost functions at these
     points.
+  id: totrans-89
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: Train a GP on the data from the objective function and another GP on the data
     from the cost function using the helper function `fit_gp_model()`.
+  id: totrans-90
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
@@ -552,134 +681,182 @@
     `.Normal` class to initialize a normal distribution object and call the `cdf()`
     method of this object on 0 (implemented as `torch.zeros(1)`) to compute the probability
     that each data point yields a cost lower than 0.
+  id: totrans-91
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: 'Initialize a regular EI policy with the `model` argument as the GP trained
     on the data from the objective function and the `best_f` argument as the current
     feasible incumbent:'
+  id: totrans-92
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: Compute the EI score for each point in the test set.
+  id: totrans-93
   prefs:
   - PREF_IND
   - PREF_OL
   type: TYPE_NORMAL
 - en: Refer to section 4.3 for more details on implementing the EI policy.
+  id: totrans-94
   prefs:
   - PREF_IND
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 有关实现EI策略的更多详细信息，请参见4.3节。
 - en: Initialize a constrained EI policy, and compute the constrained EI score for
     each point in the test set.
+  id: totrans-95
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 初始化受约束EI策略，为测试集中的每个点计算受约束EI分数。
 - en: Compute the product of the EI scores and the probabilities of feasibility, and
     verify that this manual computation leads to the same results as those from BoTorch’s
     implementation. You can use `torch.isclose(a,` `b,` `atol=1e-3)`, which performs
     element-wise comparisons between two tensors `a` and `b`, specifying `atol=1e-3`
     to account for numerical instability, to verify that all corresponding scores
     match up.
+  id: totrans-96
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 计算EI分数和可行性概率的乘积，并验证此手动计算是否导致与BoTorch实现相同的结果。您可以使用`torch.isclose（a，b，atol = 1e-3）`，它在两个张量`a`和`b`之间执行逐元素比较，指定`atol
+    = 1e-3`以考虑数值不稳定性，以验证所有相应分数是否匹配。
 - en: Plot the EI scores and the constrained EI scores in a graph, and visually verify
     that the former is always greater than or equal to the latter. Prove that this
     is the case using figure 8.4.
+  id: totrans-97
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 在图表中绘制EI分数和受约束EI分数，并通过图8.4视觉验证前者始终大于或等于后者。
 - en: 8.4 Implementing constrained EI with BoTorch
+  id: totrans-98
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 8.4 在 BoTorch 中实现受约束 EI
 - en: While we can manually multiply two quantities, the EI score and the probability
     of feasibility, to make a new acquisition score, BoTorch already takes care of
     the low-level bookkeeping. This means we can import the constrained EI policy
     from BoTorch and use it like any other BayesOpt policy, without much overhead.
     We learn how to do so in this section, and the code we use is included in the
     CH08/01 - Constrained optimization.ipynb notebook.
+  id: totrans-99
   prefs: []
   type: TYPE_NORMAL
+  zh: 虽然我们可以手动乘以两个量，即EI分数和可行性概率，以生成新的收购分数，但BoTorch已经处理了低级别的簿记。这意味着我们可以从BoTorch中导入受约束EI策略，并像使用任何其他BayesOpt策略一样使用它，而没有太多开销。我们在本节中学习如何这样做，并且我们使用的代码已包含在CH08/01-Constrained
+    optimization.ipynb笔记本中。
 - en: 'First, we need the objective function and the cost function that defines the
     constraint in figure 8.2\. In the following code, the objective function is implemented
     as `objective()`, and the cost function is `cost()`. Our search space is between
     –5 and 5, and we make the variable `bounds` that contains these numbers, which
     will be passed to BayesOpt policies later:'
+  id: totrans-100
   prefs: []
   type: TYPE_NORMAL
+  zh: 首先，我们需要实现图8.2中定义约束的目标函数和成本函数。在以下代码中，目标函数实现为`objective（）`，成本函数为`cost（）`。我们的搜索空间介于-5和5之间，并且我们制作包含这些数字的变量`bounds`，将在以后传递给BayesOpt策略：
 - en: '[PRE0]'
+  id: totrans-101
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE0]'
 - en: ❶ The objective function to be maximized
+  id: totrans-102
   prefs: []
   type: TYPE_NORMAL
+  zh: ❶ 要最大化的目标函数
 - en: ❷ The cost function
+  id: totrans-103
   prefs: []
   type: TYPE_NORMAL
+  zh: ❷ 成本函数
 - en: ❸ The bounds on the search space
+  id: totrans-104
   prefs: []
   type: TYPE_NORMAL
+  zh: ❸ 搜索空间的边界
 - en: We also need a class implementation of our GP model and a helper function `fit_
     gp_model()` that trains the GP given a training data set. As constrained optimization
     doesn’t require any changes to the GP and how we train it, we can reuse the class
     implementation and the helper function we used in previous chapters. For a more
     in-depth discussion of this implementation, refer to section 4.1.1.
+  id: totrans-105
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们还需要GP模型的类实现和一个helper函数`fit_ gp_model（）`，该函数训练给定训练数据集的GP。由于受限制的优化不需要对GP以及我们如何训练它进行任何更改，因此我们可以重复使用之前章节中使用的类实现和助手函数。有关此实现的更深入讨论，请参见4.1.1节。
 - en: 'To benchmark the optimization performance of the policies we use, we specify
     that each BayesOpt run has 10 queries, and we have 10 runs in total:'
+  id: totrans-106
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了基准测试我们使用的策略的优化性能，我们指定每个BayesOpt运行具有10个查询，并且总共有10个运行：
 - en: '[PRE1]'
+  id: totrans-107
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE1]'
 - en: Note We run each BayesOpt policy multiple times to have a holistic view of the
     performance of the policy. Refer to exercise 2 of chapter 4 for the discussion
     on repeated experiments.
+  id: totrans-108
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意 我们会多次运行每个BayesOpt策略，以全面了解策略的表现。有关重复实验的讨论，请参见第4章练习2。
 - en: 'Finally, we need to modify our BayesOpt loop to account for the changes visualized
     in figure 8.3\. At step 1 of figure 8.3—that is, at the beginning of each step
     in the BayesOpt loop—we need to retrain multiple GPs: one for the objective function
     and the other(s) for the constraint(s).'
+  id: totrans-109
   prefs: []
   type: TYPE_NORMAL
+  zh: 最后，我们需要修改我们的BayesOpt循环以考虑图8.3中可视化的更改。在图8.3的第1步（即BayesOpt循环中的每个步骤开始时），我们需要重新训练多个GP：一个用于目标函数，另一个（s）用于约束条件。
 - en: 'As we already have the helper function `fit_gp_model()` that trains a GP, this
     step comes down to passing appropriate datasets to this helper function. In our
     current example, we only have one cost function defining the constraint, so we
     have, in total, two GPs, which can be retrained with the following code:'
+  id: totrans-110
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE2]'
+  id: totrans-111
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE2]'
 - en: ❶ Train a GP on the objective function’s data.
+  id: totrans-112
   prefs: []
   type: TYPE_NORMAL
 - en: ❷ Train a GP on the cost function’s data.
+  id: totrans-113
   prefs: []
   type: TYPE_NORMAL
 - en: Here, the variable `train_x` contains the locations at which we have evaluated
     the objective and cost functions; `train_utility` is the corresponding objective
     values, and `train_cost` is the cost values.
+  id: totrans-114
   prefs: []
   type: TYPE_NORMAL
 - en: 'Step 2 of figure 8.3 refers to running a BayesOpt policy, which we learn to
     do shortly. For step 3 of figure 8.3, we evaluate the objective and cost functions
     at the data point recommended by the chosen BayesOpt policy, stored in the variable
     `next_x`. We do this by evaluating both the objective and cost functions at `next_x`:'
+  id: totrans-115
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE3]'
+  id: totrans-116
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE3]'
 - en: ❶ Evaluates the objective and cost functions at the recommended point
+  id: totrans-117
   prefs: []
   type: TYPE_NORMAL
 - en: ❷ Updates the various datasets
+  id: totrans-118
   prefs: []
   type: TYPE_NORMAL
 - en: One more bookkeeping step we need to take is keeping track of our optimization
@@ -690,27 +867,36 @@
     run) and `num_queries` columns (one for each time step). This tensor contains
     only one value by default, denoting our utility if no feasible points are found
     throughout BayesOpt.
+  id: totrans-119
   prefs: []
   type: TYPE_NORMAL
 - en: 'Inspecting figure 8.2, we see that our objective function is greater than –2
     everywhere within our search space (between –5_ and 5), so we use –2 as this default
     value:'
+  id: totrans-120
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE4]'
+  id: totrans-121
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE4]'
 - en: ❶ Checks whether a feasible point has been found
+  id: totrans-122
   prefs: []
   type: TYPE_NORMAL
 - en: 'Then, at each step of the BayesOpt loop, we only record the feasible incumbent
     by taking the maximum of the filtered observations:'
+  id: totrans-123
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE5]'
+  id: totrans-124
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE5]'
 - en: ❶ Checks whether a feasible point has been found
+  id: totrans-125
   prefs: []
   type: TYPE_NORMAL
 - en: 'The preceding code completes our constrained BayesOpt loop. All that’s left
@@ -718,18 +904,21 @@
     optimization problem. We use the constrained EI policy we discussed in section
     8.2 by using the BoTorch class `ConstrainedExpectedImprovement`. This class takes
     in a number of important arguments:'
+  id: totrans-126
   prefs: []
   type: TYPE_NORMAL
 - en: '`model`—A list of GP models for the objective function (`utility_model` in
     our case) and the functions that define the constraints (`cost_model`, in our
     case). We create this list using the `model_list_gp_regression.ModelListGP` class
     from BoTorch’s `models` module: `ModelListGP(utility_model,` `cost_model)`.'
+  id: totrans-127
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '`objective_index`—The index of the GP modeling the objective function in the
     model list `model`. Since `utility_model` is the first GP we pass to `ModelListGP`,
     this index is 0 in our case.'
+  id: totrans-128
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -739,36 +928,46 @@
     of an actual numerical value. Our example requires the cost corresponding to `cost_model`,
     which has an index of 1, to be a maximum of 0, so we set `constraints={1:` `[None,`
     `0]}`.'
+  id: totrans-129
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '`best_f`—The current feasible incumbent, which is `train_utility[train_cost`
     <= `0].max()`, if we have found at least one feasible point or the default value,
     –2, otherwise.'
+  id: totrans-130
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: 'Overall, we initialize the constrained EI policy as follows:'
+  id: totrans-131
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE6]'
+  id: totrans-132
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE6]'
 - en: ❶ The list of GP models
+  id: totrans-133
   prefs: []
   type: TYPE_NORMAL
 - en: ❷ The current feasible incumbent
+  id: totrans-134
   prefs: []
   type: TYPE_NORMAL
 - en: ❸ The objective function’s index in the model list
+  id: totrans-135
   prefs: []
   type: TYPE_NORMAL
 - en: ❹ A dictionary mapping each constraint’s index to the lower and upper bounds
+  id: totrans-136
   prefs: []
   type: TYPE_NORMAL
 - en: With the implementation of constrained EI in hand, let’s now run this policy
     on our one-dimensional constrained optimization problem and observe its performance.
     As a baseline, we can also run the regular version of EI that is constraint agnostic.
+  id: totrans-137
   prefs: []
   type: TYPE_NORMAL
 - en: Figure 8.9 shows the average feasible incumbent values found by these two policies
@@ -777,25 +976,31 @@
     always converges to the best possible solution. Figure 8.9 highlights the benefit
     of our constraint-aware optimization policy compared to a constraint-agnostic
     approach.
+  id: totrans-138
   prefs: []
   type: TYPE_NORMAL
 - en: '![](../../OEBPS/Images/08-09.png)'
+  id: totrans-139
   prefs: []
   type: TYPE_IMG
 - en: Figure 8.9 Optimization progress on a one-dimensional constrained optimization
     problem of constrained EI. Compared to the regular EI, the constrained variant
     finds a better feasible solution on average.
+  id: totrans-140
   prefs: []
   type: TYPE_NORMAL
 - en: 'The EI policy, which is blind to the constraint placed on the optimization
     problem, tends to veer off toward the infeasible optimum. Inspecting the incumbent
     values found by this policy, we notice that in many runs, the policy fails to
     progress from its initial value:'
+  id: totrans-141
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE7]'
+  id: totrans-142
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE7]'
 - en: In this chapter, we have learned about the problem of black box constrained
     optimization and how it is different from the classic black box optimization problem
     discussed in previous chapters. We learned that an effective optimization policy
@@ -804,15 +1009,18 @@
     the probability of feasibility to the acquisition score. This new acquisition
     score biases our search strategy toward feasible regions, thus better guiding
     us toward the feasible optimum.
+  id: totrans-143
   prefs: []
   type: TYPE_NORMAL
 - en: In the next chapter, we discuss a new BayesOpt setting, multifidelity optimization,
     with which there are different costs to querying the objective function. This
     setting requires us to balance finding a high objective value and preserving our
     querying budget.
+  id: totrans-144
   prefs: []
   type: TYPE_NORMAL
 - en: '8.5 Exercise 2: Constrained optimization of airplane design'
+  id: totrans-145
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
@@ -821,53 +1029,64 @@
     constrained BayesOpt on a higher-dimensional problem in which it’s not obvious
     where the feasibility optimal solution is. The solution to this exercise is included
     in the CH08/03 - Exercise 2.ipynb notebook:'
+  id: totrans-146
   prefs: []
   type: TYPE_NORMAL
 - en: Recreate the BayesOpt problem used in the CH07/04 - Exercise 2.ipynb notebook,
     including the airplane-utility objective function named `flight_utility()`, the
     bounds of our search space (the four-dimensional unit hypercube), the GP implementation,
     and the helper function that trains a GP on some training data `fit_gp_model()`.
+  id: totrans-147
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: 'Implement the following cost function, which simulates the cost of making the
     airplane design specified by a four-dimensional input:'
+  id: totrans-148
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: '[PRE8]'
+  id: totrans-149
   prefs:
   - PREF_IND
   type: TYPE_PRE
+  zh: '[PRE8]'
 - en: Figure 8.10 visualizes this cost function for various pairs of parameters we
     can tune, showing a complex nonlinear trend across these two-dimensional spaces.
+  id: totrans-150
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
 - en: '![](../../OEBPS/Images/08-10.png)'
+  id: totrans-151
   prefs:
   - PREF_IND
   type: TYPE_IMG
 - en: Figure 8.10 The cost function of the simulated airplane design optimization
     problem in various two-dimensional subspaces, corresponding to pairs of tunable
     parameters, shown as axis labels.
+  id: totrans-152
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
 - en: 'Our goal is to maximize the objective function `flight_utility()`, while following
     the constraint that the cost, as computed by `flight_cost()`, is less than or
     equal to 0:'
+  id: totrans-153
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: To this end, we set the number of queries a BayesOpt policy can make in each
     experiment as 50 and designate that each policy needs to run 10 repeated experiments.
+  id: totrans-154
   prefs:
   - PREF_IND
   - PREF_OL
   type: TYPE_NORMAL
 - en: The default value quantifying optimization progress if no feasible solution
     is found should be set to –2.
+  id: totrans-155
   prefs:
   - PREF_IND
   - PREF_OL
@@ -875,10 +1094,12 @@
 - en: Run the constrained EI policy as well as the regular EI policy on this problem,
     and then visualize and compare their average progress (along with error bars).
     The plot should look similar to figure 8.9.
+  id: totrans-156
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: Summary
+  id: totrans-157
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
@@ -887,6 +1108,7 @@
     practical solutions to the optimization problem. Constrained optimization is common
     in materials and drug discovery as well as hyperparameter tuning, where the objective
     function’s optimum is too difficult or dangerous to be used in practice.
+  id: totrans-158
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -894,12 +1116,14 @@
     is called a feasible point, while a data point that violates the constraints is
     called infeasible. We aim to find the point that maximizes the objective function
     among the feasible points.
+  id: totrans-159
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Constraints can vastly change the solution to an optimization problem, cutting
     off or even excluding a region with high objective values. We, therefore, need
     to actively account for the constraints when optimizing the objective function.
+  id: totrans-160
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -908,18 +1132,21 @@
     point will satisfy the constraints in a probabilistic manner. Specifically, the
     probability that a given data point is feasible is easy to compute thanks to the
     fact that the predictive distributions from a GP are normal distributions.
+  id: totrans-161
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: We can modify the EI policy to account for the constraints by adding the probability
     of feasibility to its acquisition score. The constrained EI policy can balance
     optimizing the objective function and satisfying the constraints.
+  id: totrans-162
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: BoTorch provides a class implementation of the constrained EI policy. When implementing
     constrained EI, we need to pass in the GPs modeling the objective and constraint
     functions as well as declare the constraint lower and upper bounds.
+  id: totrans-163
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
