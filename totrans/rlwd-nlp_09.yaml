@@ -1,27 +1,34 @@
 - en: 6 Sequence-to-sequence models
+  id: totrans-0
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
 - en: This chapter covers
+  id: totrans-1
   prefs: []
   type: TYPE_NORMAL
 - en: Building a machine translation system using Fairseq
+  id: totrans-2
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Transforming one sentence to another using a Seq2Seq model
+  id: totrans-3
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Using a beam search decoder to generate better output
+  id: totrans-4
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Evaluating the quality of machine translation systems
+  id: totrans-5
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Building a dialogue system (chatbot) using a Seq2Seq model
+  id: totrans-6
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -35,9 +42,11 @@
     search algorithms. At the end of this chapter, we will build a chatbot—an NLP
     application with which you can have a conversation. We’ll also discuss the challenges
     and limitations of simple Seq2Seq models.
+  id: totrans-7
   prefs: []
   type: TYPE_NORMAL
 - en: 6.1 Introducing sequence-to-sequence models
+  id: totrans-8
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
@@ -48,12 +57,15 @@
     (e.g., words) and estimates how probable the given sequence is in the domain in
     which the model is trained. You can also use a language model to generate realistic-looking
     text from scratch. See figure 6.1 for the overview of these two models.
+  id: totrans-9
   prefs: []
   type: TYPE_NORMAL
 - en: '![CH06_F01_Hagiwara](../Images/CH06_F01_Hagiwara.png)'
+  id: totrans-10
   prefs: []
   type: TYPE_IMG
 - en: Figure 6.1 Sequential labeling and language models
+  id: totrans-11
   prefs: []
   type: TYPE_NORMAL
 - en: Although these two models are useful for a number of NLP tasks, for some, you
@@ -69,6 +81,7 @@
     really. Although you can generate realistic-looking text using language models,
     you have almost no control over the text they generate. In fact, language models
     do not take any input.
+  id: totrans-12
   prefs: []
   type: TYPE_NORMAL
 - en: But if you look at figure 6.1 more carefully, you might notice something. The
@@ -78,6 +91,7 @@
     have the components needed to build what we want, that is, a model that takes
     a sentence and transforms it into another. The only missing part is a way to connect
     these two so that we can control what the language model generates.
+  id: totrans-13
   prefs: []
   type: TYPE_NORMAL
 - en: In fact, by the time the model on the left finishes processing the input sentence,
@@ -86,6 +100,7 @@
     representation is passed from left to right and the language model can generate
     another sentence based on the representation, it seems like you can achieve what
     you wanted to do in the first place!
+  id: totrans-14
   prefs: []
   type: TYPE_NORMAL
 - en: Sequence-to-sequence models—or *Seq2Seq* models, in short—are built on this
@@ -97,12 +112,15 @@
     generates another sequence. As with the language model, the generation stops when
     the decoder produces a special token, <END>, which enables a Seq2Seq model to
     generate an output that can be longer or shorter than the input sequence.
+  id: totrans-15
   prefs: []
   type: TYPE_NORMAL
 - en: '![CH06_F02_Hagiwara](../Images/CH06_F02_Hagiwara.png)'
+  id: totrans-16
   prefs: []
   type: TYPE_IMG
 - en: Figure 6.2 Sequence-to-sequence model
+  id: totrans-17
   prefs: []
   type: TYPE_NORMAL
 - en: Many variants of Seq2Seq models exist, depending on what architecture you use
@@ -110,6 +128,7 @@
     flows between the two. This chapter covers the most basic type of Seq2Seq model—simply
     connecting two RNNs via the sentence representation. We’ll discuss more advanced
     variants in chapter 8.
+  id: totrans-18
   prefs: []
   type: TYPE_NORMAL
 - en: Machine translation is the first, and by far the most popular, application of
@@ -124,9 +143,11 @@
     (somewhat surprising) application is parsing—if you think of the input text as
     one language and its syntax representation as another, you can parse natural language
     texts with a Seq2Seq model.[¹](#pgfId-1103720)
+  id: totrans-19
   prefs: []
   type: TYPE_NORMAL
 - en: 6.2 Machine translation 101
+  id: totrans-20
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
@@ -135,6 +156,7 @@
     language to another. The language the input text is written in is called the *source
     language*, whereas the one for the output is called the *target language*. The
     combination of the source and target languages is called the *language pair*.
+  id: totrans-21
   prefs: []
   type: TYPE_NORMAL
 - en: First, let’s look at a couple of examples to see what it’s like and why it’s
@@ -145,12 +167,15 @@
     is to draw how words or phrases of the same meaning map between the two sentences.
     Correspondence of linguistic units between two instances is called *alignment*.
     Figure 6.3 shows the alignment between the Spanish and English sentences.
+  id: totrans-22
   prefs: []
   type: TYPE_NORMAL
 - en: '![CH06_F03_Hagiwara](../Images/CH06_F03_Hagiwara.png)'
+  id: totrans-23
   prefs: []
   type: TYPE_IMG
 - en: Figure 6.3 Translation and word alignment between Spanish and English
+  id: totrans-24
   prefs: []
   type: TYPE_NORMAL
 - en: Some words (e.g., “Maria” and “Mary,” “bruja” and “witch,” and “verde” and “green”)
@@ -163,6 +188,7 @@
     and English are linguistically similar in terms of grammar and vocabulary, especially
     when compared to, say, Chinese and English, although this single example shows
     translating between the two may be a challenging task.
+  id: totrans-25
   prefs: []
   type: TYPE_NORMAL
 - en: Things start to look more complicated between Mandarin Chinese and English.
@@ -170,14 +196,21 @@
     juxing le huitan.”) and its English translation (“Bush held a talk with Shalon.”).
     Although Chinese uses ideographic characters of its own, we use romanized sentences
     here for simplicity.
+  id: totrans-26
   prefs: []
   type: TYPE_NORMAL
+  zh: 汉语和英语之间的情况开始变得更加复杂。图6.4展示了一句汉语句子（“布什与沙龙举行了会谈。”）和其英文翻译（“Bush held a talk with
+    Shalon.”）之间的对齐。尽管汉语使用了自己的表意文字，但我们在这里使用了罗马化的句子以示简便。
 - en: '![CH06_F04_Hagiwara](../Images/CH06_F04_Hagiwara.png)'
+  id: totrans-27
   prefs: []
   type: TYPE_IMG
+  zh: '![CH06_F04_Hagiwara](../Images/CH06_F04_Hagiwara.png)'
 - en: Figure 6.4 Translation and word alignment between Mandarin Chinese and English
+  id: totrans-28
   prefs: []
   type: TYPE_NORMAL
+  zh: 图6.4 汉语和英语之间的翻译和词对齐
 - en: You can now see more crossing arrows in the figure. Unlike English, Chinese
     prepositional phrases such as “with Shalon” are usually attached to verbs from
     the left. Also, the Chinese language doesn’t explicitly mark tense, and MT systems
@@ -190,14 +223,20 @@
     linguistically different languages (such as Chinese and English) is usually more
     challenging than those between linguistically similar ones (such as Spanish and
     Portuguese).
+  id: totrans-29
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在你可以在图中看到更多交叉的箭头。与英语不同，汉语介词短语（比如“和沙龙一起”）通常从左边附着在动词上。此外，汉语不明确标记时态，机器翻译系统（以及人工翻译）需要“猜测”英文翻译中应该使用的正确时态。最后，汉译英的机器翻译系统还需要推断每个名词的正确数量（单数或复数），因为汉语名词没有根据数量明确标记（例如，“会谈”只是表示“谈话”，没有明确提及数量）。这是一个很好的例子，说明了翻译的难度取决于语言对。在语言学上不同的语言之间开发机器翻译系统（如中文和英文）通常比在语言学上类似的语言之间（如西班牙语和葡萄牙语）更具挑战性。
 - en: '![CH06_F05_Hagiwara](../Images/CH06_F05_Hagiwara.png)'
+  id: totrans-30
   prefs: []
   type: TYPE_IMG
+  zh: '![CH06_F05_Hagiwara](../Images/CH06_F05_Hagiwara.png)'
 - en: Figure 6.5 Translation and word alignment between Japanese and English
+  id: totrans-31
   prefs: []
   type: TYPE_NORMAL
+  zh: 图6.5 日语和英语之间的翻译和词对齐
 - en: Let’s take a look at one more example—translating from Japanese to English,
     illustrated in figure 6.5\. All the arrows in the figure are crossed, meaning
     that the word order is almost exactly opposite in these two sentences. In addition
@@ -207,16 +246,20 @@
     language, whereas all the other languages we mentioned so far (English, Spanish,
     and Chinese) are SVO (subject-verb-object) languages. Structural differences are
     a reason why direct, word-to-word translation doesn’t work very well.
+  id: totrans-32
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们再看一个例子——从日语翻译成英语，在图6.5中有说明。图中所有的箭头都是交叉的，表示这两个句子的词序几乎完全相反。除了日语介词短语（例如“to music”）和关系从句从左边附着，跟汉语一样，宾语（例如例句中的“listening”在“我喜爱听”中）出现在动词之前。换句话说，日语是一种SOV（主语-宾语-动词）的语言，而到目前为止我们提到的其他语言（英语、西班牙语和汉语）都是SVO（主语-动词-宾语）的语言。结构上的差异是直接、逐字翻译效果不佳的原因之一。
 - en: NOTE This word-order classification system of language (such as SOV and SVO)
     is often used in linguistic typology. The vast majority of world languages are
     either SOV (most common) or SVO (slightly less common), although a small number
     of languages follow other word-order systems, such as VSO (verb-subject-object),
     used by Arabic and Irish, for example. Very few languages (less than 3% of all
     languages) follow other types (VOS, OVS, and OSV).
+  id: totrans-33
   prefs: []
   type: TYPE_NORMAL
+  zh: 注 这种语言的词序分类系统（如SOV和SVO）常常用于语言类型学。世界上绝大多数语言都是SOV（最常见）或SVO（稍少一些），尽管少数语言遵循其他词序系统，例如阿拉伯语和爱尔兰语使用的VSO（动词-主语-宾语）。很少一部分语言（不到所有语言的3%）使用其他类型（VOS、OVS和OSV）。
 - en: Besides the structural differences shown in the previous figures, many other
     factors can make MT a difficult task. One such factor is lexical difference. If
     you are translating, for example, the Japanese word “ongaku” to the English “music,”
@@ -227,6 +270,7 @@
     different choices, because in the Chinese family system, you need to use distinct
     words depending on whether your cousin is maternal or paternal, female or male,
     and older or younger than you.
+  id: totrans-34
   prefs: []
   type: TYPE_NORMAL
 - en: Another factor that makes MT challenging is omission. You can see that in figure
@@ -235,6 +279,7 @@
     the context and/or the verb form. This is called *zero pronoun*, and it can become
     a problem when translating from a pronoun-dropping language to a language where
     it happens less often (e.g., English).
+  id: totrans-35
   prefs: []
   type: TYPE_NORMAL
 - en: One of the earliest MT systems, developed during the Georgetown-IBM experiment,
@@ -245,6 +290,7 @@
     systems incorporated a larger set of lexicons and grammar rules, but these rules
     are written manually by linguists and are not enough to capture the complexities
     of language (again, remember the poor software engineer from chapter 1).
+  id: totrans-36
   prefs: []
   type: TYPE_NORMAL
 - en: 'The main paradigm for MT that remained dominant both in academia and industry
@@ -262,6 +308,7 @@
     previous chapter). The final SMT model combines these two models and produces
     output that is a plausible translation of the input and is a valid, fluent sentence
     in the target language on its own.'
+  id: totrans-37
   prefs: []
   type: TYPE_NORMAL
 - en: Around 2015, the advent of powerful neural machine translation (NMT) models
@@ -274,6 +321,7 @@
     produces an output, instead of a patchwork of submodels and submodules that you
     need to train independently. As a result, NMT models are simpler to train and
     smaller in code size than SMT models.
+  id: totrans-38
   prefs: []
   type: TYPE_NORMAL
 - en: MT is already used in many different industries and aspects of our lives. Translating
@@ -284,9 +332,11 @@
     language using an MT system, then the produced text is edited by human translators.
     Such editing is called *postediting*. The use of automated systems (called *computer-aided
     translation*, or CAT) can accelerate the translation process and reduce the cost.
+  id: totrans-39
   prefs: []
   type: TYPE_NORMAL
 - en: 6.3 Building your first translator
+  id: totrans-40
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
@@ -304,26 +354,32 @@
     by following their API; and 3) it is very fast, supporting multi-GPU and distributed
     training by default. Thanks to its powerful models, you can build a decent quality
     NMT system within a couple of hours.'
+  id: totrans-41
   prefs: []
   type: TYPE_NORMAL
 - en: Before you start, install Fairseq by running pip install fairseq in the root
     of your project directory. Also, run the following commands in your shell to download
     and expand the dataset (you may need to install unzip if you are using Ubuntu
     by running sudo apt-get install unzip):[²](#pgfId-1103788)
+  id: totrans-42
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE0]'
+  id: totrans-43
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE0]'
 - en: We are going to use Spanish and English parallel sentences from the Tatoeba
     project, which we used previously in chapter 4, to train a Spanish-to-English
     MT system. The corpus consists of approximately 200,000 English sentences and
     their Spanish translations. I went ahead and already formatted the dataset so
     that you can use it without worrying about obtaining the data, tokenizing the
     text, and so on. The dataset is already split into train, validate, and test subsets.
+  id: totrans-44
   prefs: []
   type: TYPE_NORMAL
 - en: 6.3.1 Preparing the datasets
+  id: totrans-45
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
@@ -336,12 +392,15 @@
     chapter 2 for a review). Finally, the best model is tested on the test portion
     of the dataset to obtain evaluation metrics, which reflect how good the model
     is.
+  id: totrans-46
   prefs: []
   type: TYPE_NORMAL
 - en: '![CH06_F06_Hagiwara](../Images/CH06_F06_Hagiwara.png)'
+  id: totrans-47
   prefs: []
   type: TYPE_IMG
 - en: Figure 6.6 Pipeline for building an NMT system
+  id: totrans-48
   prefs: []
   type: TYPE_NORMAL
 - en: 'The first step in MT development is preprocessing the dataset. But before preprocessing,
@@ -352,29 +411,43 @@
     files so that source sentences and their target translations are aligned sentence
     by sentence. The resulting file is often a TSV file where each line is a tab-separated
     *sentence pair*, which looks like the following:'
+  id: totrans-49
   prefs: []
   type: TYPE_NORMAL
+  zh: MT 开发的第一步是对数据集进行预处理。但在进行预处理之前，你需要将数据集转换为易于使用的格式，通常是自然语言处理中的纯文本格式。实践中，用于训练 MT
+    系统的原始数据以多种不同格式出现，例如，纯文本文件（如果你很幸运的话）、专有软件的 XML 格式、PDF 文件和数据库记录。你的第一项任务是对原始文件进行格式化，使源句子和它们的目标翻译按句子对齐。结果文件通常是一个
+    TSV 文件，每行都是一个以制表符分隔的句子对，如下所示：
 - en: '[PRE1]'
+  id: totrans-50
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE1]'
 - en: 'After the translations are aligned, the parallel corpus is fed into the preprocessing
     pipeline. Specific operations applied in this process differ from application
     to application, and from language to language, but the following steps are most
     common:'
+  id: totrans-51
   prefs: []
   type: TYPE_NORMAL
+  zh: 在翻译对齐后，平行语料被输入到预处理管道中处理。具体的操作因应用程序和语言而异，但以下步骤最为常见：
 - en: Filtering
+  id: totrans-52
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 过滤
 - en: Cleaning
+  id: totrans-53
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 清理
 - en: Tokenization
+  id: totrans-54
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 分词
 - en: In the filtering step, any sentence pairs that are not suitable for training
     an MT system are removed from the dataset. What makes a sentence pair not suitable
     depends on many factors, but, for example, any sentence pair where either text
@@ -389,14 +462,21 @@
     due to, for example, quotes, explanation, or code switching (mixing more than
     one language in a sentence). Language detection (see chapter 4) can help detect
     such anomalies.
+  id: totrans-55
   prefs: []
   type: TYPE_NORMAL
+  zh: 在过滤步骤中，将从数据集中移除任何不适合用于训练 MT 系统的句子对。一个句子对是否太长、是否有用等因素影响很大，例如，任何其中一个文本长度过长（例如超过
+    1000 个单词）的句子对都无用，因为大多数 MT 模型不能建模这样长的句子。此外，任何其中一个句子过长但另一个句子过短的句子对都可能是由于数据处理或对齐错误而引起的噪音。例如，如果一个西班牙语句子有
+    10 个单词，其英语翻译的长度应该在 5 到 15 个单词之间。最后，如果平行语料库包含除源语言和目标语言之外的任何语言，应该移除这样的句子对。这种情况比你想象的要多得多——许多文档由于引用、解释或代码切换（在一个句子中混合多种语言）而成为多语言文档。语言检测（见第
+    4 章）可以帮助检测到这些异常情况。
 - en: After filtering, sentences in the dataset can be cleaned further. This process
     may include such things as removal of HTML tags and any special characters and
     normalization of characters (e.g., traditional and simplified Chinese) and spelling
     (e.g., American and British English).
+  id: totrans-56
   prefs: []
   type: TYPE_NORMAL
+  zh: 过滤后，数据集中的句子可以进一步清理。该过程可能包括删除 HTML 标签和任何特殊字符，以及对字符（例如，繁体中文和简体中文）和拼写（例如，美式英语和英式英语）进行归一化。
 - en: If the target language uses scripts such as the Latin (a, b, c, ...) or Cyrillic
     (а, б, в, ...) alphabets, which distinguish upper- and lowercases, you may want
     to normalize case. By doing so, your MT system will group “NLP” with “nlp” and
@@ -408,9 +488,11 @@
     of data and the domain you are working with. In practice, such decisions, including
     whether to normalize cases, are carefully made by observing their effect on the
     validation data performance.
+  id: totrans-57
   prefs: []
   type: TYPE_NORMAL
 - en: Data cleaning for machine translation and NLP
+  id: totrans-58
   prefs: []
   type: TYPE_NORMAL
 - en: Note that the cleaning techniques mentioned here are not specific to MT. Any
@@ -421,64 +503,81 @@
     others, the model will have a difficulty figuring out the proper way to translate
     the word, whereas humans would easily understand that the two words represent
     a single concept.
+  id: totrans-59
   prefs: []
   type: TYPE_NORMAL
 - en: At this point, the dataset is still a bunch of strings of characters. Most MT
     systems operate on words, so you need to tokenize the input (section 3.3) to identify
     words. Depending on the language, you may need to run a different pipeline (e.g.,
     word segmentation is needed for Chinese and Japanese).
+  id: totrans-60
   prefs: []
   type: TYPE_NORMAL
 - en: 'The Tatoeba dataset you downloaded and expanded earlier has already gone through
     all this preprocessing pipeline. Now you are ready to hand the dataset over to
     Fairseq. The first step is to tell Fairseq to convert the input files to the binary
     format so that the training script can read them easily, as follows:'
+  id: totrans-61
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE2]'
+  id: totrans-62
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE2]'
 - en: 'When this succeeds, you should see a message Wrote preprocessed data to data/mt-bin
     on your terminal. You should also find the following group of files under the
     data/mt-bin directory:'
+  id: totrans-63
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE3]'
+  id: totrans-64
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE3]'
 - en: One of the key functionalities of this preprocessing step is to build the vocabulary
     (called the *dictionary* in Fairseq), which is a mapping from vocabulary items
     (usually words) to their IDs. Notice the two dictionary files in the directory,
     dict.en.txt and dict.es.txt. MT deals with two languages, so the system needs
     to maintain two mappings, one for each language.
+  id: totrans-65
   prefs: []
   type: TYPE_NORMAL
 - en: 6.3.2 Training the model
+  id: totrans-66
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
 - en: 'Now that the train data is converted into the binary format, you are ready
     to train the MT model. Invoke the fairseq-train command with the directory where
     the binary files are located, along with several hyperparameters, as shown next:'
+  id: totrans-67
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE4]'
+  id: totrans-68
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE4]'
 - en: You don’t have to worry about understanding what most of the parameters here
     mean (just yet). At this point, you need to know only that you are training a
     model using the data stored in the directory specified by the first parameter
     (data/mt-bin) using an LSTM architecture (—arch lstm) with a bunch of other hyperparameters,
     and saving the results in data/mt-ckpt (short for “checkpoint”).
+  id: totrans-69
   prefs: []
   type: TYPE_NORMAL
 - en: 'When you run this command, your terminal will show two types of progress bars
     alternatively—one for training and another for validating, as shown here:'
+  id: totrans-70
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE5]'
+  id: totrans-71
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE5]'
 - en: 'The lines corresponding to validation results are easily distinguishable by
     their contents—they say “valid” subset. For each epoch, the training process alternates
     two stages: training and validation. An *epoch*, a concept used in machine learning,
@@ -487,6 +586,7 @@
     in such a way that the new set of parameters lowers the loss. In the validation
     stage, the model parameters are fixed, and a separate dataset (validation set)
     is used to measure how well the model is performing against the dataset.'
+  id: totrans-72
   prefs: []
   type: TYPE_NORMAL
 - en: I mentioned in chapter 1 that validation sets are used for model selection,
@@ -496,6 +596,7 @@
     the intermediary models (i.e., the model after the first epoch, the one after
     two epochs, and so on). In other words, we use the validation stage to monitor
     the progress of the training.
+  id: totrans-73
   prefs: []
   type: TYPE_NORMAL
 - en: Why is this a good idea? We gain many benefits by inserting the validation stage
@@ -504,6 +605,7 @@
     further, let’s look at how the loss changes over the course of the training of
     our Spanish-to-English MT model, for both the train and the validation sets, as
     shown in figure 6.7.
+  id: totrans-74
   prefs: []
   type: TYPE_NORMAL
 - en: 'As the training continues, the train loss becomes smaller and smaller and gradually
@@ -511,6 +613,7 @@
     the loss as much as possible. Checking whether the train loss is decreasing steadily
     epoch after epoch is a good “sanity check” that your model and the training pipeline
     are working as expected.'
+  id: totrans-75
   prefs: []
   type: TYPE_NORMAL
 - en: On the other hand, if you look at the validation loss, it goes down at first
@@ -518,12 +621,15 @@
     a U-shaped curve—a typical sign of overfitting. After several epochs of training,
     your model fits the train set so well that it begins to lose its generalizability
     on the validation set.
+  id: totrans-76
   prefs: []
   type: TYPE_NORMAL
 - en: '![CH06_F07_Hagiwara](../Images/CH06_F07_Hagiwara.png)'
+  id: totrans-77
   prefs: []
   type: TYPE_IMG
 - en: Figure 6.7 Train and validation loss
+  id: totrans-78
   prefs: []
   type: TYPE_NORMAL
 - en: Let’s use a concrete example in MT to illustrate what’s really going on when
@@ -536,6 +642,7 @@
     which is the “correct” thing to do according to the train set but obviously not
     ideal if you’d like to build a robust MT system. For example, the best way to
     translate “hard” in “She is trying hard” is not “fuerte.”
+  id: totrans-79
   prefs: []
   type: TYPE_NORMAL
 - en: If you see your validation loss starting to creep up, there’s little point keeping
@@ -547,6 +654,7 @@
     epochs you wait until the training is terminated is called *patience*. In practice,
     the metric you care about the most (such as BLEU; see section 6.5.2) is used for
     early stopping instead of the validation loss.
+  id: totrans-80
   prefs: []
   type: TYPE_NORMAL
 - en: OK, that was enough about training and validating for now. The graph in figure
@@ -555,47 +663,61 @@
     the command would keep running indefinitely. Fairseq will automatically save the
     best model parameters (in terms of the validation loss) to the checkpoint_best.pt
     file.
+  id: totrans-81
   prefs: []
   type: TYPE_NORMAL
 - en: WARNING Note that the training may take a long time if you are just using a
     CPU. Chapter 11 explains how to use GPUs to accelerate the training.
+  id: totrans-82
   prefs: []
   type: TYPE_NORMAL
 - en: 6.3.3 Running the translator
+  id: totrans-83
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
 - en: 'After the model is trained, you can invoke the fairseq-interactive command
     to run your MT model on any input in an interactive way. You can run the command
     by specifying the binary file location and the model parameter file as follows:'
+  id: totrans-84
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE6]'
+  id: totrans-85
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE6]'
 - en: 'After you see the prompt Type the input sentence and press return, try typing
     (or copying and pasting) the following Spanish sentences one by one:'
+  id: totrans-86
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE7]'
+  id: totrans-87
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE7]'
 - en: 'Note the punctuation and the whitespace in these sentences—Fairseq assumes
     that the input is already tokenized. Your results may vary slightly, depending
     on many factors (the training of deep learning models usually involves some randomness),
     but you get something along the line of the following (I added boldface for emphasis):'
+  id: totrans-88
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE8]'
+  id: totrans-89
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE8]'
 - en: Most of the output sentences here are almost perfect, except the fourth one
     (I would translate to “Are there free rooms?”). Even considering the fact that
     these sentences are all simple examples you can find in any travel Spanish phrasebook,
     this is not a bad start for a system built within an hour!
+  id: totrans-90
   prefs: []
   type: TYPE_NORMAL
 - en: 6.4 How Seq2Seq models work
+  id: totrans-91
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
@@ -603,9 +725,11 @@
     a Seq2Seq model, which include the encoder and the decoder. We’ll also cover the
     algorithms used for decoding the target sentence—greedy decoding and beam search
     decoding.
+  id: totrans-92
   prefs: []
   type: TYPE_NORMAL
 - en: 6.4.1 Encoder
+  id: totrans-93
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
@@ -614,35 +738,44 @@
     Its main job is to take the input sequence (usually a sentence) and convert it
     into a vector representation of a fixed length. You can use an LSTM-RNN as shown
     in figure 6.8.
+  id: totrans-94
   prefs: []
   type: TYPE_NORMAL
 - en: '![CH06_F08_Hagiwara](../Images/CH06_F08_Hagiwara.png)'
+  id: totrans-95
   prefs: []
   type: TYPE_IMG
 - en: Figure 6.8 Encoder of a Seq2Seq model
+  id: totrans-96
   prefs: []
   type: TYPE_NORMAL
 - en: Unlike sequential-labeling models, we need only the final hidden state of an
     RNN, which is then passed to the decoder to generate the target sentence. You
     can also use a multilayer RNN as an encoder, in which case the sentence representation
     is the concatenation of the output of each layer, as illustrated in figure 6.9.
+  id: totrans-97
   prefs: []
   type: TYPE_NORMAL
 - en: '![CH06_F09_Hagiwara](../Images/CH06_F09_Hagiwara.png)'
+  id: totrans-98
   prefs: []
   type: TYPE_IMG
 - en: Figure 6.9 Using a multilayer RNN as an encoder
+  id: totrans-99
   prefs: []
   type: TYPE_NORMAL
 - en: Similarly, you can use a bidirectional (or even a bidirectional multilayer)
     RNN as an encoder. The final sentence representation is a concatenation of the
     output of the forward and the backward layers, as shown in figure 6.10.
+  id: totrans-100
   prefs: []
   type: TYPE_NORMAL
 - en: '![CH06_F10_Hagiwara](../Images/CH06_F10_Hagiwara.png)'
+  id: totrans-101
   prefs: []
   type: TYPE_IMG
 - en: Figure 6.10 Using a bidirectional RNN as an encoder
+  id: totrans-102
   prefs: []
   type: TYPE_NORMAL
 - en: 'NOTE This is a small detail, but remember that an LSTM cell produces two types
@@ -651,15 +784,19 @@
     state while discarding the cell state. Think of the cell state as something like
     a temporary loop variable used for computing the final outcome (the hidden state).
     See figure 6.11 for an illustration.'
+  id: totrans-103
   prefs: []
   type: TYPE_NORMAL
 - en: '![CH06_F11_Hagiwara](../Images/CH06_F11_Hagiwara.png)'
+  id: totrans-104
   prefs: []
   type: TYPE_IMG
 - en: Figure 6.11 An encoder using LSTM cells
+  id: totrans-105
   prefs: []
   type: TYPE_NORMAL
 - en: 6.4.2 Decoder
+  id: totrans-106
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
@@ -672,12 +809,15 @@
     decoder is one type of conditional language model, where the condition is the
     sentence representation produced by the encoder. See figure 6.12 for an illustration
     of how a Seq2Seq decoder works.
+  id: totrans-107
   prefs: []
   type: TYPE_NORMAL
 - en: '![CH06_F12_Hagiwara](../Images/CH06_F12_Hagiwara.png)'
+  id: totrans-108
   prefs: []
   type: TYPE_IMG
 - en: Figure 6.12 A decoder of a Seq2Seq model
+  id: totrans-109
   prefs: []
   type: TYPE_NORMAL
 - en: Just as with language models, Seq2Seq decoders generate text from left to right.
@@ -685,9 +825,11 @@
     RNN. However, a decoder cannot be bidirectional—you cannot generate a sentence
     from both sides. As was mentioned in chapter 5, models that operate on the past
     sequence they produced are called *autoregressive models*.
+  id: totrans-110
   prefs: []
   type: TYPE_NORMAL
 - en: Non-autoregressive models
+  id: totrans-111
   prefs: []
   type: TYPE_NORMAL
 - en: 'If you think simply generating text from left to right is too limiting, you
@@ -700,6 +842,7 @@
     in a linear fashion (see, for example, this paper from Salesforce Research: [https://arxiv.org/abs/1711.02281](https://arxiv.org/abs/1711.02281)).
     However, they haven’t exceeded autoregressive models in terms of translation quality,
     and most research and production MT systems still adopt autoregressive models.'
+  id: totrans-112
   prefs: []
   type: TYPE_NORMAL
 - en: How the decoder behaves is a bit different between the training and the prediction
@@ -708,6 +851,7 @@
     words, we know exactly what the decoder should produce, word by word. Because
     of this, decoders are trained in a similar way to how sequential-labeling models
     are trained (see chapter 5).
+  id: totrans-113
   prefs: []
   type: TYPE_NORMAL
 - en: First, the decoder is fed the sentence representation produced by the encoder
@@ -717,6 +861,7 @@
     the size of the vocabulary. The resulting vector then goes through softmax, which
     converts it to a probability distribution. This distribution dictates how likely
     each word in the vocabulary is to come next.
+  id: totrans-114
   prefs: []
   type: TYPE_NORMAL
 - en: 'Then, this is where the training happens. If the input is “Maria no daba una
@@ -731,6 +876,7 @@
     a small loss. On the other hand, if the probability for “Mary” is small, then
     the network incurs a large loss, which encourages the optimization algorithm to
     change the parameters (magic constants) by a large amount.'
+  id: totrans-115
   prefs: []
   type: TYPE_NORMAL
 - en: Then, we move on to the next cell. The next cell receives the hidden state computed
@@ -744,12 +890,15 @@
     we reach the final token, which is <END>. The total loss for the sentence is the
     average of all the losses incurred for all the words in the sentence, as shown
     in figure 6.13.
+  id: totrans-116
   prefs: []
   type: TYPE_NORMAL
 - en: '![CH06_F13_Hagiwara](../Images/CH06_F13_Hagiwara.png)'
+  id: totrans-117
   prefs: []
   type: TYPE_IMG
 - en: Figure 6.13 Training a Seq2Seq decoder
+  id: totrans-118
   prefs: []
   type: TYPE_NORMAL
 - en: Finally, the loss computed this way is used to adjust the model parameters of
@@ -758,9 +907,11 @@
     the loss propagates all the way back to the encoder through the sentence representation.
     If the sentence representation produced by the encoder is not good, the decoder
     won’t be able to produce high-quality target sentences no matter how hard it tries.
+  id: totrans-119
   prefs: []
   type: TYPE_NORMAL
 - en: 6.4.3 Greedy decoding
+  id: totrans-120
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
@@ -778,17 +929,21 @@
     (you are lucky if it’s “Mary”). The MT system produces the word that was just
     picked and then feeds it to the next RNN cell. This is repeated until the special
     token <END> is encountered. Figure 6.14 illustrates this process.
+  id: totrans-121
   prefs: []
   type: TYPE_NORMAL
 - en: '![CH06_F14_Hagiwara](../Images/CH06_F14_Hagiwara.png)'
+  id: totrans-122
   prefs: []
   type: TYPE_IMG
 - en: Figure 6.14 A prediction using a Seq2Seq decoder
+  id: totrans-123
   prefs: []
   type: TYPE_NORMAL
 - en: OK, so are we all good, then? Can we move on to evaluating our MT system, because
     it is doing everything it can to produce the best possible translation? Not so
     fast—many things could go wrong by decoding the target sentence in this manner.
+  id: totrans-124
   prefs: []
   type: TYPE_NORMAL
 - en: First of all, the goal of MT decoding is to maximize the probability of the
@@ -804,6 +959,7 @@
     the globally optimal solution, and using greedy decoding can leave you stuck with
     suboptimal translations. This is not very intuitive to understand, so let me use
     a simple example to illustrate this.
+  id: totrans-125
   prefs: []
   type: TYPE_NORMAL
 - en: When you are picking words at each timestep, you have multiple words to pick
@@ -813,12 +969,15 @@
     The diagram shows how the word you pick at one timestep (e.g., “did”) branches
     out to another set of possible words (“you” and “not”) to pick from at the next
     timestep.
+  id: totrans-126
   prefs: []
   type: TYPE_NORMAL
 - en: '![CH06_F15_Hagiwara](../Images/CH06_F15_Hagiwara.png)'
+  id: totrans-127
   prefs: []
   type: TYPE_IMG
 - en: Figure 6.15 A decoding decision tree
+  id: totrans-128
   prefs: []
   type: TYPE_NORMAL
 - en: Each transition from word to word is labeled with a score, which corresponds
@@ -829,6 +988,7 @@
     things here. For example, if you go from “Mary” to “did,” then on to “you” and
     “do,” you just generated a sentence “Mary did you do” and the total score is 1
     + 5 + 1 = 7.
+  id: totrans-129
   prefs: []
   type: TYPE_NORMAL
 - en: 'The greedy decoder we saw earlier will face two choices after it generates
@@ -838,6 +998,7 @@
     “do” with a score of 1 or generating “know” with a score of 2\. Again, it will
     pick the largest score, and you will end up with the translation “Mary did you
     know” whose score is 1+ 5 + 1 = 8.'
+  id: totrans-130
   prefs: []
   type: TYPE_NORMAL
 - en: This is not a bad result. At least, it is not as bad as the first path, which
@@ -851,6 +1012,7 @@
     short-term rewards, you are able to gain even larger rewards in the long run.
     But due to the myopic nature of the greedy decoder, it will never choose this
     path—it can’t backtrack and change its mind once it’s taken one branch over another.
+  id: totrans-131
   prefs: []
   type: TYPE_NORMAL
 - en: Choosing which way to go to maximize the total score seems easy if you look
@@ -861,15 +1023,18 @@
     You just can’t try every possible path and see what score you’d get, either, because
     the vocabulary usually contains tens of thousands of unique words, meaning the
     number of possible paths is exponentially large.
+  id: totrans-132
   prefs: []
   type: TYPE_NORMAL
 - en: The sad truth is that you can’t realistically expect to find the optimal path
     that maximizes the probability for the entire sentence within a reasonable amount
     of time. But you can avoid being stuck (or at least, make it less likely to be
     stuck) with a suboptimal solution, which is what the beam search decoder does.
+  id: totrans-133
   prefs: []
   type: TYPE_NORMAL
 - en: 6.4.4 Beam search decoding
+  id: totrans-134
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
@@ -883,6 +1048,7 @@
     majors look appealing in the short run (e.g., choosing an economics major may
     lead to some good internship opportunities at large investment banks) doesn’t
     mean that path is the best in the long run (see what happened in 2008).
+  id: totrans-135
   prefs: []
   type: TYPE_NORMAL
 - en: In such a situation, one thing you could do is to hedge your bet by pursuing
@@ -891,6 +1057,7 @@
     is more different than you had imagined, you can still change your mind and pursue
     another option, which is not possible if you choose your major greedily (i.e.,
     based only on the short-term prospects).
+  id: totrans-136
   prefs: []
   type: TYPE_NORMAL
 - en: The main idea of beam search decoding is similar to this—instead of committing
@@ -898,6 +1065,7 @@
     In this way, you leave some room for “dark horses,” that is, hypotheses that had
     low scores at first but may prove promising later. Let’s see this in action using
     the example in figure 6.16, a slightly modified version of figure 6.15.
+  id: totrans-137
   prefs: []
   type: TYPE_NORMAL
 - en: The key idea of beam search decoding is to use a *beam* (figure 6.16 bottom),
@@ -909,12 +1077,15 @@
     hypothesis, and the score is incremented by the score of the path you have just
     taken. For example, when you move on to “did,” it will make a new hypothesis consisting
     of “Mary did” and a score of 1.
+  id: totrans-138
   prefs: []
   type: TYPE_NORMAL
 - en: '![CH06_F16_Hagiwara](../Images/CH06_F16_Hagiwara.png)'
+  id: totrans-139
   prefs: []
   type: TYPE_IMG
 - en: Figure 6.16 Beam search decoding
+  id: totrans-140
   prefs: []
   type: TYPE_NORMAL
 - en: 'If you have multiple words to choose from at any particular timestep, a hypothesis
@@ -926,6 +1097,7 @@
     the beam can hold up to only two hypotheses in this example, anything except the
     top two gets kicked out of the beam, which leaves [Mary did you] (6) and [Mary
     did not] (4).'
+  id: totrans-141
   prefs: []
   type: TYPE_NORMAL
 - en: At timestep 3, each remaining hypothesis can spawn up to two child hypotheses.
@@ -933,6 +1105,7 @@
     did you do] (7), whereas the second one ([Mary did not] (4)) turns into [Mary
     did not slap] (9). These three hypotheses are sorted by their scores, and the
     best two will be returned as the result of the beam search decoding.
+  id: totrans-142
   prefs: []
   type: TYPE_NORMAL
 - en: 'Congratulations—now your algorithm was able to find the path that maximizes
@@ -944,6 +1117,7 @@
     beam width, the higher the expected quality of the translation results will be.
     However, there’s a tradeoff: because the computer needs to consider multiple hypotheses,
     it will be linearly slower as the beam width increases.'
+  id: totrans-143
   prefs: []
   type: TYPE_NORMAL
 - en: 'In Fairseq, you can use the —beam option to change the beam size. In the example
@@ -953,24 +1127,29 @@
     different results. When I tried this, I got almost the same results except the
     last one: “counts, please,” which is not a great translation for “La cuenta, por
     favor.” This means using a beam search indeed helps improve the translation quality!'
+  id: totrans-144
   prefs: []
   type: TYPE_NORMAL
 - en: 6.5 Evaluating translation systems
+  id: totrans-145
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
 - en: In this section, I’d like to briefly touch on the topic of evaluating machine
     translation systems. Accurately evaluating MT systems is an important topic, both
     in theory and practice.
+  id: totrans-146
   prefs: []
   type: TYPE_NORMAL
 - en: 6.5.1 Human evaluation
+  id: totrans-147
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
 - en: The simplest and the most accurate way to evaluate MT systems’ output is to
     use human evaluation. After all, language is translated for humans. Translations
     that are deemed good by humans should be good.
+  id: totrans-148
   prefs: []
   type: TYPE_NORMAL
 - en: As mentioned previously, we have a few considerations for what makes a translation
@@ -987,6 +1166,7 @@
     but not adequate (e.g., “Mary saw a witch in the forest” is a perfectly fluent
     but inadequate translation) and vice versa, like the earlier example. MT systems
     that produce output that is both adequate and fluent are desirable.
+  id: totrans-149
   prefs: []
   type: TYPE_NORMAL
 - en: An MT system is usually evaluated by presenting its translations to human annotators
@@ -994,9 +1174,11 @@
     is easier to judge because it requires only monolingual speakers of the target
     sentence, whereas adequacy requires bilingual speakers of both the source and
     target languages.
+  id: totrans-150
   prefs: []
   type: TYPE_NORMAL
 - en: 6.5.2 Automatic evaluation
+  id: totrans-151
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
@@ -1005,6 +1187,7 @@
     evaluators to assess an MT system’s output every time you need it. If you are
     dealing with language pairs that are not common, you might not be able to find
     bilingual speakers for evaluating adequacy at all.
+  id: totrans-152
   prefs: []
   type: TYPE_NORMAL
 - en: But more importantly, you need to constantly evaluate and monitor an MT system’s
@@ -1020,6 +1203,7 @@
     not warrant human evaluation. A large amount of correlation exists between the
     outputs of intermediate models, and human evaluators would be spending a lot of
     time evaluating very similar, if not identical, sentences.
+  id: totrans-153
   prefs: []
   type: TYPE_NORMAL
 - en: For this reason, it’d be desirable if we could use some automatic way to assess
@@ -1031,6 +1215,7 @@
     for each source sentence and calculating some sort of similarity between the reference
     and a system’s output. Once you create the reference and define the metric, you
     can automatically evaluate translation quality as many times as you want.
+  id: totrans-154
   prefs: []
   type: TYPE_NORMAL
 - en: One of the simplest ways to compute the similarity between the reference and
@@ -1043,6 +1228,7 @@
     the former—insert “not,” replace “hit” with “slap,” and delete “wicked.” If you
     divide three by the length of the reference (= 7), it’s your WER (= 3/7, or 0.43).
     The lower the WER, the better the quality of your translation.
+  id: totrans-155
   prefs: []
   type: TYPE_NORMAL
 - en: Although WER is simple and easy to compute, it is not widely used for evaluating
@@ -1052,6 +1238,7 @@
     and by far the most commonly used metric for automatic evaluation in MT is BLEU
     (bilingual evaluation understudy). BLEU solves the problem of multiple references
     by using *modified precision*. I’ll illustrate this next using a simple example.
+  id: totrans-156
   prefs: []
   type: TYPE_NORMAL
 - en: 'In the following table, we are evaluating a candidate (a system’s output) “the
@@ -1061,15 +1248,19 @@
     Because there’s only one unique word in the candidate, “the,” if you calculate
     its precision, it will automatically become the candidate’s score, which is 1,
     or 100%. But there seems to be something wrong about this.'
+  id: totrans-157
   prefs: []
   type: TYPE_NORMAL
 - en: '| Candidate | the | the | the | the | the | the | the |'
+  id: totrans-158
   prefs: []
   type: TYPE_TB
 - en: '| Reference 1 | the | cat | is | on | the | mat |  |'
+  id: totrans-159
   prefs: []
   type: TYPE_TB
 - en: '| Reference 2 | there | is | a | cat | on | the | mat |'
+  id: totrans-160
   prefs: []
   type: TYPE_TB
 - en: Because only two “thes” exist in the references, the spurious “thes” generated
@@ -1080,6 +1271,7 @@
     29%. In practice, BLEU uses not only unique words (i.e., unigrams) but also all
     unique sequences of words (n-grams) up to a length of 4 in the candidate and the
     references.
+  id: totrans-161
   prefs: []
   type: TYPE_NORMAL
 - en: However, we can game this metric in another way—because it’s based on precision,
@@ -1089,6 +1281,7 @@
     is obviously not a good translation. BLEU solves this issue by introducing the
     brevity penalty, which discounts the score if the candidate is shorter than the
     references.
+  id: totrans-162
   prefs: []
   type: TYPE_NORMAL
 - en: Development of accurate automatic metrics has been an active research area.
@@ -1096,9 +1289,11 @@
     barely scratched the surface in this section. Although new metrics show higher
     correlations with human evaluations and are claimed to be better, BLEU is still
     by far the most widely used metric, mainly due to its simplicity and long tradition.
+  id: totrans-163
   prefs: []
   type: TYPE_NORMAL
 - en: '6.6 Case study: Building a chatbot'
+  id: totrans-164
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
@@ -1106,9 +1301,11 @@
     chatbot, which is an NLP application with which you can have a conversation. We
     are going to build a very simple yet functional chatbot using a Seq2Seq model
     and discuss techniques and challenges in building intelligent agents.
+  id: totrans-165
   prefs: []
   type: TYPE_NORMAL
 - en: 6.6.1 Introducing dialogue systems
+  id: totrans-166
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
@@ -1119,6 +1316,7 @@
     with humans. Conversational technologies are currently a hot topic among NLP practitioners,
     due to the success and proliferation of commercial conversational AI systems such
     as Amazon Alexa, Apple Siri, and Google Assistant.'
+  id: totrans-167
   prefs: []
   type: TYPE_NORMAL
 - en: 'You may not have a clue as to how we can get started with building an NLP application
@@ -1134,6 +1332,7 @@
     restaurant in X?” (where X is the name of a neighborhood in your city) and “Did
     you see any Y movies lately?” (where Y is a genre) can be answered just by “pattern
     matching” and retrieving relevant information from your memory.'
+  id: totrans-168
   prefs: []
   type: TYPE_NORMAL
 - en: If you think of a conversation as a set of “turns” where the response is generated
@@ -1147,9 +1346,11 @@
     and the output as two different languages and apply a Seq2Seq model to them, including
     summarization (longer text to a shorter one) and grammatical error correction
     (text with errors to one without).
+  id: totrans-169
   prefs: []
   type: TYPE_NORMAL
 - en: 6.6.2 Preparing a dataset
+  id: totrans-170
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
@@ -1161,86 +1362,112 @@
     but these datasets are often noisy and often contain obscenities. By collecting
     made-up conversations instead, the Self-dialogue Corpus improves the quality for
     half the original cost (because you need only one person versus two people!).
+  id: totrans-171
   prefs: []
   type: TYPE_NORMAL
 - en: 'The same as earlier, I tokenized and converted the corpus into a format that
     is interpretable by Fairseq. You can obtain the converted dataset as follows:'
+  id: totrans-172
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE9]'
+  id: totrans-173
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE9]'
 - en: 'You can use the following combination of the paste command (to stitch files
     horizontally) and the head command to peek at the beginning of the training portion.
     Note that we are using fr (for “foreign,” not “French”) to denote the “language”
     we are translating from:'
+  id: totrans-174
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE10]'
+  id: totrans-175
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE10]'
 - en: 'As you can see, each line consists of an utterance (on the left) and a response
     to it (on the right). Notice that this dataset has the same structure as the Spanish-English
     parallel corpus we used in section 6.3.1\. The next step is to run the fairseq-preprocess
     command to convert it to a binary format as follows:'
+  id: totrans-176
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE11]'
+  id: totrans-177
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE11]'
 - en: Again, this is similar to what we ran for the Spanish translator example. Just
     pay attention to what you specify as the source language—we are using fr instead
     of es here.
+  id: totrans-178
   prefs: []
   type: TYPE_NORMAL
 - en: 6.6.3 Training and running a chatbot
+  id: totrans-179
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
 - en: 'Now that the training data for the chatbot is ready, let’s train a Seq2Seq
     model from this data. You can invoke the fairseq-train command with almost identical
     parameters to the last time, as shown next:'
+  id: totrans-180
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE12]'
+  id: totrans-181
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE12]'
 - en: As previously, pay attention to how the validation loss changes every epoch.
     When I tried this, the validation loss decreased for about five epochs but then
     started to slowly creep back up. Feel free to stop the training command by pressing
     Ctrl + C after you observe the validation loss leveling out. Fairseq will automatically
     save the best model (measured by the validation loss) to checkpoint_best.pt.
+  id: totrans-182
   prefs: []
   type: TYPE_NORMAL
 - en: 'Finally, you can run the chatbot model by invoking the fairseq-interactive
     command, as shown here:'
+  id: totrans-183
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE13]'
+  id: totrans-184
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE13]'
 - en: 'As with the previous example, you can type your source sentences and have a
     conversion with your chatbot by having them “translate” to another language! Here’s
     part of a conversation that I had with the model that I trained (I added boldface
     for clarity). Again, your results might be different:'
+  id: totrans-185
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE14]'
+  id: totrans-186
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE14]'
 - en: In this example, the conversation looks natural. Because the Self-dialogue Corpus
     is built by restricting the set of possible conversation topics, the conversation
     is more likely to go smoothly if you stay on such topics (movie, sports, music,
     and so on).
+  id: totrans-187
   prefs: []
   type: TYPE_NORMAL
 - en: 'However, as soon as you start talking about unfamiliar topics, the chatbot
     loses its confidence in its answers, as shown next:'
+  id: totrans-188
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE15]'
+  id: totrans-189
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE15]'
 - en: This is a well-known phenomenon—a simple Seq2Seq-based chatbot quickly regresses
     to producing cookie-cutter answers such as “I don’t know” and “I’m not sure” whenever
     asked about something it’s not familiar with. This has to do with the way we trained
@@ -1249,9 +1476,11 @@
     something applicable to as many input sentences as possible. Very generic phrases
     such as “I don’t know” can be an answer for many questions, so it’s a great way
     to play it safe and reduce the loss!
+  id: totrans-190
   prefs: []
   type: TYPE_NORMAL
 - en: 6.6.4 Next steps
+  id: totrans-191
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
@@ -1259,11 +1488,14 @@
     it’s far from perfect. One issue that it’s not great at dealing with is proper
     nouns. You can see this when you ask questions that solicit specific answers,
     like the following:'
+  id: totrans-192
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE16]'
+  id: totrans-193
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE16]'
 - en: Here <unk> is the catch-all special symbol for unknown words. The chatbot is
     trying to answer something, but that something occurs too infrequently in the
     training data to be treated as an independent word. This is an issue seen in simple
@@ -1271,15 +1503,19 @@
     in a 200-something-dimensional vector of numbers, many details and distinctions
     between similar words are sacrificed. Imagine compressing all the information
     about all the restaurants in your city into a 200-dimensional vector!
+  id: totrans-194
   prefs: []
   type: TYPE_NORMAL
 - en: 'Also, the chatbot we trained doesn’t have any “memory” or any notion of context
     whatsoever. You can test this by asking a series of related questions as follows:'
+  id: totrans-195
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE17]'
+  id: totrans-196
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE17]'
 - en: In the second question, the chatbot is having difficulties understanding the
     context and produces a completely irrelevant response. To answer such questions
     correctly, the model needs to understand that the pronoun “it” refers to a previous
@@ -1287,6 +1523,7 @@
     which mentions refer to which entities in the real world is called *coreference
     resolution*. The system also needs to maintain some type of memory to keep track
     of what was discussed so far in the dialogue.
+  id: totrans-197
   prefs: []
   type: TYPE_NORMAL
 - en: Finally, the simple Seq2Seq models we discussed in this chapter are not great
@@ -1299,40 +1536,49 @@
     neural MT models couldn’t beat traditional phrase-based statistical MT models
     until around 2015, when a mechanism called *attention* was invented to tackle
     this very problem. We’ll discuss attention in detail in chapter 8.
+  id: totrans-198
   prefs: []
   type: TYPE_NORMAL
 - en: Summary
+  id: totrans-199
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
 - en: Sequence-to-sequence (Seq2Seq) models transform one sequence into another using
     an encoder and a decoder.
+  id: totrans-200
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: You can use the fairseq framework to build a working MT system within an hour.
+  id: totrans-201
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: A Seq2Seq model uses a decoding algorithm to generate the target sequence. Greedy
     decoding maximizes the probability at each step, whereas beam search tries to
     find better solutions by considering multiple hypotheses at once.
+  id: totrans-202
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: A metric called BLEU is commonly used for automatically evaluating MT systems.
+  id: totrans-203
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: A simple chatbot can be built by using a Seq2Seq model and a conversation dataset.
+  id: totrans-204
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: ^(1.)See Oriol Vinyals et al., “Grammar as a Foreign Language,” (2015; [https://arxiv.org/abs/1412.7449](https://arxiv.org/abs/1412.7449))
     for more details.
+  id: totrans-205
   prefs: []
   type: TYPE_NORMAL
 - en: ^(2.) Note that $ at the beginning of every line is rendered by the shell, and
     you don’t need to type it.
+  id: totrans-206
   prefs: []
   type: TYPE_NORMAL
