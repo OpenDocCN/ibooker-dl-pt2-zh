@@ -3,36 +3,43 @@
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 用单词做数学运算（TF-IDF向量）
 - en: This chapter covers
   id: totrans-1
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 本章包括
 - en: Counting words, *n*-grams and *term frequencies* to analyze meaning
   id: totrans-2
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 计算单词、*n*-grams和*词频*以分析含义
 - en: Predicting word occurrence probabilities with *Zipf’s Law*
   id: totrans-3
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用*Zipf定律*预测单词出现概率
 - en: Representing natural language texts as vectors
   id: totrans-4
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 将自然语言文本表示为向量
 - en: Finding relevant documents in a collection of text using *document frequencies*
   id: totrans-5
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用*文档频率*在文本集合中找到相关文档
 - en: Estimating the similarity of pairs of documents with *cosine similarity*
   id: totrans-6
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用*余弦相似度*估计文档对的相似性
 - en: Having collected and counted words (tokens), and bucketed them into stems or
     lemmas, it’s time to do something interesting with them. Detecting words is useful
     for simple tasks, like getting statistics about word usage or doing keyword search.
@@ -52,6 +59,7 @@
   id: totrans-7
   prefs: []
   type: TYPE_NORMAL
+  zh: 收集并计数了单词（标记），并将它们分桶为词干或词元后，就可以对它们做一些有趣的事情了。检测单词对于简单任务非常有用，比如获取关于单词使用情况的统计信息或进行关键词搜索。但是你想知道哪些单词对特定文档和整个语料库更重要。因此，你可以使用该“重要性”值来根据每个文档内关键字的重要性来查找语料库中的相关文档。这样一来，垃圾邮件检测器就不太可能因为单个脏话或少量带有些许垃圾邮件特征的词而被触发。你想要测量一条Mastodon消息有多积极和亲社会，尤其是当你有各种单词，这些单词具有不同程度的“积极性”分数或标签时。如果你对这些单词相对于其他文档出现的频率有一个想法，那么你可以用它来进一步确定文档的“积极性”。在本章中，你将了解有关单词及其在文档中使用的更为细致、不那么二元的度量方法。这种方法是商业搜索引擎和垃圾邮件过滤器从自然语言生成特征的主要方法已经有几十年了。
 - en: The next step in your adventure is to turn the words of Chapter 2 into continuous
     numbers rather than just integers representing word counts or binary "bit vectors"
     that detect the presence or absence of particular words. With representations
@@ -63,32 +71,38 @@
   id: totrans-8
   prefs: []
   type: TYPE_NORMAL
+  zh: 你冒险的下一步是将第二章的文字转化为连续数字，而不仅仅是表示单词计数或二进制“位向量”的整数。通过在连续空间中表示单词，你可以用更加有趣的数学来操作它们的表达。你的目标是找到单词的数值表示，以某种方式捕捉它们所代表的重要性或信息内容。你得等到第四章才能看到如何将这些信息内容转化为代表单词**含义**的数字。
 - en: 'In this chapter, we look at three increasingly powerful ways to represent words
     and their importance in a document:'
   id: totrans-9
   prefs: []
   type: TYPE_NORMAL
+  zh: 在本章中，我们将研究三种越来越强大的方式来表示单词及其在文档中的重要性：
 - en: '*Bags of words* — Vectors of word counts or frequencies'
   id: totrans-10
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '*词袋* — 单词计数或频率的向量'
 - en: '*Bags of n-grams* — Counts of word pairs (bigrams), triplets (trigrams), and
     so on'
   id: totrans-11
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '*n-gram包* — 单词对（bigrams）、三元组（trigrams）等的计数'
 - en: '*TF-IDF vectors* — Word scores that better represent their importance'
   id: totrans-12
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '*TF-IDF向量* — 更好地表示单词的重要性的单词分数'
 - en: Important
   id: totrans-13
   prefs:
   - PREF_H5
   type: TYPE_NORMAL
+  zh: 重要
 - en: TF-IDF stands for ***t**erm **f**requency times **i**nverse **d**ocument **f**requency*.
     Term frequencies are the counts of each word in a document, which you learned
     about in previous chapters. Inverse document frequency means that you’ll divide
@@ -96,6 +110,7 @@
   id: totrans-14
   prefs: []
   type: TYPE_NORMAL
+  zh: TF-IDF代表***词频乘以逆文档频率*。词频是文档中每个单词的计数，这是你在前几章学到的。逆文档频率意味着你将每个单词的计数除以该单词出现的文档数。
 - en: Each of these techniques can be applied separately or as part of an NLP pipeline.
     These are all statistical models in that they are *frequency* based. Later in
     the book, you’ll see various ways to peer even deeper into word relationships
@@ -176,6 +191,9 @@
   id: totrans-23
   prefs: []
   type: TYPE_NORMAL
+  zh: 文档或语料库中所有唯一单词的列表称为其*词汇*或*词典*。创建您的词汇是您的 NLP 流水线中最重要的步骤。如果您不识别特定的标记并为其分配一个*位置*来存储它，您的流水线将完全忽略它。在大多数
+    NLP 流水线中，您将定义一个名为`<OOV>`（超出词汇）的单个标记，您将在其中存储有关您的流水线正在忽略的所有标记的信息，例如它们的出现次数。因此，您没有包含在词汇中的所有不寻常或虚构的“超级长的”单词将被合并到一个单一的通用标记中，而您的
+    NLP 流水线将无法计算其含义。
 - en: The Python `Counter` class is an efficient way to count up occurrences of anything,
     including tokens, in a sequence or array. In Chapter 2, you learned that a `Counter`
     is a special kind of dictionary where the keys are all the unique objects in your
@@ -183,6 +201,7 @@
   id: totrans-24
   prefs: []
   type: TYPE_NORMAL
+  zh: Python的`Counter`类是一种高效计算任何东西（包括标记）在序列或数组中出现次数的方法。在第 2 章中，您了解到`Counter`是一种特殊类型的字典，其中键是数组中的所有唯一对象，而字典的值是每个对象的计数。
 - en: '[PRE1]'
   id: totrans-25
   prefs: []
@@ -205,11 +224,14 @@
   id: totrans-26
   prefs: []
   type: TYPE_NORMAL
+  zh: '`collections.Counter` 对象实际上是一个 `dict`。这意味着键技术上存储在无序集合或`set`中，有时也称为“bag”。它可能看起来像这个字典已经保持了您的句子中单词的顺序，但这只是一种错觉。您有幸因为您的句子中没有包含许多重复的标记。而
+    Python 的最新版本（3.6 及以上）基于您在字典中插入新键的时间来维护键的顺序。但是您即将从这些标记和它们的计数的字典中创建向量。您需要向量来对一系列文档（在这种情况下是句子）进行线性代数和机器学习。您的词袋向量将使用一致的索引号来跟踪每个唯一标记在向量中的位置。这样，诸如“and”或逗号之类的标记的计数将在您的文档的所有向量中累加——维基百科文章标题为“算法偏见”的句子中。'
 - en: Important
   id: totrans-27
   prefs:
   - PREF_H5
   type: TYPE_NORMAL
+  zh: 重要提示
 - en: For NLP the order of keys in your dictionary won’t matter, because you will
     maintain a consistent ordering in vectors such as a Pandas Series. Just as in
     Chapter 2, the Counter dictionary orders your vocabulary (`dict` keys) according
@@ -224,6 +246,8 @@
   id: totrans-28
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于NLP，字典中键的顺序并不重要，因为您将在向量中保持一致的排序，例如Pandas Series。正如在第 2 章中一样，Counter 字典根据您处理语料库的每个文档的时间顺序对您的词汇（`dict`键）进行排序。有时您可能希望对您的词汇进行按字母顺序排列以便于分析。一旦您为计数向量的每个标记分配了一个维度，务必记录下该顺序以备将来使用，这样您就可以在不重新处理所有文档的情况下重新使用您的流水线而无需重新训练它。如果您试图复制他人的
+    NLP 流水线，您将想要重用其确切的词汇表（标记列表），并按照完全相同的顺序重复使用。否则，您将需要按照与他们相同的顺序，使用完全相同的软件来处理他们的训练数据集。
 - en: For short documents like this one, the jumbled bag of words still contains a
     lot of information about the original intent of the sentence. The information
     in a bag of words is sufficient to do some powerful things such as detect spam,
@@ -235,6 +259,7 @@
   id: totrans-29
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于像这样的短文档，打乱的词袋仍然包含了关于句子原始意图的大量信息。词袋中的信息足以执行一些强大的任务，比如检测垃圾邮件、计算情感（积极性或其他情绪），甚至检测微妙的意图，比如讽刺。它可能是一个袋子，但它充满了意义和信息。为了更容易地思考这些词，并确保你的管道是一致的，你想要以某种一致的顺序对它们进行排序。要按计数对标记进行排名，Counter对象有一个方便的方法，即`most_common`。
 - en: '[PRE2]'
   id: totrans-30
   prefs: []
@@ -247,6 +272,7 @@
   id: totrans-31
   prefs: []
   type: TYPE_NORMAL
+  zh: 这很方便！`Counter.most_common`方法将给出一个排名列表，其中包含你想要的任意数量的标记，并与其计数配对为2元组。但这还不是你想要的。你需要一个向量表示来轻松地对你的标记计数进行数学运算。
 - en: A Pandas `Series` is an efficient data structure for storing the token counts,
     including the 2-tuples from the `most_common` method. The nice thing about a Pandas
     `Series` is that it behaves like a vector (numpy array) whenever you use a math
@@ -256,11 +282,13 @@
   id: totrans-32
   prefs: []
   type: TYPE_NORMAL
+  zh: Pandas `Series`是一种高效的数据结构，用于存储标记计数，包括来自`most_common`方法的2元组。Pandas `Series`的好处是，每当你使用像加号（`+`）或（`*`）甚至`.dot()`这样的数学运算符时，它都表现得像一个向量（numpy数组）。而且你仍然可以使用正常的方括号（`['token']`）语法访问与每个标记关联的每个命名（标记）维度。
 - en: Tip
   id: totrans-33
   prefs:
   - PREF_H5
   type: TYPE_NORMAL
+  zh: 提示
 - en: The Python expression `x[y]` is the same as `x.*getitem*(y)`. Square brackets
     (`[` and `]`) are syntactic sugar (shorthand) for the hidden `.*getitem*()` methods
     on dictionaries, lists, Pandas Series and many other container objects. If you
@@ -270,12 +298,14 @@
   id: totrans-34
   prefs: []
   type: TYPE_NORMAL
+  zh: Python表达式`x[y]`与`x.*getitem*(y)`是相同的。方括号（`[`和`]`）是字典、列表、Pandas Series和许多其他容器对象上隐藏的`.*getitem*()`方法的语法糖（简写）。如果你想在自己的容器类上使用这个运算符，你只需要定义一个`.*getitem*(index_value)`方法，从你的容器中检索适当的元素即可。
 - en: You can coerce any list of 2-tuples into a dictionary using the built-in `dict`
     type constructor. And you can coerce any dictionary into a Pandas `Series` using
     the `Series` constructor.
   id: totrans-35
   prefs: []
   type: TYPE_NORMAL
+  zh: 你可以使用内置的`dict`类型构造函数将任意的2元组列表转换为字典。而且你可以使用`Series`构造函数将任意字典转换为Pandas `Series`。
 - en: '[PRE3]'
   id: totrans-36
   prefs: []
@@ -288,6 +318,8 @@
   id: totrans-37
   prefs: []
   type: TYPE_NORMAL
+  zh: 当你将Pandas Series打印到屏幕上时，它会显示得很好，这在你试图理解一个标记计数向量包含的内容时可能会很方便。现在你已经创建了一个计数向量，你可以像对待任何其他Pandas
+    Series一样对待它。
 - en: '[PRE4]'
   id: totrans-38
   prefs: []
@@ -303,6 +335,7 @@
   id: totrans-39
   prefs: []
   type: TYPE_NORMAL
+  zh: 你可以看到这个句子中有23个标记，但是你的词汇表中只有18个唯一的标记。因此，即使其他文档没有使用这些相同的18个词，你的每个文档向量也需要至少有18个值。这样可以让每个标记在你的计数向量中拥有自己的维度（槽）。每个标记在你的向量中被分配一个与其在词汇表中位置相对应的“槽”。向量中的某些标记计数将为零，这正是你想要的。
 - en: It makes sense that the comma (",") token and the word "and" are at the top
     of your list of `most_common` tokens. Commas were used five times, the word "and"
     was used twice, and all the other words were only used once each in this sentence.
@@ -372,6 +405,7 @@
   prefs:
   - PREF_BQ
   type: TYPE_NORMAL
+  zh: 算法偏见描述了计算机系统中的系统性和可重复的错误，这些错误会导致不公平的结果，例如偏袒某个任意的用户群体而不是其他人。偏见可能由许多因素引起，包括但不限于算法的设计或数据编码、收集、选择或用于训练算法的方式的意外或未预料到的使用或决策。
 - en: ''
   id: totrans-47
   prefs:
@@ -382,6 +416,7 @@
   prefs:
   - PREF_BQ
   type: TYPE_NORMAL
+  zh: …​
 - en: ''
   id: totrans-49
   prefs:
@@ -394,6 +429,7 @@
   prefs:
   - PREF_BQ
   type: TYPE_NORMAL
+  zh: 算法偏见已在各种情况下被引用，从选举结果到网络仇恨言论的传播。它还出现在刑事司法、医疗保健和招聘中，加剧了现有的种族、经济和性别偏见。
 - en: ''
   id: totrans-51
   prefs:
@@ -404,6 +440,7 @@
   prefs:
   - PREF_BQ
   type: TYPE_NORMAL
+  zh: …​
 - en: ''
   id: totrans-53
   prefs:
@@ -416,14 +453,17 @@
   prefs:
   - PREF_BQ
   type: TYPE_NORMAL
+  zh: 由于算法的专有性质，即通常被视为商业机密，导致了对理解、研究和发现算法偏见的问题仍然存在。
 - en: — Wikipedia
   id: totrans-55
   prefs: []
   type: TYPE_NORMAL
+  zh: — 维基百科
 - en: Algorithmic Bias ([https://en.wikipedia.org/wiki/Algorithmic_bias](wiki.html))
   id: totrans-56
   prefs: []
   type: TYPE_NORMAL
+  zh: 算法偏见 ([https://en.wikipedia.org/wiki/Algorithmic_bias](wiki.html))
 - en: Look at these sentences to see if you can find keywords that are key to your
     understanding of the text. Your algorithm will need to make sure it includes these
     words and computes statistics about them. If you were trying to detect these important
@@ -433,6 +473,8 @@
   id: totrans-57
   prefs: []
   type: TYPE_NORMAL
+  zh: 看看这些句子，看看是否能找到对您理解文本至关重要的关键字。您的算法需要确保包含这些词，并计算有关它们的统计数据。如果您尝试使用 Python 自动（程序化地）检测这些重要单词，您将如何计算重要性得分？看看您是否能想出如何使用
+    `Counter` 字典来帮助您的算法理解算法偏见的某些方面。
 - en: '[PRE6]'
   id: totrans-58
   prefs: []
@@ -451,6 +493,9 @@
   id: totrans-59
   prefs: []
   type: TYPE_NORMAL
+  zh: 看起来这句话根本没有重复使用任何词。频率分析和词频向量的关键在于单词使用的统计数据*相对于其他单词*。因此，我们需要输入其他句子，并创建基于单词如何在其他地方使用的归一化的有用单词计数。要理解“算法偏见”，您可以花时间阅读并将维基百科文章的所有内容输入到
+    Python 字符串中。或者，您可以使用 `nlpia2_wikipedia` Python 包从维基百科下载文本，然后使用自然语言处理找到您需要复习的关键概念。要直接从维基百科检索最新的“算法偏见”文本，请使用
+    `nlpia2.wikipedia` 而不是官方（但已废弃）的维基百科包。
 - en: '[PRE7]'
   id: totrans-60
   prefs: []
@@ -467,6 +512,10 @@
   id: totrans-61
   prefs: []
   type: TYPE_NORMAL
+  zh: 您还可以从 GitLab 上的 `nlpia2` 包中下载包含维基百科文章的前 3 段的文本文件。如果您已经克隆了 `nlpia2` 包，您将在本地硬盘上看到
+    `src/nlpia2/ch03/bias_intro.txt`。如果您尚未从源代码安装 `nlpia2`，您可以使用此处的代码片段使用 `requests`
+    包检索文件。`requests` 包是一个方便的工具，用于从网络上抓取和下载自然语言文本。ChatGPT、Bard 和 YouChat 显得如此聪明的所有文本都是使用类似
+    `requests` 的工具从网页上抓取的。
 - en: '[PRE8]'
   id: totrans-62
   prefs: []
@@ -573,6 +622,7 @@
   id: totrans-74
   prefs: []
   type: TYPE_NORMAL
+  zh: 一旦您将“算法偏差”文章拆分为行，您将看到向量表示的威力。您很快就会明白为什么Pandas Series与标准Python `dict.`相比，对于处理标记计数来说是一个更有用的数据结构。
 - en: '[PRE12]'
   id: totrans-75
   prefs: []
@@ -586,6 +636,7 @@
   id: totrans-76
   prefs: []
   type: TYPE_NORMAL
+  zh: 当您的向量维度用于保存标记或字符串的分数时，这就是您想要使用Pandas `DataFrame`或`Series`来存储您的向量的时候。这样，您就可以看到每个维度的用途。检查一下我们在本章开头提到的那个句子。它碰巧是维基百科文章中的第11个句子。
 - en: '[PRE13]'
   id: totrans-77
   prefs: []
@@ -599,6 +650,7 @@
   id: totrans-78
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在这个Pandas `Series`是一个*向量*。这是您可以进行数学计算的东西。当您进行数学计算时，Pandas将跟踪哪个单词在哪里，以便“偏见”和“正义”不会被意外加在一起。这个DataFrame中的行向量每个词汇中的一个“维度”。事实上，`df.columns`属性包含您的词汇表。
 - en: But wait, there are more than 30,000 words in a standard English dictionary.
     If you start processing a lot of Wikipedia articles instead of just a few sentences,
     that’ll be a lot of dimensions to deal with. You are probably used to 2D and 3D
@@ -610,6 +662,7 @@
   id: totrans-79
   prefs: []
   type: TYPE_NORMAL
+  zh: 等等，标准英语词典中有超过30,000个单词。如果您开始处理大量维基百科文章而不仅仅是几句话，那么将有很多维度要处理。您可能习惯于2D和3D向量，因为它们易于可视化。但是30,000个维度的概念，例如距离和长度，甚至是否有效？事实证明它们确实有效，您将在本书后面学习如何改进这些高维向量。现在只需知道向量的每个元素用于表示您希望向量表示的文档中单词的计数，权重或重要性。
 - en: You’ll find every unique word in each document and then find all the unique
     words in all of your documents. In math, this is the union of all the sets of
     words in each document. This master set of words for your documents is called
@@ -621,6 +674,7 @@
   id: totrans-80
   prefs: []
   type: TYPE_NORMAL
+  zh: 您将在每个文档中找到每个独特的单词，然后找到所有文档中的所有独特单词。在数学中，这就是每个文档中所有单词集合的并集。这些文档的主要单词集合称为您的管道的*词汇*。如果您决定跟踪有关每个单词的其他语言信息，例如拼写变体或词性，您可以称之为*词典*。您可能会发现使用术语*语料库*来描述一组文档的学者也可能会使用单词“词典”，只是因为它是比“词汇”更精确的技术术语。
 - en: So take a look at the vocabulary or lexicon for this tiny corpus of three paragraphs.
     First, you will do *case folding* (lowercasing) to ignore the difference between
     capitalized words (such as proper nouns) and group them together into a single
@@ -630,6 +684,7 @@
   id: totrans-81
   prefs: []
   type: TYPE_NORMAL
+  zh: 因此，看一看这三段话的词汇或词典。首先，您将进行*大小写转换*（小写化），以忽略大写字母（例如专有名词）之间的差异，并将它们组合到一个词汇标记中。这将减少您管道后续阶段中词汇表中独特单词的数量，这可以使您更容易看到发生的事情。
 - en: '[PRE14]'
   id: totrans-82
   prefs: []
@@ -642,6 +697,7 @@
   id: totrans-83
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在您已经将这28篇文档（句子）全部标记化了，您可以将所有这些标记列表连接在一起，以创建一个包含所有标记的大列表，包括重复。此标记列表与原始文档唯一的区别在于，它已经被分割成句子并标记化为单词。
 - en: '[PRE15]'
   id: totrans-84
   prefs: []
@@ -777,6 +833,8 @@
   id: totrans-101
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在你有一个矩阵（在 Python 中实际上是一个列表的列表），代表了三个文档（矩阵的三行）和词汇表中每个词的计数组成了矩阵的列。这很快！只需一行代码`vectorize.fit_transform(corpus)`，我们就达到了与你需要手动进行分词、创建词汇表和计数术语的几十行代码相同的结果。请注意，这些向量的长度为
+    16，而不是像你手动创建的向量一样的 18。这是因为 Scikit-Learn 对句子进行了稍微不同的分词（它只考虑两个或更多字母的单词作为标记）并且去掉了标点符号。
 - en: So, you have three vectors, one for each document. Now what? What can you do
     with them? Your document word-count vectors can do all the cool stuff any vector
     can do, so let’s learn a bit more about vectors and vector spaces first.^([[3](#_footnotedef_3
@@ -784,11 +842,13 @@
   id: totrans-102
   prefs: []
   type: TYPE_NORMAL
+  zh: 所以，你有三个向量，每个文档一个。现在呢？你能做什么？你的文档词数向量可以做任何向量可以做的很酷的事情，所以让我们先学习更多关于向量和向量空间的知识。
 - en: 3.1.3 Vectorize your code
   id: totrans-103
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 3.1.3 将你的代码向量化
 - en: If you read about "vectorizing code" on the internet means something entirely
     different than "vectorizing text." Vectorizing text is about converting text into
     a meaningful vector representation of that text. Vectorizing code is about speeding
@@ -803,6 +863,10 @@
   id: totrans-104
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果你在网上读到关于“向量化代码”的内容，意味着与“向量化文本”完全不同。向量化文本是将文本转换为该文本的有意义的向量表示。向量化代码是通过利用强大的编译库（如`numpy`）加速代码，并尽可能少地使用
+    Python 进行数学运算。之所以称其为“向量化”，是因为你可以使用向量代数表示法来消除代码中的`for`循环，这是许多 NLP 管道中最慢的部分。而不是使用`for`循环遍历向量或矩阵中的所有元素进行数学运算，你只需使用
+    numpy 来在编译的 C 代码中为你执行`for`循环。Pandas 在其向量代数中使用了`numpy`，所以你可以混合和匹配 DataFrame 和 numpy
+    数组或 Python 浮点数，所有这些都将运行得非常快。
 - en: '[PRE22]'
   id: totrans-105
   prefs: []
@@ -817,11 +881,14 @@
   id: totrans-106
   prefs: []
   type: TYPE_NORMAL
+  zh: Python 的动态类型设计使得所有这些魔法成为可能。当你将一个`float`乘以一个`array`或`DataFrame`时，不会因为你在两种不同类型上进行数学运算而引发错误，解释器会弄清楚你想要做什么，就像苏鲁一样。“让它成为”并且它将以最快的方式计算你所寻找的东西，使用编译的
+    C 代码而不是 Python 的`for`循环。
 - en: Tip
   id: totrans-107
   prefs:
   - PREF_H5
   type: TYPE_NORMAL
+  zh: 提示
 - en: If you use vectorization to eleminate some of the `for` loops in your code,
     you can speed up your NLP pipeline by a 100x or more. This is 100x more models
     that you can try. The Berlin Social Science Center (WZB) has a great tutorial
@@ -832,11 +899,14 @@
   id: totrans-108
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果你在代码中使用向量化来消除一些`for`循环，你可以将你的 NLP 管道加速 100 倍甚至更多。这意味着你可以尝试 100 倍以上的模型。柏林社会科学中心（WZB）有一个关于向量化的很棒的教程。而且如果你在网站的其他地方搜索，你会发现这可能是唯一一个对
+    NLP 和 AI 对社会影响的统计数据和数据有信任的来源。
 - en: 3.1.4 Vector spaces
   id: totrans-109
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 3.1.4 向量空间
 - en: Vectors are the primary building blocks of linear algebra, or vector algebra.
     They are an ordered list of numbers, or coordinates, in a vector space. They describe
     a location or position in that space. Or they can be used to identify a particular
@@ -847,6 +917,7 @@
   id: totrans-110
   prefs: []
   type: TYPE_NORMAL
+  zh: 向量是线性代数或向量代数的主要构建块。它们是向量空间中的一组有序数字或坐标。它们描述了该空间中的位置或位置。或者它们可以用来标识该空间中的特定方向和大小或距离。*向量空间*是该空间中可能出现的所有可能向量的集合。因此，具有两个值的向量将位于二维向量空间中，具有三个值的向量将位于三维向量空间中，依此类推。
 - en: A piece of graph paper, or a grid of pixels in an image, are both nice 2D vector
     spaces. You can see how the order of these coordinates matter. If you reverse
     the x and y coordinates for locations on your graph paper, without reversing all
@@ -857,6 +928,8 @@
   id: totrans-111
   prefs: []
   type: TYPE_NORMAL
+  zh: 一张纸上的一小块图，或者图像中的像素网格，都是不错的二维向量空间。你可以看到这些坐标的顺序很重要。如果你颠倒了图纸上位置的 x 和 y 坐标，而没有颠倒所有的向量计算，那么你所有的线性代数问题的答案都会被颠倒。图纸和图像是矩形的，或者欧几里得的空间的例子，因为
+    x 和 y 坐标是彼此垂直的。本章中讨论的向量都是矩形的，欧几里得的空间。
 - en: 'What about latitude and longitude on a map or globe? That geographic coordinate
     space is definitely two-dimensional because it’s an ordered list of two numbers:
     latitude and longitude. But each of the latitude-longitude pairs describes a point
@@ -870,6 +943,8 @@
   id: totrans-112
   prefs: []
   type: TYPE_NORMAL
+  zh: 地图或地球上的经度和纬度呢？那地理坐标空间肯定是二维的，因为它是一组有序的两个数字：纬度和经度。但每个纬度-经度对描述的是一个近似球面的点——地球表面。纬度-经度向量空间不是直线的，并且欧几里得几何在其中不完全适用。这意味着在计算由一对二维地理坐标或任何非欧几里得空间中的点表示的距离或接近度时，你必须小心。想想如何计算波特兰和纽约的纬度和经度坐标之间的距离。^([[6](#_footnotedef_6
+    "查看注释。")])
 - en: Figure [3.1](#figure-2d-vectors) shows one way to visualize the three 2D vectors
     `(5, 5)`, `(3, 2)`, and `(-1, 1)`. The head of a vector (represented by the pointy
     tip of an arrow) is used to identify a location in a vector space. So the vector
@@ -879,15 +954,19 @@
   id: totrans-113
   prefs: []
   type: TYPE_NORMAL
+  zh: 图[3.1](#figure-2d-vectors)展示了一种可视化三个二维向量`(5, 5)`、`(3, 2)`和`(-1, 1)`的方法。向量的头部（由箭头尖端表示）用于标识向量空间中的位置。因此，该图中的向量头将位于这三个坐标对处。位置向量的尾部（由箭头的“后部”表示）始终位于原点，或`(0,
+    0)`。
 - en: Figure 3\. 1\. 2D vectors
   id: totrans-114
   prefs:
   - PREF_H5
   type: TYPE_NORMAL
+  zh: 图3. 1. 二维向量
 - en: '![vecs](images/vecs.png)'
   id: totrans-115
   prefs: []
   type: TYPE_IMG
+  zh: '![vecs](images/vecs.png)'
 - en: What about 3D vector spaces? Positions and velocities in the 3D physical world
     you live in can be represented by x, y, and z coordinates in a 3D vector. But
     you aren’t limited to normal 3D space. You can have 5 dimensions, 10 dimensions,
@@ -898,6 +977,9 @@
   id: totrans-116
   prefs: []
   type: TYPE_NORMAL
+  zh: 三维向量空间呢？你生活的三维物理世界中的位置和速度可以用三维向量中的 x、y 和 z 坐标来表示。但你并不限于正常的三维空间。你可以有 5 个维度、10
+    个维度、5000 个维度，等等。线性代数都能得到相同的结果。随着维度的增加，你可能需要更多的计算能力。你会遇到一些“维度灾难”问题，但你可以等到第 10 章再处理它们。^([[7](#_footnotedef_7
+    "查看注释。")])
 - en: For a natural language document vector space, the dimensionality of your vector
     space is the count of the number of distinct words that appear in the entire corpus.
     For TF (and TF-IDF to come), we call this dimensionality capital letter "K". This
@@ -913,15 +995,20 @@
   id: totrans-117
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于自然语言文档向量空间，您的向量空间的维度是整个语料库中出现的不同单词数量的计数。对于 TF（和即将出现的 TF-IDF），我们将此维度称为大写字母“K”。这个不同单词的数量也是您语料库的词汇量大小，所以在学术论文中它通常被称为“|V|”。然后，您可以用一个
+    K 维向量描述这个 K 维向量空间中的每个文档。在关于哈利和吉尔的三个文档语料库中，K = 18（或者如果您的分词器去除了标点符号，则为 16）。因为人类不能轻易地可视化超过三维的空间，所以让我们暂时搁置大部分维度，看一看其中的两个，这样你就可以在这张平面上的页面上对这些向量进行可视化表示了。因此，在图
+    [3.2](#figure-2d-term-frequency-vectors) 中，K 被缩减为两个，以便二维查看 18 维哈利和吉尔向量空间。
 - en: Figure 3\. 2\. 2D term frequency vectors
   id: totrans-118
   prefs:
   - PREF_H5
   type: TYPE_NORMAL
+  zh: 图 3. 2. 2D 项频率向量
 - en: '![harry faster vecs](images/harry_faster_vecs.png)'
   id: totrans-119
   prefs: []
   type: TYPE_IMG
+  zh: '![哈利更快的向量](images/harry_faster_vecs.png)'
 - en: K-dimensional vectors work the same way, just in ways you can’t easily visualize.
     Now that you have a representation of each document and know they share a common
     space, you have a path to compare them. You could measure the Euclidean distance
@@ -934,6 +1021,8 @@
   id: totrans-120
   prefs: []
   type: TYPE_NORMAL
+  zh: K 维向量的工作方式相同，只是您不能轻易地可视化它们。现在您已经有了每个文档的表示，并且知道它们共享一个共同的空间，您可以比较它们了。您可以通过减去它们并计算它们之间的距离的长度来测量向量之间的欧几里德距离，这称为
+    2-范数距离。它是一只“乌鸦”飞行（直线）从一个向量的尖端（头部）到另一个向量的尖端的距离。查看线性代数附录 C，了解为什么这对于单词计数（项频率）向量是个糟糕的主意。
 - en: Two vectors are "similar" if they share similar direction. They might have similar
     magnitude (length), which would mean that the word count (term frequency) vectors
     are for documents of about the same length. But do you care about document length
@@ -945,15 +1034,18 @@
   id: totrans-121
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果两个向量具有相似的方向，则它们是“相似的”。它们可能具有相似的大小（长度），这意味着单词计数（项频率）向量的长度大致相同。但是您是否在词汇量空间中对文档长度感兴趣？可能不。您希望您对文档相似性的估计发现相同单词的使用大致相同的次数和相似的比例。这样准确的估计会让您相信它们所代表的文档可能在讨论相似的内容。
 - en: Figure 3\. 3\. 2D vectors and the angles between them
   id: totrans-122
   prefs:
   - PREF_H5
   type: TYPE_NORMAL
+  zh: 图 3. 3. 2D 向量及其之间的角度
 - en: '![vecs cosine](images/vecs_cosine.png)'
   id: totrans-123
   prefs: []
   type: TYPE_IMG
+  zh: '![向量余弦](images/vecs_cosine.png)'
 - en: '*Cosine similarity*, is the cosine of the angle between two vectors (theta).
     Figure [3.3](#figure-vecs-cosine) shows how you can compute the cosine similarity
     dot product using equation [3.1](#equation_3_3). Cosine similarity is a popular
@@ -961,26 +1053,32 @@
   id: totrans-124
   prefs: []
   type: TYPE_NORMAL
+  zh: '*余弦相似度*，是两个向量之间的夹角（θ）的余弦值。图 [3.3](#figure-vecs-cosine) 显示了如何使用方程 [3.1](#equation_3_3)
+    计算余弦相似度点积。余弦相似度在 NLP 工程师中很受欢迎，因为：'
 - en: Fast to compute even for high dimensional vectors
   id: totrans-125
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 即使对于高维向量也能快速计算
 - en: Sensitive to changes in a single dimension
   id: totrans-126
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 对单个维度的变化敏感
 - en: Work well for high-dimensional vectors
   id: totrans-127
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 对高维向量表现良好
 - en: Has a value between -1 and 1
   id: totrans-128
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 其值介于 -1 和 1 之间
 - en: You can use cosine similarity without bogging down your NLP pipeline because
     you only need to compute the dot product. And you may be surprised to learn that
     you do not need to compute the cosine function to get the cosine similarity. You
@@ -993,49 +1091,60 @@
   id: totrans-129
   prefs: []
   type: TYPE_NORMAL
+  zh: 你可以使用余弦相似度而不拖慢你的 NLP 管道，因为你只需要计算点积。你可能会惊讶地发现，你不需要计算余弦函数就能得到余弦相似度。你可以使用线性代数点积，它不需要进行任何三角函数计算。这使得计算非常高效（快速）。余弦相似度独立地考虑每个维度及其对向量方向的影响，即使对于高维向量也是如此。TF-IDF
+    可能有数千甚至数百万个维度，因此你需要使用一个在维度数量增加时不会降低有用性的度量（称为维度灾难）。
 - en: 'Another big advantage of cosine similarity is that it outputs a value between
     -1 and +1:'
   id: totrans-130
   prefs: []
   type: TYPE_NORMAL
+  zh: 余弦相似度的另一个重要优势是它输出一个介于 -1 和 +1 之间的值：
 - en: -1 means the vectors point in exactly opposite directions - this can only happen
     for vectors that have negative values (TF-IDF vectors do not)
   id: totrans-131
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: -1 表示向量指向完全相反的方向 - 这只会发生在具有负值的向量上（TF-IDF 向量除外）
 - en: 0 means the vectors are perpendicular or orthogonal - this happens whenever
     your two TF-IDF vectors do not share any of the same words (dimensions)
   id: totrans-132
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 0 表示向量是垂直或正交的 - 这会在你的两个 TF-IDF 向量不共享任何相同单词（维度）时发生
 - en: +1 means the two vectors are perfectly aligned - this can happen whenever your
     two documents use the same words with the same relative frequency
   id: totrans-133
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: +1 表示两个向量完全对齐 - 这会在你的两个文档使用相同单词且相对频率相同的情况下发生
 - en: 'This makes it easier to guess at good thresholds to use in conditional expression
     within your pipeline. Here’s what the normalized dot product looks like in your
     linear algebra textbook:'
   id: totrans-134
   prefs: []
   type: TYPE_NORMAL
+  zh: 这样更容易猜测在管道内的条件表达式中使用的好阈值。以下是在你的线性代数教科书中归一化点积的样子：
 - en: Equation 3.1
   id: totrans-135
   prefs:
   - PREF_H5
   type: TYPE_NORMAL
+  zh: 方程式 3.1
 - en: \[\begin{equation} \boldsymbol{A} \cdot \boldsymbol{B} = |\boldsymbol{A}| |\boldsymbol{B}|
     * cos(\theta) \end{equation}\]
   id: totrans-136
   prefs: []
   type: TYPE_NORMAL
+  zh: \[\begin{equation} \boldsymbol{A} \cdot \boldsymbol{B} = |\boldsymbol{A}| |\boldsymbol{B}|
+    * cos(\theta) \end{equation}\]
 - en: 'In Python you might use code like this to compute cosine similarity:'
   id: totrans-137
   prefs: []
   type: TYPE_NORMAL
+  zh: 在 Python 中，你可能会使用类似以下的代码来计算余弦相似度：
 - en: '[PRE23]'
   id: totrans-138
   prefs: []
@@ -1047,11 +1156,13 @@
   id: totrans-139
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果你解出这个方程得到 `np.cos(angle_between_A_and_B)`（称为“向量 A 和 B 之间的余弦相似度”），你可以导出计算余弦相似度的代码：
 - en: Listing 3.2 Cosine similarity formula in Python
   id: totrans-140
   prefs:
   - PREF_H5
   type: TYPE_NORMAL
+  zh: 列表 3.2 Python 中的余弦相似度公式
 - en: '[PRE24]'
   id: totrans-141
   prefs: []
@@ -1061,25 +1172,31 @@
   id: totrans-142
   prefs: []
   type: TYPE_NORMAL
+  zh: 用线性代数表示，这变成了方程式 [3.2](#equation_3_4)：
 - en: Equation 3.2 cosine similarity between two vectors
   id: totrans-143
   prefs:
   - PREF_H5
   type: TYPE_NORMAL
+  zh: 方程式 3.2 两个向量之间的余弦相似度
 - en: \[\begin{equation} cos(\theta) = \frac{\boldsymbol{A} \cdot \boldsymbol{B}}{|\boldsymbol{A}||\boldsymbol{B}|}
     \end{equation}\]
   id: totrans-144
   prefs: []
   type: TYPE_NORMAL
+  zh: \[\begin{equation} cos(\theta) = \frac{\boldsymbol{A} \cdot \boldsymbol{B}}{|\boldsymbol{A}||\boldsymbol{B}|}
+    \end{equation}\]
 - en: 'Or in pure Python without `numpy`:'
   id: totrans-145
   prefs: []
   type: TYPE_NORMAL
+  zh: 或者在纯 Python 中，不使用 `numpy`：
 - en: Listing 3.3 Compute cosine similarity in python
   id: totrans-146
   prefs:
   - PREF_H5
   type: TYPE_NORMAL
+  zh: 列表 3.3 在 Python 中计算余弦相似度
 - en: '[PRE25]'
   id: totrans-147
   prefs: []
@@ -1097,6 +1214,9 @@
   id: totrans-148
   prefs: []
   type: TYPE_NORMAL
+  zh: 因此，你需要计算你感兴趣的两个向量的点积 - 将每个向量的元素成对相乘 - 然后将这些乘积相加。然后你除以每个向量的范数（大小或长度）。向量范数与其从头到尾的欧几里德距离相同
+    - 其元素平方和的平方根。这个*归一化点积*，就像余弦函数的输出一样，将是介于 -1 和 1 之间的值。它是这两个向量之间夹角的余弦。它给出了这两个向量指向相同方向的程度的值。[[8](#_footnotedef_8
+    "View footnote.")]
 - en: A cosine similarity of **1** represents identical normalized vectors that point
     in exactly the same direction along all dimensions. The vectors may have different
     lengths or magnitudes, but they point in the same direction. Remember you divided
@@ -1108,6 +1228,8 @@
   id: totrans-149
   prefs: []
   type: TYPE_NORMAL
+  zh: '**1** 的余弦相似度代表指向所有维度上完全相同方向的标准化向量。这些向量可能具有不同的长度或大小，但它们指向相同的方向。请记住，你将点积除以每个向量的范数。因此，余弦相似度值越接近
+    1，两个向量在角度上越接近。对于 NLP 文档向量，如果余弦相似度接近 1，你就知道这些文档使用相似的词汇以相似的比例。因此，文档向量彼此接近的文档很可能在谈论相同的事情。'
 - en: A cosine similarity of **0** represents two vectors that share no components.
     They are orthogonal, perpendicular in all dimensions. For NLP TF vectors, this
     situation occurs only if the two documents share no words in common. This doesn’t
@@ -1116,6 +1238,7 @@
   id: totrans-150
   prefs: []
   type: TYPE_NORMAL
+  zh: '**0** 的余弦相似度代表两个向量没有共享成分。它们在所有维度上都是正交的，即在所有维度上都是垂直的。对于 NLP 的 TF 向量来说，只有当两个文档没有共同的词时才会出现这种情况。这并不一定意味着它们具有不同的含义或主题，只是它们使用完全不同的词语。'
 - en: A cosine similarity of **-1** represents two vectors that are anti-similar,
     completely opposite. They point in opposite directions. This can never happen
     for simple word count (term frequency) vectors or even normalized TF vectors (which
@@ -1128,6 +1251,7 @@
   id: totrans-151
   prefs: []
   type: TYPE_NORMAL
+  zh: '**-1** 的余弦相似度代表两个完全相反的向量，完全相反。它们指向相反的方向。对于简单的词频（词项频率）向量甚至是标准化的 TF 向量（稍后我们会讨论），这种情况永远不会发生。单词的计数永远不会是负数。因此，词频（词项频率）向量始终位于向量空间的同一“象限”中。你的任何词频向量都不可能在向量空间的一个象限中悄悄溜走。你的任何词频向量都不可能有与另一个词频向量相反的分量（词频），因为词频就是不能是负数。'
 - en: You won’t see any negative cosine similarity values for pairs of vectors for
     natural language documents in this chapter. But in the next chapter, we develop
     a concept of words and topics that are "opposite" to each other. And this will
@@ -1136,6 +1260,8 @@
   id: totrans-152
   prefs: []
   type: TYPE_NORMAL
+  zh: 在本章节中，你不会看到任何自然语言文档向量对的负余弦相似度值。但在下一章中，我们将发展出一种概念，即相互“相反”的单词和主题。这将显示为余弦相似度小于零，甚至是
+    **-1** 的文档、单词和主题。
 - en: 'If you want to compute cosine similarity for regular `numpy` vectors, such
     as those returned by `CountVectorizer`, you can use Scikit-Learn’s built-in tools.
     Here is how you can calculate the cosine similarity between word vectors 1 and
@@ -1143,11 +1269,14 @@
   id: totrans-153
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果你想要计算常规 `numpy` 向量的余弦相似度，比如由 `CountVectorizer` 返回的向量，你可以使用 Scikit-Learn 内置的工具。这是如何计算我们在
+    [3.4](#listing-cosine-similarity) 中计算的词向量 1 和 2 之间的余弦相似度的方法：
 - en: Listing 3.4 Cosine similarity
   id: totrans-154
   prefs:
   - PREF_H5
   type: TYPE_NORMAL
+  zh: 第3.4节 余弦相似度
 - en: '[PRE26]'
   id: totrans-155
   prefs: []
@@ -1165,6 +1294,9 @@
   id: totrans-156
   prefs: []
   type: TYPE_NORMAL
+  zh: 对词频（`tf`）DataFrame 进行切片的操作可能看起来是检索向量的奇怪方式。这是因为 SciKit-Learn 用于计算余弦相似度的函数已经被优化为在大型向量数组（2-D
+    矩阵）上高效工作。这段代码将 DataFrame 的第一行和第二行切片为包含文本第一句中单词计数的 1xN 数组。这个第一句话来自于“算法偏见”文章的计数向量与该文章第二句话只有
+    11.7% 的相似度（余弦相似度为 0.117）。看起来第二句话与第一句话共享的单词非常少。
 - en: To dig in deeper and understand cosine distance you can check that the code
     in [3.3](#listing-compute-cosine-similarity-in-python) will give you the same
     answer for Counter dictionaries as the `sklearn` cosine similarity function gives
@@ -1176,11 +1308,13 @@
   id: totrans-157
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了更深入地了解余弦距离，你可以检查代码 [3.3](#listing-compute-cosine-similarity-in-python)，它会给你与`sklearn`余弦相似度函数在等效的numpy数组中给出的Counter字典相同的答案。当你尝试预测一个NLP算法的输出，然后根据实际情况进行修正时，它会提高你对NLP工作原理的直觉。
 - en: 3.2 Counting n-grams
   id: totrans-158
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 3.2 计数 n-grams
 - en: You have already seen in the last chapter how to create *n*-grams from the tokens
     in your corpus. Now, it’s time to use them to create a better representation of
     documents. Fortunately for you, you can use the same tools you are already familiar
@@ -1188,11 +1322,13 @@
   id: totrans-159
   prefs: []
   type: TYPE_NORMAL
+  zh: 在上一章中你已经学到如何从语料库的标记中创建 *n*-gram。现在，是时候将它们用于创建更好的文档表示了。对你来说幸运的是，你可以使用你已经熟悉的相同工具，只需稍微调整参数即可。
 - en: First, let’s add another sentence to our corpus, which will illustrate why ngram
     vectors can sometimes be more useful than count vectors.
   id: totrans-160
   prefs: []
   type: TYPE_NORMAL
+  zh: 首先，让我们在我们的语料库中添加另一句话，这将说明为什么 n-gram 向量有时比计数向量更有用。
 - en: '[PRE27]'
   id: totrans-161
   prefs: []
@@ -1204,6 +1340,7 @@
   id: totrans-162
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果你使用我们在 3.2 小节训练的相同的向量化器计算这个新句子（问题）的词频向量，你会发现它与第二个句子的表示完全相等：
 - en: '[PRE28]'
   id: totrans-163
   prefs: []
@@ -1216,6 +1353,7 @@
   id: totrans-164
   prefs: []
   type: TYPE_NORMAL
+  zh: 稀疏矩阵是存储标记计数的高效方法，但为了增强对正在发生的情况的直观理解，或者调试代码，你会希望将向量*稠密化*。你可以使用`.toarray()`方法将稀疏向量（稀疏矩阵的行）转换为numpy数组或Pandas系列。
 - en: '[PRE29]'
   id: totrans-165
   prefs: []
@@ -1229,6 +1367,7 @@
   id: totrans-166
   prefs: []
   type: TYPE_NORMAL
+  zh: 你可能猜到了问题中显示在计数向量的第8个位置（维度）上的单词是哪个。记住，这是由`CountVectorizer`计算的词汇表中的第8个词，并且在运行`.fit()`时它会按字典序对其词汇表进行排序。你可以将计数向量与Pandas`Series`一起配对，以查看计数向量中的内容。
 - en: '[PRE30]'
   id: totrans-167
   prefs: []
@@ -1240,6 +1379,7 @@
   id: totrans-168
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，计算问题向量与你的句子向量"知识库"中所有其他向量之间的余弦相似度。这就是搜索引擎或数据库全文搜索用来查找问题答案的方法。
 - en: '[PRE31]'
   id: totrans-169
   prefs: []
@@ -1252,6 +1392,7 @@
   id: totrans-170
   prefs: []
   type: TYPE_NORMAL
+  zh: 最相似的是语料库中的第四个句子。它与`question_vector`的余弦相似度为0.433。检查一下你的句子知识库中的第四个句子，看看它是否能很好地匹配这个问题。
 - en: '[PRE32]'
   id: totrans-171
   prefs: []
@@ -1264,6 +1405,7 @@
   id: totrans-172
   prefs: []
   type: TYPE_NORMAL
+  zh: 不错！那个句子可能是一个不错的开头。然而，维基百科文章的第一句可能更适合这个问题的算法偏见的定义。想一想如何改进向量化流水线，使得你的搜索返回第一句而不是第四句。
 - en: To find out whether 2-grams might help, do the same vectorization process you
     did a few pages ago with `CountVectorizer`, but instead set the `n-gram` *hyperparameter*
     to count 2-grams instead of individual tokens (1-grams). A hyperparameter is just
@@ -1273,6 +1415,9 @@
   id: totrans-173
   prefs: []
   type: TYPE_NORMAL
+  zh: 要找出 2-grams 是否有帮助，请执行与几页前使用 `CountVectorizer` 进行的相同向量化过程，但是将 `n-gram` *超参数*
+    设置为计算 2-grams 而不是单个令牌（1-grams）。超参数只是一个函数名称、参数值或任何你可能想要调整以改善 NLP 流水线的东西。找到最佳超参数称为超参数调整。因此开始调整
+    `ngram_range` 参数，看看是否有帮助。
 - en: '[PRE33]'
   id: totrans-174
   prefs: []
@@ -1285,6 +1430,8 @@
   id: totrans-175
   prefs: []
   type: TYPE_NORMAL
+  zh: 查看新计数向量的维数，你可能注意到这些向量要长得多。唯一的 2-grams（单词对）总是比唯一的令牌多。检查一下对你的问题非常重要的“算法偏差”2-gram
+    的 ngram-计数。
 - en: '[PRE34]'
   id: totrans-176
   prefs: []
@@ -1298,11 +1445,13 @@
   id: totrans-177
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，第一句话可能更符合你的查询。值得注意的是，词袋-*n*-gram 方法也有自己的挑战。在大型文本和语料库中，*n*-gram 的数量呈指数增长，导致了我们之前提到的“维度灾难”问题。然而，正如你在本节中看到的，可能会有一些情况，你会选择使用它而不是单个令牌计数。
 - en: 3.2.1 Analyzing this
   id: totrans-178
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 3.2.1 分析这个
 - en: Even though until now we only dealt with *n*-grams of word token, *n*-gram of
     characters can be useful too. For example, they can be used for language detection,
     or authorship attribution (deciding who among the set of authors wrote the document
@@ -1311,11 +1460,14 @@
   id: totrans-179
   prefs: []
   type: TYPE_NORMAL
+  zh: 即使到目前为止我们只处理了词令牌的 *n*-grams，字符的 *n*-grams 也是有用的。例如，它们可以用于语言检测或作者归属（确定在分析的文档集中谁是作者）。让我们使用字符
+    *n*-grams 和你刚学会如何使用的 `CountVectorizer` 类来解决一个谜题。
 - en: 'We’ll start by importing a small and interesting Python package called `this`,
     and examining some of its constants:'
   id: totrans-180
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们将从导入一个名为 `this` 的小而有趣的 Python 包开始，并检查其中一些常量：
 - en: '[PRE35]'
   id: totrans-181
   prefs: []
@@ -1327,6 +1479,8 @@
   id: totrans-182
   prefs: []
   type: TYPE_NORMAL
+  zh: 这些奇怪的词是什么？用什么语言写的？H.P. Lovecraft 的粉丝可能会想到用来召唤死神克苏鲁的古老语言。^([[9](#_footnotedef_9
+    "查看脚注。")]) 但即使对他们来说，这个消息也将是难以理解的。
 - en: To figure out the meaning of this cryptic piece of text, you’ll use the method
     you just learned — frequency analysis (counting tokens). Only this time, a little
     bird is telling you it might be worth to start with character tokens rather than
@@ -1335,11 +1489,14 @@
   id: totrans-183
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了弄清楚这段神秘文字的意思，你将使用你刚学到的方法 - 频率分析（计数令牌）。但这一次，一只小鸟告诉你，也许从字符令牌而不是单词令牌开始可能会更有价值！幸运的是，`CountVectorizer`
+    在这里也能为你提供帮助。你可以在图 3.4a 中看到列出的结果 [3.5](#listing-countvectorizer-histogram) 。
 - en: Listing 3.5 CountVectorizer histogram
   id: totrans-184
   prefs:
   - PREF_H5
   type: TYPE_NORMAL
+  zh: 列表 3.5 CountVectorizer 直方图
 - en: '[PRE36]'
   id: totrans-185
   prefs: []
@@ -1353,6 +1510,8 @@
   id: totrans-186
   prefs: []
   type: TYPE_NORMAL
+  zh: 嗯。 不太确定你可以用这些频率计数做什么。 但再说一遍，你甚至还没有看到其他文本的频率计数。 让我们选择一些大型文档 - 例如，机器学习的维基百科文章，^([[10](#_footnotedef_10
+    "查看脚注。")]) 并尝试进行相同的分析（查看图 3.4b 中的结果）：
 - en: '[PRE37]'
   id: totrans-187
   prefs: []
@@ -1366,6 +1525,7 @@
   id: totrans-188
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在看起来很有趣！如果你仔细观察两个频率直方图，你可能会注意到一个模式。直方图的峰值和谷值似乎以相同的顺序排列。如果你之前曾经处理过频率谱，这可能会有意义。字符频率峰值和谷值的模式是相似的，但是偏移了。
 - en: To determine whether your eyes are seeing a real pattern, you need to check
     to see if the shift in the peaks and valleys is consistent. This signal processing
     approach is called *spectral analysis*. You can compute the relative position
@@ -1374,12 +1534,14 @@
   id: totrans-189
   prefs: []
   type: TYPE_NORMAL
+  zh: 要确定你的眼睛是否看到了一个真实的模式，你需要检查峰值和谷值的变化是否一致。这种信号处理方法被称为*频谱分析*。你可以通过将每个信号的最高点的位置相互减去来计算峰值的相对位置。
 - en: You can use a couple of built-in python functions, `ord()` and `chr()`, to convert
     back and forth between integers and characters. Fortunately these integers and
     character mappings are in alphabetical order "ABC…​".
   id: totrans-190
   prefs: []
   type: TYPE_NORMAL
+  zh: 你可以使用几个内置的 Python 函数，`ord()` 和 `chr()`，来在整数和字符之间进行转换。幸运的是，这些整数和字符的映射是按字母顺序排列的，"ABC…​"。
 - en: '[PRE38]'
   id: totrans-191
   prefs: []
@@ -1394,6 +1556,7 @@
   id: totrans-192
   prefs: []
   type: TYPE_NORMAL
+  zh: 所以，如果你想解码这个秘密信息中的字母"R"，你应该从它的*ordinal*（`ord`）值中减去13，以得到字母"E"——英语中最常用的字母。同样，要解码字母"V"，你可以将它替换为"I"——第二个最常用的字母。前三个最常用的字母已经被同样的`peak_distance`（13）移动，以创建编码消息。并且这个距离在最不常用的字母之间也被保持：
 - en: '[PRE39]'
   id: totrans-193
   prefs: []
@@ -1411,6 +1574,10 @@
   id: totrans-194
   prefs: []
   type: TYPE_NORMAL
+  zh: 到这个点为止，你可能已经通过 MetaGered（搜索网络）查找了有关这个谜题的信息。^([[11](#_footnotedef_11 "View footnote.")])也许你发现了这个秘密信息很可能是使用
+    ROT13 密码（编码）进行编码的。^([[12](#_footnotedef_12 "View footnote.")]) ROT13 算法将字符串中的每个字母向字母表的前面旋转13个位置。要解码一个据说是用
+    ROT13 编码的秘密信息，你只需要应用逆算法，将你的字母表向后旋转13个位置。你可能可以在一行代码中创建编码器和解码器函数。或者你可以使用 Python
+    的内置`codecs`包来揭示这一切是关于什么的：
 - en: '[PRE40]'
   id: totrans-195
   prefs: []
@@ -1426,11 +1593,15 @@
   id: totrans-196
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在你知道了 Python 的禅意！这些智慧之言是由 Python 族长之一的 Tim Peters 在 1999 年写的。由于这首诗已经放入了公共领域，被谱曲，^([[13](#_footnotedef_13
+    "View footnote.")])甚至被拙劣模仿。^([[14](#_footnotedef_14 "View footnote.")])Python
+    的禅意已经帮助本书作者编写了更干净、更易读和可重用的代码。由于基于字符的`CountVectorizer`，你能够解码这些智慧之言。
 - en: 3.3 Zipf’s Law
   id: totrans-197
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 3.3 锡普夫定律
 - en: Now on to our main topic — Sociology. Okay, not, but you’ll make a quick detour
     into the world of counting people and words, and you’ll learn a seemingly universal
     rule that governs the counting of most things. It turns out, that in language,
@@ -1438,6 +1609,7 @@
   id: totrans-198
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在我们来到了我们的主题——社会学。好吧，不是，但你将会快速地进入人数和字词计数的世界，你将会学到一个看似普遍适用的规则来统计大多数事物。事实证明，在语言中，像大多数涉及到生物的事物一样，模式是丰富多彩的。
 - en: In the early twentieth century, the French stenographer Jean-Baptiste Estoup
     noticed a pattern in the frequencies of words that he painstakingly counted by
     hand across many documents (thank goodness for computers and `Python`). In the
