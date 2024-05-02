@@ -1250,10 +1250,13 @@
   id: totrans-196
   prefs: []
   type: TYPE_NORMAL
+  zh: 在我的机器上，使用急切生成 generate_sentence() 生成 50 个词的句子大约需要 2.5 秒，而使用 tf_generate_sentence()
+    只需要 0.1 秒，提高了 25 倍！记住，先通过急切运行原型代码进行原型设计，只有在达到想要的效果后才使用 tf_function()。
 - en: '**for loops and autograph**'
   id: totrans-197
   prefs: []
   type: TYPE_NORMAL
+  zh: '**for 循环和 autograph**'
 - en: 'One wrinkle with evaluating R functions eagerly before wrapping them with tf_
     function(fn, autograph = TRUE) (the default) is that autograph = TRUE gives capabilities
     that base R doesn’t have, like the ability for for to iterate over tensors. You
@@ -1262,85 +1265,107 @@
   id: totrans-198
   prefs: []
   type: TYPE_NORMAL
+  zh: 在使用 tf_ 函数(fn, autograph = TRUE)（默认设置）包装之前急切地评估 R 函数时，一个注意事项是 autograph = TRUE
+    提供了基本 R 没有的功能，比如让 for 能够迭代张量。你仍然可以通过直接调用 tfautograph::autograph() 来急切地评估诸如 for(i
+    in tf$range()) 或 for(batch in tf_ dataset) 这样的表达式，例如：
 - en: library(tfautograph)
   id: totrans-199
   prefs: []
   type: TYPE_NORMAL
+  zh: library(tfautograph)
 - en: autograph({
   id: totrans-200
   prefs: []
   type: TYPE_NORMAL
+  zh: autograph({
 - en: for(i in tf$range(3L))
   id: totrans-201
   prefs: []
   type: TYPE_NORMAL
+  zh: for(i in tf$range(3L))
 - en: print(i)
   id: totrans-202
   prefs: []
   type: TYPE_NORMAL
+  zh: print(i)
 - en: '})'
   id: totrans-203
   prefs: []
   type: TYPE_NORMAL
+  zh: '})'
 - en: tf.Tensor(0, shape=(), dtype=int32)
   id: totrans-204
   prefs: []
   type: TYPE_NORMAL
+  zh: tf.Tensor(0, shape=(), dtype=int32)
 - en: tf.Tensor(1, shape=(), dtype=int32)
   id: totrans-205
   prefs: []
   type: TYPE_NORMAL
+  zh: tf.Tensor(1, shape=(), dtype=int32)
 - en: tf.Tensor(2, shape=(), dtype=int32)
   id: totrans-206
   prefs: []
   type: TYPE_NORMAL
+  zh: tf.Tensor(2, shape=(), dtype=int32)
 - en: or
   id: totrans-207
   prefs: []
   type: TYPE_NORMAL
+  zh: 或者
 - en: fn <— function(x) {
   id: totrans-208
   prefs: []
   type: TYPE_NORMAL
+  zh: fn <— function(x) {
 - en: for(i in x) print(i)
   id: totrans-209
   prefs: []
   type: TYPE_NORMAL
+  zh: for(i in x) print(i)
 - en: '}'
   id: totrans-210
   prefs: []
   type: TYPE_NORMAL
+  zh: '}'
 - en: ag_fn <— autograph(fn)
   id: totrans-211
   prefs: []
   type: TYPE_NORMAL
+  zh: ag_fn <— autograph(fn)
 - en: ag_fn(tf$range(3))
   id: totrans-212
   prefs: []
   type: TYPE_NORMAL
+  zh: ag_fn(tf$range(3))
 - en: tf.Tensor(0.0, shape=(), dtype=float32)
   id: totrans-213
   prefs: []
   type: TYPE_NORMAL
+  zh: tf.Tensor(0.0, shape=(), dtype=float32)
 - en: tf.Tensor(1.0, shape=(), dtype=float32)
   id: totrans-214
   prefs: []
   type: TYPE_NORMAL
+  zh: tf.Tensor(1.0, shape=(), dtype=float32)
 - en: tf.Tensor(2.0, shape=(), dtype=float32)
   id: totrans-215
   prefs: []
   type: TYPE_NORMAL
+  zh: tf.Tensor(2.0, shape=(), dtype=float32)
 - en: In interactive sessions you can temporarily globally enable if, while, and for
     to accept tensors by calling tfautograph:::attach_ag_mask().
   id: totrans-216
   prefs: []
   type: TYPE_NORMAL
+  zh: 在交互式会话中，你可以通过调用 tfautograph:::attach_ag_mask() 临时全局启用 if、while 和 for 来接受张量。
 - en: A for() loop that iterates over a tensor in a tf_function() builds a tf$while_loop(),
     and it inherits all same restrictions. Every tensor tracked by the loop must have
     a stable shape and dtype throughout iteration.
   id: totrans-217
   prefs: []
   type: TYPE_NORMAL
+  zh: 在 tf_function() 中迭代张量的 for() 循环构建了一个 tf$while_loop()，并且继承了所有相同的限制。循环跟踪的每个张量在整个迭代过程中必须具有稳定的形状和数据类型。
 - en: The call ag_loop_vars(sentence) gives the tf_function() compiler a hint that
     the only variable we’re interested in after the for loop is sentence. This informs
     the compiler that other tensors, like sampled_word, i, and model_preds, are loop-local
@@ -1348,6 +1373,8 @@
   id: totrans-218
   prefs: []
   type: TYPE_NORMAL
+  zh: 调用 ag_loop_vars(sentence) 给 tf_function() 编译器一个提示，即我们在 for 循环之后感兴趣的唯一变量是 sentence。这通知编译器其他张量，如
+    sampled_word、i 和 model_preds，都是循环局部变量，并且可以在循环后安全地优化掉。
 - en: Note that iterating over a regular R object like for(i in seq(0, 49)) in a tf_
     function() would not build a tf$while_loop(), but would instead evaluate with
     regular R semantics and would result in the tf_function() tracing an unrolled
@@ -1355,115 +1382,144 @@
   id: totrans-219
   prefs: []
   type: TYPE_NORMAL
+  zh: 请注意，在 tf_ 函数() 中迭代常规 R 对象（例如 for(i in seq(0, 49))）不会构建 tf$while_loop()，而是使用常规的
+    R 语义进行评估，并且会导致 tf_function() 追踪展开的循环（有时这是可取的，对于迭代次数固定的短循环）。
 - en: 'Here is the callback where we’ll call tf_generate_sentence() to generate text
     during training:'
   id: totrans-220
   prefs: []
   type: TYPE_NORMAL
+  zh: 这是我们将在回调中调用 tf_generate_sentence() 来在训练期间生成文本的地方：
 - en: Listing 12.7 The text-generation callback
   id: totrans-221
   prefs: []
   type: TYPE_NORMAL
+  zh: 列表 12.7 文本生成回调
 - en: callback_text_generator <— new_callback_class(
   id: totrans-222
   prefs: []
   type: TYPE_NORMAL
+  zh: callback_text_generator <— new_callback_class(
 - en: classname = "TextGenerator",
   id: totrans-223
   prefs: []
   type: TYPE_NORMAL
+  zh: classname = "TextGenerator",
 - en: initialize = function(prompt, generate_length,
   id: totrans-224
   prefs: []
   type: TYPE_NORMAL
+  zh: initialize = function(prompt, generate_length,
 - en: temperatures = 1,
   id: totrans-225
   prefs: []
   type: TYPE_NORMAL
+  zh: temperatures = 1,
 - en: print_freq = 1L) {
   id: totrans-226
   prefs: []
   type: TYPE_NORMAL
+  zh: print_freq = 1L) {
 - en: private$prompt <— as_tensor(prompt, "string")
   id: totrans-227
   prefs: []
   type: TYPE_NORMAL
+  zh: private$prompt <— as_tensor(prompt, "string")
 - en: private$generate_length <— as_tensor(generate_length, "int32")
   id: totrans-228
   prefs: []
   type: TYPE_NORMAL
+  zh: private$generate_length <— as_tensor(generate_length, "int32")
 - en: private$temperatures <— as.numeric(temperatures)➊
   id: totrans-229
   prefs: []
   type: TYPE_NORMAL
+  zh: private$temperatures <— as.numeric(temperatures)➊
 - en: private$print_freq <— as.integer(print_freq)
   id: totrans-230
   prefs: []
   type: TYPE_NORMAL
+  zh: private$print_freq <— as.integer(print_freq)
 - en: '},'
   id: totrans-231
   prefs: []
   type: TYPE_NORMAL
+  zh: '},'
 - en: on_epoch_end = function(epoch, logs = NULL) {
   id: totrans-232
   prefs: []
   type: TYPE_NORMAL
+  zh: on_epoch_end = function(epoch, logs = NULL) {
 - en: if ((epoch %% private$print_freq) != 0)
   id: totrans-233
   prefs: []
   type: TYPE_NORMAL
+  zh: if ((epoch %% private$print_freq) != 0)
 - en: return()
   id: totrans-234
   prefs: []
   type: TYPE_NORMAL
+  zh: return()
 - en: for (temperature in private$temperatures) {➋
   id: totrans-235
   prefs: []
   type: TYPE_NORMAL
+  zh: for (temperature in private$temperatures) {➋
 - en: cat("== Generating with temperature", temperature, "\n")
   id: totrans-236
   prefs: []
   type: TYPE_NORMAL
+  zh: cat("== 使用温度生成", temperature, "\n")
 - en: sentence <— tf_generate_sentence(➌
   id: totrans-237
   prefs: []
   type: TYPE_NORMAL
+  zh: sentence <— tf_generate_sentence(➌
 - en: self$model,
   id: totrans-238
   prefs: []
   type: TYPE_NORMAL
+  zh: self$model,
 - en: private$prompt,
   id: totrans-239
   prefs: []
   type: TYPE_NORMAL
+  zh: private$prompt,
 - en: private$generate_length,➍
   id: totrans-240
   prefs: []
   type: TYPE_NORMAL
+  zh: private$generate_length,➍
 - en: as_tensor(temperature, "float32")
   id: totrans-241
   prefs: []
   type: TYPE_NORMAL
+  zh: as_tensor(temperature, "float32")
 - en: )
   id: totrans-242
   prefs: []
   type: TYPE_NORMAL
+  zh: )
 - en: cat(as.character(sentence), "\n")
   id: totrans-243
   prefs: []
   type: TYPE_NORMAL
+  zh: cat(as.character(sentence), "\n")
 - en: '}'
   id: totrans-244
   prefs: []
   type: TYPE_NORMAL
+  zh: '}'
 - en: '}'
   id: totrans-245
   prefs: []
   type: TYPE_NORMAL
+  zh: '}'
 - en: )
   id: totrans-246
   prefs: []
   type: TYPE_NORMAL
+  zh: )
 - en: text_gen_callback <— callback_text_generator(
   id: totrans-247
   prefs: []
@@ -1843,30 +1899,37 @@
   id: totrans-298
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们从获取一张用于梦想的测试图像开始。我们将使用冬季时节的加利福尼亚北部崎岖的海岸景色（[图 12.5](#fig12-5)）。
 - en: Listing 12.9 Fetching the test image
   id: totrans-299
   prefs: []
   type: TYPE_NORMAL
+  zh: 清单 12.9 获取测试图像
 - en: base_image_path <— get_file(
   id: totrans-300
   prefs: []
   type: TYPE_NORMAL
+  zh: base_image_path <— get_file(
 - en: '"coast.jpg", origin = "https://img-datasets.s3.amazonaws.com/coast.jpg")'
   id: totrans-301
   prefs: []
   type: TYPE_NORMAL
+  zh: '"coast.jpg", origin = "https://img-datasets.s3.amazonaws.com/coast.jpg")'
 - en: plot(as.raster(jpeg::readJPEG(base_image_path)))
   id: totrans-302
   prefs: []
   type: TYPE_NORMAL
+  zh: plot(as.raster(jpeg::readJPEG(base_image_path)))
 - en: '![Image](../images/f0415-01.jpg)'
   id: totrans-303
   prefs: []
   type: TYPE_IMG
+  zh: '![图像](../images/f0415-01.jpg)'
 - en: '**Figure 12.15 Our test image**'
   id: totrans-304
   prefs: []
   type: TYPE_NORMAL
+  zh: '**图 12.15 我们的测试图像**'
 - en: Next, we need a pretrained convnet. In Keras, many such convnets are available—
     VGG16, VGG19, Xception, ResNet50, and so on—all with weights pretrained on ImageNet.
     You can implement DeepDream with any of them, but your base model of choice will
@@ -1877,14 +1940,20 @@
   id: totrans-305
   prefs: []
   type: TYPE_NORMAL
+  zh: 接下来，我们需要一个预训练的卷积网络。在 Keras 中，有许多这样的卷积网络可用 — VGG16、VGG19、Xception、ResNet50 等等
+    — 它们的权重都是在 ImageNet 上预训练的。你可以用任何一个实现 DeepDream，但你选择的基础模型自然会影响你的可视化效果，因为不同的架构会导致不同的学习特征。原始
+    DeepDream 发布中使用的卷积网络是一个 Inception 模型，在实践中，Inception 被认为能产生外观良好的 DeepDream，所以我们将使用
+    Keras 提供的 Inception V3 模型。
 - en: '**Listing 12.10 Instantiating a pretrained InceptionV3 model**'
   id: totrans-306
   prefs: []
   type: TYPE_NORMAL
+  zh: '**清单 12.10 实例化预训练的 InceptionV3 模型**'
 - en: model <— application_inception_v3(weights = "imagenet", include_top = FALSE)
   id: totrans-307
   prefs: []
   type: TYPE_NORMAL
+  zh: model <— application_inception_v3(weights = "imagenet", include_top = FALSE)
 - en: We’ll use our pretrained convnet to create a feature extractor model that returns
     the activations of the various intermediate layers, listed in the following code.
     For each layer, we pick a scalar score that weights the contribution of the layer
@@ -1894,72 +1963,90 @@
   id: totrans-308
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们将使用我们的预训练卷积网络创建一个特征提取器模型，该模型返回各个中间层的激活值，如下面的代码所列。对于每一层，我们选择一个标量分数，以加权各层对我们将在梯度上升过程中寻求最大化的损失的贡献。如果你想要一个完整的层名称列表，以便挑选新的层来尝试，只需使用
+    print(model)。
 - en: Listing 12.11 Configuring the contribution of each layer to the DeepDream loss
   id: totrans-309
   prefs: []
   type: TYPE_NORMAL
+  zh: 清单 12.11 配置每层对 DeepDream 损失的贡献
 - en: layer_settings <— c( ➊
   id: totrans-310
   prefs: []
   type: TYPE_NORMAL
+  zh: layer_settings <— c( ➊
 - en: mixed4 = 1,
   id: totrans-311
   prefs: []
   type: TYPE_NORMAL
+  zh: mixed4 = 1,
 - en: mixed5 = 1.5,
   id: totrans-312
   prefs: []
   type: TYPE_NORMAL
+  zh: mixed5 = 1.5,
 - en: mixed6 = 2,
   id: totrans-313
   prefs: []
   type: TYPE_NORMAL
+  zh: mixed6 = 2,
 - en: mixed7 = 2.5
   id: totrans-314
   prefs: []
   type: TYPE_NORMAL
+  zh: mixed7 = 2.5
 - en: )
   id: totrans-315
   prefs: []
   type: TYPE_NORMAL
+  zh: )
 - en: outputs <— list()
   id: totrans-316
   prefs: []
   type: TYPE_NORMAL
+  zh: 输出 <— list()
 - en: for(layer_name in names(layer_settings))
   id: totrans-317
   prefs: []
   type: TYPE_NORMAL
+  zh: for(layer_name in names(layer_settings))
 - en: outputs[[layer_name]] <—➋
   id: totrans-318
   prefs: []
   type: TYPE_NORMAL
+  zh: outputs[[layer_name]] <—➋
 - en: get_layer(model, layer_name)$output➋
   id: totrans-319
   prefs: []
   type: TYPE_NORMAL
+  zh: get_layer(model, layer_name)$output➋
 - en: feature_extractor <— keras_model(inputs = model$inputs,➌
   id: totrans-320
   prefs: []
   type: TYPE_NORMAL
+  zh: feature_extractor <— keras_model(inputs = model$inputs,➌
 - en: outputs = outputs)
   id: totrans-321
   prefs: []
   type: TYPE_NORMAL
+  zh: 输出 = 输出)
 - en: ➊ **Layers for which we try to maximize activation, as well as their weight
     in the total loss. You can tweak these setting to obtain new visual effects.**
   id: totrans-322
   prefs: []
   type: TYPE_NORMAL
+  zh: ➊ **我们试图最大化激活的层，以及它们在总损失中的权重。你可以调整这些设置以获得新的视觉效果。**
 - en: ➋ **Collect in a named list the output symbolic tensor from each layer.**
   id: totrans-323
   prefs: []
   type: TYPE_NORMAL
+  zh: ➋ **在一个命名列表中收集每个层的输出符号张量。**
 - en: ➌ **A model that returns the activation values for every target layer (as a
     named list)**
   id: totrans-324
   prefs: []
   type: TYPE_NORMAL
+  zh: ➌ **一个模型，返回每个目标层的激活值（作为命名列表）**
 - en: 'Next, we’ll compute the *loss*: the quantity we’ll seek to maximize during
     the gradient-ascent process at each processing scale. In chapter 9, for filter
     visualization, we tried to maximize the value of a specific filter in a specific
@@ -2227,209 +2314,262 @@
   id: totrans-373
   prefs: []
   type: TYPE_NORMAL
+  zh: 最后，DeepDream 算法的外部循环。首先，我们将定义一个 *尺度* 列表（也称为 *八度音阶*），用于处理图像。我们将在三个不同的八度音阶上处理我们的图像。对于每个连续的八度音阶，从最小到最大，我们将通过
+    gradient_ascent_loop() 运行 20 步梯度上升，以最大化我们之前定义的损失。在每个八度音阶之间，我们将通过 40%（1.4×）放大图像：我们将从处理小图像开始，然后逐渐放大它（参见[图
+    12.6](#fig12-6)）。
 - en: '![Image](../images/f0418-01.jpg)'
   id: totrans-374
   prefs: []
   type: TYPE_IMG
+  zh: '![图像](../images/f0418-01.jpg)'
 - en: '**Figure 12.6 The DeepDream process: Successive scales of spatial processing
     (octaves) and detail reinjection upon upscaling**'
   id: totrans-375
   prefs: []
   type: TYPE_NORMAL
+  zh: '**图 12.6 DeepDream 过程：连续尺度的空间处理（八度音阶）和在放大时重新注入细节**'
 - en: We define the parameters of this process in the following code. Tweaking these
     parameters will allow you to achieve new effects!
   id: totrans-376
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们在下面的代码中定义了这个过程的参数。调整这些参数将使您能够实现新的效果！
 - en: step <— 20➊
   id: totrans-377
   prefs: []
   type: TYPE_NORMAL
+  zh: 步骤 <— 20➊
 - en: num_octaves <— 3➋
   id: totrans-378
   prefs: []
   type: TYPE_NORMAL
+  zh: 八度音阶数量 <— 3➋
 - en: octave_scale <— 1.4➌
   id: totrans-379
   prefs: []
   type: TYPE_NORMAL
+  zh: 八度音阶比例 <— 1.4➌
 - en: iterations <— 30➍
   id: totrans-380
   prefs: []
   type: TYPE_NORMAL
+  zh: 迭代次数 <— 30➍
 - en: max_loss <— 15➎
   id: totrans-381
   prefs: []
   type: TYPE_NORMAL
+  zh: 最大损失 <— 15➎
 - en: ➊ **Gradient ascent step size**
   id: totrans-382
   prefs: []
   type: TYPE_NORMAL
+  zh: ➊ **梯度上升步长**
 - en: ➋ **Number of scales at which to run gradient ascent**
   id: totrans-383
   prefs: []
   type: TYPE_NORMAL
+  zh: ➋ **在哪些尺度上运行梯度上升的数量**
 - en: ➌ **Size ratio between successive scales**
   id: totrans-384
   prefs: []
   type: TYPE_NORMAL
+  zh: ➌ **连续尺度之间的大小比例**
 - en: ➍ **Number of gradient ascent steps per scale**
   id: totrans-385
   prefs: []
   type: TYPE_NORMAL
+  zh: ➍ **每个尺度的梯度上升步骤数**
 - en: ➎ **We’ll stop the gradient-ascent process for a scale if the loss gets higher
     than this.**
   id: totrans-386
   prefs: []
   type: TYPE_NORMAL
+  zh: ➎ **如果损失超过这个值，我们将停止梯度上升过程的该尺度。**
 - en: We’re also going to need a couple of utility functions to load and save images.
   id: totrans-387
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们还需要几个实用函数来加载和保存图像。
 - en: '**Listing 12.14 Image processing utilities**'
   id: totrans-388
   prefs: []
   type: TYPE_NORMAL
+  zh: '**清单 12.14 图像处理实用程序**'
 - en: preprocess_image <— tf_function(function(image_path) {➊
   id: totrans-389
   prefs: []
   type: TYPE_NORMAL
+  zh: 预处理图片 <— tf_function(function(image_path) {➊
 - en: image_path %>%
   id: totrans-390
   prefs: []
   type: TYPE_NORMAL
+  zh: 图像路径 %>%
 - en: tf$io$read_file() %>%
   id: totrans-391
   prefs: []
   type: TYPE_NORMAL
+  zh: tf$io$read_file() %>%
 - en: tf$io$decode_image() %>%
   id: totrans-392
   prefs: []
   type: TYPE_NORMAL
+  zh: tf$io$decode_image() %>%
 - en: tf$expand_dims(axis = 0L) %>%➋
   id: totrans-393
   prefs: []
   type: TYPE_NORMAL
+  zh: tf$expand_dims(axis = 0L) %>%➋
 - en: tf$cast("float32") %>%➌
   id: totrans-394
   prefs: []
   type: TYPE_NORMAL
+  zh: tf$cast("float32") %>%➌
 - en: inception_v3_preprocess_input()
   id: totrans-395
   prefs: []
   type: TYPE_NORMAL
+  zh: inception_v3_preprocess_input()
 - en: '})'
   id: totrans-396
   prefs: []
   type: TYPE_NORMAL
+  zh: '})'
 - en: deprocess_image <— tf_function(function(img) {➍
   id: totrans-397
   prefs: []
   type: TYPE_NORMAL
+  zh: 反向处理图片 <— tf_function(function(img) {➍
 - en: img %>%
   id: totrans-398
   prefs: []
   type: TYPE_NORMAL
+  zh: img %>%
 - en: tf$squeeze(axis = 0L) %>%➎
   id: totrans-399
   prefs: []
   type: TYPE_NORMAL
+  zh: tf$squeeze(axis = 0L) %>%➎
 - en: '{ (. * 127.5) + 127.5 } %>%➏'
   id: totrans-400
   prefs: []
   type: TYPE_NORMAL
+  zh: '{ （。* 127.5）+ 127.5 } %>%➏'
 - en: tf$saturate_cast("uint8")➐
   id: totrans-401
   prefs: []
   type: TYPE_NORMAL
+  zh: tf$saturate_cast("uint8")➐
 - en: '})'
   id: totrans-402
   prefs: []
   type: TYPE_NORMAL
+  zh: '})'
 - en: display_image_tensor <— function(x, …, max = 255,
   id: totrans-403
   prefs: []
   type: TYPE_NORMAL
+  zh: 显示图片张量 <— function(x, …, max = 255,
 - en: plot_margins = c(0, 0, 0, 0)) {
   id: totrans-404
   prefs: []
   type: TYPE_NORMAL
+  zh: 绘制边距 = c(0, 0, 0, 0)) {
 - en: if (!is.null(plot_margins))
   id: totrans-405
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果（！is.null(plot_margins)）
 - en: withr::local_par(mar = plot_margins)➑
   id: totrans-406
   prefs: []
   type: TYPE_NORMAL
+  zh: withr::local_par(mar = plot_margins)➑
 - en: x %>%
   id: totrans-407
   prefs: []
   type: TYPE_NORMAL
+  zh: x %>%
 - en: as.array() %>%➒
   id: totrans-408
   prefs: []
   type: TYPE_NORMAL
+  zh: 转换为数组() %>%➒
 - en: drop() %>%
   id: totrans-409
   prefs: []
   type: TYPE_NORMAL
+  zh: drop() %>%
 - en: as.raster(max = max) %>%➓
   id: totrans-410
   prefs: []
   type: TYPE_NORMAL
+  zh: 转换为栅格(max = max) %>%➓
 - en: plot(…, interpolate = FALSE)
   id: totrans-411
   prefs: []
   type: TYPE_NORMAL
+  zh: 绘制（…，不插值 = FALSE）
 - en: '}'
   id: totrans-412
   prefs: []
   type: TYPE_NORMAL
+  zh: '}'
 - en: ➊ **Util function to load, resize, and format pictures into appropriate arrays**
   id: totrans-413
   prefs: []
   type: TYPE_NORMAL
+  zh: ➊ **加载、调整大小和格式化图片到适当数组的实用函数**
 - en: ➋ **Add batch axis, equivalent to .[tf$newaxis, all_dims()]. axis arg is 0-based.**
   id: totrans-414
   prefs: []
   type: TYPE_NORMAL
+  zh: ➋ **添加批处理轴，相当于 .[tf$newaxis, all_dims()]。轴参数基于 0。**
 - en: ➌ **Cast from 'uint8'.**
   id: totrans-415
   prefs: []
   type: TYPE_NORMAL
+  zh: ➌ **从 'uint8' 转换。**
 - en: ➍ **Util function to convert a tensor array into a valid image and undo preprocessing**
   id: totrans-416
   prefs: []
   type: TYPE_NORMAL
+  zh: ➍ **将张量数组转换为有效图像并撤消预处理的实用函数**
 - en: ➎ **Drop first dim-the batch axis (must be size 1), the inverse of tf$expand_dims().**
   id: totrans-417
   prefs: []
   type: TYPE_NORMAL
+  zh: ➎ **删除第一个维度-批处理轴（必须为大小 1），tf$expand_dims() 的逆操作。**
 - en: ➏ **Rescale so values in [-1, 1] are remapped to [0, 255].**
   id: totrans-418
   prefs: []
   type: TYPE_NORMAL
+  zh: ➏ **重新缩放，使值在[-1, 1]范围内重新映射到[0, 255]。**
 - en: '➐ **saturate_case() clips values to the dtype range: [0, 255].**'
   id: totrans-419
   prefs: []
   type: TYPE_NORMAL
+  zh: ➐ **saturate_case() 将值剪辑到 dtype 范围：[0, 255]。**
 - en: ➑ **Default to no margins when plotting images.**
   id: totrans-420
   prefs: []
   type: TYPE_NORMAL
+  zh: ➑ **在绘制图像时默认没有边距。**
 - en: ➒ **Convert tensors to R arrays.**
   id: totrans-421
   prefs: []
   type: TYPE_NORMAL
+  zh: ➒ **将张量转换为 R 数组。**
 - en: ➓ **Convert to R native raster format.**
   id: totrans-422
   prefs: []
   type: TYPE_NORMAL
+  zh: ➓ **转换为 R 原生栅格格式。**
 - en: '**withr::local_***'
   id: totrans-423
   prefs: []
   type: TYPE_NORMAL
+  zh: '**withr::local_***'
 - en: Here we use withr::local_par() to set par() before calling plot(). local_ par()
     acts just like par(), except that it restores the previous par() settings when
     the function exits. Using funcions like local_par() or local_options() helps ensure
@@ -2438,35 +2578,44 @@
   id: totrans-424
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这里，我们使用 withr::local_par() 来设置 par()，然后调用 plot()。local_ par() 的作用就像 par()，只是在函数退出时它会恢复先前的
+    par() 设置。使用像 local_par() 或 local_options() 这样的函数有助于确保您编写的函数不会永久修改全局状态，这使得它们在更多的上下文中更可预测和可用。
 - en: 'You can replace local_par() and do the equivalent with a separate on.exit()
     call like this:'
   id: totrans-425
   prefs: []
   type: TYPE_NORMAL
+  zh: 您可以用一个单独的 on.exit() 调用来替换 local_par() 并执行相同的操作，如下所示：
 - en: display_image_tensor <— function()
   id: totrans-426
   prefs: []
   type: TYPE_NORMAL
+  zh: display_image_tensor <— function()
 - en: <…>
   id: totrans-427
   prefs: []
   type: TYPE_NORMAL
+  zh: <…>
 - en: opar <— par(mar = plot_margins)
   id: totrans-428
   prefs: []
   type: TYPE_NORMAL
+  zh: opar <— par(mar = plot_margins)
 - en: on.exit(par(opar))
   id: totrans-429
   prefs: []
   type: TYPE_NORMAL
+  zh: on.exit(par(opar))
 - en: <…>
   id: totrans-430
   prefs: []
   type: TYPE_NORMAL
+  zh: <…>
 - en: '}'
   id: totrans-431
   prefs: []
   type: TYPE_NORMAL
+  zh: '}'
 - en: 'This is the outer loop. To avoid losing a lot of image detail after each successive
     scale-up (resulting in increasingly blurry or pixelated images), we can use a
     simple trick: after each scale-up, we’ll reinject the lost details back into the
@@ -2478,230 +2627,288 @@
   id: totrans-432
   prefs: []
   type: TYPE_NORMAL
+  zh: 这是外循环。为了避免在每次连续放大后丢失大量图像细节（导致图像越来越模糊或像素化），我们可以使用一个简单的技巧：在每次放大后，我们将丢失的细节重新注入到图像中，这是可能的，因为我们知道原始图像在较大比例时应该是什么样子的。给定一个小图像尺寸
+    *S* 和一个较大的图像尺寸 *L*，我们可以计算原始图像调整为尺寸 *L* 和尺寸 *S* 时的差异——这个差异量化了从 *S* 到 *L* 过程中丢失的细节。
 - en: '**Listing 12.15 Running gradient ascent over multiple successive octaves**'
   id: totrans-433
   prefs: []
   type: TYPE_NORMAL
+  zh: '**清单 12.15 在多个连续的八度上运行梯度上升**'
 - en: original_img <— preprocess_image(base_image_path)➊
   id: totrans-434
   prefs: []
   type: TYPE_NORMAL
+  zh: original_img <— preprocess_image(base_image_path)➊
 - en: original_HxW <— dim(original_img)[2:3]
   id: totrans-435
   prefs: []
   type: TYPE_NORMAL
+  zh: original_HxW <— dim(original_img)[2:3]
 - en: calc_octave_HxW <— function(octave) {
   id: totrans-436
   prefs: []
   type: TYPE_NORMAL
+  zh: calc_octave_HxW <— function(octave) {
 - en: as.integer(round(original_HxW / (octave_scale ^ octave)))
   id: totrans-437
   prefs: []
   type: TYPE_NORMAL
+  zh: as.integer(round(original_HxW / (octave_scale ^ octave)))
 - en: '}'
   id: totrans-438
   prefs: []
   type: TYPE_NORMAL
+  zh: '}'
 - en: octaves <— seq(num_octaves - 1, 0) %>%➋
   id: totrans-439
   prefs: []
   type: TYPE_NORMAL
+  zh: octaves <— seq(num_octaves - 1, 0) %>%➋
 - en: '{ zip_lists(num = .,'
   id: totrans-440
   prefs: []
   type: TYPE_NORMAL
+  zh: '{ zip_lists(num = .,'
 - en: HxW = lapply(., calc_octave_HxW)) }
   id: totrans-441
   prefs: []
   type: TYPE_NORMAL
+  zh: HxW = lapply(., calc_octave_HxW)) }
 - en: str(octaves)
   id: totrans-442
   prefs: []
   type: TYPE_NORMAL
+  zh: str(octaves)
 - en: List of 3
   id: totrans-443
   prefs: []
   type: TYPE_NORMAL
+  zh: List of 3
 - en: $ :List of 2
   id: totrans-444
   prefs: []
   type: TYPE_NORMAL
+  zh: $ :List of 2
 - en: '..$ num: int 2'
   id: totrans-445
   prefs: []
   type: TYPE_NORMAL
+  zh: '..$ num: int 2'
 - en: '..$ HxW: int [1:2] 459 612'
   id: totrans-446
   prefs: []
   type: TYPE_NORMAL
+  zh: '..$ HxW: int [1:2] 459 612'
 - en: $ :List of 2
   id: totrans-447
   prefs: []
   type: TYPE_NORMAL
+  zh: $ :List of 2
 - en: '..$ num: int 1'
   id: totrans-448
   prefs: []
   type: TYPE_NORMAL
+  zh: '..$ num: int 1'
 - en: '..$ HxW: int [1:2] 643 857'
   id: totrans-449
   prefs: []
   type: TYPE_NORMAL
+  zh: '..$ HxW: int [1:2] 643 857'
 - en: $ :List of 2
   id: totrans-450
   prefs: []
   type: TYPE_NORMAL
+  zh: $ :List of 2
 - en: '..$ num: int 0'
   id: totrans-451
   prefs: []
   type: TYPE_NORMAL
+  zh: '..$ num: int 0'
 - en: '..$ HxW: int [1:2] 900 1200'
   id: totrans-452
   prefs: []
   type: TYPE_NORMAL
+  zh: '..$ HxW: int [1:2] 900 1200'
 - en: ➊ **Load and preprocess the test image.**
   id: totrans-453
   prefs: []
   type: TYPE_NORMAL
+  zh: ➊ **加载并预处理测试图像。**
 - en: ➋ **Compute the target shape of the image at different octaves.**
   id: totrans-454
   prefs: []
   type: TYPE_NORMAL
+  zh: ➋ **计算不同八度图像的目标形状。**
 - en: shrunk_original_img <— original_img %>% tf$image$resize(octaves[[1]]$HxW)
   id: totrans-455
   prefs: []
   type: TYPE_NORMAL
+  zh: shrunk_original_img <— original_img %>% tf$image$resize(octaves[[1]]$HxW)
 - en: img <— original_img ➊
   id: totrans-456
   prefs: []
   type: TYPE_NORMAL
+  zh: img <— original_img ➊
 - en: for (octave in octaves) {➋
   id: totrans-457
   prefs: []
   type: TYPE_NORMAL
+  zh: for (octave in octaves) {➋
 - en: cat(sprintf("Processing octave %i with shape (%s)\n",
   id: totrans-458
   prefs: []
   type: TYPE_NORMAL
+  zh: cat(sprintf("Processing octave %i with shape (%s)\n",
 - en: octave$num, paste(octave$HxW, collapse = ", ")))
   id: totrans-459
   prefs: []
   type: TYPE_NORMAL
+  zh: octave$num, paste(octave$HxW, collapse = ", ")))
 - en: img <— img %>%
   id: totrans-460
   prefs: []
   type: TYPE_NORMAL
+  zh: img <— img %>%
 - en: tf$image$resize(octave$HxW) %>%➌
   id: totrans-461
   prefs: []
   type: TYPE_NORMAL
+  zh: tf$image$resize(octave$HxW) %>%➌
 - en: gradient_ascent_loop(iterations = iterations, ➍
   id: totrans-462
   prefs: []
   type: TYPE_NORMAL
+  zh: gradient_ascent_loop(iterations = iterations, ➍
 - en: learning_rate = step,
   id: totrans-463
   prefs: []
   type: TYPE_NORMAL
+  zh: learning_rate = step,
 - en: max_loss = max_loss)
   id: totrans-464
   prefs: []
   type: TYPE_NORMAL
+  zh: max_loss = max_loss)
 - en: upscaled_shrunk_original_img <— ➎
   id: totrans-465
   prefs: []
   type: TYPE_NORMAL
+  zh: upscaled_shrunk_original_img <— ➎
 - en: shrunk_original_img %>% tf$image$resize(octave$HxW)
   id: totrans-466
   prefs: []
   type: TYPE_NORMAL
+  zh: shrunk_original_img %>% tf$image$resize(octave$HxW)
 - en: same_size_original <—
   id: totrans-467
   prefs: []
   type: TYPE_NORMAL
+  zh: same_size_original <—
 - en: original_img %>% tf$image$resize(octave$HxW)➏
   id: totrans-468
   prefs: []
   type: TYPE_NORMAL
+  zh: original_img %>% tf$image$resize(octave$HxW)➏
 - en: lost_detail <—➐
   id: totrans-469
   prefs: []
   type: TYPE_NORMAL
+  zh: lost_detail <—➐
 - en: same_size_original - upscaled_shrunk_original_img
   id: totrans-470
   prefs: []
   type: TYPE_NORMAL
+  zh: same_size_original - upscaled_shrunk_original_img
 - en: img %<>% `+`(lost_detail)➑
   id: totrans-471
   prefs: []
   type: TYPE_NORMAL
+  zh: img %<>% `+`(lost_detail)➑
 - en: shrunk_original_img <—
   id: totrans-472
   prefs: []
   type: TYPE_NORMAL
+  zh: shrunk_original_img <—
 - en: original_img %>% tf$image$resize(octave$HxW)
   id: totrans-473
   prefs: []
   type: TYPE_NORMAL
+  zh: original_img %>% tf$image$resize(octave$HxW)
 - en: '}'
   id: totrans-474
   prefs: []
   type: TYPE_NORMAL
+  zh: '}'
 - en: img <— deprocess_image(img)
   id: totrans-475
   prefs: []
   type: TYPE_NORMAL
+  zh: img <— deprocess_image(img)
 - en: img %>% display_image_tensor()
   id: totrans-476
   prefs: []
   type: TYPE_NORMAL
+  zh: img %>% display_image_tensor()
 - en: img %>%
   id: totrans-477
   prefs: []
   type: TYPE_NORMAL
+  zh: img %>%
 - en: tf$io$encode_png() %>%
   id: totrans-478
   prefs: []
   type: TYPE_NORMAL
+  zh: tf$io$encode_png() %>%
 - en: tf$io$write_file("dream.png", .)➒
   id: totrans-479
   prefs: []
   type: TYPE_NORMAL
+  zh: tf$io$write_file("dream.png", .)➒
 - en: ➊ **Save a reference to the original image (we need to keep the original around).**
   id: totrans-480
   prefs: []
   type: TYPE_NORMAL
+  zh: ➊ **保存对原始图像的引用（我们需要保留原始图像）。**
 - en: ➋ **Iterate over the different octaves.**
   id: totrans-481
   prefs: []
   type: TYPE_NORMAL
+  zh: ➋ **迭代不同的八度。**
 - en: ➌ **Scale up the dream image.**
   id: totrans-482
   prefs: []
   type: TYPE_NORMAL
+  zh: ➌ **将梦想图像放大。**
 - en: ➍ **Run gradient ascent, altering the dream.**
   id: totrans-483
   prefs: []
   type: TYPE_NORMAL
+  zh: ➍ **运行梯度上升，改变梦想。**
 - en: '➎ **Scale up the smaller version of the original image: it will be pixelated.**'
   id: totrans-484
   prefs: []
   type: TYPE_NORMAL
+  zh: ➎ **将原始图像的较小版本放大：它会出现像素化。**
 - en: ➏ **Compute the high-quality version of the original image at this size.**
   id: totrans-485
   prefs: []
   type: TYPE_NORMAL
+  zh: ➏ **计算此尺寸下原始图像的高质量版本。**
 - en: ➐ **The difference between the two is the detail that was lost when detail up.**
   id: totrans-486
   prefs: []
   type: TYPE_NORMAL
+  zh: ➐ **两者之间的区别是在放大时丢失的细节。**
 - en: ➑ **Reinject the lost detail into the dream.**
   id: totrans-487
   prefs: []
   type: TYPE_NORMAL
+  zh: ➑ **重新注入丢失的细节到梦想中。**
 - en: ➒ **Save the final result.**
   id: totrans-488
   prefs: []
   type: TYPE_NORMAL
+  zh: ➒ **保存最终结果。**
 - en: Because the original Inception V3 network was trained to recognize concepts
     in images of size 299 × 299, and given that the process involves scaling the images
     down by a reasonable factor, the DeepDream implementation produces much better
@@ -2710,19 +2917,24 @@
   id: totrans-489
   prefs: []
   type: TYPE_NORMAL
+  zh: 因为原始的 Inception V3 网络是在大小为 299 × 299 的图像上训练的，并且考虑到该过程涉及将图像按合理因子缩小，因此 DeepDream
+    实现对大小介于 300 × 300 到 400 × 400 之间的图像产生更好的结果。不管怎样，您都可以在任何大小和比例的图像上运行相同的代码。
 - en: On a GPU, it takes only a few seconds to run the whole thing. [Figure 12.7](#fig12-7)
     shows the result of our dream configuration on the test image.
   id: totrans-490
   prefs: []
   type: TYPE_NORMAL
+  zh: 在 GPU 上，整个过程只需几秒钟。[图 12.7](#fig12-7) 展示了我们在测试图像上的梦幻配置的结果。
 - en: '![Image](../images/f0421-01.jpg)'
   id: totrans-491
   prefs: []
   type: TYPE_IMG
+  zh: '![图片](../images/f0421-01.jpg)'
 - en: '**Figure 12.7 Running the DeepDream code on the test image**'
   id: totrans-492
   prefs: []
   type: TYPE_NORMAL
+  zh: '**图 12.7 在测试图像上运行 DeepDream 代码**'
 - en: I strongly suggest that you explore what you can do by adjusting which layers
     you use in your loss. Layers that are lower in the network contain more-local,
     less-abstract representations and lead to dream patterns that look more geometric.
@@ -2735,42 +2947,51 @@
   id: totrans-493
   prefs: []
   type: TYPE_NORMAL
+  zh: 我强烈建议您通过调整使用的损失中的哪些层来探索可以做什么。网络中较低的层包含更本地化、不太抽象的表示，并导致看起来更几何化的梦幻图案。位于较高位置的层会导致更具可识别性的视觉模式，基于ImageNet中发现的最常见的对象，例如狗的眼睛、鸟的羽毛等。您可以使用
+    layer_settings 向量中参数的随机生成快速探索许多不同的层组合。[图 12.8](#fig12-8) 展示了在使用不同层配置的图像上获得的一系列结果。
 - en: 12.2.2 Wrapping up
   id: totrans-494
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 12.2.2 总结
 - en: DeepDream consists of running a convnet in reverse to generate inputs based
     on the representations learned by the network.
   id: totrans-495
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: DeepDream 包括运行卷积网络的逆向过程，以根据网络学到的表示生成输入。
 - en: The results produced are fun and somewhat similar to the visual artifacts induced
     in humans by the disruption of the visual cortex via psychedelics.
   id: totrans-496
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 生成的结果有趣且在某种程度上类似于通过致幻剂扰乱视觉皮层而在人类中引发的视觉现象。
 - en: Note that the process isn’t specific to image models or even to convnets. It
     can be done for speech, music, and more.
   id: totrans-497
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 请注意，这个过程不限于图像模型，甚至不限于卷积网络。它可以用于语音、音乐等。
 - en: '![Image](../images/f0422-01.jpg)'
   id: totrans-498
   prefs: []
   type: TYPE_IMG
+  zh: '![图片](../images/f0422-01.jpg)'
 - en: '**Figure 12.8 Trying a range of DeepDream configurations on an example image**'
   id: totrans-499
   prefs: []
   type: TYPE_NORMAL
+  zh: '**图 12.8 在示例图像上尝试一系列 DeepDream 配置**'
 - en: 12.3 Neural style transfer
   id: totrans-500
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 12.3 神经风格迁移
 - en: In addition to DeepDream, another major development in deep-learning-driven
     image modification is *neural style transfer*, introduced by Leon Gatys et al.
     in the summer of 2015.^([4](#Rendnote4)) The neural style transfer algorithm has
@@ -2780,20 +3001,25 @@
   id: totrans-501
   prefs: []
   type: TYPE_NORMAL
+  zh: 除了 DeepDream，深度学习驱动的图像修改的另一个重要发展是*神经风格迁移*，由Leon Gatys等人在2015年夏天引入。^([4](#Rendnote4))
+    神经风格迁移算法自原始引入以来经历了许多改进，并产生了许多变体，并且已经应用到许多智能手机照片应用中。为简单起见，本节重点介绍了原始论文中描述的公式。
 - en: Neural style transfer consists of applying the style of a reference image to
     a target image while conserving the content of the target image. [Figure 12.9](#fig12-9)
     shows an example.
   id: totrans-502
   prefs: []
   type: TYPE_NORMAL
+  zh: 神经风格迁移包括将参考图像的风格应用到目标图像上，同时保留目标图像的内容。[图 12.9](#fig12-9) 展示了一个例子。
 - en: '![Image](../images/f0422-02.jpg)'
   id: totrans-503
   prefs: []
   type: TYPE_IMG
+  zh: '![图片](../images/f0422-02.jpg)'
 - en: '**Figure 12.9 A style transfer example**'
   id: totrans-504
   prefs: []
   type: TYPE_NORMAL
+  zh: '**图 12.9 一个风格迁移的例子**'
 - en: In this context, *style* essentially means textures, colors, and visual patterns
     in the image, at various spatial scales, and the content is the higher-level macrostructure
     of the image. For instance, blue-and-yellow circular brushstrokes are considered
@@ -2802,6 +3028,7 @@
   id: totrans-505
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这个语境中，*风格* 实质上意味着图像中的纹理、颜色和视觉模式，以及不同空间尺度上的内容，而内容则是图像的更高级宏观结构。例如，[图 12.9](#fig12-9)（使用*星夜*的文森特·梵高）中的蓝色和黄色圆形笔触被认为是风格，而图宾根照片中的建筑被认为是内容。
 - en: The idea of style transfer, which is tightly related to that of texture generation,
     has had a long history in the image-processing community prior to the development
     of neural style transfer in 2015\. But as it turns out, the deep-learning-based
@@ -2811,6 +3038,7 @@
   id: totrans-506
   prefs: []
   type: TYPE_NORMAL
+  zh: 与纹理生成紧密相关的风格迁移的概念，在 2015 年神经风格迁移的发展之前，在图像处理社区中已经有了很长的历史。但事实证明，基于深度学习的风格迁移实现提供了无与伦比的结果，远远超过了以前通过经典计算机视觉技术所取得的成就，并引发了计算机视觉创意应用的惊人复兴。
 - en: 'The key notion behind implementing style transfer is the same idea that’s central
     to all deep learning algorithms: you define a loss function to specify what you
     want to achieve, and you minimize this loss. We know what we want to achieve:
@@ -2820,14 +3048,17 @@
   id: totrans-507
   prefs: []
   type: TYPE_NORMAL
+  zh: 实现风格迁移的关键概念与所有深度学习算法的核心思想相同：你定义一个损失函数来指定你想要实现的目标，并最小化这个损失。我们知道我们想要实现什么：保留原始图像的内容同时采用参考图像的风格。如果我们能够在数学上定义*内容*和*风格*，那么一个适当的最小化损失函数将是以下内容：
 - en: loss <— distance(style(reference_image) - style(combination_image)) +
   id: totrans-508
   prefs: []
   type: TYPE_NORMAL
+  zh: loss <— 距离(style(reference_image) - style(combination_image)) +
 - en: distance(content(original_image) - content(combination_image))
   id: totrans-509
   prefs: []
   type: TYPE_NORMAL
+  zh: 距离(content(original_image) - content(combination_image))
 - en: Here, distance() is a norm function such as the L2 norm, content() is a function
     that takes an image and computes a representation of its content, and style()
     is a function that takes an image and computes a representation of its style.
@@ -2837,17 +3068,20 @@
   id: totrans-510
   prefs: []
   type: TYPE_NORMAL
+  zh: 这里，distance() 是一个诸如 L2 范数的范数函数，content() 是一个接受图像并计算其内容表示的函数，style() 是一个接受图像并计算其风格表示的函数。最小化这个损失会导致style(combination_image)接近style(reference_image)，而content(combination_image)接近content(original_image)，从而实现我们定义的风格迁移。
 - en: A fundamental observation made by Gatys et al. was that deep convolutional neural
     networks offer a way to mathematically define the style and content functions.
     Let’s see how.
   id: totrans-511
   prefs: []
   type: TYPE_NORMAL
+  zh: Gatys 等人所做的一个基本观察是，深度卷积神经网络提供了一种数学定义风格和内容函数的方法。让我们看看如何做到这一点。
 - en: 12.3.1 The content loss
   id: totrans-512
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 12.3.1 内容损失
 - en: As you already know, activations from earlier layers in a network contain *local*
     information about the image, whereas activations from higher layers contain increasingly
     global, abstract information. Formulated in a different way, the activations of
@@ -2858,6 +3092,7 @@
   id: totrans-513
   prefs: []
   type: TYPE_NORMAL
+  zh: 正如你所了解的那样，网络中较早层的激活包含有关图像的*局部*信息，而较高层的激活包含越来越全局、抽象的信息。换句话说，卷积网络的不同层的激活提供了图像内容在不同空间尺度上的分解。因此，你会期望图像的内容，即更全局和抽象的部分，会被卷积网络中的上层表示所捕获。
 - en: A good candidate for content loss is thus the L2 norm between the activations
     of an upper layer in a pretrained convnet, computed over the target image, and
     the activations of the same layer computed over the generated image. This guarantees
@@ -2868,11 +3103,13 @@
   id: totrans-514
   prefs: []
   type: TYPE_NORMAL
+  zh: 因此，内容损失的一个很好的候选是预训练卷积网络中上层的激活之间的 L2 范数，计算在目标图像上，以及在生成的图像上计算相同层的激活。这确保了，从上层看，生成的图像看起来与原始目标图像相似。假设卷积网络的上层看到的确实是其输入图像的内容，那么这就作为一种保留图像内容的方法。
 - en: 12.3.2 The style loss
   id: totrans-515
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 12.3.2 风格损失
 - en: 'The content loss uses only a single upper layer, but the style loss as defined
     by Gatys et al. uses multiple layers of a convnet: you try to capture the appearance
     of the style-reference image at all spatial scales extracted by the convnet, not
@@ -2885,6 +3122,7 @@
   id: totrans-516
   prefs: []
   type: TYPE_NORMAL
+  zh: 内容损失仅使用单个上层，但由Gatys等人定义的风格损失使用卷积神经网络的多个层：您尝试捕获卷积神经网络提取的所有空间尺度的样式参考图像的外观，而不仅仅是一个单一尺度。对于风格损失，Gatys等人使用一个层激活的*Gram矩阵*：给定层的特征图的内积。这个内积可以理解为表示层特征之间的关联的地图。这些特征相关性捕获了特定空间尺度的模式的统计信息，这些模式在经验上对应于在这个尺度上发现的纹理的外观。
 - en: Hence, the style loss aims to preserve similar internal correlations within
     the activations of different layers, across the style-reference image and the
     generated image. In turn, this guarantees that the textures found at different
@@ -2893,11 +3131,13 @@
   id: totrans-517
   prefs: []
   type: TYPE_NORMAL
+  zh: 因此，风格损失旨在保留不同层次内部激活之间的相似内部关联，在样式参考图像和生成图像之间。反过来，这保证了在样式参考图像和生成图像之间看起来相似的不同空间尺度的纹理。
 - en: 'In short, you can use a pretrained convnet to define a loss that will do the
     following:'
   id: totrans-518
   prefs: []
   type: TYPE_NORMAL
+  zh: 简而言之，您可以使用预训练的卷积神经网络来定义以下损失：
 - en: Preserve content by maintaining similar high-level layer activations between
     the original image and the generated image. The convnet should “see” both the
     original image and the generated image as containing the same things.
@@ -2905,6 +3145,7 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 通过保持原始图像和生成图像之间的类似高级层激活来保留内容。卷积神经网络应该“看到”原始图像和生成图像中包含相同的内容。
 - en: 'Preserve style by maintaining similar *correlations* within activations for
     both low-level layers and high-level layers. Feature correlations capture *textures*:
     the generated image and the style-reference image should share the same textures
@@ -2913,17 +3154,20 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 通过保持低层和高层激活中的相似*相关性*来保留样式。特征相关性捕获*纹理*：生成图像和样式参考图像应该在不同的空间尺度上共享相同的纹理。
 - en: Now let’s look at a Keras implementation of the original 2015 neural style transfer
     algorithm. As you’ll see, it shares many similarities with the DeepDream implementation
     we developed in the previous section.
   id: totrans-521
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在让我们看一下原始的2015年神经风格迁移算法的Keras实现。正如你将看到的那样，它与我们在前一节中开发的DeepDream实现有许多相似之处。
 - en: 12.3.3 Neural style transfer in Keras
   id: totrans-522
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 12.3.3 Keras中的神经风格迁移
 - en: 'Neural style transfer can be implemented using any pretrained convnet. Here,
     we’ll use the VGG19 network used by Gatys et al. VGG19 is a simple variant of
     the VGG16 network introduced in chapter 5, with three more convolutional layers.
@@ -2931,23 +3175,27 @@
   id: totrans-523
   prefs: []
   type: TYPE_NORMAL
+  zh: 神经风格迁移可以使用任何预训练的卷积神经网络来实现。在这里，我们将使用Gatys等人使用的VGG19网络。VGG19是VGG16网络的一个简单变体，引入了三个额外的卷积层。以下是一般过程：
 - en: Set up a network that computes VGG19 layer activations for the style-reference
     image, the base image, and the generated image at the same time.
   id: totrans-524
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 设置一个网络，同时计算样式参考图像、基础图像和生成图像的VGG19层激活。
 - en: Use the layer activations computed over these three images to define the loss
     function described earlier, which we’ll minimize to achieve style transfer.
   id: totrans-525
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用在这三个图像上计算的层激活来定义先前描述的损失函数，我们将最小化它以实现风格迁移。
 - en: Set up a gradient-descent process to minimize this loss function.
   id: totrans-526
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 设置一个梯度下降过程来最小化这个损失函数。
 - en: Let’s start by defining the paths to the style-reference image and the base
     image. To make sure that the processed images are a similar size (widely different
     sizes make style transfer more difficult), we’ll later resize them all to a shared
@@ -2955,237 +3203,294 @@
   id: totrans-527
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们从定义样式参考图像和基础图像的路径开始。为了确保处理后的图像具有相似的大小（大小差异很大会使风格迁移更加困难），我们将稍后将它们全部调整为共享高度为400像素。
 - en: Listing 12.16 Getting the style and content images
   id: totrans-528
   prefs: []
   type: TYPE_NORMAL
+  zh: 列表 12.16 获取风格和内容图像
 - en: base_image_path <— get_file(➊
   id: totrans-529
   prefs: []
   type: TYPE_NORMAL
+  zh: base_image_path <— get_file(➊
 - en: '"sf.jpg", origin = "https://img-datasets.s3.amazonaws.com/sf.jpg")'
   id: totrans-530
   prefs: []
   type: TYPE_NORMAL
+  zh: '"sf.jpg"，origin = "https://img-datasets.s3.amazonaws.com/sf.jpg")'
 - en: style_reference_image_path <— get_file(➋
   id: totrans-531
   prefs: []
   type: TYPE_NORMAL
+  zh: style_reference_image_path <— get_file(➋
 - en: '"starry_night.jpg",'
   id: totrans-532
   prefs: []
   type: TYPE_NORMAL
+  zh: '"starry_night.jpg",'
 - en: origin = "https://img-datasets.s3.amazonaws.com/starry_night.jpg")
   id: totrans-533
   prefs: []
   type: TYPE_NORMAL
+  zh: origin = "https://img-datasets.s3.amazonaws.com/starry_night.jpg")
 - en: c(original_height, original_width) %<—% {
   id: totrans-534
   prefs: []
   type: TYPE_NORMAL
+  zh: c(original_height, original_width) %<—% {
 - en: base_image_path %>%
   id: totrans-535
   prefs: []
   type: TYPE_NORMAL
+  zh: base_image_path %>%
 - en: tf$io$read_file() %>%
   id: totrans-536
   prefs: []
   type: TYPE_NORMAL
+  zh: tf$io$read_file() %>%
 - en: tf$io$decode_image() %>%
   id: totrans-537
   prefs: []
   type: TYPE_NORMAL
+  zh: tf$io$decode_image() %>%
 - en: dim() %>% .[1:2]
   id: totrans-538
   prefs: []
   type: TYPE_NORMAL
+  zh: dim() %>% .[1:2]
 - en: '}'
   id: totrans-539
   prefs: []
   type: TYPE_NORMAL
+  zh: '}'
 - en: img_height <— 400➌
   id: totrans-540
   prefs: []
   type: TYPE_NORMAL
+  zh: img_height <— 400➌
 - en: img_width <— round(img_height * (original_width / original_height))➌
   id: totrans-541
   prefs: []
   type: TYPE_NORMAL
+  zh: img_width <— round(img_height * (original_width / original_height))➌
 - en: ➊ **Path to the image we want to transform**
   id: totrans-542
   prefs: []
   type: TYPE_NORMAL
+  zh: ➊ **我们想要转换的图像的路径**
 - en: ➋ **Path to the style image**
   id: totrans-543
   prefs: []
   type: TYPE_NORMAL
+  zh: ➋ **风格图片的路径**
 - en: ➌ **Dimensions of the generated picture**
   id: totrans-544
   prefs: []
   type: TYPE_NORMAL
+  zh: ➌ **生成图片的尺寸**
 - en: Our content image is shown in [figure 12.10](#fig12-10), and [figure 12.11](#fig12-11)
     shows our style image.
   id: totrans-545
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们的内容图片显示在[图 12.10](#fig12-10)，而[图 12.11](#fig12-11)显示了我们的风格图片。
 - en: '![Image](../images/f0425-01.jpg)'
   id: totrans-546
   prefs: []
   type: TYPE_IMG
+  zh: '![图片](../images/f0425-01.jpg)'
 - en: '**Figure 12.10 Content image: San Francisco from Nob Hill**'
   id: totrans-547
   prefs: []
   type: TYPE_NORMAL
+  zh: '**图 12.10 内容图片：旧金山诺布山**'
 - en: '![Image](../images/f0426-01.jpg)'
   id: totrans-548
   prefs: []
   type: TYPE_IMG
+  zh: '![图片](../images/f0426-01.jpg)'
 - en: '**Figure 12.11 Style image: *Starry Night* by van Gogh**'
   id: totrans-549
   prefs: []
   type: TYPE_NORMAL
+  zh: '**图 12.11 风格图片：*星夜*，梵高**'
 - en: We also need some auxiliary functions for loading, preprocessing, and postprocessing
     the images that go in and out of the VGG19 convnet.
   id: totrans-550
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们还需要一些用于加载、预处理和后处理进入和退出VGG19卷积网络的图像的辅助函数。
 - en: '**Listing 12.17 Auxiliary functions**'
   id: totrans-551
   prefs: []
   type: TYPE_NORMAL
+  zh: '**清单 12.17 辅助函数**'
 - en: preprocess_image <— function(image_path) {➊
   id: totrans-552
   prefs: []
   type: TYPE_NORMAL
+  zh: preprocess_image <— function(image_path) {➊
 - en: image_path %>%
   id: totrans-553
   prefs: []
   type: TYPE_NORMAL
+  zh: image_path %>%
 - en: tf$io$read_file() %>%
   id: totrans-554
   prefs: []
   type: TYPE_NORMAL
+  zh: tf$io$read_file() %>%
 - en: tf$io$decode_image() %>%
   id: totrans-555
   prefs: []
   type: TYPE_NORMAL
+  zh: tf$io$decode_image() %>%
 - en: tf$image$resize(as.integer(c(img_height, img_width))) %>%
   id: totrans-556
   prefs: []
   type: TYPE_NORMAL
+  zh: tf$image$resize(as.integer(c(img_height, img_width))) %>%
 - en: k_expand_dims(axis = 1) %>%➋
   id: totrans-557
   prefs: []
   type: TYPE_NORMAL
+  zh: k_expand_dims(axis = 1) %>%➋
 - en: imagenet_preprocess_input()
   id: totrans-558
   prefs: []
   type: TYPE_NORMAL
+  zh: imagenet_preprocess_input()
 - en: '}'
   id: totrans-559
   prefs: []
   type: TYPE_NORMAL
+  zh: '}'
 - en: deprocess_image <— tf_function(function(img) {➌
   id: totrans-560
   prefs: []
   type: TYPE_NORMAL
+  zh: deprocess_image <— tf_function(function(img) {➌
 - en: if (length(dim(img)) == 4)
   id: totrans-561
   prefs: []
   type: TYPE_NORMAL
+  zh: if (length(dim(img)) == 4)
 - en: img <— k_squeeze(img, axis = 1)➍
   id: totrans-562
   prefs: []
   type: TYPE_NORMAL
+  zh: img <— k_squeeze(img, axis = 1)➍
 - en: c(b, g, r) %<—% {
   id: totrans-563
   prefs: []
   type: TYPE_NORMAL
+  zh: c(b, g, r) %<—% {
 - en: img %>%
   id: totrans-564
   prefs: []
   type: TYPE_NORMAL
+  zh: img %>%
 - en: k_reshape(c(img_height, img_width, 3)) %>%
   id: totrans-565
   prefs: []
   type: TYPE_NORMAL
+  zh: k_reshape(c(img_height, img_width, 3)) %>%
 - en: k_unstack(axis = 3)➎
   id: totrans-566
   prefs: []
   type: TYPE_NORMAL
+  zh: k_unstack(axis = 3)➎
 - en: '}'
   id: totrans-567
   prefs: []
   type: TYPE_NORMAL
+  zh: '}'
 - en: r %<>% `+`(123.68)➏
   id: totrans-568
   prefs: []
   type: TYPE_NORMAL
+  zh: r %<>% `+`(123.68)➏
 - en: g %<>% `+`(103.939)➏
   id: totrans-569
   prefs: []
   type: TYPE_NORMAL
+  zh: g %<>% `+`(103.939)➏
 - en: b %<>% `+`(116.779)➏
   id: totrans-570
   prefs: []
   type: TYPE_NORMAL
+  zh: b %<>% `+`(116.779)➏
 - en: k_stack(c(r, g, b), axis = 3) %>%➐
   id: totrans-571
   prefs: []
   type: TYPE_NORMAL
+  zh: k_stack(c(r, g, b), axis = 3) %>%➐
 - en: k_clip(0, 255) %>%
   id: totrans-572
   prefs: []
   type: TYPE_NORMAL
+  zh: k_clip(0, 255) %>%
 - en: k_cast("uint8")
   id: totrans-573
   prefs: []
   type: TYPE_NORMAL
+  zh: k_cast("uint8")
 - en: '})'
   id: totrans-574
   prefs: []
   type: TYPE_NORMAL
+  zh: '})'
 - en: ➊ **Util function to open, resize, and format pictures into appropriate arrays**
   id: totrans-575
   prefs: []
   type: TYPE_NORMAL
+  zh: ➊ **打开、调整大小和将图片格式化为适当的数组的实用函数**
 - en: ➋ **Add a batch dimension.**
   id: totrans-576
   prefs: []
   type: TYPE_NORMAL
+  zh: ➋ **添加一个批次维度。**
 - en: ➌ **Util function to convert a tensor into a valid image**
   id: totrans-577
   prefs: []
   type: TYPE_NORMAL
+  zh: ➌ **将张量转换为有效图像的实用函数**
 - en: ➍ **Also accept an image with a batch-dim of size 1. (This will throw an error
     if the first axis is not size 1.)**
   id: totrans-578
   prefs: []
   type: TYPE_NORMAL
+  zh: ➍ **还接受批次维度大小为1的图像。（如果第一个轴不是大小为1，则会引发错误。）**
 - en: ➎ **Unstack along the third axis, and return a list of length 3.**
   id: totrans-579
   prefs: []
   type: TYPE_NORMAL
+  zh: ➎ **沿第三个轴拆分，并返回长度为3的列表。**
 - en: ➏ **Zero-center by removing the mean pixel value from ImageNet. This reverses
     a transformation done by imagenet_preprocess_input().**
   id: totrans-580
   prefs: []
   type: TYPE_NORMAL
+  zh: ➏ **通过从ImageNet中移除平均像素值来将图像零居中。这是对imagenet_preprocess_input()执行的转换的逆操作。**
 - en: ➐ **Note that we're reversing the order of the channels, BGR to RGB. This is
     also part of the reversal of imagenet_preprocess_input().**
   id: totrans-581
   prefs: []
   type: TYPE_NORMAL
+  zh: ➐ **请注意，我们正在颠倒通道的顺序，从BGR到RGB。这也是imagenet_preprocess_input()的反转的一部分。**
 - en: Keras backend functions (k_*)
   id: totrans-582
   prefs: []
   type: TYPE_NORMAL
+  zh: Keras后端函数（k_*）
 - en: In this version of preprocess_image() and deprocess_image(), we used Keras backend
     functions, like k_expand_dims() but in earlier versions, we used functions from
     the tf module, like tf$expand_dims(). What’s the difference?
   id: totrans-583
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这个版本的preprocess_image()和deprocess_image()中，我们使用了Keras后端函数，比如k_expand_dims()，但在早期版本中，我们使用了tf模块中的函数，比如tf$expand_dims()。有什么区别呢？
 - en: The Keras package contains an extensive suite of backend functions, all starting
     with the k_ prefix. They are a vestige from a time when the Keras library was
     designed to work with multiple backends. Today it’s more common to call directly
@@ -3197,6 +3502,8 @@
   id: totrans-584
   prefs: []
   type: TYPE_NORMAL
+  zh: Keras包含一套广泛的后端函数，全部以k_前缀开头。它们是Keras库设计为与多个后端一起使用时的遗留物。如今更常见的是直接调用tf模块中的函数，这些函数通常暴露更多的功能和能力。然而，keras::k_后端函数的一个好处是它们全部是基于1的，并且通常会根据需要自动将函数参数强制转换为整数。例如，k_expand_dims(axis
+    = 1)等同于tf$expand_dims(axis = 0L)。
 - en: The backend functions are no longer actively developed, but they are covered
     by the TensorFlow stability promise, are maintained, and will not be going away
     anytime soon. You can safely use functions like k_expand_dims(), k_squeeze(),
@@ -3395,6 +3702,7 @@
   id: totrans-629
   prefs: []
   type: TYPE_NORMAL
+  zh: 你最小化的损失是这三种损失的加权平均值。为了计算内容损失，你只使用一个较高的层——block5_conv2层——而对于风格损失，你使用一个跨越低层和高层的层列表。你在最后添加了总变差损失。
 - en: Depending on the style-reference image and content image you’re using, you’ll
     likely want to tune the content_weight coefficient (the contribution of the content
     loss to the total loss). A higher content_weight means the target content will
@@ -3402,218 +3710,272 @@
   id: totrans-630
   prefs: []
   type: TYPE_NORMAL
+  zh: 根据你使用的风格参考图像和内容图像，你可能希望调整content_weight系数（内容损失对总损失的贡献）。较高的content_weight意味着生成图像中的目标内容将更容易被识别。
 - en: Listing 12.22 Defining the final loss that you’ll minimize
   id: totrans-631
   prefs: []
   type: TYPE_NORMAL
+  zh: 清单12.22 定义你将最小化的最终损失
 - en: style_layer_names <— c(➊
   id: totrans-632
   prefs: []
   type: TYPE_NORMAL
+  zh: style_layer_names <— c(➊
 - en: '"block1_conv1",'
   id: totrans-633
   prefs: []
   type: TYPE_NORMAL
+  zh: '"block1_conv1",'
 - en: '"block2_conv1",'
   id: totrans-634
   prefs: []
   type: TYPE_NORMAL
+  zh: '"block2_conv1",'
 - en: '"block3_conv1",'
   id: totrans-635
   prefs: []
   type: TYPE_NORMAL
+  zh: '"block3_conv1",'
 - en: '"block4_conv1",'
   id: totrans-636
   prefs: []
   type: TYPE_NORMAL
+  zh: '"block4_conv1",'
 - en: '"block5_conv1"'
   id: totrans-637
   prefs: []
   type: TYPE_NORMAL
+  zh: '"block5_conv1"'
 - en: )
   id: totrans-638
   prefs: []
   type: TYPE_NORMAL
+  zh: )
 - en: content_layer_name <— "block5_conv2"➋
   id: totrans-639
   prefs: []
   type: TYPE_NORMAL
+  zh: content_layer_name <— "block5_conv2"➋
 - en: total_variation_weight <— 1e—6➌
   id: totrans-640
   prefs: []
   type: TYPE_NORMAL
+  zh: total_variation_weight <— 1e—6➌
 - en: content_weight <— 2.5e—8➍
   id: totrans-641
   prefs: []
   type: TYPE_NORMAL
+  zh: content_weight <— 2.5e—8➍
 - en: style_weight <— 1e—6➎
   id: totrans-642
   prefs: []
   type: TYPE_NORMAL
+  zh: style_weight <— 1e—6➎
 - en: compute_loss <
   id: totrans-643
   prefs: []
   type: TYPE_NORMAL
+  zh: 计算损失 <
 - en: function(combination_image, base_image, style_reference_image) {
   id: totrans-644
   prefs: []
   type: TYPE_NORMAL
+  zh: 函数(组合图像, 基准图像, 风格参考图像) {
 - en: input_tensor <
   id: totrans-645
   prefs: []
   type: TYPE_NORMAL
+  zh: input_tensor <
 - en: list(base_image,
   id: totrans-646
   prefs: []
   type: TYPE_NORMAL
+  zh: 列表(基准图像,
 - en: style_reference_image,
   id: totrans-647
   prefs: []
   type: TYPE_NORMAL
+  zh: 风格参考图像,
 - en: combination_image) %>%
   id: totrans-648
   prefs: []
   type: TYPE_NORMAL
+  zh: combination_image) %>%
 - en: k_concatenate(axis = 1)
   id: totrans-649
   prefs: []
   type: TYPE_NORMAL
+  zh: k_concatenate(axis = 1)
 - en: features <— feature_extractor(input_tensor)
   id: totrans-650
   prefs: []
   type: TYPE_NORMAL
+  zh: 特征 <— 特征提取器(input_tensor)
 - en: layer_features <— features[[content_layer_name]]
   id: totrans-651
   prefs: []
   type: TYPE_NORMAL
+  zh: layer_features <— features[[content_layer_name]]
 - en: base_image_features <— layer_features[1, , , ]
   id: totrans-652
   prefs: []
   type: TYPE_NORMAL
+  zh: base_image_features <— layer_features[1, , , ]
 - en: combination_features <— layer_features[3, , , ]
   id: totrans-653
   prefs: []
   type: TYPE_NORMAL
+  zh: combination_features <— layer_features[3, , , ]
 - en: loss <— 0➏
   id: totrans-654
   prefs: []
   type: TYPE_NORMAL
+  zh: 损失 <— 0➏
 - en: loss %<>% `+`(➐
   id: totrans-655
   prefs: []
   type: TYPE_NORMAL
+  zh: 损失 %<>% `+`(➐
 - en: content_loss(base_image_features, combination_features) *
   id: totrans-656
   prefs: []
   type: TYPE_NORMAL
+  zh: 内容损失(基准图像特征, 组合特征) *
 - en: content_weight
   id: totrans-657
   prefs: []
   type: TYPE_NORMAL
+  zh: content_weight
 - en: )
   id: totrans-658
   prefs: []
   type: TYPE_NORMAL
+  zh: )
 - en: for (layer_name in style_layer_names) {
   id: totrans-659
   prefs: []
   type: TYPE_NORMAL
+  zh: for (layer_name in style_layer_names) {
 - en: layer_features <— features[[layer_name]]
   id: totrans-660
   prefs: []
   type: TYPE_NORMAL
+  zh: layer_features <— features[[layer_name]]
 - en: style_reference_features <— layer_features[2, , , ]
   id: totrans-661
   prefs: []
   type: TYPE_NORMAL
+  zh: style_reference_features <— layer_features[2, , , ]
 - en: combination_features <— layer_features[3, , , ]
   id: totrans-662
   prefs: []
   type: TYPE_NORMAL
+  zh: combination_features <— layer_features[3, , , ]
 - en: loss %<>% `+`(➑
   id: totrans-663
   prefs: []
   type: TYPE_NORMAL
+  zh: 损失 %<>% `+`(➑
 - en: style_loss(style_reference_features, combination_features) *
   id: totrans-664
   prefs: []
   type: TYPE_NORMAL
+  zh: 风格损失(风格参考特征, 组合特征) *
 - en: style_weight / length(style_layer_names)
   id: totrans-665
   prefs: []
   type: TYPE_NORMAL
+  zh: 风格权重 / 长度(风格层名称)
 - en: )
   id: totrans-666
   prefs: []
   type: TYPE_NORMAL
+  zh: )
 - en: '}'
   id: totrans-667
   prefs: []
   type: TYPE_NORMAL
+  zh: '}'
 - en: loss %<>% `+`(➒
   id: totrans-668
   prefs: []
   type: TYPE_NORMAL
+  zh: 损失 %<>% `+`(➒
 - en: total_variation_loss(combination_image) *
   id: totrans-669
   prefs: []
   type: TYPE_NORMAL
+  zh: 总变差损失(组合图像) *
 - en: total_variation_weight
   id: totrans-670
   prefs: []
   type: TYPE_NORMAL
+  zh: total_variation_weight
 - en: )
   id: totrans-671
   prefs: []
   type: TYPE_NORMAL
+  zh: )
 - en: loss➓
   id: totrans-672
   prefs: []
   type: TYPE_NORMAL
+  zh: 损失➓
 - en: '}'
   id: totrans-673
   prefs: []
   type: TYPE_NORMAL
+  zh: '}'
 - en: ➊ **The list of layers to use for the style loss**
   id: totrans-674
   prefs: []
   type: TYPE_NORMAL
+  zh: ➊ **用于风格损失的层列表**
 - en: ➋ **The layer to use for the content loss**
   id: totrans-675
   prefs: []
   type: TYPE_NORMAL
+  zh: ➋ **用于内容损失的层**
 - en: ➌ **The contribution weight of the total variation loss**
   id: totrans-676
   prefs: []
   type: TYPE_NORMAL
+  zh: ➌ **总变差损失的贡献权重**
 - en: ➍ **The contribution weight of the content loss**
   id: totrans-677
   prefs: []
   type: TYPE_NORMAL
+  zh: ➍ **内容损失的贡献权重**
 - en: ➎ **The contribution weight of the style loss**
   id: totrans-678
   prefs: []
   type: TYPE_NORMAL
+  zh: ➎ **风格损失的贡献权重**
 - en: ➏ **Initialize the loss to 0.**
   id: totrans-679
   prefs: []
   type: TYPE_NORMAL
+  zh: ➏ **将损失初始化为0。**
 - en: ➐ **Add the content loss.**
   id: totrans-680
   prefs: []
   type: TYPE_NORMAL
+  zh: ➐ **添加内容损失。**
 - en: ➑ **Add the style loss for each style layer.**
   id: totrans-681
   prefs: []
   type: TYPE_NORMAL
+  zh: ➑ **为每个风格层添加风格损失。**
 - en: ➒ **Add the total variation loss.**
   id: totrans-682
   prefs: []
   type: TYPE_NORMAL
+  zh: ➒ **添加总变差损失。**
 - en: ➓ **Return the sum of content loss, style loss, and total variation loss.**
   id: totrans-683
   prefs: []
   type: TYPE_NORMAL
+  zh: ➓ **返回内容损失、风格损失和总变差损失的总和。**
 - en: 'Finally, let’s set up the gradient—descent process. In the original Gatys et
     al. paper, optimization is performed using the L—BFGS algorithm, but that’s not
     available in Tensor-Flow, so we’ll just do mini—batch gradient descent with the
@@ -3625,169 +3987,210 @@
   id: totrans-684
   prefs: []
   type: TYPE_NORMAL
+  zh: 最后，让我们设置梯度下降过程。在原始的Gatys等人的论文中，优化是使用L-BFGS算法进行的，但在TensorFlow中不可用，所以我们将使用SGD优化器进行小批量梯度下降。我们将利用一个你以前没有见过的优化器特性：学习率调度。我们将逐渐减小学习率，从一个非常高的值（100）到一个更小的最终值（约为20）。这样，我们将在训练的早期阶段取得快速进展，然后在接近损失最小值时更加谨慎地进行。
 - en: Listing 12.23 Setting up the gradient-descent process
   id: totrans-685
   prefs: []
   type: TYPE_NORMAL
+  zh: 清单12.23 设置梯度下降过程
 - en: compute_loss_and_grads <— tf_function(➊
   id: totrans-686
   prefs: []
   type: TYPE_NORMAL
+  zh: 计算损失和梯度 <— tf_function(➊
 - en: function(combination_image, base_image, style_reference_image) {
   id: totrans-687
   prefs: []
   type: TYPE_NORMAL
+  zh: 函数(组合图像, 基准图像, 风格参考图像) {
 - en: with(tf$GradientTape() %as% tape, {
   id: totrans-688
   prefs: []
   type: TYPE_NORMAL
+  zh: with(tf$GradientTape() %as% tape, {
 - en: loss <— compute_loss(combination_image,
   id: totrans-689
   prefs: []
   type: TYPE_NORMAL
+  zh: loss <— compute_loss(combination_image,
 - en: base_image,
   id: totrans-690
   prefs: []
   type: TYPE_NORMAL
+  zh: base_image,
 - en: style_reference_image)
   id: totrans-691
   prefs: []
   type: TYPE_NORMAL
+  zh: style_reference_image)
 - en: '})'
   id: totrans-692
   prefs: []
   type: TYPE_NORMAL
+  zh: '})'
 - en: grads <— tape$gradient(loss, combination_image)
   id: totrans-693
   prefs: []
   type: TYPE_NORMAL
+  zh: grads <— tape$gradient(loss, combination_image)
 - en: list(loss, grads)
   id: totrans-694
   prefs: []
   type: TYPE_NORMAL
+  zh: list(loss, grads)
 - en: '})'
   id: totrans-695
   prefs: []
   type: TYPE_NORMAL
+  zh: '})'
 - en: optimizer <— optimizer_sgd(
   id: totrans-696
   prefs: []
   type: TYPE_NORMAL
+  zh: optimizer <— optimizer_sgd(
 - en: learning_rate_schedule_exponential_decay(
   id: totrans-697
   prefs: []
   type: TYPE_NORMAL
+  zh: learning_rate_schedule_exponential_decay(
 - en: initial_learning_rate = 100, decay_steps = 100,➋
   id: totrans-698
   prefs: []
   type: TYPE_NORMAL
+  zh: initial_learning_rate = 100, decay_steps = 100,➋
 - en: decay_rate = 0.96))➋
   id: totrans-699
   prefs: []
   type: TYPE_NORMAL
+  zh: decay_rate = 0.96))➋
 - en: base_image <— preprocess_image(base_image_path)
   id: totrans-700
   prefs: []
   type: TYPE_NORMAL
+  zh: base_image <— preprocess_image(base_image_path)
 - en: style_reference_image <— preprocess_image(style_reference_image_path)
   id: totrans-701
   prefs: []
   type: TYPE_NORMAL
+  zh: style_reference_image <— preprocess_image(style_reference_image_path)
 - en: combination_image <
   id: totrans-702
   prefs: []
   type: TYPE_NORMAL
+  zh: combination_image <
 - en: tf$Variable(preprocess_image(base_image_path))➌
   id: totrans-703
   prefs: []
   type: TYPE_NORMAL
+  zh: tf$Variable(preprocess_image(base_image_path))➌
 - en: output_dir <— fs::path("style-transfer-generated-images")
   id: totrans-704
   prefs: []
   type: TYPE_NORMAL
+  zh: output_dir <— fs::path("style-transfer-generated-images")
 - en: iterations <— 4000
   id: totrans-705
   prefs: []
   type: TYPE_NORMAL
+  zh: iterations <— 4000
 - en: for (i in seq(iterations)) {
   id: totrans-706
   prefs: []
   type: TYPE_NORMAL
+  zh: for (i in seq(iterations)) {
 - en: c(loss, grads) %<—% compute_loss_and_grads(
   id: totrans-707
   prefs: []
   type: TYPE_NORMAL
+  zh: c(loss, grads) %<—% compute_loss_and_grads(
 - en: combination_image, base_image, style_reference_image)
   id: totrans-708
   prefs: []
   type: TYPE_NORMAL
+  zh: combination_image, base_image, style_reference_image)
 - en: optimizer$apply_gradients(list(➍
   id: totrans-709
   prefs: []
   type: TYPE_NORMAL
+  zh: optimizer$apply_gradients(list(➍
 - en: tuple(grads, combination_image)))
   id: totrans-710
   prefs: []
   type: TYPE_NORMAL
+  zh: tuple(grads, combination_image)))
 - en: if ((i %% 100) == 0) {
   id: totrans-711
   prefs: []
   type: TYPE_NORMAL
+  zh: if ((i %% 100) == 0) {
 - en: 'cat(sprintf("Iteration %i: loss = %.2f\n", i, loss))'
   id: totrans-712
   prefs: []
   type: TYPE_NORMAL
+  zh: cat(sprintf("迭代第%i次：损失 = %.2f\n", i, loss))
 - en: img <— deprocess_image(combination_image)
   id: totrans-713
   prefs: []
   type: TYPE_NORMAL
+  zh: img <— deprocess_image(combination_image)
 - en: display_image_tensor(img)
   id: totrans-714
   prefs: []
   type: TYPE_NORMAL
+  zh: display_image_tensor(img)
 - en: fname <— sprintf("combination_image_at_iteration_%04i.png", i)
   id: totrans-715
   prefs: []
   type: TYPE_NORMAL
+  zh: fname <— sprintf("combination_image_at_iteration_%04i.png", i)
 - en: tf$io$write_file(filename = output_dir / fname,➎
   id: totrans-716
   prefs: []
   type: TYPE_NORMAL
+  zh: tf$io$write_file(filename = output_dir / fname,➎
 - en: contents = tf$io$encode_png(img))
   id: totrans-717
   prefs: []
   type: TYPE_NORMAL
+  zh: contents = tf$io$encode_png(img))
 - en: '}'
   id: totrans-718
   prefs: []
   type: TYPE_NORMAL
+  zh: '}'
 - en: '}'
   id: totrans-719
   prefs: []
   type: TYPE_NORMAL
+  zh: '}'
 - en: ➊ **We make the training step fast by compiling it as a tf_function().**
   id: totrans-720
   prefs: []
   type: TYPE_NORMAL
+  zh: ➊ **我们通过将训练步骤编译为tf_function()来加快训练速度。**
 - en: ➋ **We'll start with a learning rate of 100 and decrease it by 4% every 100
     steps.**
   id: totrans-721
   prefs: []
   type: TYPE_NORMAL
+  zh: ➋ **我们将从学习率100开始，并在每100步时将其减少4%。**
 - en: ➌ **Use a tf$Variable() to store the combination image because we'll be updating
     it during training.**
   id: totrans-722
   prefs: []
   type: TYPE_NORMAL
+  zh: ➌ **使用tf$Variable()存储组合图像，因为我们将在训练过程中更新它。**
 - en: ➍ **Update the combination image in a direction that reduces the style transfer
     loss.**
   id: totrans-723
   prefs: []
   type: TYPE_NORMAL
+  zh: ➍ **在减少样式转移损失方向上更新组合图像。**
 - en: ➎ **Save the combination image at regular intervals.**
   id: totrans-724
   prefs: []
   type: TYPE_NORMAL
+  zh: ➎ **定期保存组合图像。**
 - en: '[Figure 12.12](#fig12-12) shows what you get. Keep in mind that what this technique
     achieves is merely a form of image retexturing, or texture transfer. It works
     best with style—reference images that are strongly textured and highly self-similar,
@@ -3798,14 +4201,17 @@
   id: totrans-725
   prefs: []
   type: TYPE_NORMAL
+  zh: '[图12.12](#fig12-12)展示了您将获得的结果。请记住，这种技术实现的仅仅是一种图像重纹理或纹理转移的形式。它最适合具有强烈纹理和高自相似性的风格参考图像以及不需要高细节级别才能识别的内容目标。它通常无法实现诸如将一个肖像的风格转移到另一个肖像之类的相当抽象的能力。该算法更接近于经典信号处理而不是人工智能，因此不要期望它像魔术一样起作用！'
 - en: '![Image](../images/f0431-01.jpg)'
   id: totrans-726
   prefs: []
   type: TYPE_IMG
+  zh: '![Image](../images/f0431-01.jpg)'
 - en: '**Figure 12.12 Style transfer result**'
   id: totrans-727
   prefs: []
   type: TYPE_NORMAL
+  zh: '**图12.12 风格转移结果**'
 - en: 'Additionally, note that this style-transfer algorithm is slow to run. But the
     transformation operated by the setup is simple enough that it can be learned by
     a small, fast feed-forward convnet as well—as long as you have appropriate training
@@ -3817,44 +4223,52 @@
   id: totrans-728
   prefs: []
   type: TYPE_NORMAL
+  zh: 此外，请注意，这种样式转移算法运行速度较慢。但是通过这种设置操作的变换足够简单，以至于它可以被一个小型、快速的前向卷积网络学习，只要您有适当的训练数据可用。因此，首先通过使用此处概述的方法花费大量计算周期为固定风格参考图像生成输入-输出训练示例，然后训练一个简单的卷积网络来学习这种特定于风格的转换，就能实现快速风格转移。一旦完成，给定图像的风格化就是瞬间完成：只需对此小型卷积网络进行正向传递。
 - en: 12.3.4 Wrapping up
   id: totrans-729
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 12.3.4 结束
 - en: Style transfer consists of creating a new image that preserves the contents
     of a target image while also capturing the style of a reference image.
   id: totrans-730
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 样式转移包括创建一个新图像，保留目标图像的内容，同时捕捉参考图像的风格。
 - en: Content can be captured by the high-level activations of a convnet.
   id: totrans-731
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 内容可以通过卷积网络的高级激活来捕捉。
 - en: Style can be captured by the internal correlations of the activations of different
     layers of a convnet.
   id: totrans-732
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 风格可以通过卷积网络不同层的激活之间的内部相关性来捕捉。
 - en: Hence, deep learning allows style transfer to be formulated as an optimization
     process using a loss defined with a pretrained convnet.
   id: totrans-733
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 因此，深度学习使得风格迁移可以被形式化为使用预训练卷积网络定义的损失函数的优化过程。
 - en: Starting from this basic idea, many variants and refinements are possible.
   id: totrans-734
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 从这个基本思想出发，可以有很多变体和改进的可能性。
 - en: 12.4 Generating images with variational autoencoders
   id: totrans-735
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 12.4 使用变分自编码器生成图像
 - en: 'The most popular and successful application of creative AI today is image generation:
     learning latent visual spaces and sampling from them to create entirely new pictures
     interpolated from real ones—pictures of imaginary people, imaginary places, imaginary
@@ -3862,6 +4276,7 @@
   id: totrans-736
   prefs: []
   type: TYPE_NORMAL
+  zh: 当今创造性人工智能的最流行和最成功的应用就是图像生成：学习潜在的视觉空间，并从中进行采样，以从实际图像中插值出全新的图片，如虚构的人物、虚构的地方、虚构的猫和狗等等。
 - en: 'In this section and the next, we’ll review some high-level concepts pertaining
     to image generation, alongside implementation details relative to the two main
     techniques in this domain: *variational autoencoders* (VAEs) and *generative adversarial
@@ -3872,11 +4287,13 @@
   id: totrans-737
   prefs: []
   type: TYPE_NORMAL
+  zh: 在本节和下一节中，我们将回顾与图像生成相关的一些高级概念，以及与这个领域中的两种主要技术相关的实现细节：*变分自编码器*（VAEs）和*生成对抗网络*（GANs）。请注意，我在这里介绍的技术并不局限于图像，你可以使用GANs和VAEs开发音频、音乐甚至文本的潜在空间，但实际上，最有趣的结果是在图像领域获得的，这也是我们在这里的重点。
 - en: 12.4.1 Sampling from latent spaces of images
   id: totrans-738
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 12.4.1 从图像的潜在空间中采样
 - en: 'The key idea of image generation is to develop a low-dimensional *latent space*
     of representations (which, like everything else in deep learning, is a vector
     space), where any point can be mapped to a “valid” image: an image that looks
@@ -3889,15 +4306,19 @@
   id: totrans-739
   prefs: []
   type: TYPE_NORMAL
+  zh: 图像生成的关键思想是开发一个低维的*潜在空间*（就像深度学习中的其他所有东西一样，它是一个向量空间），任何点都可以映射到一个“有效”的图像：一个看起来像真实世界的图像。能够实现这种映射的模块，输入为潜在点，输出为图像（像素网格），被称为*生成器*（在GANs的情况下）或*解码器*（在VAEs的情况下）。一旦学习到这样一个潜在空间，你可以从中采样点，并通过将它们映射回图像空间，生成从未见过的图像（见
+    [图12.13](#fig12-13)）。这些新图像就是训练图像之间的中间过渡图像。
 - en: '![Image](../images/f0432-01.jpg)'
   id: totrans-740
   prefs: []
   type: TYPE_IMG
+  zh: '![图片](../images/f0432-01.jpg)'
 - en: '**Figure 12.13 Learning a latent vector space of images and using it to sample
     new images**'
   id: totrans-741
   prefs: []
   type: TYPE_NORMAL
+  zh: '**图12.13 学习图像的潜在向量空间并使用它来采样新图像**'
 - en: GANs and VAEs are two different strategies for learning such latent spaces of
     image representations, each with its own characteristics. VAEs are great for learning
     latent spaces that are well structured, where specific directions encode a meaningful
@@ -3907,19 +4328,24 @@
   id: totrans-742
   prefs: []
   type: TYPE_NORMAL
+  zh: GANs 和 VAEs 是学习图像表示的潜在空间的两种不同策略，各自具有其特点。VAEs 适用于学习结构良好的潜在空间，其中特定方向对数据的变化有着有意义的编码（见
+    [图12.14](#fig12-14)）。GANs 生成的图像可能非常逼真，但它们所来自的潜在空间可能没有很强的结构性和连续性。
 - en: '![Image](../images/f0433-01.jpg)'
   id: totrans-743
   prefs: []
   type: TYPE_IMG
+  zh: '![图片](../images/f0433-01.jpg)'
 - en: '**Figure 12.14 A continuous space of faces generated by Tom White using VAEs**'
   id: totrans-744
   prefs: []
   type: TYPE_NORMAL
+  zh: '**图12.14 使用VAEs生成的连续面部空间，由Tom White生成**'
 - en: 12.4.2 Concept vectors for image editing
   id: totrans-745
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 12.4.2 图像编辑的概念向量
 - en: 'We already hinted at the idea of a *concept vector* when we covered word embeddings
     in chapter 11\. The idea is still the same: given a latent space of representations,
     or an embedding space, certain directions in the space may encode interesting
@@ -3939,19 +4365,25 @@
   id: totrans-746
   prefs: []
   type: TYPE_NORMAL
+  zh: 当我们讨论第11章的词嵌入时，已经提及了*概念向量*的想法。思想仍然很简单：给定一个表示空间或嵌入空间的潜在空间，空间中的某些方向可能编码原始数据的有趣变化轴。例如，在面部图像的潜在空间中，可能存在一个*微笑向量*，使得如果潜在点z是某个面孔的嵌入表示，则潜在点z
+    + s是相同面孔的嵌入表示，微笑着。一旦你识别出这样一个向量，就可以通过将图像投影到潜在空间中，以有意义的方式移动它们的表示，然后再将它们解码回图像空间进行编辑。对于图像空间中的任何独立变化维度，都存在概念向量，例如在面孔的情况下，通过训练VAE（CelebA数据集）的Tom
+    White发现了添加太阳镜、摘掉眼镜、将男性面孔变成女性面孔等向量（见[图12.15](#fig12-15)）。
 - en: '![Image](../images/f0434-01.jpg)'
   id: totrans-747
   prefs: []
   type: TYPE_IMG
+  zh: '![Image](../images/f0434-01.jpg)'
 - en: '**Figure 12.15 The smile vector**'
   id: totrans-748
   prefs: []
   type: TYPE_NORMAL
+  zh: '**图12.15 微笑向量**'
 - en: 12.4.3 Variational autoencoders
   id: totrans-749
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 12.4.3 变分自编码器
 - en: Variational autoencoders, simultaneously discovered by Kingma and Welling in
     December 2013^([5](#Rendnote5)) and Rezende, Mohamed, and Wierstra in January
     2014,^([6](#Rendnote6)) are a kind of generative model that’s especially appropriate
@@ -3961,6 +4393,7 @@
   id: totrans-750
   prefs: []
   type: TYPE_NORMAL
+  zh: 变分自编码器是由Kingma和Welling在2013年12月^[5](#Rendnote5)以及Rezende、Mohamed和Wierstra在2014年1月^[6](#Rendnote6)同时发现的一种生成模型，特别适用于通过概念向量进行图像编辑的任务。它们是对自编码器的现代化改进（自编码器是一种旨在将输入编码到低维潜在空间中，然后再进行解码的网络类型），将深度学习的思想与贝叶斯推理混合起来。
 - en: A classical image autoencoder takes an image, maps it to a latent vector space
     via an encoder module, and then decodes it back to an output with the same dimensions
     as the original image, via a decoder module (see [figure 12.16](#fig12-16)). It’s
@@ -3974,15 +4407,18 @@
   id: totrans-751
   prefs: []
   type: TYPE_NORMAL
+  zh: 一个经典的图像自编码器会将图像通过编码器模块映射到潜在向量空间中，然后通过解码器模块将其解码回与原始图像具有相同维度的输出（见[图12.16](#fig12-16)）。然后，通过使用*与输入图像相同的图像*作为目标数据进行训练，意味着自编码器学习重建原始输入。通过对代码（编码器的输出）施加各种限制，可以让自编码器学习更多或更少有趣的数据的潜在表示。最常见的情况是限制代码为低维和稀疏（大多数为零），在这种情况下，编码器充当将输入数据压缩为更少信息位的方式。
 - en: '![Image](../images/f0434-02.jpg)'
   id: totrans-752
   prefs: []
   type: TYPE_IMG
+  zh: '![Image](../images/f0434-02.jpg)'
 - en: '**Figure 12.16 An autoencoder mapping an input *x* to a compressed representation
     and then decoding it back as *x*’**'
   id: totrans-753
   prefs: []
   type: TYPE_NORMAL
+  zh: '**图12.16 自编码器将输入*x*映射到压缩的表示，然后解码回*x***  '
 - en: In practice, such classical autoencoders don’t lead to particularly useful or
     nicely structured latent spaces. They’re not much good at compression, either.
     For these reasons, they have largely fallen out of fashion. VAEs, however, augment
@@ -3992,6 +4428,7 @@
   id: totrans-754
   prefs: []
   type: TYPE_NORMAL
+  zh: 在实践中，这样的经典自编码器并不会导致特别有用或结构良好的潜在空间。它们在压缩方面也不太好。因此，出于这些原因，它们在很大程度上已经过时了。而VAE则通过一些统计魔法来增强自编码器，迫使它们学习连续、高度结构化的潜在空间。它们已经被证明是图像生成的强大工具。
 - en: 'Instead of compressing its input image into a fixed code in the latent space,
     a VAE turns the image into the parameters of a statistical distribution: a mean
     and a variance. Essentially, this means we’re assuming the input image has been
@@ -4005,26 +4442,32 @@
   id: totrans-755
   prefs: []
   type: TYPE_NORMAL
+  zh: VAE不是将其输入图像压缩成潜在空间中的固定代码，而是将图像转换为统计分布的参数：均值和方差。基本上，这意味着我们假设输入图像是由一个统计过程生成的，并且在编码和解码过程中应考虑到这个过程的随机性。然后，VAE使用均值和方差参数随机采样分布的一个元素，并将该元素解码回原始输入（见[图
+    12.17](#fig12-17)）。这个过程的随机性提高了鲁棒性，并迫使潜在空间在任何地方都编码有意义的表示：在潜在空间中采样的每一点都被解码为有效的输出。
 - en: '![Image](../images/f0435-01.jpg)'
   id: totrans-756
   prefs: []
   type: TYPE_IMG
+  zh: '![图像](../images/f0435-01.jpg)'
 - en: '**Figure 12.17 A VAE maps an image to two vectors, z_mean and z_log_sigma,
     which define a probability distribution over the latent space, used to sample
     a latent point to decode.**'
   id: totrans-757
   prefs: []
   type: TYPE_NORMAL
+  zh: '**图 12.17 VAE将图像映射到两个向量 z_mean 和 z_log_sigma，它们定义了潜在空间上的概率分布，用于对潜在点进行采样以解码。**'
 - en: 'In technical terms, here’s how a VAE works:'
   id: totrans-758
   prefs: []
   type: TYPE_NORMAL
+  zh: 从技术角度来看，VAE的工作原理如下：
 - en: '**1** An encoder module turns the input sample, input_img, into two parameters
     in a latent space of representations, z_mean and z_log_variance.'
   id: totrans-759
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: '**1** 编码器模块将输入样本 input_img 转换为表示的潜在空间中的两个参数，z_mean 和 z_log_variance。'
 - en: '**2** You randomly sample a point z from the latent normal distribution that’s
     assumed to generate the input image, via z = z_mean + exp(z_log_variance) * epsilon,
     where epsilon is a random tensor of small values.'
@@ -4032,12 +4475,15 @@
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: '**2** 你随机从假设生成输入图像的潜在正态分布中采样一个点 z，通过 z = z_mean + exp(z_log_variance) * epsilon，其中
+    epsilon 是一个小值的随机张量。'
 - en: '**3** A decoder module maps this point in the latent space back to the original
     input image.'
   id: totrans-761
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: '**3** 解码器模块将潜在空间中的这一点映射回原始输入图像。'
 - en: Because epsilon is random, the process ensures that every point that’s close
     to the latent location where you encoded input_img (z—mean) can be decoded to
     something similar to input_img, thus forcing the latent space to be continuously
@@ -4045,6 +4491,7 @@
   id: totrans-762
   prefs: []
   type: TYPE_NORMAL
+  zh: 由于 epsilon 是随机的，这个过程确保了每一个接近编码输入图像（z_mean）的潜在位置的点都可以被解码为与输入图像类似的东西，从而迫使潜在空间连续有意义。
 - en: Any two close points in the latent space will decode to highly similar images.
     Continuity, combined with the low dimensionality of the latent space, forces every
     direction in the latent space to encode a meaningful axis of variation of the
@@ -4053,6 +4500,7 @@
   id: totrans-763
   prefs: []
   type: TYPE_NORMAL
+  zh: 潜在空间中的任意两个接近点将解码为高度相似的图像。连续性，加上潜在空间的低维度，迫使潜在空间中的每个方向编码数据的有意义变化轴，使得潜在空间非常结构化，因此非常适合通过概念向量进行操作。
 - en: 'The parameters of a VAE are trained via two loss functions: a *reconstruction
     loss* that forces the decoded samples to match the initial inputs, and a *regularization
     loss* that helps learn well—rounded latent distributions and reduces overfitting
@@ -4060,22 +4508,27 @@
   id: totrans-764
   prefs: []
   type: TYPE_NORMAL
+  zh: VAE的参数通过两个损失函数进行训练：一个 *重构损失*，强制解码样本与初始输入匹配，一个 *正则化损失*，有助于学习良好的潜在分布并减少对训练数据的过度拟合。从图示上看，这个过程如下：
 - en: c(z_mean, z_log_variance) %<—% encoder(input_img)➊
   id: totrans-765
   prefs: []
   type: TYPE_NORMAL
+  zh: c(z_mean, z_log_variance) %<—% encoder(input_img)➊
 - en: z <— z_mean + exp(z_log_variance) * epsilon➋
   id: totrans-766
   prefs: []
   type: TYPE_NORMAL
+  zh: z <— z_mean + exp(z_log_variance) * epsilon➋
 - en: reconstructed_img <— decoder(z) ➌
   id: totrans-767
   prefs: []
   type: TYPE_NORMAL
+  zh: reconstructed_img <— decoder(z) ➌
 - en: model <— keras_model(input_img, reconstructed_img)➍
   id: totrans-768
   prefs: []
   type: TYPE_NORMAL
+  zh: model <— keras_model(input_img, reconstructed_img)➍
 - en: ➊ **Encode the input into mean and variance parameters.**
   id: totrans-769
   prefs: []
@@ -4861,17 +5314,20 @@
   id: totrans-946
   prefs: []
   type: TYPE_NORMAL
+  zh: 理解 GAN 的一种直观方式是想象一位赝造者试图制作一幅假的毕加索画。起初，赝造者在这个任务上并不在行。他把一些假画和真正的毕加索画混在一起，然后把它们展示给一个艺术品经销商。艺术品经销商为每幅画作进行真伪鉴别，并给赝造者反馈，告诉他什么因素使一幅画看起来像毕加索的作品。赝造者回到自己的工作室准备一些新的伪品。随着时间的推移，赝造者在模仿毕加索的风格方面变得越来越能胜任，而经销商在识别伪品方面也变得越来越熟练。最终，他们手里有了一些极好的假毕加索作品。
 - en: 'That’s what a GAN is: a forger network and an expert network, each being trained
     to best the other. As such, a GAN is made of two parts:'
   id: totrans-947
   prefs: []
   type: TYPE_NORMAL
+  zh: 这就是 GAN 的含义：一个规模化的轨迹生成和专家网络，每个都在训练过程中竭尽全力来胜过对方。因此，GAN 由两部分组成：
 - en: '*Generator network*—Takes as input a random vector (a random point in the latent
     space), and decodes it into a synthetic image'
   id: totrans-948
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '*生成器网络*—以随机向量（潜在空间中的一个随机点）作为输入，并将其解码为合成图像'
 - en: '*Discriminator network (or adversary)*—Takes as input an image (real or synthetic),
     and predicts whether the image came from the training set or was created by the
     generator network'
@@ -4879,6 +5335,7 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '*判别器网络（或对手）*—以图像（真实的或合成的）作为输入，并预测该图像是否来自训练集或由生成器网络生成'
 - en: 'The generator network is trained to be able to fool the discriminator network,
     and thus it evolves toward generating increasingly realistic images as training
     goes on: artificial images that look indistinguishable from real ones, to the
@@ -4892,16 +5349,20 @@
   id: totrans-950
   prefs: []
   type: TYPE_NORMAL
+  zh: 生成器网络得到训练，以欺骗判别器网络，并因此朝着生成越来越逼真的图像的方向发展：人工图像看起来与真实图像无法区分，以至于判别器网络无法将两者区分开来（见[图12.19](#fig12-19)）。同时，判别器网络不断适应生成器逐渐提升的能力，为生成的图像设定了很高的真实性标准。训练结束后，生成器可以将输入空间中的任意点转化为一幅可信的图像。与
+    VAE 不同，这个潜在空间没有明确保证具有有意义结构的特性；尤其是，它不是连续的。
 - en: '![Image](../images/f0443-01.jpg)'
   id: totrans-951
   prefs: []
   type: TYPE_IMG
+  zh: '![图片](../images/f0443-01.jpg)'
 - en: '**Figure 12.19 A generator transforms random latent vectors into images, and
     a discriminator seeks to tell real images from generated ones. The generator is
     trained to fool the discriminator.**'
   id: totrans-952
   prefs: []
   type: TYPE_NORMAL
+  zh: '**图12.19 生成器将随机潜在向量转化为图像，判别器则试图区分真实图像和生成的图像。生成器的训练目标是欺骗判别器。**'
 - en: Remarkably, a GAN is a system where the optimization minimum isn’t fixed, unlike
     in any other training setup you’ve encountered in this book. Normally, gradient
     descent consists of rolling down hills in a static loss landscape. But with a
@@ -4913,11 +5374,14 @@
   id: totrans-953
   prefs: []
   type: TYPE_NORMAL
+  zh: 值得注意的是，GAN 是一个优化最小值不固定的系统，与本书中其他训练设置所遇到的情况不同。通常，梯度下降法是在静态损失空间中下坡前进的。但是使用 GAN
+    时，沿着坡下降的每一步都会稍微改变整个损失空间。这是一个动态系统，优化过程寻求的不是最小值，而是两个力之间的平衡状态。因此，GAN 中的训练非常困难，要使其正常工作需要对模型结构和训练参数进行大量细致的调整。
 - en: 12.5.1 A schematic GAN implementation
   id: totrans-954
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 12.5.1 一个概要的 GAN 实现
 - en: 'In this section, we’ll explain how to implement a GAN in Keras in its barest
     form. GANs are advanced, so diving deeply into the technical details of architectures
     like that of the StyleGAN2 that generated the images in [figure 12.20](#fig12-20)
