@@ -3,35 +3,42 @@
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 6 序列到序列模型
 - en: This chapter covers
   id: totrans-1
   prefs: []
   type: TYPE_NORMAL
+  zh: 本章包括
 - en: Building a machine translation system using Fairseq
   id: totrans-2
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用Fairseq构建机器翻译系统
 - en: Transforming one sentence to another using a Seq2Seq model
   id: totrans-3
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用Seq2Seq模型将一句话转换成另一句话
 - en: Using a beam search decoder to generate better output
   id: totrans-4
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用束搜索解码器生成更好的输出
 - en: Evaluating the quality of machine translation systems
   id: totrans-5
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 评估机器翻译系统的质量
 - en: Building a dialogue system (chatbot) using a Seq2Seq model
   id: totrans-6
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用Seq2Seq模型构建对话系统（聊天机器人）
 - en: In this chapter, we are going to discuss sequence-to-sequence (Seq2Seq) models,
     which are some of the most important complex NLP models and are used for a wide
     range of applications, including machine translation. Seq2Seq models and their
@@ -45,11 +52,13 @@
   id: totrans-7
   prefs: []
   type: TYPE_NORMAL
+  zh: 在本章中，我们将讨论序列到序列（Seq2Seq）模型，这些模型是一些最重要的复杂自然语言处理模型，被用于广泛的应用场景，包括机器翻译。Seq2Seq模型及其变种已经在许多实际应用中作为基本构建块使用，包括谷歌翻译和语音识别。我们将使用一个强大的框架来构建一个简单的神经机器翻译系统，以了解这些模型的工作原理以及如何使用贪婪和束搜索算法生成输出。在本章的结尾，我们将构建一个聊天机器人——一个可以与之对话的自然语言处理应用。我们还将讨论简单Seq2Seq模型的挑战和局限性。
 - en: 6.1 Introducing sequence-to-sequence models
   id: totrans-8
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 6.1 介绍序列到序列模型
 - en: In the previous chapter, we discussed two types of powerful NLP models, namely,
     sequential labeling and language models. To recap, a sequence-labeling model takes
     a sequence of some units (e.g., words) and assigns a label (e.g., a part-of-speech
@@ -60,14 +69,18 @@
   id: totrans-9
   prefs: []
   type: TYPE_NORMAL
+  zh: 在前一章中，我们讨论了两种强大的自然语言处理模型，即序列标记和语言模型。回顾一下，序列标记模型接收一些单元的序列（例如，单词）并为每个单元分配一个标签（例如，词性标注）。而语言模型接收一些单元的序列（例如，单词），并估计给定序列在模型训练的领域中出现的概率。你还可以使用语言模型从零开始生成看起来真实的文本。请参阅图
+    6.1 以了解这两种模型的概况。
 - en: '![CH06_F01_Hagiwara](../Images/CH06_F01_Hagiwara.png)'
   id: totrans-10
   prefs: []
   type: TYPE_IMG
+  zh: '![CH06_F01_Hagiwara](../Images/CH06_F01_Hagiwara.png)'
 - en: Figure 6.1 Sequential labeling and language models
   id: totrans-11
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 6.1 序列标记和语言模型
 - en: Although these two models are useful for a number of NLP tasks, for some, you
     may want the best of both worlds—you may want your model to take some input (e.g.,
     a sentence) and generate something else (e.g., another sentence) in response.
@@ -84,6 +97,8 @@
   id: totrans-12
   prefs: []
   type: TYPE_NORMAL
+  zh: 虽然这两种模型对于许多自然语言处理任务都非常有用，但对于某些任务，你可能希望兼顾这两者——让你的模型接收一些输入（例如，一句句子）并产生另一个东西（例如，另一句句子）作为响应。例如，如果你希望将用一种语言写的文本翻译成另一种语言，你需要让模型接收一个句子并产生另一个句子。你能用序列标记模型实现吗？不能，因为它们只能产生与输入句子中标记数量相同数量的输出标签。这显然对于翻译来说太过有限——一种语言中的表达（比如法语中的“Enchanté”）在另一种语言中可以有任意多或少的单词（比如英语中的“Nice
+    to meet you”）。你能用语言模型实现吗？还是不能。虽然你可以使用语言模型生成看起来真实的文本，但你几乎无法控制它们生成的文本。事实上，语言模型不接受任何输入。
 - en: But if you look at figure 6.1 more carefully, you might notice something. The
     model on the left (the sequential-labeling model) takes a sentence as its input
     and produces some form of representations, whereas the model on the right produces
@@ -94,6 +109,7 @@
   id: totrans-13
   prefs: []
   type: TYPE_NORMAL
+  zh: 但是如果你仔细看图6.1，你可能会注意到一些东西。左侧模型（序列标记模型）以句子作为输入，并生成某种形式的表示，而右侧模型则生成一个看起来像自然语言文本的长度可变的句子。我们已经有了构建我们想要的东西所需的组件，即一个接受句子并将其转换为另一个句子的模型。唯一缺失的部分是一种连接这两者的方法，以便我们可以控制语言模型生成什么。
 - en: In fact, by the time the model on the left finishes processing the input sentence,
     the RNN has already produced its abstract representation, which is encoded in
     the RNN’s hidden states. If you can simply connect these two so that the sentence
@@ -103,6 +119,7 @@
   id: totrans-14
   prefs: []
   type: TYPE_NORMAL
+  zh: 实际上，当左侧模型完成处理输入句子时，循环神经网络已经生成了其抽象表示，该表示被编码在循环神经网络的隐藏状态中。如果你能简单地将这两者连接起来，使得句子表示从左到右传递，并且语言模型可以根据这个表示生成另一个句子，那么似乎你可以实现最初想要做的事情！
 - en: Sequence-to-sequence models—or *Seq2Seq* models, in short—are built on this
     insight. A Seq2Seq model consists of two subcomponents—an encoder and a decoder.
     See figure 6.2 for an illustration. An encoder takes a sequence of some units
@@ -115,14 +132,17 @@
   id: totrans-15
   prefs: []
   type: TYPE_NORMAL
+  zh: 序列到序列模型，简称*Seq2Seq*模型，是基于这一见解构建的。Seq2Seq模型由两个子组件组成，即编码器和解码器。见图6.2进行说明。编码器接受一系列单位（例如，一个句子）并将其转换为某种内部表示。另一方面，解码器从内部表示生成一系列单位（例如，一个句子）。总的来说，Seq2Seq模型接受一个序列并生成另一个序列。与语言模型一样，生成过程在解码器产生一个特殊标记<END>时停止，这使得Seq2Seq模型可以生成比输入序列更长或更短的输出。
 - en: '![CH06_F02_Hagiwara](../Images/CH06_F02_Hagiwara.png)'
   id: totrans-16
   prefs: []
   type: TYPE_IMG
+  zh: '![CH06_F02_Hagiwara](../Images/CH06_F02_Hagiwara.png)'
 - en: Figure 6.2 Sequence-to-sequence model
   id: totrans-17
   prefs: []
   type: TYPE_NORMAL
+  zh: 图6.2 序列到序列模型
 - en: Many variants of Seq2Seq models exist, depending on what architecture you use
     for the encoder, what architecture you use for the decoder, and how information
     flows between the two. This chapter covers the most basic type of Seq2Seq model—simply
@@ -131,6 +151,7 @@
   id: totrans-18
   prefs: []
   type: TYPE_NORMAL
+  zh: 有许多Seq2Seq模型的变体存在，这取决于你用于编码器的架构，你用于解码器的架构以及两者之间信息流动的方式。本章涵盖了最基本类型的Seq2Seq模型——简单地通过句子表示连接两个循环神经网络。我们将在第8章中讨论更高级的变体。
 - en: Machine translation is the first, and by far the most popular, application of
     Seq2Seq models. However, the Seq2Seq architecture is a generic model applicable
     to numerous NLP tasks. In one such task, summarization, an NLP system takes a
@@ -146,11 +167,16 @@
   id: totrans-19
   prefs: []
   type: TYPE_NORMAL
+  zh: 机器翻译是 Seq2Seq 模型的第一个，也是迄今为止最流行的应用。然而，Seq2Seq 架构是一个通用模型，适用于许多自然语言处理任务。在其中一项任务中，摘要生成，一个自然语言处理系统接受长文本（例如新闻文章）并生成其摘要（例如新闻标题）。Seq2Seq
+    模型可以用来将较长的文本“翻译”成较短的文本。另一个任务是对话系统，或者*聊天机器人*。如果你将用户的话语视为输入，系统的回应视为输出，对话系统的工作就是将前者“翻译”成后者。在本章后面，我们将讨论一个案例研究，在这个案例中，我们实际上使用了
+    Seq2Seq 模型构建了一个聊天机器人。另一个（有些令人惊讶的）应用是解析——如果你将输入文本视为一种语言，将其语法表示视为另一种语言，你可以使用 Seq2Seq
+    模型解析自然语言文本。
 - en: 6.2 Machine translation 101
   id: totrans-20
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 6.2 机器翻译 101
 - en: We briefly touched upon machine translation in section 1.2.1\. To recap, machine
     translation (MT) systems are NLP systems that translate a given text from one
     language to another. The language the input text is written in is called the *source
@@ -159,6 +185,7 @@
   id: totrans-21
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们在第 1.2.1 节简要提及了机器翻译。简而言之，机器翻译（MT）系统是将给定文本从一种语言翻译成另一种语言的自然语言处理系统。输入文本所用语言称为*源语言*，而输出文本所用语言称为*目标语言*。源语言和目标语言的组合称为*语言对*。
 - en: First, let’s look at a couple of examples to see what it’s like and why it’s
     difficult to translate a foreign language to English (or any other language you
     understand). In the first example, let’s translate a Spanish sentence, “Maria
@@ -170,14 +197,20 @@
   id: totrans-22
   prefs: []
   type: TYPE_NORMAL
+  zh: 首先，让我们看一些例子，看看是什么样子，以及为什么将外语翻译成英语（或者任何其他你理解的语言）是困难的。在第一个例子中，让我们将一个西班牙句子翻译成英文，即，“Maria
+    no daba una bofetada a la bruja verde.” 翻译成英文对应的是，“Mary did not slap the green
+    witch.” 在说明翻译过程时的一个常见做法是绘制两个句子之间具有相同意思的单词或短语如何映射的图。两个实例之间的语言单位的对应称为*对齐*。图 6.3
+    显示了西班牙语和英语句子之间的对齐。
 - en: '![CH06_F03_Hagiwara](../Images/CH06_F03_Hagiwara.png)'
   id: totrans-23
   prefs: []
   type: TYPE_IMG
+  zh: '![CH06_F03_Hagiwara](../Images/CH06_F03_Hagiwara.png)'
 - en: Figure 6.3 Translation and word alignment between Spanish and English
   id: totrans-24
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 6.3 西班牙语和英语之间的翻译和词对齐
 - en: Some words (e.g., “Maria” and “Mary,” “bruja” and “witch,” and “verde” and “green”)
     match exactly one to one. However, some expressions (e.g., “daba una bofetada”
     and “slap”) differ in such a significant way that you can only align phrases between
@@ -191,6 +224,9 @@
   id: totrans-25
   prefs: []
   type: TYPE_NORMAL
+  zh: 一些单词（例如，“Maria” 和 “Mary”，“bruja” 和 “witch”，以及 “verde” 和 “green”）完全一一对应。然而，一些表达（例如，“daba
+    una bofetada” 和 “slap”）在某种程度上有很大不同，以至于你只能在西班牙语和英语之间对齐短语。最后，即使单词之间有一对一的对应关系，单词的排列方式，或者*词序*，在两种语言之间可能也会有所不同。例如，形容词在西班牙语中在名词之后添加（“la
+    bruja verde”），而在英语中，它们在名词之前（“the green witch”）。在语法和词汇方面，西班牙语和英语在某种程度上是相似的，尤其是与中文和英语相比，尽管这个单一的例子显示了在两种语言之间进行翻译可能是一项具有挑战性的任务。
 - en: Things start to look more complicated between Mandarin Chinese and English.
     Figure 6.4 illustrates the alignment between a Chinese sentence (“Bushi yu Shalong
     juxing le huitan.”) and its English translation (“Bush held a talk with Shalon.”).
@@ -273,6 +309,7 @@
   id: totrans-34
   prefs: []
   type: TYPE_NORMAL
+  zh: 除了前面图示的结构差异之外，许多其他因素也会使机器翻译成为一项困难的任务。其中之一是词汇差异。例如，如果你将日语单词“音楽”翻译成英语“music”，几乎没有歧义。“音楽”几乎总是“music”。然而，如果你将英语单词“brother”翻译成中文，你会面临歧义，因为中文对“哥哥”和“弟弟”使用不同的词语。在更极端的情况下，如果你将“cousin”翻译成中文，你会有八种不同的选择，因为在中国家庭制度中，你需要根据你的表兄弟是母亲的还是父亲的，是女性还是男性，比你大还是小，使用不同的词语。
 - en: Another factor that makes MT challenging is omission. You can see that in figure
     6.5, there’s no Japanese word for “I.” In languages such as Chinese, Japanese,
     Spanish, and many others, you can omit the subject pronoun when it’s clear from
@@ -282,6 +319,8 @@
   id: totrans-35
   prefs: []
   type: TYPE_NORMAL
+  zh: 另一个使机器翻译具有挑战性的因素是省略。你可以在图6.5中看到，日语中没有“我”的单词。在诸如中文、日语、西班牙语等许多其他语言中，当主语代词在上下文和/或动词形式中是明确的时候，你可以省略主语代词。这被称为*zero
+    pronoun*，当从一个省略代词的语言翻译成一个省略频率较低的语言时（例如英语），它可能会成为一个问题。
 - en: One of the earliest MT systems, developed during the Georgetown-IBM experiment,
     was built to translate Russian sentences into English during the Cold War. But
     all it did was not much different from looking up each word in a bilingual dictionary
@@ -293,6 +332,7 @@
   id: totrans-36
   prefs: []
   type: TYPE_NORMAL
+  zh: 在乔治敦-IBM实验期间开发的最早的机器翻译系统之一是在冷战期间将俄语句子翻译成英语的。但它所做的不过是不比用双语词典查找每个单词并用其翻译替换它有多不同。上面展示的三个例子应该足以让你相信，简单地逐词替换太过于限制了。后来的系统包含了更大的词典和语法规则，但这些规则是由语言学家手动编写的，并不足以捕捉语言的复杂性（再次记住第1章中可怜的软件工程师）。
 - en: 'The main paradigm for MT that remained dominant both in academia and industry
     before the advent of neural machine translation (NMT) is called *statistical machine
     translation* (SMT). The idea behind it is simple: learn how to translate from
@@ -311,6 +351,7 @@
   id: totrans-37
   prefs: []
   type: TYPE_NORMAL
+  zh: 在神经机器翻译（NMT）出现之前，在学术界和工业界主导的机器翻译的主要范式称为*统计机器翻译*（SMT）。其背后的理念很简单：通过数据学习如何翻译，而不是通过手工制定规则。具体而言，SMT系统学习如何从包含源语言文本和其在目标语言中的翻译的数据集中进行翻译。这些数据集称为*平行语料库*（或*平行文本*或*双文本*）。通过查看两种语言中成对句子的集合，算法寻找一种语言中的单词应如何翻译为另一种语言的模式。由此产生的统计模型称为*翻译模型*。同时，通过查看一系列目标句子，算法可以学习目标语言中有效句子的外观。听起来耳熟吗？这正是*语言模型*的全部内容（请参阅前一章）。最终的SMT模型结合了这两个模型，并生成一种对输入的合理翻译，并且在目标语言中是一句有效、流畅的句子。
 - en: Around 2015, the advent of powerful neural machine translation (NMT) models
     subverted the dominance of SMT. SMT and NMT have two key differences. First, by
     definition, NMT is based on neural networks, which are well known for their power
@@ -324,6 +365,7 @@
   id: totrans-38
   prefs: []
   type: TYPE_NORMAL
+  zh: 大约在2015年，强大的神经机器翻译（NMT）模型的出现颠覆了SMT的主导地位。SMT和NMT有两个关键区别。首先，根据定义，NMT基于神经网络，而神经网络以其准确建模语言的能力而闻名。因此，由NMT生成的目标句子往往比由SMT生成的句子更流畅和自然。其次，NMT模型是端到端训练的，正如我在第1章中简要提到的那样。这意味着NMT模型由一个单一的神经网络组成，该网络接受输入并直接产生输出，而不是您需要独立训练的子模型和子模块的拼接。因此，与SMT模型相比，NMT模型更容易训练，代码规模更小。
 - en: MT is already used in many different industries and aspects of our lives. Translating
     foreign text into a language that you understand to grasp its meaning quickly
     is called *gisting*. If the text is deemed important enough after gisting, it
@@ -335,11 +377,13 @@
   id: totrans-39
   prefs: []
   type: TYPE_NORMAL
+  zh: MT已经在许多不同的行业和我们生活的方方面面得到了应用。将外语文本翻译成您理解的语言以快速抓住其含义的过程称为*摘要*。如果在摘要后认为文本足够重要，则可能会将其发送到正式的手动翻译中。专业翻译人员也使用MT进行工作。通常，源文本首先使用MT系统翻译为目标语言，然后由人类翻译人员编辑生成的文本。这种编辑称为*后编辑*。使用自动化系统（称为*计算机辅助翻译*或CAT）可以加速翻译过程并降低成本。
 - en: 6.3 Building your first translator
   id: totrans-40
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 6.3 构建你的第一个翻译器
 - en: 'In this section, we are going to build a working MT system. Instead of writing
     any Python code to do that, we’ll make the most of existing MT frameworks. A number
     of open source frameworks make it easier to build MT systems, including Moses
@@ -357,6 +401,12 @@
   id: totrans-41
   prefs: []
   type: TYPE_NORMAL
+  zh: 在本节中，我们将构建一个可工作的 MT 系统。我们不会编写任何 Python 代码来实现，而是会充分利用现有的 MT 框架。许多开源框架使构建 MT 系统变得更加容易，包括
+    Moses（[http://www.statmt.org/moses/](http://www.statmt.org/moses/)）用于 SMT 和 OpenNMT（[http://opennmt.net/](http://opennmt.net/)）用于
+    NMT。在本节中，我们将使用 Fairseq（[https://github.com/pytorch/fairseq](https://github.com/pytorch/fairseq)），这是
+    Facebook 开发的一个 NMT 工具包，如今在 NLP 从业者中变得越来越流行。以下几个方面使 Fairseq 成为快速开发 NMT 系统的不错选择：1）它是一个现代化的框架，提供了许多预定义的最先进的
+    NMT 模型，您可以立即使用；2）它非常可扩展，意味着您可以通过遵循它们的 API 快速实现自己的模型；3）它非常快速，默认支持多 GPU 和分布式训练。由于其强大的模型，您可以在几小时内构建一个质量不错的
+    NMT 系统。
 - en: Before you start, install Fairseq by running pip install fairseq in the root
     of your project directory. Also, run the following commands in your shell to download
     and expand the dataset (you may need to install unzip if you are using Ubuntu
@@ -364,6 +414,8 @@
   id: totrans-42
   prefs: []
   type: TYPE_NORMAL
+  zh: 在开始之前，请在项目目录的根目录中运行`pip install fairseq`来安装 Fairseq。此外，请在您的 shell 中运行以下命令来下载并展开数据集（如果您使用的是
+    Ubuntu，则可能需要安装 unzip，可以通过运行`sudo apt-get install unzip`来安装）:[²](#pgfId-1103788)
 - en: '[PRE0]'
   id: totrans-43
   prefs: []
@@ -378,11 +430,14 @@
   id: totrans-44
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们将使用 Tatoeba 项目中的西班牙语和英语平行句子来训练一个西班牙语到英语的 MT 系统，这是我们在第 4 章中已经使用过的。该语料库包含大约
+    20 万个英语句子及其西班牙语翻译。我已经提前格式化了数据集，这样您就可以在不必担心获取数据、标记文本等方面的情况下使用它。数据集已经分为训练、验证和测试子集。
 - en: 6.3.1 Preparing the datasets
   id: totrans-45
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 6.3.1 准备数据集
 - en: As mentioned previously, MT systems (both SMT and NMT) are machine learning
     models and thus are trained from data. The development process of MT systems looks
     similar to any other modern NLP systems, as shown in figure 6.6\. First, the training
@@ -395,14 +450,19 @@
   id: totrans-46
   prefs: []
   type: TYPE_NORMAL
+  zh: 如前所述，MT 系统（包括 SMT 和 NMT）是机器学习模型，因此是根据数据训练的。MT 系统的开发过程看起来与任何其他现代 NLP 系统相似，如图
+    6.6 所示。首先，对平行语料库的训练部分进行预处理，并用于训练一组 NMT 模型候选者。接下来，使用验证部分来选择所有候选模型中表现最佳的模型。这个过程称为*模型选择*（请参阅第
+    2 章进行复习）。最后，最佳模型将在数据集的测试部分上进行测试，以获得反映模型优劣的评估指标。
 - en: '![CH06_F06_Hagiwara](../Images/CH06_F06_Hagiwara.png)'
   id: totrans-47
   prefs: []
   type: TYPE_IMG
+  zh: '![CH06_F06_Hagiwara](../Images/CH06_F06_Hagiwara.png)'
 - en: Figure 6.6 Pipeline for building an NMT system
   id: totrans-48
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 6.6 构建 NMT 系统的流水线
 - en: 'The first step in MT development is preprocessing the dataset. But before preprocessing,
     you need to convert the dataset into an easy-to-use format, which is usually plain
     text in NLP. In practice, the raw data for training MT systems come in many different
@@ -491,10 +551,12 @@
   id: totrans-57
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果目标语言使用类似于拉丁（a，b，c，...）或西里尔（а，б，в，...）字母表的脚本，区分大小写，您可能需要规范化大小写。通过这样做，您的MT系统将“NLP”与“nlp”和“Nlp”分组在一起。通常，这是一件好事，因为通过具有三个不同表示的单一概念，MT模型必须从数据中学习它们实际上是单一概念。规范化大小写也会减少不同单词的数量，从而使训练和预测更快。但是，这也将“US”和“Us”以及“us”分组在一起，这可能不是一种理想的行为，具体取决于您处理的数据类型和领域。在实践中，这些决策，包括是否规范化大小写，都是通过观察它们对验证数据性能的影响来谨慎做出的。
 - en: Data cleaning for machine translation and NLP
   id: totrans-58
   prefs: []
   type: TYPE_NORMAL
+  zh: 机器翻译和NLP的数据清理
 - en: Note that the cleaning techniques mentioned here are not specific to MT. Any
     NLP applications and tasks can benefit from a carefully crafted pipeline of filtering
     and cleaning operations. However, cleaning of the training data is particularly
@@ -506,6 +568,7 @@
   id: totrans-59
   prefs: []
   type: TYPE_NORMAL
+  zh: 请注意，这里提到的清理技术并不特定于MT。任何NLP应用和任务都可以从经过精心设计的过滤和清理操作的流程中受益。然而，对于MT来说，清理训练数据尤为重要，因为翻译的一致性对于构建强大的MT模型至关重要。如果您的训练数据在某些情况下使用“NLP”，而在其他情况下使用“nlp”，则模型将难以找到正确翻译该单词的方法，而人类很容易理解这两个单词代表一个概念。
 - en: At this point, the dataset is still a bunch of strings of characters. Most MT
     systems operate on words, so you need to tokenize the input (section 3.3) to identify
     words. Depending on the language, you may need to run a different pipeline (e.g.,
@@ -513,6 +576,7 @@
   id: totrans-60
   prefs: []
   type: TYPE_NORMAL
+  zh: 此时，数据集仍然是一堆字符字符串。大多数MT系统操作单词，因此您需要对输入进行标记化（第3.3节）以识别单词。根据语言，您可能需要运行不同的流程（例如，对于中文和日文，需要进行词段切分）。
 - en: 'The Tatoeba dataset you downloaded and expanded earlier has already gone through
     all this preprocessing pipeline. Now you are ready to hand the dataset over to
     Fairseq. The first step is to tell Fairseq to convert the input files to the binary
@@ -520,6 +584,7 @@
   id: totrans-61
   prefs: []
   type: TYPE_NORMAL
+  zh: 您之前下载和展开的Tatoeba数据集已经通过了所有这些预处理流程。现在，您已经准备好将数据集交给Fairseq了。第一步是告诉Fairseq将输入文件转换为二进制格式，以便训练脚本可以轻松读取它们，如下所示：
 - en: '[PRE2]'
   id: totrans-62
   prefs: []
@@ -531,6 +596,7 @@
   id: totrans-63
   prefs: []
   type: TYPE_NORMAL
+  zh: 当成功时，您应该在终端上看到一条“Wrote preprocessed data to data/mt-bin”的消息。您还应该在data/mt-bin目录下找到以下一组文件：
 - en: '[PRE3]'
   id: totrans-64
   prefs: []
@@ -544,17 +610,20 @@
   id: totrans-65
   prefs: []
   type: TYPE_NORMAL
+  zh: 此预处理步骤的关键功能之一是构建词汇表（在Fairseq中称为*dictionary*），它是从词汇项（通常为单词）到它们的ID的映射。注意目录中的两个字典文件dict.en.txt和dict.es.txt。MT涉及两种语言，因此系统需要维护两个映射，每个语言一个。
 - en: 6.3.2 Training the model
   id: totrans-66
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 6.3.2 训练模型
 - en: 'Now that the train data is converted into the binary format, you are ready
     to train the MT model. Invoke the fairseq-train command with the directory where
     the binary files are located, along with several hyperparameters, as shown next:'
   id: totrans-67
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，训练数据已转换为二进制格式，您可以准备好训练MT模型了。按下面所示使用包含二进制文件的目录以及几个超参数来调用fairseq-train命令：
 - en: '[PRE4]'
   id: totrans-68
   prefs: []
@@ -568,11 +637,13 @@
   id: totrans-69
   prefs: []
   type: TYPE_NORMAL
+  zh: 您不必担心理解大多数参数的含义（至少暂时不用）。此时，您只需要知道使用指定目录中存储的数据（data/mt-bin）使用LSTM架构（-arch lstm）和一堆其他超参数来训练模型，并将结果保存在data/mt-ckpt（checkpoint的缩写）中即可。
 - en: 'When you run this command, your terminal will show two types of progress bars
     alternatively—one for training and another for validating, as shown here:'
   id: totrans-70
   prefs: []
   type: TYPE_NORMAL
+  zh: 运行此命令时，终端会交替显示两种进度条——一个用于训练，另一个用于验证，如下所示：
 - en: '[PRE5]'
   id: totrans-71
   prefs: []
@@ -589,6 +660,7 @@
   id: totrans-72
   prefs: []
   type: TYPE_NORMAL
+  zh: 验证结果对应的行内容很容易区分——它们会说“验证”子集。每个时期，训练过程会轮流进行两个阶段：训练和验证。机器学习中使用的一个概念——一个*时期*，意味着对整个训练数据的一次遍历。在训练阶段，使用训练数据计算损失，然后以使新的参数集降低损失的方式调整模型参数。在验证阶段，模型参数被固定，使用一个单独的数据集（验证集）来衡量模型在该数据集上的表现。
 - en: I mentioned in chapter 1 that validation sets are used for model selection,
     a process where the best machine learning model is chosen among all the possible
     models trained from a single training set. Here, by alternating between training
@@ -599,6 +671,7 @@
   id: totrans-73
   prefs: []
   type: TYPE_NORMAL
+  zh: 我在第1章中提到过，验证集用于模型选择，这是从单个培训集中选择最佳的机器学习模型的过程。在这里，通过交替进行训练和验证阶段，我们使用验证集来检查所有中间模型（即第一个时期后的模型，第二个时期后的模型，等等）的性能。换言之，我们使用验证阶段来监视培训的进展情况。
 - en: Why is this a good idea? We gain many benefits by inserting the validation stage
     after every epoch, but the most important one is to avoid overfitting—the very
     reason why a validation data is important in the first place. To illustrate this
@@ -608,6 +681,7 @@
   id: totrans-74
   prefs: []
   type: TYPE_NORMAL
+  zh: 为什么这是个好方法？我们通过在每个时期之后插入验证阶段获得了许多好处，但最重要的好处是避免过度拟合——验证数据之所以重要正是因为这个原因。为了进一步说明这一点，让我们看看在我们的西班牙语到英语机器翻译模型的训练过程中，训练集和验证集的损失如何随着时间变化，如图6.7所示。
 - en: 'As the training continues, the train loss becomes smaller and smaller and gradually
     approaches zero, because this is exactly what we told the optimizer to do: decrease
     the loss as much as possible. Checking whether the train loss is decreasing steadily
@@ -616,6 +690,7 @@
   id: totrans-75
   prefs: []
   type: TYPE_NORMAL
+  zh: 随着训练的进行，训练损失变得越来越小，并逐渐趋近于零，因为这正是我们告诉优化器要做的：使损失尽可能地降低。检查训练损失是否在一个个时期后稳步下降是一个很好的“健全性检查”，可以验证您的模型和培训流水线是否按预期工作。
 - en: On the other hand, if you look at the validation loss, it goes down at first
     for several epochs, but after a certain point, it gradually goes back up, forming
     a U-shaped curve—a typical sign of overfitting. After several epochs of training,
@@ -624,14 +699,17 @@
   id: totrans-76
   prefs: []
   type: TYPE_NORMAL
+  zh: 另一方面，如果您看一下验证损失，它在前几个时期内会下降，但在一定点之后逐渐回升，形成一个U形曲线——这是过度拟合的一个典型迹象。经过几个时期的培训后，您的模型在训练集上表现得非常好，开始失去其对验证集的泛化性。
 - en: '![CH06_F07_Hagiwara](../Images/CH06_F07_Hagiwara.png)'
   id: totrans-77
   prefs: []
   type: TYPE_IMG
+  zh: '![CH06_F07_Hagiwara](../Images/CH06_F07_Hagiwara.png)'
 - en: Figure 6.7 Train and validation loss
   id: totrans-78
   prefs: []
   type: TYPE_NORMAL
+  zh: 图6.7训练和验证损失
 - en: Let’s use a concrete example in MT to illustrate what’s really going on when
     a model is overfitted. For example, if your training data contains the English
     sentence “It is raining hard” and its Spanish translation “Esta lloviendo fuerte,”
@@ -645,6 +723,9 @@
   id: totrans-79
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们用机器翻译中的一个具体例子来说明当模型过度拟合时实际发生了什么。例如，如果您的训练数据包含了英文句子“It is raining hard”及其西班牙语翻译“Esta
+    lloviendo fuerte”，而其他句子中没有包含“hard”一词，那么过拟合的模型可能会认为“fuerte”是“hard”的唯一可能翻译。一个正确拟合的模型可能会留下一些余地，让其他西班牙语单词出现作为“hard”的翻译，但一个过拟合的机器翻译系统总是会将“hard”翻译为“fuerte”，这是根据训练集“正确”的做法，但显然不是您想要构建健壮的机器翻译系统的理想选择。例如，“She
+    is trying hard”中“hard”的最佳翻译方式并不是“fuerte”。
 - en: If you see your validation loss starting to creep up, there’s little point keeping
     the training process running, because chances are, your model has already overfitted
     to the data to some extent. A common practice in such a situation, called *early
@@ -657,6 +738,8 @@
   id: totrans-80
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果您看到验证损失开始上升，那么继续保持训练过程是没有意义的，因为很有可能您的模型已经在某种程度上过度拟合了数据。在这种情况下的一种常见做法，称为*提前停止*，是终止训练。具体来说，如果您的验证损失在一定数量的轮次内没有改善，您就停止训练，并使用验证损失最低时的模型。等待训练终止的轮次数称为*耐心*。在实践中，最关心的指标（例如
+    BLEU；请参阅第 6.5.2 节）用于提前停止，而不是验证损失。
 - en: OK, that was enough about training and validating for now. The graph in figure
     6.7 indicates that the validation loss is lowest around epoch 8, so you can stop
     (by pressing Ctrl + C) the fairseq-train command after around 10 epochs; otherwise,
@@ -666,22 +749,27 @@
   id: totrans-81
   prefs: []
   type: TYPE_NORMAL
+  zh: 好了，现在关于训练和验证就说到这里。图 6.7 中的图表表明验证损失在第 8 轮左右最低，所以你可以在大约 10 轮后停止（通过按 Ctrl + C），否则该命令会一直运行下去。Fairseq
+    将自动将最佳模型参数（根据验证损失）保存到 checkpoint_best.pt 文件中。
 - en: WARNING Note that the training may take a long time if you are just using a
     CPU. Chapter 11 explains how to use GPUs to accelerate the training.
   id: totrans-82
   prefs: []
   type: TYPE_NORMAL
+  zh: 警告 如果您只使用 CPU 进行训练，可能需要很长时间。第 11 章解释了如何使用 GPU 加速训练。
 - en: 6.3.3 Running the translator
   id: totrans-83
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 6.3.3 运行翻译器
 - en: 'After the model is trained, you can invoke the fairseq-interactive command
     to run your MT model on any input in an interactive way. You can run the command
     by specifying the binary file location and the model parameter file as follows:'
   id: totrans-84
   prefs: []
   type: TYPE_NORMAL
+  zh: 模型训练完成后，您可以调用 fairseq-interactive 命令以交互方式在任何输入上运行您的机器翻译模型。您可以通过指定二进制文件位置和模型参数文件来运行该命令，如下所示：
 - en: '[PRE6]'
   id: totrans-85
   prefs: []
@@ -692,6 +780,7 @@
   id: totrans-86
   prefs: []
   type: TYPE_NORMAL
+  zh: 看到提示“Type the input sentence and press return”后，尝试逐一输入（或复制粘贴）以下西班牙语句子：
 - en: '[PRE7]'
   id: totrans-87
   prefs: []
@@ -704,6 +793,7 @@
   id: totrans-88
   prefs: []
   type: TYPE_NORMAL
+  zh: 请注意这些句子中的标点和空白——Fairseq 假定输入已经进行了分词。您的结果可能会略有不同，这取决于许多因素（深度学习模型的训练通常涉及一些随机性），但您会得到类似以下的结果（我加粗了以示强调）：
 - en: '[PRE8]'
   id: totrans-89
   prefs: []
@@ -716,11 +806,13 @@
   id: totrans-90
   prefs: []
   type: TYPE_NORMAL
+  zh: 这里大部分的输出句子都几乎完美，除了第四句（我会翻译成“有免费的房间吗？”）。即使考虑到这些句子都是任何一本旅行西班牙短语书中都可以找到的简单例子，但对于一个在一个小时内构建的系统来说，这并不是一个坏的开始！
 - en: 6.4 How Seq2Seq models work
   id: totrans-91
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 6.4 Seq2Seq模型的工作原理
 - en: In this section, we will dive deep into the individual components that constitute
     a Seq2Seq model, which include the encoder and the decoder. We’ll also cover the
     algorithms used for decoding the target sentence—greedy decoding and beam search
@@ -728,11 +820,13 @@
   id: totrans-92
   prefs: []
   type: TYPE_NORMAL
+  zh: 在本节中，我们将深入探讨构成Seq2Seq模型的各个组件，包括编码器和解码器。我们还将涵盖用于解码目标句子的算法——贪婪解码和波束搜索解码。
 - en: 6.4.1 Encoder
   id: totrans-93
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 6.4.1 编码器
 - en: As we saw in the beginning of this chapter, the encoder of a Seq2Seq model is
     not much different from the sequential-labeling models we covered in chapter 5\.
     Its main job is to take the input sequence (usually a sentence) and convert it
@@ -741,14 +835,17 @@
   id: totrans-94
   prefs: []
   type: TYPE_NORMAL
+  zh: 正如我们在本章开始看到的，Seq2Seq模型的编码器与我们在第5章中讨论的顺序标记模型并没有太大的不同。它的主要工作是接受输入序列（通常是一个句子）并将其转换为固定长度的向量表示。你可以使用像图6.8中所示的LSTM-RNN。
 - en: '![CH06_F08_Hagiwara](../Images/CH06_F08_Hagiwara.png)'
   id: totrans-95
   prefs: []
   type: TYPE_IMG
+  zh: '![CH06_F08_Hagiwara](../Images/CH06_F08_Hagiwara.png)'
 - en: Figure 6.8 Encoder of a Seq2Seq model
   id: totrans-96
   prefs: []
   type: TYPE_NORMAL
+  zh: 图6.8 Seq2Seq模型的编码器
 - en: Unlike sequential-labeling models, we need only the final hidden state of an
     RNN, which is then passed to the decoder to generate the target sentence. You
     can also use a multilayer RNN as an encoder, in which case the sentence representation
@@ -756,28 +853,34 @@
   id: totrans-97
   prefs: []
   type: TYPE_NORMAL
+  zh: 与顺序标记模型不同，我们只需要RNN的最终隐藏状态，然后将其传递给解码器生成目标句子。你也可以使用多层RNN作为编码器，这种情况下句子表示是每一层输出的串联，如图6.9所示。
 - en: '![CH06_F09_Hagiwara](../Images/CH06_F09_Hagiwara.png)'
   id: totrans-98
   prefs: []
   type: TYPE_IMG
+  zh: '![CH06_F09_Hagiwara](../Images/CH06_F09_Hagiwara.png)'
 - en: Figure 6.9 Using a multilayer RNN as an encoder
   id: totrans-99
   prefs: []
   type: TYPE_NORMAL
+  zh: 图6.9 使用多层RNN作为编码器
 - en: Similarly, you can use a bidirectional (or even a bidirectional multilayer)
     RNN as an encoder. The final sentence representation is a concatenation of the
     output of the forward and the backward layers, as shown in figure 6.10.
   id: totrans-100
   prefs: []
   type: TYPE_NORMAL
+  zh: 同样地，你可以使用双向（甚至是双向多层）RNN作为编码器。最终的句子表示是正向层和反向层输出的串联，如图6.10所示。
 - en: '![CH06_F10_Hagiwara](../Images/CH06_F10_Hagiwara.png)'
   id: totrans-101
   prefs: []
   type: TYPE_IMG
+  zh: '![CH06_F10_Hagiwara](../Images/CH06_F10_Hagiwara.png)'
 - en: Figure 6.10 Using a bidirectional RNN as an encoder
   id: totrans-102
   prefs: []
   type: TYPE_NORMAL
+  zh: 图6.10 使用双向RNN作为编码器
 - en: 'NOTE This is a small detail, but remember that an LSTM cell produces two types
     of output: the cell state and the hidden state (see section 4.2.2 for review).
     When using LSTM for encoding a sequence, we usually just use the final hidden
@@ -787,19 +890,23 @@
   id: totrans-103
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意 这是一个小细节，但要记得LSTM单元产生两种类型的输出：单元状态和隐藏状态（请参阅4.2.2节）。在使用LSTM编码序列时，我们通常只使用最终隐藏状态，而丢弃单元状态。把单元状态看作是类似于临时循环变量，用于计算最终结果（隐藏状态）。请参见图6.11进行说明。
 - en: '![CH06_F11_Hagiwara](../Images/CH06_F11_Hagiwara.png)'
   id: totrans-104
   prefs: []
   type: TYPE_IMG
+  zh: '![CH06_F11_Hagiwara](../Images/CH06_F11_Hagiwara.png)'
 - en: Figure 6.11 An encoder using LSTM cells
   id: totrans-105
   prefs: []
   type: TYPE_NORMAL
+  zh: 图6.11 使用LSTM单元的编码器
 - en: 6.4.2 Decoder
   id: totrans-106
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 6.4.2 解码器
 - en: Likewise, the decoder of a Seq2Seq model is similar to the language model we
     covered in chapter 5\. In fact, they are identical except for one crucial difference—a
     decoder takes an input from the encoder. The language models we covered in chapter
@@ -812,14 +919,19 @@
   id: totrans-107
   prefs: []
   type: TYPE_NORMAL
+  zh: 同样，Seq2Seq 模型的解码器与我们在第 5 章中介绍的语言模型类似。实际上，它们除了一个关键的区别外完全相同——解码器从编码器那里获取输入。我们在第
+    5 章中介绍的语言模型称为*无条件语言模型*，因为它们在没有任何输入或前提条件的情况下生成语言。另一方面，根据某些输入（条件）生成语言的语言模型称为*条件语言模型*。Seq2Seq
+    解码器是一种条件语言模型，其中条件是编码器生成的句子表示。请参见图 6.12，了解 Seq2Seq 解码器的工作原理的示例。
 - en: '![CH06_F12_Hagiwara](../Images/CH06_F12_Hagiwara.png)'
   id: totrans-108
   prefs: []
   type: TYPE_IMG
+  zh: '![CH06_F12_Hagiwara](../Images/CH06_F12_Hagiwara.png)'
 - en: Figure 6.12 A decoder of a Seq2Seq model
   id: totrans-109
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 6.12 Seq2Seq 模型的解码器
 - en: Just as with language models, Seq2Seq decoders generate text from left to right.
     Like the encoder, you can use an RNN to do this. A decoder can also be a multilayer
     RNN. However, a decoder cannot be bidirectional—you cannot generate a sentence
@@ -828,10 +940,13 @@
   id: totrans-110
   prefs: []
   type: TYPE_NORMAL
+  zh: 就像语言模型一样，Seq2Seq 解码器从左到右生成文本。与编码器一样，您可以使用 RNN 来实现这一点。解码器也可以是多层 RNN。然而，解码器不能是双向的——你不能从两边生成一个句子。正如第
+    5 章中提到的那样，对过去生成的序列进行操作的模型被称为*自回归模型*。
 - en: Non-autoregressive models
   id: totrans-111
   prefs: []
   type: TYPE_NORMAL
+  zh: 非自回归模型
 - en: 'If you think simply generating text from left to right is too limiting, you
     have a good point. Humans also do not always write language linearly—we often
     revise, add, and delete words and phrases afterward. Also, generating text in
@@ -845,6 +960,8 @@
   id: totrans-112
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果你认为简单地从左到右生成文本太过受限制，那么你有道理。人类也不总是线性地写语言——我们经常在之后修订、添加和删除单词和短语。此外，线性地生成文本并不是很高效。句子的后半部分需要等待直到它的前半部分完成，这使得并行化生成过程非常困难。截至本文撰写时，研究人员正在大力开发非自回归的机器翻译模型，这些模型不会以线性方式生成目标句子（例如，请参阅
+    Salesforce Research 的这篇论文：[https://arxiv.org/abs/1711.02281](https://arxiv.org/abs/1711.02281)）。然而，它们在翻译质量上还没有超过自回归模型，大多数研究和生产的机器翻译系统仍然采用自回归模型。
 - en: How the decoder behaves is a bit different between the training and the prediction
     stages. Let’s see how it is trained first. At the training stage, we know exactly
     how the source sentence should be translated into the target sentence. In other
@@ -854,6 +971,8 @@
   id: totrans-113
   prefs: []
   type: TYPE_NORMAL
+  zh: 解码器在训练阶段和预测阶段的行为略有不同。让我们先看看它是如何训练的。在训练阶段，我们确切地知道源句应该被翻译成目标句。换句话说，我们确切地知道解码器应该逐词生成什么。因此，解码器的训练方式与顺序标记模型的训练方式相似（参见第
+    5 章）。
 - en: First, the decoder is fed the sentence representation produced by the encoder
     and a special token <START>, which indicates the start of a sentence. The first
     RNN cell processes these two inputs and produces the first hidden state. The hidden
@@ -864,6 +983,8 @@
   id: totrans-114
   prefs: []
   type: TYPE_NORMAL
+  zh: '首先，解码器被喂入由编码器产生的句子表示和一个特殊标记<START>，该标记表示句子的开始。 第一个RNN单元处理这两个输入并产生第一个隐藏状态。 隐藏状态向量被馈送到一个线性层，该层收缩或扩展此向量以匹配词汇表的大小。
+    然后得到的向量通过softmax，将其转换为概率分布。 此分布规定了词汇表中每个单词在接下来出现的可能性。  '
 - en: 'Then, this is where the training happens. If the input is “Maria no daba una
     bofetada a la bruja verde,” then we would like the decoder to produce its English
     equivalent: “Mary did not slap the green witch.” This means that we would like
@@ -879,6 +1000,9 @@
   id: totrans-115
   prefs: []
   type: TYPE_NORMAL
+  zh: 然后，这就是训练发生的地方。 如果输入是“Maria no daba una bofetada a la bruja verde”，那么我们希望解码器生成其英文等效句子：“Mary
+    did not slap the green witch.” 这意味着我们希望最大化第一个RNN单元生成“Mary”的概率，给定输入句子。 这是本书中我们在很多地方见过的一个多类别分类问题——词嵌入（第3章），句子分类（第4章）和序列标记（第5章）。
+    您使用交叉熵损失来衡量期望结果与网络实际输出之间的差距有多远。 如果“Mary”的概率很大，那么好——网络会产生较小的损失。 另一方面，如果“Mary”的概率很小，则网络会产生较大的损失，这会鼓励优化算法大幅更改参数（魔法常量）。
 - en: Then, we move on to the next cell. The next cell receives the hidden state computed
     by the first cell and the word “Mary,” *regardless of what the first cell generated*.
     Instead of feeding the token generated by the previous cell, as we did when generating
@@ -893,14 +1017,19 @@
   id: totrans-116
   prefs: []
   type: TYPE_NORMAL
+  zh: 然后，我们移动到下一个单元。 下一个单元接收由第一个单元计算的隐藏状态和单词“Mary”，*不管第一个单元生成了什么*。 与使用语言模型生成文本时喂入先前单元生成的标记不同，我们约束解码器的输入，以防止其“偏离”。
+    第二个单元基于这两个输入产生隐藏状态，然后用于计算第二个单词的概率分布。 我们通过将分布与期望输出“did”进行比较来计算交叉熵损失，并继续移动到下一个单元。
+    我们一直这样做，直到达到最终标记，即<END>。 句子的总损失是句子中所有单词产生的所有损失的平均值，如图6.13所示。
 - en: '![CH06_F13_Hagiwara](../Images/CH06_F13_Hagiwara.png)'
   id: totrans-117
   prefs: []
   type: TYPE_IMG
+  zh: '![CH06_F13_Hagiwara](../Images/CH06_F13_Hagiwara.png)'
 - en: Figure 6.13 Training a Seq2Seq decoder
   id: totrans-118
   prefs: []
   type: TYPE_NORMAL
+  zh: 图6.13 训练Seq2Seq解码器
 - en: Finally, the loss computed this way is used to adjust the model parameters of
     the decoder, so that it can generate the desired output the next time around.
     Note that the parameters of the encoder are also adjusted in this process, because
@@ -910,11 +1039,14 @@
   id: totrans-119
   prefs: []
   type: TYPE_NORMAL
+  zh: 最后，以这种方式计算的损失用于调整解码器的模型参数，以便下一次它能生成期望的输出。 请注意，在此过程中也会调整编码器的参数，因为损失通过句子表示一直传播回编码器。
+    如果编码器产生的句子表示不好，那么解码器无论如何努力，都无法生成高质量的目标句子。
 - en: 6.4.3 Greedy decoding
   id: totrans-120
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 6.4.3 贪婪解码
 - en: Now let’s look at how the decoder behaves at the prediction stage, where a source
     sentence is given to the network, but we don’t know what the correct translation
     should be. At this stage, a decoder behaves a lot like the language models we
@@ -1033,11 +1165,13 @@
   id: totrans-133
   prefs: []
   type: TYPE_NORMAL
+  zh: 令人沮丧的事实是，您无法合理地期望在短时间内找到最大化整个句子概率的最优解路径。但是你可以避免陷入困境（或至少减少陷入困境的可能性），这就是梁搜索解码器的作用。
 - en: 6.4.4 Beam search decoding
   id: totrans-134
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 6.4.4 梁搜索解码
 - en: Let’s think what you would do if you were in the same situation. Let’s use an
     analogy and say you are a college sophomore and need to decide which major to
     pursue by the end of the school year. Your goal is to maximize the total amount
@@ -1051,6 +1185,7 @@
   id: totrans-135
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们想象如果你处于同样的情境下应该怎么做。假设你是一名大学大二的学生，在本学年结束前，你需要决定选择哪个专业。你的目标是在你一生中最大化收入（或幸福或其他你关心的东西），但你不知道哪个专业对于这一目标来说是最好的。你不能尝试每个可能的专业并观察几年后的结果——专业太多，你也无法回到过去。并且仅仅因为有些专业在短期内看起来很有吸引力（例如选择经济学专业可能会带来在大型投资银行的好实习机会），并不意味着这条道路在长期来看是最好的（请看2008年发生了什么）。
 - en: In such a situation, one thing you could do is to hedge your bet by pursuing
     more than one major (as a double major or a minor) at the same time instead of
     committing 100% to one particular major. After a couple of years, if the situation
@@ -1060,6 +1195,7 @@
   id: totrans-136
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这种情况下，你可以做的一件事是通过同时选择多个专业（双专业或辅修）而不是100%致力于特定的专业，来进行投机。几年后，如果情况与你想象的不同，仍然可以更改主意并追求另一种选择，如果你贪婪地选择专业（即只考虑短期前景），则这是不可能的。
 - en: The main idea of beam search decoding is similar to this—instead of committing
     to one path, it purses multiple paths (called *hypotheses*) at the same time.
     In this way, you leave some room for “dark horses,” that is, hypotheses that had
@@ -1068,6 +1204,7 @@
   id: totrans-137
   prefs: []
   type: TYPE_NORMAL
+  zh: 梁搜索解码的主要思想类似于这个——不是只选择一条路径，而是同时追求多条路径（称为*假设*）。这样，你就为“黑马”留下了一些空间，也就是那些在最初得分不高但可能后来表现出色的假设。让我们使用图6.16中的示例，这是图6.15的略微修改版本。
 - en: The key idea of beam search decoding is to use a *beam* (figure 6.16 bottom),
     which you can think of as some sort of buffer that can retain multiple hypotheses
     at the same time. The size of the beam, that is, the number of hypotheses it can
@@ -1080,14 +1217,18 @@
   id: totrans-138
   prefs: []
   type: TYPE_NORMAL
+  zh: 梁搜索解码的关键思想是使用*梁*（图6.16底部），可以将其看作是一种缓冲区，可以同时保留多个假设。梁的大小，即它可以保持的假设数，称为*梁宽度*。让我们使用大小为2的梁并看看会发生什么。最初，你的第一个假设只包含一个词“Mary”，得分为0。当你转向下一个单词时，你选择的单词被附加到假设中，并且得分增加了你刚刚走过的路径的得分。例如，当你转到“did”时，它会生成一个新的假设，包含“Mary
+    did”和得分1。
 - en: '![CH06_F16_Hagiwara](../Images/CH06_F16_Hagiwara.png)'
   id: totrans-139
   prefs: []
   type: TYPE_IMG
+  zh: '![CH06_F16_Hagiwara](../Images/CH06_F16_Hagiwara.png)'
 - en: Figure 6.16 Beam search decoding
   id: totrans-140
   prefs: []
   type: TYPE_NORMAL
+  zh: 图6.16 梁搜索解码
 - en: 'If you have multiple words to choose from at any particular timestep, a hypothesis
     can spawn multiple child hypotheses. At timestep 2, you have three different choices—“you,”
     “not,” and “n’t”—which generate three new child hypotheses: [Mary did you] (6),
@@ -1169,6 +1310,9 @@
   id: totrans-149
   prefs: []
   type: TYPE_NORMAL
+  zh: 正如之前提到的，我们对好的翻译有一些考虑因素。对于这两个方面最重要且常用的概念是充分性(也称为忠实度)和流畅性(也与可理解性密切相关)。充分性是源句子中的信息在翻译中反映的程度。如果通过阅读它的翻译，你可以重构源句子表达的大量信息，那么该翻译具有很高的充分性。流畅性则是翻译在目标语言中的自然程度。例如，如果你正在翻译为英语，“Mary
+    did not slap the green witch”是一种流畅的翻译，而“Mary no had a hit with witch, green”则不是，尽管这两种翻译几乎是同样充分的。请注意，这两个方面在某种程度上是独立的-你可以想象一种流畅但不充分的翻译(例如，“Mary
+    saw a witch in the forest”是一种完全流畅但不充分的翻译)，反之亦然，就像之前的例子一样。能够产生既充分又流畅输出的MT系统是有价值的。
 - en: An MT system is usually evaluated by presenting its translations to human annotators
     and having them judge its output on a 5- or 7-point scale for each aspect. Fluency
     is easier to judge because it requires only monolingual speakers of the target
@@ -1177,11 +1321,13 @@
   id: totrans-150
   prefs: []
   type: TYPE_NORMAL
+  zh: MT系统通常通过将其翻译呈现给人类注释器并要求他们对其每个方面进行5或7点的评价来进行评估。流畅性更容易判断，因为它只需要目标句子的单语种听众，而充分性需要源语言和目标语言的双语种人员。
 - en: 6.5.2 Automatic evaluation
   id: totrans-151
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 6.5.2 自动评估
 - en: Although human evaluation gives the most accurate assessment to MT systems’
     quality, it’s not always feasible. In most cases, you cannot afford to hire human
     evaluators to assess an MT system’s output every time you need it. If you are
@@ -1190,6 +1336,7 @@
   id: totrans-152
   prefs: []
   type: TYPE_NORMAL
+  zh: 尽管人工评估给出了MT系统质量的最准确评估，但并不总是可行的。在大多数情况下，你可能无法负担雇用人类评估员以在你需要时评估MT系统的输出。如果你处理的是不常见的语言对，你可能根本找不到双语的说话者来评估其充分性。
 - en: But more importantly, you need to constantly evaluate and monitor an MT system’s
     quality when you are developing one. For example, if you use a Seq2Seq model to
     train an NMT system, you need to reevaluate its performance every time you adjust
@@ -1206,6 +1353,8 @@
   id: totrans-153
   prefs: []
   type: TYPE_NORMAL
+  zh: 但更重要的是，在开发MT系统时需要不断地评估和监测其质量。例如，如果你使用Seq2Seq模型去训练一个NMT系统，你需要每次调整一个超参数就重新评估其性能。否则，你就不知道你的更改对它的最终性能是否有好或坏的影响。更糟糕的是，如果你要做像“early
+    stopping”(见第6.3.2节)这样的事情来决定何时停止训练过程，你需要在每个周期之后评估它的性能。你不可能雇用人来在每个周期评估你的中间模型-这将是开发MT系统的一个可怕的缓慢的方法。这也是浪费时间，因为最初模型的输出在很大程度上是垃圾，不值得人类评估。中间模型的输出之间存在大量的相关性，人类评估员将花费大量的时间评估非常相似甚至相同的句子。
 - en: For this reason, it’d be desirable if we could use some automatic way to assess
     translation quality. The way this works is similar to some automatic metrics for
     other NLP tasks that we saw earlier, such as accuracy, precision, recall, and
@@ -1335,6 +1484,7 @@
   id: totrans-168
   prefs: []
   type: TYPE_NORMAL
+  zh: 您可能不知道如何开始构建可以进行会话交流的自然语言处理应用程序。我们该如何构建一个“智能”的东西来“思考”，以便它能为人类输入生成有意义的响应？这似乎有些遥远和困难。但是，如果您退后一步，看看我们与其他人的典型对话，有多少实际上是“智能”的呢？如果您像我们大多数人一样，那么您正在进行的会话中有很大一部分都是自动驾驶的：“你好吗？”“我没事，谢谢”“祝你有个愉快的一天”“你也是！”等等。您可能还有一组“模板”回复，对于许多日常问题，例如“你在干什么？”和“你来自哪里？”这些问题可以通过查看输入来回答。甚至更复杂的问题，如“X中你最喜欢的餐厅是什么？”（其中X是您城市的一个地区的名称）和“你最近看过任何Y类型的电影吗？”（其中Y是一种类型），都可以通过“模式匹配”并从记忆中检索相关信息来回答。
 - en: If you think of a conversation as a set of “turns” where the response is generated
     by pattern matching against the previous utterance, this starts to look a lot
     like a typical NLP problem. In particular, if you regard dialogues as a problem
@@ -1349,11 +1499,13 @@
   id: totrans-169
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果您将对话视为一组“回合”，其中响应是通过模式匹配来生成的，那么这看起来与典型的自然语言处理问题非常相似。特别是，如果您认为对话是一个问题，其中NLP系统只是将您的问题“翻译”为其响应，那么这正是我们可以使用本章迄今涵盖的Seq2Seq模型的地方。我们可以将之前（人类的）话语视为外国语句子，并将聊天机器人“翻译”成另一种语言。尽管在这种情况下，这两种语言都是英语，但是在NLP中，通常将输入和输出视为两种不同的语言，并将Seq2Seq模型应用于它们，包括摘要（将更长的文本缩短）和语法纠错（将有错误的文本纠正为无错误的文本）。
 - en: 6.6.2 Preparing a dataset
   id: totrans-170
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 6.6.2 准备数据集
 - en: In this case study, we are going to use The Self-dialogue Corpus ([https://github.com/jfainberg/self_dialogue_corpus](https://github.com/jfainberg/self_dialogue_corpus)),
     a collection of 24,165 conversations. What’s special about this dataset is that
     these conversations are not actual ones between two people, but fictitious ones
@@ -1365,11 +1517,13 @@
   id: totrans-171
   prefs: []
   type: TYPE_NORMAL
+  zh: 在本案例中，我们将使用自我对话语料库（[https://github.com/jfainberg/self_dialogue_corpus](https://github.com/jfainberg/self_dialogue_corpus)），其中包含24,165个对话。这个数据集的特殊之处在于，这些对话并不是两个人之间的实际对话，而是由一人扮演双方所写的虚构对话。虽然还有其他几个基于文本的聊天机器人的对话数据集（例如OpenSubtitles数据集，[http://opus.nlpl.eu/OpenSubtitles-v2018.php](http://opus.nlpl.eu/OpenSubtitles-v2018.php)），但这些数据集通常存在噪声并且常常包含粗言秽语。相比之下，通过收集编造的对话，自我对话语料库在仅有一人的情况下提高了一半的质量（因为你只需要一个人而不是两个人！）。
 - en: 'The same as earlier, I tokenized and converted the corpus into a format that
     is interpretable by Fairseq. You can obtain the converted dataset as follows:'
   id: totrans-172
   prefs: []
   type: TYPE_NORMAL
+  zh: 与之前相同，我对语料进行了分词和转换，使其可被Fairseq解读。您可以按以下方式获取转换后的数据集：
 - en: '[PRE9]'
   id: totrans-173
   prefs: []
