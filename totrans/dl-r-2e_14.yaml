@@ -8297,204 +8297,255 @@
   id: totrans-1426
   prefs: []
   type: TYPE_NORMAL
+  zh: 最后，让我们尝试使用我们的模型来翻译来自测试集的从未见过的英语句子。设置与我们用于序列到序列 RNN 模型相同；唯一改变的是我们将 seq2seq_rnn
+    替换为 transformer，并且删除了我们配置的 target_vectorization() 层添加的额外标记。
 - en: '**Listing 11.38 Translating new sentences with our Transformer model**'
   id: totrans-1427
   prefs: []
   type: TYPE_NORMAL
+  zh: '**列表 11.38 使用我们的 Transformer 模型翻译新句子**'
 - en: tf_decode_sequence <- tf_function(function(input_sentence) {
   id: totrans-1428
   prefs: []
   type: TYPE_NORMAL
+  zh: tf_decode_sequence <- tf_function(function(input_sentence) {
 - en: withr::local_options(tensorflow.extract.style = "python")
   id: totrans-1429
   prefs: []
   type: TYPE_NORMAL
+  zh: withr::local_options(tensorflow.extract.style = "python")
 - en: tokenized_input_sentence <- input_sentence %>%
   id: totrans-1430
   prefs: []
   type: TYPE_NORMAL
+  zh: tokenized_input_sentence <- input_sentence %>%
 - en: as_tensor(shape = c(1, 1)) %>%
   id: totrans-1431
   prefs: []
   type: TYPE_NORMAL
+  zh: as_tensor(shape = c(1, 1)) %>%
 - en: source_vectorization()
   id: totrans-1432
   prefs: []
   type: TYPE_NORMAL
+  zh: source_vectorization()
 - en: spa_vocab <- as_tensor(spa_vocab)
   id: totrans-1433
   prefs: []
   type: TYPE_NORMAL
+  zh: spa_vocab <- as_tensor(spa_vocab)
 - en: decoded_sentence <- as_tensor("[start]", shape = c(1, 1))
   id: totrans-1434
   prefs: []
   type: TYPE_NORMAL
+  zh: decoded_sentence <- as_tensor("[start]", shape = c(1, 1))
 - en: for (i in tf$range(as.integer(max_decoded_sentence_length))) {
   id: totrans-1435
   prefs: []
   type: TYPE_NORMAL
+  zh: for (i in tf$range(as.integer(max_decoded_sentence_length))) {
 - en: tokenized_target_sentence <-
   id: totrans-1436
   prefs: []
   type: TYPE_NORMAL
+  zh: tokenized_target_sentence <-
 - en: target_vectorization(decoded_sentence)[, NA:-1]➊
   id: totrans-1437
   prefs: []
   type: TYPE_NORMAL
+  zh: target_vectorization(decoded_sentence)[, NA:-1]➊
 - en: next_token_predictions <-➋
   id: totrans-1438
   prefs: []
   type: TYPE_NORMAL
+  zh: next_token_predictions <-➋
 - en: transformer(list(tokenized_input_sentence,
   id: totrans-1439
   prefs: []
   type: TYPE_NORMAL
+  zh: transformer(list(tokenized_input_sentence,
 - en: tokenized_target_sentence))
   id: totrans-1440
   prefs: []
   type: TYPE_NORMAL
+  zh: tokenized_target_sentence))
 - en: sampled_token_index <- tf$argmax(next_token_predictions[0, i, ])
   id: totrans-1441
   prefs: []
   type: TYPE_NORMAL
+  zh: sampled_token_index <- tf$argmax(next_token_predictions[0, i, ])
 - en: sampled_token <- spa_vocab[sampled_token_index]➌
   id: totrans-1442
   prefs: []
   type: TYPE_NORMAL
+  zh: sampled_token <- spa_vocab[sampled_token_index]➌
 - en: decoded_sentence <-
   id: totrans-1443
   prefs: []
   type: TYPE_NORMAL
+  zh: decoded_sentence <-
 - en: tf$strings$join(c(decoded_sentence, sampled_token),
   id: totrans-1444
   prefs: []
   type: TYPE_NORMAL
+  zh: tf$strings$join(c(decoded_sentence, sampled_token),
 - en: separator = " ")
   id: totrans-1445
   prefs: []
   type: TYPE_NORMAL
+  zh: separator = " ")
 - en: if (sampled_token == "[end]")➍
   id: totrans-1446
   prefs: []
   type: TYPE_NORMAL
+  zh: if (sampled_token == "[end]")➍
 - en: break
   id: totrans-1447
   prefs: []
   type: TYPE_NORMAL
+  zh: break
 - en: '}'
   id: totrans-1448
   prefs: []
   type: TYPE_NORMAL
+  zh: '}'
 - en: decoded_sentence
   id: totrans-1449
   prefs: []
   type: TYPE_NORMAL
+  zh: decoded_sentence
 - en: '})'
   id: totrans-1450
   prefs: []
   type: TYPE_NORMAL
+  zh: '})'
 - en: for (i in sample.int(nrow(test_pairs), 20)) {
   id: totrans-1451
   prefs: []
   type: TYPE_NORMAL
+  zh: for (i in sample.int(nrow(test_pairs), 20)) {
 - en: c(input_sentence, correct_translation) %<-% test_pairs[i, ]
   id: totrans-1452
   prefs: []
   type: TYPE_NORMAL
+  zh: c(input_sentence, correct_translation) %<-% test_pairs[i, ]
 - en: cat(input_sentence, "\n")
   id: totrans-1453
   prefs: []
   type: TYPE_NORMAL
+  zh: cat(input_sentence, "\n")
 - en: cat(input_sentence %>% as_tensor() %>%
   id: totrans-1454
   prefs: []
   type: TYPE_NORMAL
+  zh: cat(input_sentence %>% as_tensor() %>%
 - en: tf_decode_sequence() %>% as.character(), "\n")
   id: totrans-1455
   prefs: []
   type: TYPE_NORMAL
+  zh: tf_decode_sequence() %>% as.character(), "\n")
 - en: cat("-\n")
   id: totrans-1456
   prefs: []
   type: TYPE_NORMAL
+  zh: cat("-\n")
 - en: '}'
   id: totrans-1457
   prefs: []
   type: TYPE_NORMAL
+  zh: '}'
 - en: ➊ **Drop the last token; "python" style is not inclusive of a slice end.**
   id: totrans-1458
   prefs: []
   type: TYPE_NORMAL
+  zh: ➊ **删除最后一个标记；“python” 样式不包括切片结尾。**
 - en: ➋ **Sample the next token.**
   id: totrans-1459
   prefs: []
   type: TYPE_NORMAL
+  zh: ➋ **随机抽取下一个标记。**
 - en: ➌ **Convert the next token prediction to a string, and append it to the generated
     sentence.**
   id: totrans-1460
   prefs: []
   type: TYPE_NORMAL
+  zh: ➌ **将下一个标记预测转换为字符串，并附加到生成的句子中。**
 - en: ➍ **Exit condition**
   id: totrans-1461
   prefs: []
   type: TYPE_NORMAL
+  zh: ➍ **退出条件**
 - en: Subjectively, the Transformer seems to perform significantly better than the
     GRU-based translation model. It’s still a toy model, but it’s a better toy model.
   id: totrans-1462
   prefs: []
   type: TYPE_NORMAL
+  zh: 主观上，Transformer 似乎比基于 GRU 的翻译模型表现要好得多。它仍然是一个玩具模型，但是是一个更好的玩具模型。
 - en: Listing 11.39 Some sample results from the Transformer translation model
   id: totrans-1463
   prefs: []
   type: TYPE_NORMAL
+  zh: 列表 11.39 Transformer 翻译模型的一些示例结果
 - en: This is a song I learned when I was a kid.
   id: totrans-1464
   prefs: []
   type: TYPE_NORMAL
+  zh: 这是我小的时候学会的一首歌。
 - en: '[start] esta es una canción que aprendí cuando'
   id: totrans-1465
   prefs: []
   type: TYPE_NORMAL
+  zh: '[start] esta es una canción que aprendí cuando'
 - en: '![Image](../images/common01.jpg) era chico [end]➊'
   id: totrans-1466
   prefs: []
   type: TYPE_NORMAL
+  zh: '![Image](../images/common01.jpg) era chico [end]➊'
 - en: '-'
   id: totrans-1467
   prefs: []
   type: TYPE_NORMAL
+  zh: '-'
 - en: She can play the piano.
   id: totrans-1468
   prefs: []
   type: TYPE_NORMAL
+  zh: 她会弹钢琴。
 - en: '[start] ella puede tocar piano [end]'
   id: totrans-1469
   prefs: []
   type: TYPE_NORMAL
+  zh: '[start] ella puede tocar piano [end]'
 - en: '-'
   id: totrans-1470
   prefs: []
   type: TYPE_NORMAL
+  zh: '-'
 - en: I’m not who you think I am.
   id: totrans-1471
   prefs: []
   type: TYPE_NORMAL
+  zh: 我不是你认为的那个人。
 - en: '[start] no soy la persona que tú creo que soy [end]'
   id: totrans-1472
   prefs: []
   type: TYPE_NORMAL
+  zh: '[start] no soy la persona que tú creo que soy [end]'
 - en: '-'
   id: totrans-1473
   prefs: []
   type: TYPE_NORMAL
+  zh: '-'
 - en: It may have rained a little last night.
   id: totrans-1474
   prefs: []
   type: TYPE_NORMAL
+  zh: 昨晚可能下了一点雨。
 - en: '[start] puede que llueve un poco el pasado [end]'
   id: totrans-1475
   prefs: []
   type: TYPE_NORMAL
+  zh: '[start] puede que llueve un poco el pasado [end]'
 - en: ➊ **Although the source sentence wasn't gendered, this translation assumes a
     male speaker. Keep in mind that translation models will often make unwarranted
     assumptions about their input data, which leads to algorithmic bias. In the worst
@@ -8503,6 +8554,7 @@
   id: totrans-1476
   prefs: []
   type: TYPE_NORMAL
+  zh: ➊ **尽管源句子没有明确性别，但这个翻译假设了一个男性说话者。请记住，翻译模型经常会对其输入数据做出不合理的假设，这会导致算法偏见。在最糟糕的情况下，模型可能会产生与当前处理的数据无关的记忆信息。**
 - en: That concludes this chapter on natural language processing—you just went from
     the very basics to a fully fledged Transformer that can translate from English
     to Spanish. Teaching machines to make sense of language is the latest superpower
@@ -8510,11 +8562,13 @@
   id: totrans-1477
   prefs: []
   type: TYPE_NORMAL
+  zh: 这就结束了关于自然语言处理的这一章节——你刚刚从最基础的知识到了一个完全成熟的 Transformer，可以将英语翻译成西班牙语。教会机器理解语言是你可以添加到自己技能集合中的最新超能力。
 - en: Summary
   id: totrans-1478
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 总结
 - en: 'There are two kinds of NLP models: *bag-of-words models* that process sets
     of words or *N*-grams without taking into account their order, and *sequence models*
     that process word order. A bag-of-words model is made of Dense layers, whereas
