@@ -1,0 +1,1014 @@
+- en: 12 Machine learning pipeline
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter covers
+  prefs: []
+  type: TYPE_NORMAL
+- en: Understanding machine learning pipelines with experiment management and hyperparameter
+    optimization
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Implementing Docker containers for the DC taxi model to reduce boilerplate code
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Deploying a machine learning pipeline to train the model
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Thus far, you have learned about the individual stages or steps of machine
+    learning in isolation. Focusing on one step of machine learning at a time helped
+    to concentrate your effort on a more manageable scope of work. However, to deploy
+    a production machine learning system it is necessary to integrate these steps
+    into a single pipeline: the outputs of a step flowing into the inputs of the subsequent
+    steps of the pipeline. Further, the pipeline should be flexible enough to enable
+    the hyperparameter optimization (HPO) process to manage and to experiment with
+    the specific tasks executed across the stages of the pipeline.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this chapter, you will learn about the concepts and the tools you can use
+    to integrate the machine learning pipeline, deploy it to AWS, and train a DC Taxi
+    fare estimation machine learning model using experiment management and hyperparameter
+    optimization.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 12.1 Describing the machine learning pipeline
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: This section introduces the core concepts needed to explain the machine learning
+    pipeline implementation described in this chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To clarify the scope of the machine learning pipeline described in this chapter,
+    it is helpful to start with the description of the inputs and outputs of the entire
+    pipeline. On the input side, the pipeline expects a data set produced from exploratory
+    data analysis (EDA) and data quality (data cleanup) processes. The output of the
+    machine learning pipeline is one or more trained machine learning model(s), meaning
+    that the scope of the pipeline excludes the steps from the deployment of the model
+    to production. Since the inputs and the outputs of the pipeline require either
+    human-computer interaction (EDA and data quality) or repeatable automation (model
+    deployment), they are both out of scope for HPO.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For an illustration of the desired features of a machine learning pipeline look
+    at figure 12.1.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![12-01](Images/12-01.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 12.1 A unified machine learning pipeline enables hyperparameter optimization
+    at every stage.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the diagram, the data preparation, feature engineering, and machine learning
+    model training stages are managed by HPO. Using HPO-managed stages may result
+    in experiments about whether
+  prefs: []
+  type: TYPE_NORMAL
+- en: During the data preparation stage, the training examples with missing numeric
+    features are dropped from the training data set or are updated to replace missing
+    values with the expected (mean) values for the features
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: During the feature engineering stage, numeric location features (such as latitude
+    or longitude coordinates) are converted into categorical features using binning
+    into categories with 64 or 128 distinct values
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: During the machine learning training stage, the model is trained using stochastic
+    gradient descent (SGD) or the Adam optimizer
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Although it may appear that implementing the pipeline in figure 12.1 should
+    be complex, by using a collection of PyTorch and complementary frameworks you
+    will be able to deploy it by the conclusion of this section. The implementation
+    of the pipeline in this section relies on the following technologies:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*MLFlow*—For open source experiment management'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Optuna*—For hyperparameter optimization'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Docker*—For pipeline component packaging and reproducible execution'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*PyTorch Lighting*—For PyTorch machine learning model training and validation'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Kaen*—For provisioning and management of the pipeline across AWS and other
+    public cloud providers'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Before proceeding, it is helpful to summarize the key concepts that are going
+    to describe the HPO aspects of the pipeline in more detail. The diagram in figure
+    12.2 clarifies the relationship across the pipeline, HPO, and associated concepts.
+    Experiment management platforms such as MLFlow (other examples include Weights
+    & Biases, Comet.ML, and Neptune.AI) store and manage experiment instances such
+    that each instance corresponds to a different machine learning pipeline. For example,
+    an experiment management platform may store an experiment instance for a machine
+    learning pipeline implemented to train DC Taxi fare estimation models and a different
+    experiment instance for a machine learning pipeline that trains natural language
+    processing models for online chatbots. The experiment instances are isolated from
+    each other but are managed by a single experiment management platform.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![12-02](Images/12-02.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 12.2 An experiment manager controls the execution of pipeline execution
+    (job) instances according to HPO settings.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Each experiment instance uses a *parent run* as a collection of one or more
+    machine learning pipeline executions (*child runs*). The parent run is configured
+    with the settings that apply across multiple pipeline executions, for instance
+    the value of the pseudorandom number seed used by an HPO engine such as Optuna.
+    The parent run also specifies the total number of child runs (machine learning
+    pipeline executions) that should be executed to complete the parent run. Since
+    each machine learning pipeline execution also corresponds to a unique combination
+    of hyperparameter key/value pairs, the number of the child runs specified by the
+    parent run also specifies the total number of HPO trials (sets of values) that
+    should be produced by the HPO engine to complete the parent run.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The machine learning pipeline code along with the services for experiment management,
+    hyperparameter optimization, and machine learning model training are deployed
+    as Docker containers interconnected by a virtual private cloud (VPC) network in
+    a cloud provider. This deployment is illustrated in figure 12.3.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![12-03](Images/12-03.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 12.3 A machine learning pipeline with HPO is deployed as a collection
+    of Docker containers with at least one management and one worker node as well
+    as optional management and worker nodes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As shown in the figure, in order to deploy a machine learning pipeline with
+    HPO, at least two Docker containers are connected on a virtual private cloud’s
+    network, with at least one manager and at least one worker node in the deployment.
+    The manager node(s) host container(s) with the
+  prefs: []
+  type: TYPE_NORMAL
+- en: Experiment management service (e.g., MLFlow)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: HPO engine (e.g., Optuna) running as a service integrated with experiment management
+    (e.g., Kaen’s BaseOptunaService)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Experiment management user interface
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Worker management service for scheduling and orchestration of the machine learning
+    pipeline child runs across the worker nodes
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The worker node(s) host the Docker containers with the machine learning model
+    (e.g., PyTorch code) along with the code describing how to train, validate, and
+    test the machine learning model based on the hyperparameters (e.g., PyTorch Lightning
+    code).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that the life cycle of the manager and worker nodes is different from the
+    life cycle of the Docker container execution on the nodes. This means that the
+    same nodes can host the execution of multiple container instances and multiple
+    machine learning pipeline runs without having to be provisioned or de-provisioned.
+    Also, while the containers on the management nodes are long running, for example
+    to provide the experiment service user interface and hyperparameter optimization
+    engine services across multiple machine learning pipeline executions, the containers
+    on the worker nodes stay running only for the duration of the machine learning
+    pipeline execution.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Although the deployment configuration described in this section may appear complex,
+    provisioning of the nodes, machine learning middleware (experiment management,
+    hyperparameter optimization, and so on), as well as the orchestration of the machine
+    learning pipeline execution across the worker nodes, are handled entirely by the
+    Kaen framework and associated Docker containers. You are going to learn more about
+    the framework and how to build your machine learning pipeline on top of existing
+    Kaen containers later in this chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 12.2 Enabling PyTorch-distributed training support with Kaen
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: This section illustrates how to add PyTorch-distributed training support using
+    the PyTorch DistributedDataParallel class. By the conclusion of this section,
+    the train method for the DC taxi fare model will be extended to integrate with
+    the Kaen framework for distributed training in a cloud environment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Unlike the code and Jupyter notebook instructions from the previous chapters
+    of this book, the code in the remainder of this chapter requires that your environment
+    has Docker and Kaen installed. You can find more about installing and getting
+    started with Docker in appendix B. To install Kaen to an environment with an existing
+    Docker installation, execute
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: which will download and install the kaen command line interface (CLI) in your
+    shell environment. For example, if Kaen is installed correctly, you can get help
+    about the Kaen commands using
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'which should produce an output resembling the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: To execute the instructions in the remainder of this book, launch a Kaen Jupyter
+    environment using
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'from your shell environment, which should launch a specialized Jupyter notebook
+    environment as a new Docker container in your local Docker host. The kaen jupyter
+    command should also navigate your default browser to the Jupyter home page and
+    output text in the shell that resembles the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: which specifies the URL that you can use in your browser to open the newly launched
+    Jupyter instance.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the Jupyter environment, create and open a new notebook. For example, you
+    can name the notebook ch12.ipynb. As the first step in the notebook, you should
+    execute the shell command
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: to create an src director for your code in this environment. Recall that when
+    you use the exclamation sign ! in a Python code cell in Jupyter, the command that
+    follows it is executed in the underlying bash shell. So, the result of running
+    the code is to create an src directory in the filesystem.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Next, save the latest version of the DC taxi model (as described in the chapter
+    11) to a model_v1.py file in the src directory using the %%writefile magic.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 12.1 Saving the implementation to model_v1.py
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Since the code in listing 12.1 saved version 1 of the DC taxi model to a file
+    named model_v1.py, the entry point (in a trainer.py file of the src directory)
+    to the process of building and testing this version of the model starts by loading
+    the DC taxi model instance from the model_v1 package:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Initialize the pseudorandom number seed using the hyperparameters or a current
+    timestamp.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Automatically update the DC taxi model to take advantage of multiple trainer
+    nodes if available.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ As described in chapter 8, in a distributed cluster the shard_size is often
+    distinct from . . .
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ . . . the batch_size used to compute the gradients.
+  prefs: []
+  type: TYPE_NORMAL
+- en: At this point you can unit test trainer.py by running the following from your
+    shell environment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 12.2 Run a simple test to confirm that the implementation works as expected.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: This should train, test, and report on the metrics of your model using a small
+    sample of the DC taxi data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 12.2.1 Understanding PyTorch-distributed training settings
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This section illustrates the configuration of the environment variables and
+    related settings expected by PyTorch models when performing distributed training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The distributed training approach for PyTorch models is surprisingly straightforward
+    to enable. Although native PyTorch does not provide integration with cloud providers
+    such as AWS, Azure, or GCP, the code in listing 12.3 illustrates how to use the
+    Kaen framework ([http://kaen.ai](http://kaen.ai)) to bridge PyTorch and PyTorch
+    Lightning with distributed training in cloud providers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The PyTorch-specific implementation used by the kaen.torch.init_process_ group
+    method enables distributed training for the DC taxi model, as specified by the
+    model PyTorch Lightning module, where the PyTorch torch.nn.Sequential layers are
+    stored in the model.layers attribute.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 12.3 Kaen framework configuring PyTorch model
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Set PyTorch MASTER_ADDR to localhost address unless otherwise specified by
+    Kaen.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Set PyTorch MASTER_PORT to 12355 unless otherwise specified in the MASTER_PORT
+    variable.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Use the CPU-based gloo backend unless otherwise specified by KAEN_BACKEND.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Initialize the distributed data parallel training rank . . .
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ . . . and the count of training nodes based on KAEN_RANK and KAEN_WORLD_SIZE
+    variables.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❻ Ensure that the distributed training process group is ready to train.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❼ Enable distributed training for the model using DistributedDataParallel.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When training a PyTorch model using the DistributedDataParallel implementation,
+    there are several prerequisites that must be met before the training can start.
+    First, the distributed training library must be configured with the MASTER_ADDR
+    and MASTER_PORT environment variables for the model training manager node on the
+    network. These values must be specified even when DistributedDataParallel is used
+    in a scenario with a single node. In a single-node scenario, MASTER_ADDR and MASTER_
+    PORT are initialized to the values 127.0.0.1 and 12355, respectively. When the
+    distributed training cluster consists of more than a single node, MASTER_ADDR
+    must correspond to the IP address of the manager node (node rank 0, per the description
+    in chapter 11) in the distributed node in the cluster.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The Kaen framework can initialize the runtime environment of your model training
+    environment with the runtime IP address for the manager node used for PyTorch
+    training. Hence, in the example, MASTER_ADDR is initialized to the value of KAEN_
+    JOB_MANAGER_IP if the latter environment variable is set by the Kaen framework
+    and to 127.0.0.1 (for single-node training) otherwise. In the example, MASTER_PORT
+    is initialized to 12355 by default unless a different value is preset before starting
+    the training runtime.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Notice that the init_method parameter to the init_process_group method is hardcoded
+    to env:// to ensure that the distributed training initialization happens according
+    to the values of the MASTER_ADDR and MASTER_PORT environment variables described
+    earlier. Although it is possible to use a file or a key/value store for initialization,
+    the environment-based approach is demonstrated in this example because it is natively
+    supported by the Kaen framework.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In addition to the initialization method, notice that init_process_group is
+    invoked with the values for the BACKEND, WORKER, and REPLICAS settings. The BACKEND
+    setting corresponds to the name of one of several distributed communication backend
+    libraries supported by PyTorch. (The details of the features supported by the
+    libraries are available here: [https://pytorch.org/docs/stable/distributed.html](https://pytorch.org/docs/stable/distributed.html).)
+    gloo is used to enable distributed training over CPUs while nccl is used for GPU-based
+    distributed training. Since CPU-based distributed training is easier, cheaper,
+    and often faster to provision in cloud providers like AWS, this chapter focuses
+    on CPU-based training first and then on how to introduce the changes needed to
+    support GPU-based training.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The values for RANK and WORLD_SIZE needed to initialize distributed training
+    are also provided by the Kaen framework. The WORLD_SIZE value corresponds to a
+    natural count (i.e., starting with one) of the integer count of the nodes used
+    in distributed training, while the RANK value corresponds to a zero-based integer
+    index of the node executing the Python runtime training in the PyTorch model.
+    Note that both RANK and WORLD_SIZE are initialized based on the Kaen’s framework’s
+    environment variable settings. For example, if you instantiate a Kaen training
+    environment with only a single training node, then KAEN_WORLD_SIZE is set to 1
+    while the RANK value of the single training node is set to 0. In contrast, for
+    a distributed Kaen training environment consisting of 16 nodes, KAEN_WORLD_SIZE
+    is initialized to 16 and each of the training nodes is assigned a RANK value in
+    the range from [0, 15], in other words inclusive of both the start (0) index and
+    the end (15) index.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Lastly, notice that the DistributedDataParallel training is initialized only
+    once, after checking the is_initialized status. The initialization involves executing
+    init_ process_group using the backend, rank, and world_size settings described
+    earlier in this section. Once the initialization completes (in other words, the
+    init_process_ group returns), the DistributedDataParallel instance is wrapped
+    around the PyTorch nn.Module-based model instance, which is assigned to model.nn
+    in the example. At this point, the model is ready to be trained by a distributed
+    cluster.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 12.3 Unit testing model training in a local Kaen container
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: This section describes how to unit test the model implementation in a local
+    Kaen container prior to deploying the code to a cloud environment like AWS.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Although the code implementation supports distributed training, it can be tested
+    without having to provision (and pay for) a distributed training environment in
+    a cloud provider. You will start the unit test by downloading a Kaen-provided
+    base container image provided for PyTorch models targeted at AWS.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Ensure that you can authenticate with DockerHub where you can download the
+    base container image. Once you execute the following code snippet in your Kaen
+    Jupyter environment, you will be prompted to enter your DockerHub username, which
+    is then stored in the DOCKER_HUB_USER Python variable:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Next, enter the DockerHub password for your username when prompted. Notice
+    that the password is cleared out from the DOCKER_HUB_PASSWORD variable after the
+    authentication is finished:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: You should see an output with the message Login Succeeded if you specified valid
+    DockerHub credentials.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The base PyTorch Docker image is quite large, about 1.9 GB. The Kaen-based PyTorch
+    image (kaenai/pytorch-mlflow-aws-base:latest), which adds binaries with support
+    for AWS and MLFlow, is roughly 2 GB in size, so be prepared that the following
+    download will take a few minutes, depending on the speed of your internet connection.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To execute the download, run
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Once the download completes, you can package your source code to an image derived
+    from kaenai/pytorch-mlflow-aws-base:latest using the following Dockerfile. Notice
+    that the file simply copies the Python source code to the /workspace directory
+    of the image filesystem:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Since the source code files model_v1.py and trainer.py described earlier in
+    this chapter were saved to an src directory, notice that the following command
+    to build your Docker image uses the src/ directory as the root of the Docker image
+    build process. To ensure that the image you build can be uploaded to DockerHub,
+    the image is tagged using {DOCKER_HUB_USER} as a prefix:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: After the docker build command is finished, you can run you newly created Docker
+    container using
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: which should produce an output identical to the output of listing 12.2\. Why
+    should you bother creating the Docker image? Recall that having the Docker image
+    will simplify deployment and training of your model in the cloud provider environment
+    such as AWS. How will the image be shared from your local environment to the cloud
+    provider environment? In general, Docker images are shared using Docker Registry
+    instances such as DockerHub.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To push (upload) your newly built image to DockerHub, execute
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: which should complete in just a few seconds since the docker push operation
+    will need to push only the content of the source code (Python files) to DockerHub.
+    The rest of your dctaxi image is mounted from the base kaenai/pytorch-mlflow-aws-base:latest
+    image.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 12.4 Hyperparameter optimization with Optuna
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: This section teaches about Optuna for HPO and how to use the Kaen framework
+    to add support for HPO to the DC taxi fare estimation model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Thus far, you have been unit testing your implementation using a static set
+    of hyperparameter values for model training. Recall from chapter 11 that you can
+    use Optuna to perform hyperparameter optimization (HPO) for your code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Optuna is one of several HPO frameworks supported by Kaen. To incorporate support
+    for HPO in distributed training, you need to use one of the Kaen-based Docker
+    images that expose Optuna as a service to your code and implement a sub-classable
+    Python class named BaseOptunaService. Recall from chapter 11 that hyperparameters
+    in Optuna are specified using the trial API. The BaseOptunaService in Kaen provides
+    access to the Optuna trial instance to subclasses of BaseOptunaService. For example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ The _trial attribute references an Optuna trial instance.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ The trial instance supports Optuna trial API methods such as suggest_int.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Notice that there is a single hyperparameter requested from Optuna in the dictionary
+    instance returned by the hparams method. The suggest_int method is one of several
+    methods available from the Optuna trial API to obtain a value for a hyperparameter.
+    (Other methods available from the trial interface are described here: [https://optuna.readthedocs.io/en/stable/reference/generated/optuna.trial.Trial.html#](https://optuna.readthedocs.io/en/stable/reference/generated/optuna.trial.Trial.html#).)
+    In the example, the suggest_int(''seed'', 0, np.iinfo(np.int32).max) method specifies
+    that Optuna should recommend values for the pseudorandom number seed generator
+    from 0 up to and including the maximum positive 32-bit integer.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Recall that the training of the DcTaxiModel depends on additional hyperparameter
+    values, including optimizer, bins, lr (the learning rate), num_hidden_neurons,
+    batch_size, and max_batches. The implementation of these hyperparameters using
+    the Optuna trial API was covered in chapter 11\. To enable support for these hyperparameters
+    in the implementation of the DcTaxiHpoService class, you need to expand the dictionary
+    returned by the hparams method with the Optuna specification for the hyperparameter
+    values that should be tried during HPO:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: In addition to a trial, Optuna uses a concept of a *study* (corresponding to
+    an MLFlow parent run), which is a collection of trials. In the Kaen framework,
+    Optuna studies are used to generate reports about the summary statistics of the
+    trials and to generate reports in the form of custom visualizations of the completed
+    trials.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To persist the summary statistics about the trials, you can use the trials_dataframe
+    method of the Optuna study API, which returns a pandas DataFrame describing the
+    completed trials along with summary statistics of the associated hyperparameter
+    values. Notice that in the following example the data frame is persisted to an
+    html file based on the name of the experiment:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the example, the calls to the Optuna APIs are executed in the content of
+    the on_ experiment_end method, which is, unsurprisingly, invoked by the BaseOptunaService
+    base class after the conclusion of the experiment. After persisting the html file
+    with the summary statistics of the experiment, the remainder of the method’s implementation
+    generates and persists visualizations of the study using the Optuna visualization
+    package ([http://mng.bz/4Kxw](http://mng.bz/4Kxw)). Notice that for each visualization
+    the corresponding image is persisted to a png file.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The mlflow_client in the code acts as a generic reference to the MLFlow Client
+    API ([http://mng.bz/QqjG](http://mng.bz/QqjG)), enabling reads from and writes
+    to MLFlow as well as to monitoring the progress of the experiment. The parent_run
+    variable is a reference to the “parent” run, or, in other words, a collection
+    of trials or executions of the experiment with specific configuration of hyperparameter
+    values suggested by the Optuna HPO service.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The entire HPO implementation described in this chapter is shown in the following
+    code snippet. Notice that the snippet saves the implementation source code as
+    an hpo.py file in your src folder:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'With the source code in place, you are ready to package it as a Docker container.
+    Start by pulling a base Kaen container for Optuna and MLFlow:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: Once that’s finished, create a Dockerfile for a derived image using
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: Notice that the package prefix for your DcTaxiHpoService implementation corresponds
+    to the filename hpo.py, as specified by the KAEN_HPO_SERVICE_NAME and the KAEN_HPO_SERVICE_PREFIX
+    environment variables, respectively. Once the Dockerfile is saved, build the image
+    by running
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: and push it to DockerHub using
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: 12.4.1 Enabling MLFlow support
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This section describes how to add integration between your DcTaxiModel and the
+    MLFlow framework in order to manage and track HPO experiments.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Although the base kaenai/pytorch-mlflow-aws-base:latest image includes support
+    for MLFlow, the implementation of training in trainer.py does not take advantage
+    of MLFlow experiment management and tracking. Since MLFlow uses the concept of
+    an experiment to organize a collection of HPO trials and run, Kaen provides a
+    BaseMLFlowClient class, which can be used to implement an MLFlow-managed experiment
+    for DcTaxiModel. The subclasses of BaseMLFlowClient are responsible for instantiating
+    the untrained PyTorch model instances using the hyperparameter values that BaseMLFlowClient
+    fetches from MLFlow and Optuna.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Start by saving an instance of your BaseMLFlowClient subclass named DcTaxiExperiment
+    by running the following in your Kaen Jupyter environment:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: This saves the code to train your model to the src/experiment.py file.
+  prefs: []
+  type: TYPE_NORMAL
+- en: With the experiment support in place, you are ready to build the updated dctaxi
+    image using
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: which specifies a new entry point into the image using experiment.DcTaxiExperiment
+    from experiment.py by changing the default values of the KAEN_HPO_CLIENT_PREFIX
+    and the KAEN_HPO_CLIENT_NAME environment variables.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As previously, build your dctaxi image using
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: and push it to DockerHub using
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: 12.4.2 Using HPO for DcTaxiModel in a local Kaen provider
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: At this point, you are prepared to build a Docker container capable of suggesting
+    hyperparameter optimization trials and managing the associated experimental runs
+    of the trials. In the container, the hyperparameter values are suggested by Optuna,
+    and the experiments based on the values are managed by MLFlow.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Before provisioning the more expensive cloud provider, it is a good idea to
+    start by provisioning a local Kaen provider so that you can unit test your HPO
+    and model training code. You can create a Kaen training *dojo* by executing
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: which should return an alphanumeric identifier for the newly created Kaen dojo.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can list available Kaen dojos in your workspace using
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: which should print out the ID of the dojo you just created.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You will want the identifier of the dojo saved as a Python variable for future
+    use, and you can do so using the Jupyter syntax for assignment of bash scripts
+    to Python variables as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: Before a Kaen dojo can be used for training, it should be activated. Activate
+    the dojo specified by the identifier in the MOST_RECENT_DOJO variable by running
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: Since the Jupyter ! shell shortcut provides access to Python variables, in the
+    previous code snippet the {MOST_RECENT_DOJO} syntax is replaced with the value
+    of the corresponding Python variable. You can confirm that the dojo is active
+    by inspecting it using
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: which should include an output line with KAEN_DOJO_STATUS=active.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Before you can start a training job in the dojo, you need to create one specifying
+    both the dojo and the Kaen image for training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To create a job to train the DcTaxiModel, execute
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: which will attempt to pull the specified image from DockerHub and if successful
+    will return the alphanumeric identifier for the job.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Just as with the dojo, you can save the identifier of the job to a Python variable
+    using
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: which should print out the identifier of the job you created.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Every job in Kaen is configured with dedicated networking settings you can inspect
+    by running
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: Since you have not yet enabled HPO for this job, the inspected job settings
+    do not include the information about the HPO image used to serve MLFlow experiment
+    management and Optuna hyperparameter values. You can configure the job with a
+    single run of HPO by executing
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: which overrides the default settings of your dctaxi-hpo image to specify that
+    the hpo.DcTaxiHpoService class should be used to start the HPO service. The executed
+    statement also configures the MLFlow UI port 5001 using the --port setting.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Assuming the hpo enable command completes successfully, you can inspect the
+    job again to observe the HPO-specific settings:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: Notice that at this time the output includes the KAEN_HPO_MANAGER_IP for the
+    IP address of the internal Docker network (specified by KAEN_JOB_SUBNET) that
+    handles the communication across your container instances.
+  prefs: []
+  type: TYPE_NORMAL
+- en: At this time, the HPO service should be up and running, so you should be able
+    to access the MLFlow user interface by navigating your browser to http://127.0.0.1:5001,
+    which should show a screen similar to the one in figure 12.4\. Note that you need
+    to open the MLFlow experiment that starts with a job prefix on the left-side bar
+    of the MLFlow interface before you can explore the details of the HPO experiment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![12-04](Images/12-04.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 12.4 Screen capture of the MLFlow browser-based interface illustrating
+    the parent run and the sole child run for the experiment instance
+  prefs: []
+  type: TYPE_NORMAL
+- en: Since at this point you have just started the HPO service, your experiment consists
+    of just a single parent run with a single child run. The parent or main run has
+    a one-to-one relationship with the MLFlow experiment and contains the individual
+    child runs that define specific hyperparameter configurations that should be used
+    by the machine learning pipeline execution instances. If you navigate to the child
+    run in the MLFlow user interface, you should see a screen resembling the screenshot
+    in figure 12.5.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![12-05](Images/12-05.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 12.5 MLFlow screen capture of the settings suggested by Optuna HPO for
+    the child run
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To start training your model in the local provider using the data available
+    in your AWS bucket, you need to configure environment variables with your AWS
+    credentials. In the following code snippet, replace the Python None with your
+    matching AWS credentials for AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and AWS_DEFAULT_REGION.
+    Also, perform the same replacement for your BUCKET_ID value and execute the code
+    to configure the corresponding environment variables in your Kaen Jupyter environment:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'I recommend that you execute the following sequence of echo commands from your
+    bash shell to ensure that all of the environment variables are configured as expected:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now you are ready to start training your model by running kaen job start. For
+    simplicity, start by training with a single training worker (as specified by --replicas
+    1). Notice that the KAEN_OSDS environment variables in the command are pointing
+    to your data CSV files in the AWS bucket:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: While the training job is running, you should be able to navigate to the details
+    of the child run in the MLFlow user interface, and assuming that your training
+    process ran for at least 25 training steps, the resulting graph for the train_rmse
+    metric should resemble the one in figure 12.6.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![12-06](Images/12-06.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 12.6 MLFlow screen capture of the graph for the train_rmse metric
+  prefs: []
+  type: TYPE_NORMAL
+- en: 12.4.3 Training with the Kaen AWS provider
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This section illustrates how to use the Kaen framework to train your containers
+    in an AWS virtual private cloud environment instead of your local provider so
+    you can take advantage of the elastic, horizontal scaling available in AWS.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To create a Kaen dojo in AWS, you need to use the --provider aws setting when
+    running kaen init. By default, when using the AWS provider, Kaen provisions t3.micro
+    instances as both worker and manager nodes in AWS. Although the t3.micro instances
+    are low-cost defaults suitable for simple demos, for the DcTaxiModel, I recommend
+    provisioning t3.large instances as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: This, upon a successful provisioning, should report the dojo ID.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To configure the MOST_RECENT_DOJO Python variable, you should execute
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: and then activate the dojo using
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE44]'
+  prefs: []
+  type: TYPE_PRE
+- en: Notice that if you provision underpowered AWS node instances (such as t3.micro),
+    the activation process could take a while. Once the activation is finished correctly,
+    you should be able to inspect the Dojo using
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE45]'
+  prefs: []
+  type: TYPE_PRE
+- en: and the output should include a line that starts with KAEN_DOJO_STATUS=active
+    and the timestamp of when the activation completed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Just as with a local provider, to perform training in AWS, you should start
+    by creating a job:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE46]'
+  prefs: []
+  type: TYPE_PRE
+- en: Unlike the case of the local provider, running kaen job create in the AWS provider
+    may take a while. This is caused by the fact that the dctaxi image that you pushed
+    to DockerHub needs to be downloaded to the AWS node in your dojo. After the job
+    is created, you should save the ID of the job to the MOST_RECENT_JOB Python variable
+    using
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE47]'
+  prefs: []
+  type: TYPE_PRE
+- en: which also sets the MOST_RECENT_JOB environment variable to the value matching
+    the corresponding Python variable.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, enable HPO for the job using the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE48]'
+  prefs: []
+  type: TYPE_PRE
+- en: Once the kaen hpo enable operation is finished, you can open the MLFlow user
+    interface by constructing the URL in your notebook using
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE49]'
+  prefs: []
+  type: TYPE_PRE
+- en: and navigating to the URL in your browser. Since it may take a few seconds for
+    the MLFlow UI to become available (depending on the performance of your AWS management
+    node instances), you may need to refresh your browser to get access to this interface.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To start the training, the kaen job start command is identical to the one you
+    used before:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE50]'
+  prefs: []
+  type: TYPE_PRE
+- en: As in the case with the local provider, you can navigate your browser to the
+    MLFlow UI and monitor the metrics as the model trains.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When you are done, do not forget to remove the AWS training dojo using
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE51]'
+  prefs: []
+  type: TYPE_PRE
+- en: Summary
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Experiment management and hyperparameter optimization are integral phases of
+    a machine learning pipeline.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Docker containers facilitate packaging, deployment, and integration of machine
+    learning code with the machine learning pipeline services.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Training a machine learning model translates to numerous experiments executed
+    as instances of machine learning pipeline runs.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL

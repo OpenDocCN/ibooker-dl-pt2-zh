@@ -1,0 +1,521 @@
+- en: 10 Adopting PyTorch Lightning
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter covers
+  prefs: []
+  type: TYPE_NORMAL
+- en: Implementing PyTorch Lightning to reduce boilerplate code
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Adding training, validation, and test support for the DC taxi model
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Analyzing DC taxi model training and validation using pandas
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Thus far, you have written your own implementation related to training and testing
+    your machine learning model. However, much of the code you wrote was unrelated
+    to your machine learning model architecture and could have applied to a broad
+    range of distinct models. Building on this observation, this chapter introduces
+    you to PyTorch Lightning, a framework that can help you reduce the amount of boilerplate
+    engineering code in your machine learning system, and consequently help you focus
+    on evolving your model design and implementation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 10.1 Understanding PyTorch Lightning
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: This section introduces the PyTorch Lightning framework for your PyTorch DC
+    taxi fare estimation model and teaches you the steps involved in enabling PyTorch
+    Lightning training, validation, and test features.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Thus far, you have implemented a sizable portion of Python and PyTorch boilerplate
+    code for your machine learning model. This meant that only a few parts of your
+    implementation were model specific, such as the code to
+  prefs: []
+  type: TYPE_NORMAL
+- en: Package the feature values as tensors
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Configure the neural net layers
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Calculate the tensors for the loss
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Report on the model metrics
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Much of the remaining code, such as the code to iterate over the training batches,
+    validation batches, and epochs of training, is largely boilerplate, meaning that
+    it can be re-used unmodified across various changes to the model-specific code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As your machine learning system grows more complex, so does the boilerplate
+    code in your system’s implementation. For example, mature machine learning systems
+    require periodic saving (checkpointing) of the model’s weight values to storage
+    in order to enable reproducibility. Having model checkpoints also enables machine
+    learning training pipelines to resume from a pre-trained model. Other examples
+    include the code involved in integration with hyperparameter optimization services,
+    metric tracking, and other experiment management tools that control repeated executions
+    of a machine learning pipeline. This should not come as a surprise: recall from
+    chapter 1 that over 90% of the components of a production machine learning system
+    are complementary to the core machine learning code.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The PyTorch Lightning framework ([https://www.pytorchlightning.ai](https://www.pytorchlightning.ai))
+    aims to make PyTorch developers more productive by helping them focus on developing
+    core machine learning code instead of getting distracted by the boilerplate. In
+    case of the DC taxi model, adopting PyTorch Lightning is straightforward. Before
+    starting, you need to ensure that you have the pip package for PyTorch Lightning
+    installed by running the following in your shell environment:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: PyTorch Lightning is a comprehensive framework with a sizable feature set for
+    machine learning model development. This book does not aim to replace existing
+    PyTorch Lightning tutorials or documentation; instead, the upcoming sections focus
+    on the features of the framework you can adopt for the DC taxi model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 10.1.1 Converting PyTorch model training to PyTorch Lightning
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This section teaches you about the PyTorch Lightning __init__, training_step
+    and configure_optimizers methods and then illustrates how to implement these methods
+    for the DC taxi model and how to train the PyTorch Lighting—based DC taxi model
+    using a small, sample training data set.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Assuming that the PyTorch Lighting package is installed correctly in your environment,
+    you can implement a minimal, trainable version of the DC taxi model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 10.1 A basic PyTorch Lightining DC taxi model with support
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Import the PyTorch Lightning library and alias it as pl.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Use torch.float64 for dtype of the model parameters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ PyTorch Lightning models must extend from LightningModule.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ The **kwargs are used to pass hyperparameters to the model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ The LightningModule subclass must call parent __init__ first.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❻ Save hyperparameters from **kwargs to self.hparams.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❼ Set the pseudorandom number generator per hyperparameter settings.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❽ Use a simple linear regression model for this illustration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❾ Re-use functions from chapter 7 for the batchToXy . . .
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❿ . . . and forward implementations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ⓫ Use PyTorch Lightning built-in logging for MSE and RMSE measures.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ⓬ The training_step method must return the loss tensor.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ⓭ A LightningModule subclass must have a configure_optimizers method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ⓮ Return a configured optimizer instance specified by hyperparameters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ⓯ Instantiate a PyTorch Lightning version of the DcTaxiModel as model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Notice that the DcTaxiModel class inherits from the base pl.LightningModule
+    class, which requires a separate initialization in the __init__ method by the
+    super() .__init__() method call. The rest of the __init__ method of the class
+    is simplified here for illustration and to highlight the following key concepts:
+    storage of a reference to the model’s hyperparameters in self.hparams as well
+    as the instantiation of the model parameters in the self.layers instance.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The training_step method is the workhorse of the PyTorch Lightning implementation,
+    performing the forward step through the model layers, computing the loss, and
+    returning the loss value. Notice that it relies on the batchToXy method (introduced
+    in chapter 7) responsible for converting a batch of training examples into the
+    format suitable for model training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The conversion amounts to eliminating any dimensions that have a shape of 1
+    using the squeeze_ method. For example, a tensor with a shape of [1, 128, 5, 1]
+    is reshaped to [128, 5] after the application of squeeze_. The use of squeeze_
+    (with the trailing underscore) instead of the squeeze method is a minor performance
+    optimization. Recall from chapter 5 that the trailing underscore in squeeze_ indicates
+    that this PyTorch method performs the operation in place, mutating the tensor,
+    as opposed to returning a new tensor instance.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The DcTaxiModel implementation assumes that the first column in the tensor is
+    the label with the remaining columns as features, so the concluding portion of
+    the batchToXy code simply aliases the label as y and features as X, returning
+    the result.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The calls to self.log in the training_step method report the training MSE and
+    RMSE values computed by the model. As explained in chapter 5, in the PyTorch tensor
+    API the item method of a PyTorch scalar tensor returns a regular Python value
+    instead of a tensor. Hence, the values that are logged using self.log are Python
+    numerics rather than PyTorch tensors. The self.log method of PyTorch Lightning
+    is a generic API for an extensible logging framework, which will be covered in
+    more detail later in this chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The configure_optimizers method in the example uses a dictionary of optimizers
+    in order to enable the model to switch between different optimization algorithms
+    (Adam versus SGD) based on the value of the optimizer hyperparameter. Although
+    this implementation of model training does not yet use hyperparameter optimization,
+    the dictionary-based lookup approach shown in configure_optimizers ensures that
+    the model code does not need to be changed at the later stages of development
+    when hyperparameter optimization is enabled.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In PyTorch Lightning, training of a model is performed using an instance of
+    a Trainer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 10.2 PyTorch Lightining Trainer to train a subclass
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ CSVLogger is used to illustrate analysis with pandas.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ The seed hyperparameter is used to uniquely identify the model log.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Use multiple GPUs for training when available.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Use 1 since the training duration is controlled by max_batches.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Use max_batches to set the number of the training iterations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❻ Ensure that every call to self.log is persisted in the log.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❼ Persist the values sent to self.log based on csvLog setup.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The hyperparameter values can be applied to the machine learning pipeline and
+    not just to the model: for example, the max_batches hyperparameter controls the
+    duration of the model training. As you will see in the remainder of this chapter,
+    hyperparameter values can be used throughout the stages of the machine learning
+    pipeline. The max_epochs settings in the code example is designed to ensure that
+    the training pipeline can support both Iterable as well as Map PyTorch data sets.
+    Recall from chapter 7 that IterableDataset instances have a variable number of
+    examples per training data set; hence, training with this category is controlled
+    by limiting the number of training batches. This number is specified using the
+    limit_train_batches parameter of the Trainer.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The progress_bar_refresh_rate and weight_summary settings in listing 10.2 are
+    reasonable defaults to use with the Trainer to minimize the amount of the logging
+    information reported during training. If you prefer to have a report on the training
+    model parameters, you can change weights_summary to "full" to report all weights,
+    or to "top" to report just the weights of the top (the ones connected to the trunk
+    of the model) layers in the model. Similarly, the progress_bar_refresh_rate can
+    be changed to an integer value representing the frequency (in terms of the number
+    of training steps) for how often to redraw a progress bar showing progress toward
+    training completion.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To provide the model with the training examples, you can use the ObjectStorageDataset
+    introduced in chapter 7\. Before executing the code snippet in the next example,
+    ensure that you have the Kaen framework installed using
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Next, to execute just the training of the model, you can invoke the fit method
+    on the instance of pl.Trainer, passing in a PyTorch DataLoader with the training
+    examples:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the example, the sample of the DC taxi data set available from [http://mng.bz/nr9a](http://mng.bz/nr9a)
+    is used to simply illustrate how to use PyTorch Lightning. In the next chapter,
+    you will see how to scale to larger data sets by simply changing the URL string
+    passed to osds.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Since during training the loss and metric values are logged to a CSV file, once
+    the training is finished, you can load the values into a pandas DataFrame and
+    plot the results using
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: which should output a graph resembling figure 10.1.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![10-01](Images/10-01.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 10.1 On a small sample, the trivial linear regression model converges
+    as expected.
+  prefs: []
+  type: TYPE_NORMAL
+- en: According to figure 10.1, the naive linear regression model from listing 10.1
+    converges to a consistent loss value. To examine the details of the loss value
+    at the trailing 25 steps of the convergence, you can again take advantage of pandas
+    DataFrame APIs,
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: which plots figure 10.2.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![10-02](Images/10-02.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 10.2 Trailing 25 steps of training converge to a RMSE of roughly 4.0.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can confirm that toward the last 25 steps of training, the model converges
+    at an average RMSE of about 4.0\. Even with the trivial linear regression model,
+    this should not come as a surprise since this illustration used a tiny training
+    sample.
+  prefs: []
+  type: TYPE_NORMAL
+- en: At this point, it is useful to introduce a build function that can be invoked
+    to instantiate, train, and later validate, as well as test the model. For convenience,
+    here’s the entire implementation of this version of the model with the training
+    steps encapsulated.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 10.3 Basic PyTorch Lightining DC taxi model
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 10.1.2 Enabling test and reporting for a trained model
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This section describes the test_step method for a PyTorch Lightning model and
+    how the method can be used to test and report on the metrics of a trained model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Once the model is trained, the Trainer instance can also be used to report
+    on the model loss and metrics against a test data set. However, in order to support
+    testing in PyTorch Lightning, a LightningModule subclass must be extended with
+    an implementation of a test_step method. The following code snippet describes
+    the corresponding implementation for DcTaxiModel:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Ignore the gradient graph during testing for better performance.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Use test_mse instead of train_mse . . .
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ . . . and test_rmse instead of train_rmse when logging test measurements.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The PyTorch Lightning test_step does not require any return values; instead,
+    the code is expected to report the metrics computed using a trained model. Recall
+    from the discussion of autodiff in chapter 6 that maintaining the backward graph
+    of the gradients carries additional performance overhead. Since the model gradients
+    are not needed during model testing (or validation), the forward and mse_loss
+    methods are invoked in the context of with pt.no_grad():, which disables the tracking
+    needed for gradient calculations of the loss.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Outside of the minor change related to renaming the logged loss and metric measures
+    (e.g., test_rmse versus train_rmse), the implementation of test_step logging is
+    identical to the one from training_step function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To introduce configuration changes to the Trainer instance for testing and
+    to create the DataLoader for the test data, the build function needs to be modified
+    ❶—❹:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Pass URL globs to instantiate DataLoader for training and test data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Use the test data set only once to report on the loss and metric measures.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Use test_glob to instantiate the train_ds . . .
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ . . . and train_dl instances.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Test and report on the model performance using the Trainer.test method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: After executing the training and test using the updated model and build implementation
+    using
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'you should get test results resembling the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 10.1.3 Enabling validation during model training
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This section illustrates how to use the validation_step method in a LightningModule
+    subclass to enable support for PyTorch model validation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The advantages of using PyTorch Lightning become more evident when you modify
+    your implementation to support recurring validation steps during training. For
+    example, to add model validation to the DcTaxiModel implementation, you simply
+    introduce the validation_step method:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The following code describes the remaining changes needed to configure the
+    trainer instance to perform validation over a fixed-sized data set (as opposed
+    to k-fold cross validation):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Validate just 1 batch of validation DataLoader data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Validate before training to ensure the validation data set is available.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Validate after every 20 training iterations (steps) of gradient descent.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The limit_val_batches acts similarly to limit_train_batches in specifying the
+    number of batches from the validation Dataset to use for validation. The num_sanity_val_
+    steps parameter to the Trainer controls a feature of PyTorch Lightning that uses
+    the validation data set to ensure that the model, as well as the validation DataLoader,
+    are instantiated correctly and are ready for training. In the example, setting
+    the value of num_sanity_val_steps to 1 performs a single validation step and reports
+    the corresponding metrics. The val_check_interval parameter specifies that at
+    most after every 20 iterations of training, PyTorch Lightning should perform validation
+    using the number of batches specified by the limit_val_batches parameters. The
+    use of the min function with val_check_interval ensures that if the hyperparameter
+    for max_batches is set to be less than 20, the validation is performed at the
+    conclusion of training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 10.4 PyTorch Lightning DC taxi linear regression model
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: You can train, validate, and test the entire model by running
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: If you load the resulting logs from the logs/dctaxi/version_1686523060 folder
+    as a pandas DataFrame and plot the result using
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: you should observe a graph resembling figure 10.3\. Since the val_check_interval
+    parameter was set to 20, most of the values for the val_rmse_step column in the
+    data frame are missing. The fillna(method='ffill') call fills the missing values
+    forward, for example by setting missing values for steps 81, 82, and so on, based
+    on the validation RMSE from step 80.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![10-03](Images/10-03.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 10.3 Despite reasonable test performance, validation RMSE signals overfitting.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The lackluster performance against the validation data set, as shown in figure
+    10.3, points at the likelihood of the model overfitting on the training data set.
+    Before putting the code in production, the model implementation should be refactored
+    to become more generalizable and less reliant on memorization of the training
+    data set. This means that to move forward, you need a model development approach
+    with more comprehensive support for experimentation and hyperparameter optimization.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Adopting the PyTorch Lightning framework can help you refactor your machine
+    learning implementation to reduce the fraction of incidental, boilerplate code
+    and to focus on model-specific development.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In a PyTorch Lightning-based implementation for a machine learning model, you
+    can incrementally add support for model training, validation, and test support,
+    along with pluggable features such as a logging framework for analysis.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The CSVLogger from PyTorch Lightning saves the results of model training, validation,
+    and test features to CSV files that you analyzed using pandas.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL

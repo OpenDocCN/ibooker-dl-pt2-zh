@@ -1,0 +1,844 @@
+- en: 7 Serverless machine learning at scale
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter covers
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using IterableDataset with AWS and other clouds
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Understanding GPUs for PyTorch programming
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Scaling up gradient descent with a GPU core
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Benchmarking the DC taxi data set using linear regression
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In chapters 5 and 6, you learned about using PyTorch on a small scale, instantiating
+    tensors consisting of a few hundred data values and training machine learning
+    models with just a few parameters. The scale used in chapter 6 meant that to train
+    a machine learning model, you could perform gradient descent with an assumption
+    that the entire set of model parameters, along with the parameter gradients and
+    the entire training data set, could easily fit in memory of a single node and
+    thus be readily available to the gradient descent algorithm.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This chapter introduces the concepts that you need to significantly scale your
+    machine learning system. You will build on your existing knowledge of gradient
+    descent (for a refresher, refer to appendix A) to learn how to perform gradient
+    descent over data set batches. Next, you are going to use batches to help you
+    scale to data sets that do not fit in the memory of a single node of your machine
+    learning platform. You are also going to learn about scaling up on a single node,
+    or in other words, about taking advantage of multiple processors such as CPUs
+    and GPUs in a node. The concepts from this chapter are also re-used in chapter
+    8 to explain scaling out, in other words, ensuring that your machine learning
+    system can take advantage of an aggregation of the compute capabilities of a distributed
+    computing cluster consisting of multiple, inter-networked processing nodes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.1 What if a single node is enough for my machine learning model?
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: This section teaches you about the factors that should inform your decision
+    on whether the PyTorch capabilities for scaling machine learning systems are relevant
+    to your machine learning project.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you (a) work with data sets that fit in memory of a single node of your machine
+    learning platform, (b) expect your data sets to continue to fit in memory even
+    after you launch your system, and (c) find the performance of your machine learning
+    code on a CPU or a GPU to be sufficient, then you can forego the scaling techniques
+    described in this and the next chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note As a general rule of thumb, *if your machine learning model and the data
+    set are guaranteed to fit in memory, keep them in memory*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The machine learning algorithms that work on in-memory data sets provide the
+    best performance both in terms of the computational efficiency and machine learning
+    effectiveness. This means that your machine learning model training and inference
+    are going to take less time when using machine learning on in-memory data, and
+    you are going to be able to reach the best loss and metric performance sooner.
+    Further, with data sets that fit in memory, you can use single node machine learning
+    frameworks like scikit-learn to develop and test a variety of machine learning
+    models before going to production. If your plan is to avoid implementing the code
+    for scaling machine learning, you can consider skipping to chapter 9 to continue
+    with feature selection and engineering.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Before you rush ahead, you should keep in mind that “The Bitter Lesson,” an
+    influential 2019 publication by distinguished computer scientist and artificial
+    intelligence researcher Rich Sutton ([http://www.incompleteideas.net/IncIdeas/BitterLesson.html](http://www.incompleteideas.net/IncIdeas/BitterLesson.html))
+    argues that the machine learning systems that take advantage of massive computational
+    capacity have been the most effective, and by a large margin. Sutton’s paper describes
+    examples of breakthrough results from such disparate fields of artificial intelligence
+    research as playing the ancient board game of Go, performing speech recognition,
+    and tackling computer vision. If you are working on a machine learning system
+    hosted on a cloud platform, the scale of the information technology capacity available
+    to your system is bounded by your financial budget rather than technical limitations.
+    So, as part of your machine learning system design, you need to make decisions
+    about the scale at which your system is expected to consume information technology
+    resources available in the cloud. If you are building machine learning systems
+    that need to outperform in the marketplace or deliver state-of-the-art results
+    in academia, then you should learn from the “bitter lesson” and design for both
+    scaling up and scaling out.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you plan on taking the bitter lesson to heart and scaling your machine learning
+    system, you need to put in some work to get a deeper understanding of data set
+    batching, use of GPUs, and distributed processing using PyTorch. Although there
+    are many popular and effective machine learning algorithms, including gradient-boosted
+    decision trees, what makes the gradient descent and deep learning stand out is
+    their ability to take advantage of compute, storage, and networking at the scale
+    described by Rich Sutton.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.2 Using IterableDataset and ObjectStorageDataset
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: This section introduces you to the applications of the IterableDataset class
+    that can help you support out-of-memory and streaming data sets with gradient
+    descent. You are also going to learn about ObjectStorageDataset, which can help
+    you use data sets residing in AWS object storage or in similar services from other
+    major cloud providers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In out-of-memory datasets, an example in the data set may reside on disk or
+    in the memory of an arbitrary node of your machine learning platform. The assumption
+    of in-memory, index-based addressing used by map-style data sets (in the __getitem__
+    method) does not fit with this out-of-memory model. Also, the map-style data sets
+    (as described in chapter 6) assume that the data set must use a __len__ method,
+    rendering them unsuitable for the conceptually unbounded, streaming data sets.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The newer, torch.utils.data.IterableDataset, introduced to PyTorch in version
+    1.2, eliminates the requirement to define the __getitem__ and __len__ methods
+    and instead requires only the definition of an __iter__ method, which can be used
+    with Python built-in iterator APIs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 7.1 Sketch of a declaration for an IterableDataset subclass
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'For example to retrieve a single batch of examples from a data set and assign
+    it to a batch variable, you can use Python next and iter functions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: While the number of the examples in the batch is not specified as part of the
+    IterableDataset class, the individual implementations and instances of the IterableDataset
+    class are responsible for managing the batch size. For example, in the ObjectStorageDataset
+    class used in the rest of this book, the batch size is specified as one of the
+    arguments for the __init__ method of the class.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Just like TensorDataset (described in chapter 6) provides support for tensor-based,
+    in-memory data sets for the map-style interface, the ObjectStorageDataset provides
+    support for tensor-based, out-of-memory data sets for the iterable-style interface.
+    The ObjectStorageDataset is not available by default when you install PyTorch,
+    so you need to install it separately from Kaen framework using
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: Once installed, import the class in your runtime using
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: The ObjectStorageDataset class provides a standard PyTorch interface to data
+    sets stored in the CSV format, regardless of whether they are located in public
+    cloud object storage or on your local filesystem. For every call to the __iter__
+    method of the class, the result is a PyTorch tensor of the numeric values from
+    the CSV-based data set. In the case of the DC taxi development data set created
+    by the dctaxi_dev _test.py PySpark job from chapter 4, this means that the tensor
+    returned by ObjectStorageDataset must be separated into the label (y) and the
+    features (X) needed to perform an iteration of gradient descent. For example,
+    this can be done using Python slicing notation ❷.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 7.2 Partitioning a batch tensor
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Eliminate the leading (batch) dimension of the tensor.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Slice batch into first (y_batch) and remaining columns (X_batch).
+  prefs: []
+  type: TYPE_NORMAL
+- en: All of the rows in the first column of the batch are assigned to the label tensor
+    y_batch and all the rows of the remaining columns are assigned to the feature
+    tensor X_batch.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To instantiate the ObjectStorageDataset, you must specify a URL-style path (similar
+    to a Unix glob string) that points to the location of your CSV-formatted data
+    set. For example, if you have configured the BUCKET_ID and AWS_DEFAULT_REGION
+    environment variables for the S3 bucket containing your development data set,
+    you can instantiate the class using
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: where the train_ds gets assigned an instance of the ObjectStorageDataset. Since
+    the ObjectStorageDataset supports the wildcard character (*), the Python f-string
+    used to create the train_ds instance specifies that the data set should include
+    all of the objects in S3 matching the /csv/dev/part*.csv glob in the dc-taxi-${BUCKET_
+    ID}-${AWS_DEFAULT_REGION} S3 bucket.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The partitions_glob parameter of the ObjectStorageDataset points to the metadata
+    file about the CSV part files that match the /csv/dev/part*.csv glob. Recall that
+    the dctaxi_dev_test.py PySpark job saved the Spark partition (also known as part-file)
+    metadata to the .meta/shards subfolder of your development and test data sets.
+    For the development part of the data set, you can preview this metadata by loading
+    it in memory as a pandas DataFrame,
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'which should produce an output similar to the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: where the id column represents the ID of one of the part files in the .meta/shards
+    subfolder and the count column represents the count of the number of lines (records)
+    in the part file.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The ObjectStorageDataset is designed to instantiate in the shortest amount of
+    time possible to start the iterations of gradient descent. In practice, this translates
+    to ObjectStorageDataset caching in memory and on disk only the data set objects
+    needed to return the first batch of examples from the data set, as illustrated
+    in figure 7.1.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![07-01](Images/07-01.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.1 Multilevel cache access to object storage using ObjectStorageDataset
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the example in figure 7.1, ObjectStorageDataset is instantiated using a fictional
+    src S3 bucket containing CSV-formatted objects with a complete URL-style path
+    as s3://src/data/part*.csv (right side of figure 7.1). The partitions of the data
+    set (i.e., the CSV-formatted objects with the names matching part*.csv) reside
+    under the data folder in the src bucket. In figure 7.1, part*.csv objects are
+    shown as numbered squares in the S3 bucket. For illustration, each one of the
+    part*.csv objects in the S3 bucket is assumed to consist of 1,000 examples, which
+    are represented in the CSV format as one line per row.
+  prefs: []
+  type: TYPE_NORMAL
+- en: After ObjectStorageDataset is instantiated with a batch_size of 2,048 in the
+    Python runtime of a compute node (left side of the figure), the implementation
+    of ObjectStorageDataset triggers a network transfer of three data set partitions
+    from the S3 bucket to the filesystem cache of the compute node. Since each object
+    in S3 is 1,000 rows, 3 objects (totaling 3,000 rows) need to be transferred from
+    S3 to the compute node’s filesystem for the ObjectStorageDataset instance to produce
+    a batch of 2,048 rows. In the figure, the location of the filesystem cache is
+    shown as the /tmp directory; however, a Linux operating system-specific location
+    can vary depending on the operating system defaults. The filesystem cache is needed
+    to minimize the aggregate data transfer over the network in cases where the process
+    for training a machine learning model is repeated for multiple epochs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that the size (number of rows) of the partitions is entirely independent
+    of the batch_size used to instantiate ObjectStorageDataset, meaning that the batch_size
+    can vary while the size of the partitions stays constant. In the DC taxi project
+    used in this book, the number and the size of the partitions are specified in
+    the PySpark jobs that save the cleaned-up data set to object storage. In general,
+    the number and size of the data set partitions vary depending on the specifics
+    of the machine learning project, although it is better to choose partition size
+    in the range of 100—200 MB for efficient transfer over a network connection if
+    you are working with commonly deployed 100 Mbps network interfaces.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note The data set partitions are copied to the filesystem cache unless the URL-style
+    path starts with the file:// protocol handler or the data set originates from
+    the node’s filesystem.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When a single batch of training examples fits in memory, after the partitions
+    are cached in the filesystem, partitions 1, 2, and the first 48 lines from partition
+    3 (shown with a dashed line in figure 7.1) that make up a 2,048-sized shard are
+    cached in memory as PyTorch tensors. Each subsequent call to the __iter__ method
+    of the ObjectStorageDataset flushes the in-memory cache, triggers the network
+    transfer of the additional data set partitions needed for the next shard from
+    the bucket to the filesystem cache directory, and loads into memory the next 2,048
+    examples as PyTorch tensors.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'All the capabilities of ObjectStorageDataset described in this section apply
+    to data sets that reside in serverless object storage services from major cloud
+    providers.[¹](#pgfId-1013545) Although the example in this book focuses on using
+    AWS and S3, you can easily repoint an instance of the ObjectStorageDataset class
+    to a different cloud provider (or a local filesystem) by modifying the protocol
+    specified in the URL-style glob named parameter of the class:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: gcs:// for Google Cloud Storage, for example using
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs:
+  - PREF_UL
+  type: TYPE_PRE
+- en: abfs:// for Azure Blob Storage or Azure Datalake Gen2, for example using
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs:
+  - PREF_UL
+  type: TYPE_PRE
+- en: file:// for the files residing on the local filesystem, for example using
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs:
+  - PREF_UL
+  type: TYPE_PRE
+- en: 7.3 Gradient descent with out-of-memory data sets
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In this section, you are going to extend the basic linear regression example
+    explained in chapter 6 to calculate a weak baseline performance metric for the
+    DC taxi training and test data sets.
+  prefs: []
+  type: TYPE_NORMAL
+- en: So far in this chapter, you have learned about using PyTorch gradient descent
+    based on batches using instances of Dataset and DataLoader classes along with
+    a basic linear regression model with just a single model parameter. Since the
+    DC taxi data set you have prepared for training consists of eight features (latitude
+    and longitude coordinates for pickup and drop-off locations as well as year, month,
+    day of the week, and hour of the trip), to perform linear regression, you need
+    to extend the machine learning model to at least eight parameters, one per feature.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Also, notice that, until now, none of the linear regression examples you have
+    seen used a bias parameter. This was intentional to simplify the sample code:
+    since the previous examples of linear regression relied on data sets with a zero
+    mean, the bias parameter was not necessary. However, the columns of the DC taxi
+    data set do not have a mean of zero in the next example. Hence, you are going
+    to add an extra tensor scalar to represent the bias parameter for linear regression.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Previously, you used the torch.randn method to initialize the model parameters
+    by sampling from a normal distribution, but since you are transitioning to more
+    complex models, you can take advantage of better model parameter initialization
+    schemes available from PyTorch.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Kaiming initialization was popularized in a seminal research paper by He and
+    colleagues in 2015 titled “Delving Deep into Rectifiers: Surpassing Human-Level
+    Performance on ImageNet Classification.”[²](#pgfId-1014263) Kaiming initialization
+    sets the initial model parameter values by taking into account the number of the
+    model parameters that need to be initialized. To use the Kaiming initialization,
+    you simply wrap the calls to torch.empty with a call to the torch.nn.init.kaiming_uniform_
+    method ❷, ❸.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 7.3 Using Kaiming initialization for model parameters
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Use torch.float64 as the dtype for newly created tensors.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Here, the model parameters (also known as coefficients in linear regression)
+    are assigned to the w variable and the model bias (intercept) is assigned to b.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note As explained in more detail in chapter 5, the kaiming_uniform_ method is
+    an example of a PyTorch in-place method, which is indicated by the trailing underscore
+    in the method name. Since the example of the Kaiming initialization in this chapter
+    uses the in-place method, the tensor values returned by the empty method are replaced
+    by the initialization.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In section 7.2, you saw that by default ObjectStorageDataset returns float64
+    as the dtype for the batch tensors. As explained in chapter 5, PyTorch requires
+    that tensors have an identical dtype before you can perform operations such as
+    matrix multiplication on the tensors. The set_default_dtype method used in listing
+    7.3 ❶ ensures that the w and b tensors are created using the float64 data type
+    to match the dtype returned by the ObjectStorageDataset.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To take advantage of the modified model parameters, you will have to change
+    the details of the forward step of the gradient descent iteration. At this point,
+    since the feature tensor X for the DC taxi data set has a shape of torch.Size([DATASET_SIZE,
+    FEATURE_COUNT]) and the model parameter tensor w has a shape of torch.Size ([FEATURE_COUNT,
+    1]), their product must have a shape of torch.Size([DATASET_ SIZE, 1]). However,
+    the y_batch tensor created by slicing the batch from the ObjectStorageDataset,
+    as explained in listing 7.2, has a shape of torch.Size([DATASET_ SIZE]). So, before
+    the y_batch and the y_est tensors can be subtracted during the computation of
+    the loss metric, you should update the y_est tensor using the PyTorch squeeze
+    method to ensure their shapes are both torch.Size([DATASET_SIZE]):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: Given these changes, the baseline linear regression implementation for the DC
+    taxi data set is ready.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 7.4 Weak baseline using linear regression
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Assume GRADIENT_NORM is not initialized by setting it to None.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Clip the gradients if the gradients are above GRADIENT_NORM, no-op otherwise.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The ITERATION_COUNT in listing 7.4 is intentionally set to a value of 5 because
+    once you execute the code from the listing, you are going to see an output resembling
+    the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: Notice that unlike the linear regression example from chapter 6, the loss function
+    in this output fails to converge. If you have never seen this behavior from gradient
+    descent before picking up this book, congratulations! You just observed your first
+    exploding gradients!
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If you find this result at all surprising, think back to the synthetic X and
+    y data tensors used in chapter 6: their values had a mean of zero and were relatively
+    small. In contrast, the data in the DC taxi data set consists of the unmodified
+    original values for the locations and the taxi fares, with large values and a
+    non-zero mean. You are going to learn about techniques to properly prepare the
+    data set and prevent the likelihood of exploding (and vanishing) gradients later
+    in this book. For now you should know that exploding gradients can be easily resolved
+    using the built-in PyTorch torch.nn .utils.clip_grad_norm_ method.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The first two annotations in listing 7.4 ❶ and ❸ illustrate how to include gradient
+    clipping in your gradient descent iteration. When you observed exploding gradients
+    during the execution listing code, the GRADIENT_NORM was set to None ❶, which
+    turned off gradient clipping. To enable gradient clipping, the value of GRADIENT_NORM
+    should be set to a positive decimal value. The value is used as an upper limit
+    on the maximum gradient value in the model tensors. In other words, gradient clipping
+    amounts to running the Python min(gradient, GRADIENT_NORM) function on every gradient
+    value of the tensors passed to the clip_grad_norm method. Hence, it is critical
+    to use the clip_ grad_norm method after the backward step (which sets the potentially
+    exploding gradient values) but before the optimizer step, which uses the gradient
+    values to update the model parameters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To obtain the baseline metric for mean squared error over your training data
+    set, modify the GRADIENT_NORM to be 0.5 and ITERATION_COUNT to be 50. The values
+    of GRADIENT_NORM and ITERATION_COUNT are inversely proportional: clipping gradients
+    to smaller values means that gradient descent needs a larger number of iterations
+    to adjust the values of the model parameters. While it is useful to know about
+    gradient clipping when troubleshooting a machine learning model, the better approach
+    is to minimize the risk of having an exploding gradient in the first place.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Assuming that you used the default seed setting of 0 from listing 7.4 and re-executed
+    the code from the listing using GRADIENT_NORM=0.5 and ITERATION_COUNT=50, the
+    training should return the following results for the last 10 iterations of the
+    gradient descent:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the last 10 iterations, the value of the MSE loss function is not improving
+    and the range of 200—400 is obviously a weak baseline. However, with gradient
+    clipping enabled the gradients are no longer exploding.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.4 Faster PyTorch tensor operations with GPUs
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: This section describes the graphical processing unit (GPU) support provided
+    by PyTorch tensor APIs and when GPUs can help improve the performance of machine
+    learning algorithms with higher throughput computing. Learning about GPU support
+    in PyTorch is going to prepare you for the next section, where you will modify
+    the weak baseline linear regression implementation for the DC taxi data set to
+    use a GPU instead of a CPU.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Alex Krizhevsky’s winning entry at the 2012 ImageNet competition[³](#pgfId-1015825)
+    was one of the most visible success stories that helped re-ignite interest in
+    deep learning. While the convolutional neural network, the machine learning model
+    used by Krizhevsky, was well known since the 1990s, it captured the top place
+    in the rankings in large part due to a “very efficient GPU implementation.”[⁴](#pgfId-1015838)
+    Since 2012, GPUs and other dedicated processors[⁵](#pgfId-1015916) have been used
+    to efficiently train state-of-the-art machine learning models, in particular for
+    domains with large, unstructured data sets, such as those that contain images,
+    video, audio, or a large quantity of natural language documents.
+  prefs: []
+  type: TYPE_NORMAL
+- en: PyTorch tensors can take advantage of the higher-throughput computation possible
+    with GPUs without changes to the implementation of the machine learning code.
+    However, if you are planning on using GPUs on your machine learning project, you
+    should have a clear understanding of the tensor performance you can get with CPUs,
+    and also be aware of the barriers to entry for using GPUs for PyTorch tensors.
+  prefs: []
+  type: TYPE_NORMAL
+- en: PyTorch relies on Compute Unified Device Architecture (CUDA)-based APIs for
+    interfacing with a GPU. CUDA was introduced in 2007 by nVidia, a major GPU manufacturer,
+    and since then became a de facto standard for software libraries providing applications
+    and frameworks like PyTorch with GPU APIs. CUDA enables PyTorch to perform parallel
+    processing of tensor operations on a GPU regardless of whether the GPU was built
+    by nVidia, Intel, or another processor manufacturer that supports the CUDA standard.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'PyTorch can perform a limited degree of parallel processing using CPUs since
+    it is common for modern processors to have anywhere from 2 to 16 cores. To find
+    out the exact number of CPU cores available to PyTorch you can execute the following
+    Python code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: which in my case returns a 4. In processor terminology, each one of these CPU
+    cores can act as an independent arithmetic logic unit (ALU) that performs the
+    low-level arithmetic computations needed by PyTorch tensor operations. However,
+    as illustrated in figure 7.2, the number of ALUs on a standard CPU pales in comparison
+    with the number of ALUs on a GPU.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![07-02](Images/07-02.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.2 While equipped with a larger cache, a CPU (left) is limited in parallel
+    processing throughput by the number of ALU cores. Smaller cache and control units
+    in a GPU (right) are shared across a larger number of ALU cores having a higher
+    total parallel processing throughput than a CPU.
+  prefs: []
+  type: TYPE_NORMAL
+- en: PyTorch CUDA APIs can provide you with information about the exact number of
+    ALUs available on your GPU device. In PyTorch, it is customary to initialize the
+    device variable before using the GPU.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 7.5 Checking if GPU and CUDA device drivers are available
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If you have a CUDA device available on your computer, the device variable has
+    the value of "cuda". To find out the number of ALUs you have available, you need
+    to first use the get_device_capability method to find out your CUDA compute capability
+    profile:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: which in my case reports
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The values returned by get_device_capability are not the actual ALUs counts
+    but rather a generic device profile. To find out the actual number of ALUs for
+    the profile, you need to look up the corresponding entry on the nVidia CUDA website:
+    [https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html](https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html).
+    For example, in the case of the 6,0 profile, the specific URL is [https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#compute-capability-6-x](https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#compute-capability-6-x%20which)
+    which lists 64 ALUs, matching the number on the right side of figure 7.2.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In section 7.3, you learned about using the set_default_dtype method to specify
+    the default dtypes for the tensors created in your PyTorch code. For every supported
+    PyTorch dtype (e.g., torch.float64), there are two alternative implementations
+    available from the PyTorch library: one for CPU-based and another for GPU-based
+    tensors.[⁶](#pgfId-1080789) PyTorch defaults to using the CPU-based tensors unless
+    you specify the CUDA-based implementation as the default using the set_default_tensor_type
+    method. For example,'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: outputs
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: where the device attribute of the tensor instance reports that PyTorch defaulted
+    to a CPU-based implementation. However, you can configure PyTorch to default to
+    a GPU-based implementation (listing 7.6 ❶).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 7.6 Using a GPU tensor as the default tensor type
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Use the torch.cuda.FloatTensor as default tensor type.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This code produces
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: showing that the tensor is defaulting to the first CUDA GPU device, as indicated
+    by the cuda prefix and the 0-based index postfix.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note In this chapter, you will learn about scaling up PyTorch code to use a
+    single GPU per compute node. Chapter 8 and later chapters explain how to scale
+    out to multiple GPU devices and to multiple compute nodes in a network.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The set_default_tensor_type method is a global setting, and as such it may inadvertently
+    impact your entire PyTorch codebase. Even if you specify set_default_tensor_ type
+    to use a GPU-based implementation for a FloatTensor tensor, all tensors created
+    in your code are converted to use GPUs. For example,
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: prints out
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: showing that the tensor instance configured as an int also defaulted to the
+    GPU-based implementation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'While it is important to be mindful of the global set_default_tensor_type setting,
+    a better practice when using a GPU for tensor operations is to create tensors
+    directly on a desired device. Assuming that you initialize the device variable
+    as explained in listing 7.5, you can create a tensor on a specific device by setting
+    the device named parameter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: which outputs
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: if a CUDA device is available to PyTorch (i.e., cuda.is_available is True).
+    When a CUDA device is not available or not configured,[⁷](#pgfId-1081375) the
+    same code outputs
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the situations where your PyTorch code processes tensors from external libraries
+    such as NumPy, it can be useful to move the existing tensor to a different device
+    using the to method. For example, if your device variable is initialized to cuda,
+    then to create an array tensor with 100 random elements on a GPU, you can use
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note that all tensors used by a tensor operation have to reside on the same
+    device for the operation to succeed. This means that
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: correctly returns the sum of tensors a and b, while
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'fails with a RuntimeError: expected device cuda:0 but got device cpu.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'While GPUs offer significant performance improvements for machine learning
+    compared to CPUs, there is a latency overhead involved in moving contents of a
+    tensor from the main computer memory to the memory of the GPU. To quantify the
+    performance advantages of the GPU, you can start with the following benchmark
+    function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: where, after the execution of the benchmark method, the ratio variable contains
+    the performance of the GPU versus CPU (higher is better). For example, in my measurements,
+    a GPU achieved speed-ups of over 1000 times versus the CPU (figure 7.3), especially
+    for larger tensor sizes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![07-03](Images/07-03.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.3 For larger tensor sizes (horizontal axis), a GPU can be up to 150
+    times faster than a CPU (vertical axis) for tensor addition.
+  prefs: []
+  type: TYPE_NORMAL
+- en: However, for smaller tensor sizes, those containing 4,096 floating point values
+    or fewer (figure 7.4), the performance of the CPU is either on par or faster than
+    that of the GPU.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![07-04](Images/07-04.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.4 For tensors with fewer than 4K values (horizontal axis), the overhead
+    of data transfer to GPU memory can mean GPU performance at 50% of a CPU (vertical
+    axis).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.5 Scaling up to use GPU cores
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In this section, you will modify the baseline linear regression implementation
+    from listing 7.4 to take advantage of multiple GPU cores of your compute node.
+    As you learned from section 7.4, to adapt your machine learning code to take advantage
+    of GPUs, you need to ensure that the CUDA device and the device drivers are properly
+    configured for PyTorch by invoking the torch.cuda.is_available() method (listing
+    7.7 ❶), where the available device is assigned to the device variable.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 7.7 Weak baseline using linear regression
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Use GPU when the device is available.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Customize the DataLoader to pin the data in memory for accelerated transfer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷' Initialize the model parameters . . .
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ . . . and the model bias to use the GPU device when available and CPU otherwise.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❽ Transfer the batch data to the GPU device when available, no-op otherwise.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The remaining changes are highlighted in listing 7.7 ❸—❾. Notice that the DataLoader
+    instantiation is changed to take advantage of the pin_memory parameter ❸. This
+    parameter helps accelerate the transfer of large tensors from CPU memory to GPU
+    by “pinning” virtual memory pages of the operating system to prevent the pages
+    from swapping from physical memory to storage, and vice versa. The remaining changes
+    ❹—❾ are simply to specify the correct device to use with the PyTorch tensors:
+    cuda, if the GPU is available to the PyTorch runtime, and cpu otherwise.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Running the code from listing 7.7 should demonstrate a weak baseline as measured
+    by MSE loss:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: Summary
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'While using in-memory approaches is faster and more effective for smaller machine
+    learning problems, using out-of-memory techniques enables scalability to larger
+    data sets and larger pools of information technology resources: compute, storage,
+    networking.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using data set batches with gradient descent enables your PyTorch code to scale
+    up to take advantage of the compute resources within a single node and scale out
+    to take advantage of multiple nodes in a compute cluster.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: PyTorch IterableDataset simplifies the use of batches for out-of-memory and
+    streaming data sets in PyTorch code, while the ObjectStorageDataset utility class
+    provides ready-to-use implementations for out-of-memory data sets.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: PyTorch support for GPUs is enabled by CUDA device drivers, providing PyTorch
+    developers with the option to easily scale existing PyTorch code to take advantage
+    of the higher throughput and more parallel compute capabilities of GPUs.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A basic linear regression implementation in PyTorch can provide a weak baseline
+    for the expected training mean squared error on the DC taxi data set.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: ^(1.)The complete list of the storage options supported by ObjectStorageDataset
+    is available from [https:// filesystem-spec.readthedocs.io/en/latest/](https://filesystem-spec.readthedocs.io/en/latest/).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '^(2.)The abstract of the paper along with a link to the PDF version are available
+    from arXiv: [https://arxiv.org/ abs/1502.01852](https://arxiv.org/abs/1502.01852).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '^(3.)The competition website along with the links to the competition results
+    is available here: [http://mng.bz/Koqj](http://mng.bz/Koqj).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '^(4.)As described by Alex Krizhevsky’s paper: [http://www.cs.toronto.edu/~hinton/absps/imagenet.pdf](http://www.cs.toronto.edu/~hinton/absps/imagenet.pdf).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ^(5.)Google has developed a tensor processing unit (TPU) designed to accelerate
+    tensor operations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ^(6.)For detailed documentation about PyTorch dtypes and the corresponding CPU
+    and GPU tensor implementation, refer to [http://mng.bz/9an7](http://mng.bz/9an7).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '^(7.)The device parameter is available for all PyTorch tensor creation operations
+    and documented here: [http:// mng.bz/jj8r](http://mng.bz/jj8r).'
+  prefs: []
+  type: TYPE_NORMAL

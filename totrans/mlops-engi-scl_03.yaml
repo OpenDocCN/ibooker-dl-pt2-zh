@@ -1,0 +1,1233 @@
+- en: 2 Getting started with the data set
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter covers
+  prefs: []
+  type: TYPE_NORMAL
+- en: Introducing a use case for machine learning
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Starting with object storage for serverless machine learning
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using crawlers to automatically discover structured data schemas
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Migrating to column-oriented data storage for more efficient analytics
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Experimenting with PySpark extract-transform-load (ETL) jobs
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In the previous chapter, you learned about serverless machine learning platforms
+    and some of the reasons they can help you build a successful machine learning
+    system. In this chapter, you will get started with a pragmatic, real-world use
+    case for a serverless machine learning platform. Next, you are asked to download
+    a data set of a few years’ worth of taxi rides from Washington, DC, to build a
+    machine learning model for the use case. As you get familiar with the data set
+    and learn about the steps for using it to build a machine learning model, you
+    are introduced to the key technologies that are a part of a serverless machine
+    learning platform, including object storage, data crawlers, metadata catalogs,
+    and distributed data processing (extract-transform-load) services. By the conclusion
+    of the chapter, you will also see examples with code and shell commands that illustrate
+    how these technologies can be used with Amazon Web Services (AWS) so that you
+    can apply what you learned in your own AWS account.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.1 Introducing the Washington, DC taxi rides data set
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: This section dives into the details of the business domain and the business
+    rules for the taxicab industry in Washington, DC. You might be tempted to skip
+    these details; after all, they are probably irrelevant to the data sets you are
+    planning to use in your machine learning projects. However, I encourage you to
+    treat this section as a case study illustrating the kinds of questions you should
+    ask about any business domain where you are planning to apply machine learning.
+    As you explore the business use case in this section, you can learn more about
+    the factors behind the DC taxi trips data and better prepare for building a machine
+    learning model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.1.1 What is the business use case?
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Imagine that you are a machine learning engineer working for a plucky startup
+    planning to launch an autonomous, driverless car to take over the ride-sharing
+    industry and outmaneuver companies like Waymo, Uber, and Lyft. Your business leadership
+    decided that the first market your service will launch in is Washington, DC. Since
+    your startup wants to offer prices that are competitive with regular taxis, you
+    have been asked to write some code to estimate how much it costs a passenger to
+    take a regular taxi from one location to another within the boundaries of Washington,
+    DC, and the nearby areas of Virginia and Maryland.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.1.2 What are the business rules?
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The business rules for calculating the Washington, DC, taxi fares are available
+    on the web from dc.gov.[¹](#pgfId-1011886) The rules are as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The charge for the first 1/8 of a mile is $3.50.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Each additional 1/8 of a mile is charged at $0.27, which adds up to $2.16 per
+    mile.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A special duration-based charge is $25 per hour and is accrued in 1-minute increments.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The duration-based charge applies to situations when the cab is in a traffic
+    jam so that the fare amount continues to increase over time. The dc.gov website
+    also lists additional special charges (e.g., for snow emergency days), but let’s
+    ignore them for now.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.1.3 What is the schema for the business service?
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: For a more concrete specification of the taxi fare estimation service interface,
+    a software engineer could define the data types for the input and output values
+    as shown in table 2.1\. The interface expects an input consisting of pickup and
+    drop-off locations (each in terms of a pair of latitude and longitude coordinates),
+    as well as a timestamp with an expected start time of the trip. The output of
+    the service is just the dollar amount of the estimated taxi fare. The values provided
+    in table 2.1 as examples apply to a short, half-mile taxi trip, which costs about
+    $6.12\. Due to the fixed charge of $3.50 for the first 1/8 of the mile, and $0.81
+    for the remaining 3/8 distance ($0.27 * 3), the remaining $1.81 is likely due
+    to the taxi spending time in midday heavy traffic on a Monday in a busy area of
+    downtown DC.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Table 2.1 Schema and example values for a taxi fare estimation service interface
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| Input |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Name | Data Type | Example Value |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Pickup location latitude | FLOAT [²](#pgfId-1044105) | 38.907243 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Pickup location longitude | FLOAT | –77.042754 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Drop-off location latitude | FLOAT | 38.90451 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Drop-off location longitude | FLOAT | –77.048813 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Expected start time of the trip | TIMESTAMP [³](#pgfId-1044108) | 01/12/2015
+    12:42 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Output |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Name | Data Type | Example Value |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Estimated fare (dollars) | FLOAT | 6.12 |'
+  prefs: []
+  type: TYPE_TB
+- en: The latitude and longitude coordinates of the trip from table 2.1 correspond
+    to a pickup address of 1814 N St. NW and a drop-off address of 1100 New Hampshire
+    Ave. NW in Washington, DC. Note that the service does not perform any geocoding;
+    in other words, the service expects pickup and drop-off locations as latitude
+    and longitude coordinates instead of human-readable addresses like 1100 New Hampshire
+    Ave. NW. Of course, a user of your service is not expected to type in the latitude
+    and longitude values of the coordinates. Instead, the user can be prompted to
+    visually drop pins for pickup and drop-off locations on a map in your mobile application.
+    The latitude and longitude of the dropped pins can then be used directly with
+    the service. Alternatively, there are geocoding features available from Google
+    Maps and similar services, but they are outside the scope of this book.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.1.4 What are the options for implementing the business service?
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The trip from the example in table 2.1 is based on just one of many possible
+    taxi routes in the DC area. For the purposes of the taxi fare estimation service,
+    a taxi trip can take place across any pickup and drop-off location, as long as
+    both are within the diamond-shaped boundary, which includes the entirety of Washington,
+    DC, as well as the nearby areas of Maryland and Virginia. The area on the interactive
+    map ([https://osm.org/go/ZZcaT9](https://osm.org/go/ZZcaT9)) includes all possible
+    pickup and drop-off locations for the DC taxi trips in this book. A user of your
+    startup’s mobile application could place pickup and drop-off pins within the area
+    boundary to get back an estimated price for the trip.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Before diving into the implementation of a machine learning project for estimating
+    the taxi fare, consider the traditional software engineering approach for building
+    the fare estimation service. A software engineer (assume they are unfamiliar with
+    machine learning) may start by developing code to use business rules for calculating
+    the fare and by integrating the code with a route planning application programming
+    interface (API) from a service such as Google Maps or Bing Maps. Both APIs can
+    calculate the shortest driving route from one location to another and estimate
+    the distance as well as the duration for the route. The actual route the taxi
+    driver takes and the duration of the trip can vary based on traffic, road closures,
+    weather, and other factors, but this approach provides a reasonable estimate of
+    the distance. Next, the distance returned by the API can be combined with the
+    business rules to calculate the estimated taxi fare.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The traditional software engineering approach to building the taxi fare estimation
+    service has several advantages. The service is straightforward to implement, even
+    for a junior software engineer. There is a large pool of engineers worldwide with
+    the skills to deliver the implementation. Once implemented, the service should
+    produce accurate estimates, except in the extreme cases where the taxi rides are
+    impacted by unusual traffic, weather, or emergency events.
+  prefs: []
+  type: TYPE_NORMAL
+- en: However, for a startup, relying on a route-planning service can be expensive.
+    Services like Google Maps charge per API request to perform route planning and
+    calculate distances, and to choose a route based on traffic. The costs of these
+    services can quickly add up. Also, keep in mind the additional costs of the users
+    of your service, who will estimate the price of a trip without actually taking
+    the ride. While a larger company could explore the option of developing an on-premises,
+    internal deployment of a route-planning service by building on open source data
+    software or by purchasing a license from a vendor, the cost of doing so is prohibitive
+    for a startup.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Instead of relying on traditional software engineering to build the taxi fare
+    estimation service, in this book you are introduced to a machine learning approach
+    implemented using the serverless capabilities of AWS.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.1.5 What data assets are available for the business service?
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The Office of the Chief Technology Officer for Washington, DC, maintains a website
+    that hosts data from taxi rides that took place within the DC-area boundaries.[⁴](#pgfId-1012413)
+    In this book, you will use this historical data set of the taxi rides from 2015
+    through 2019 to build machine learning models to estimate how much it costs to
+    travel by taxi around DC. The key advantage of the machine learning approach is
+    that it will not depend on an expensive external service for route planning and
+    distance calculations. The model will learn from the taxi rides data to estimate
+    the fares based on taxi trips taken across different locations in DC.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Later in the book, you will also deploy the models to AWS as a web service with
+    an internet-accessible API for taxi fare predictions. The service will process
+    HTTP (hyperText transfer protocol) requests containing geographic coordinates
+    of the pickup and drop-off locations and will return the estimated taxi fare.
+    The service’s API will also take into account the start time of the trip so that
+    the model can correctly adjust the predicted fare. For example, fares for multiple
+    trips across the same pickup and drop-off locations will vary depending on the
+    time of the day (rush hour versus middle of the night), day of the week (weekday
+    versus weekend), and even day of the year (holiday versus workday).
+  prefs: []
+  type: TYPE_NORMAL
+- en: You are also going to observe that the machine learning approach can be adapted
+    with minimal changes as your service expands to support other geographical areas.
+    Instead of hardcoding city-specific business rules for every city where your startup
+    wants to launch, you can simply extend the data set with data about taxi trips
+    in other cities.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.1.6 Downloading and unzipping the data set
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Start with the data set by downloading and unzipping the files from opendata.dc.gov.[⁵](#pgfId-1012467)
+    Once the files are downloaded, you should be able to confirm that you have the
+    data for years 2015 through 2019, with a separate zip file for each year. Note
+    that the data set for 2019 is limited to the data from January through June. After
+    you unzip the files, the entire data set should take up to 12 GiB of disk space.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note After unzipping the files, the contents of the data set get placed into
+    separate subdirectories. Before proceeding, move all the files from the data set
+    to a single directory. Don’t worry about overwriting the README_DC_ Taxicab_trip.txt
+    file; there is an identical copy of this file for every year of the data set.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The instructions in this book assume that you are using the bash (or similar)
+    shell in Linux or MacOS as your shell environment. Once you have downloaded and
+    unzipped the files, you should be able to confirm that the data set occupies roughly
+    12 GiB on your disk using the du command from your shell:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: resulting in the output that starts with the following.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 2.1 Unzipped files of the DC taxi trips data set from 2015 to 2019
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: For brevity, the output of the du command in listing 2.1 omits most of the files
+    in the data set, replacing them with the ellipsis. The entire listing is available
+    as a Github Gist ([http://mng.bz/nrov](http://mng.bz/nrov)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Inside the zip files, the data is packaged as a collection of text files (with
+    a “.txt” extension) that use the | (pipe) character to separate columns within
+    each row. It is common for machine learning practitioners to refer to such files
+    as *pipe-delimited comma-separated values* (CSVs). Although this industry terminology
+    is confusing, I will keep with the practice of using the acronym CSV for this
+    data format throughout the book.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The CSV files for the DC taxi data set contain a header row, meaning that the
+    first row of every file has string labels for every column, for example MILEAGE,
+    FAREAMOUNT, and others. The remaining rows in the files are the records of the
+    taxi trips, one trip per row. Every zip file also contains an identical copy of
+    the README_DC_Taxicab_trip.txt file, which provides some additional documentation
+    for the data asset. The key parts of the documentation are covered later in this
+    chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.2 Starting with object storage for the data set
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: This section introduces you to the first serverless capability from the machine
+    learning project in this book. You are going to build on what you know about traditional
+    filesystems to start learning about serverless object storage. Next, you are going
+    to use a command line interface for AWS to create a serverless object storage
+    location for the DC taxi data set and start to copy your CSV files to the location.
+    You are going to become acquainted with using public cloud object storage for
+    your machine learning data sets and complete the transfer of the DC taxi data
+    set to object storage for further processing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This section and the rest of the book will use examples based on Simple Storage
+    Service (S3) from AWS to explain how serverless object storage can help you with
+    machine learning projects. However, you should know that other public cloud vendors,
+    such as Google Cloud and Microsoft Azure, offer similar capabilities.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.2.1 Understanding object storage vs. filesystems
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: There are many similarities between filesystems and object storage, so you will
+    find it easier to understand object storage if you start by focusing on the differences
+    (table 2.2). Recall that filesystems are designed to store mutable, or changeable,
+    data in a named location. This means that with a filesystem you can open a file,
+    navigate to any line or a byte location in the file, change as many or as few
+    bytes as you would like, and then save the changes back to the filesystem. Since
+    files in a filesystem are mutable, after you make the change the original data
+    is gone and is replaced on the storage medium (for example, on a solid-state drive)
+    with your changes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Table 2.2 While both filesystems and object storage services have similar features
+    such as hierarchies of folders and support common operations such as copy, delete,
+    and move, there are some important differences, as highlighted in this table.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| File system/Files | Serverless object storage/Objects |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Mutable | Immutable |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Lack globally unique names | Can be globally identified using a URL |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Data redundancy across multiple storage devices | Data redundancy across
+    multiple availability zones (data centers) and multiple storage devices |'
+  prefs: []
+  type: TYPE_TB
+- en: In contrast, objects in object storage are immutable. Once you have created
+    an object in object storage, it stores exactly the data that was placed in the
+    object when it was created. You can create a new version of an object with your
+    changes, but as far as the object storage service is concerned, the new version
+    is an additional object occupying additional storage space. Of course, you can
+    also delete an entire object, freeing up the storage space.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Unlike files, objects in serverless object storage services like AWS S3 are
+    designed to be accessible on the internet using the HTTP protocol. By default,
+    public internet access to objects is disabled. However, any object in serverless
+    object storage can be made available via a public URL. To support this capability,
+    object storage services organize objects into *buckets* (known as *containers*
+    in Azure), which are named locations with globally unique identifiers. Every object
+    in object storage must exist within a bucket, either directly or under some hierarchical,
+    folder-like name structure. For example, if <guid> is a globally unique identifier
+    name for an S3 bucket, an object named dataset could be accessible via a URL directly
+    from the S3 bucket using https://<guid>.us-east-2.amazonaws.com/dataset or under
+    a folder named “2015” within the bucket using https://<guid>.us-east-2.amazonaws.com/2015/dataset.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The “us-east-2” portion of the object URL from the example is due to another
+    difference between traditional filesystems and object storage. Unlike filesystems
+    that rely on multiple storage devices within the same physical server for data
+    redundancy,[⁶](#pgfId-1012868) object storage providers like AWS replicate data
+    across both multiple storage devices and multiple physical data centers called
+    *availability zones*. A redundant cluster of availability zones within a metropolitan
+    area, interconnected by a high bandwidth and a low latency network, is called
+    a *region*. The “us-east-2” part of the object URL specifies an AWS-specific code
+    name for a region storing the object.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Why should you use serverless object storage for the DC taxi rides data set
+    and for the taxi fare estimation service? For the purposes of your machine learning
+    project, with serverless object storage you will not have to worry about running
+    out of storage space. Services like S3 can help you scale from gigabyte- to petabyte-sized
+    data sets. As you recall from the definition of serverless in chapter 1, using
+    serverless object storage ensures that you won’t have any storage infrastructure
+    to manage, and you will be charged based on the amount of data you keep in your
+    storage bucket. Also, since object storage can provide an HTTP-based interface
+    to the stored objects, it takes less effort to access and to integrate with the
+    data that you have stored.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.2.2 Authenticating with Amazon Web Services
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The remaining examples in this chapter depend on AWS services. If you are planning
+    to run the code from the examples, you should have the AWS Software Development
+    Kit (SDK) installed, and you should know your AWS account’s access and secret
+    keys. The details of the SDK installation are available from the AWS documentation
+    ([https://docs.aws.amazon.com/cli](https://docs.aws.amazon.com/cli)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you don’t have your AWS access and secret keys available, you can generate
+    a new pair by navigating to the AWS management console ([https://console.aws.amazon.com/](https://console.aws.amazon.com/)),
+    clicking on your user name in the upper right-hand corner drop-down menu, and
+    choosing “My Security Credentials.” To create a new pair of keys, click on the
+    “Create access key” button.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The instructions in this book assume that you have your shell configured with
+    AWS environment variables using
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: before running any of the commands that depend on the AWS SDK.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note In this book, all of the listings replace sensitive account-specific information
+    with a sequence of █ characters. Take care to use your account-specific values
+    for AWS access and secret keys.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To verify that you have specified valid values for the environment variables
+    AWS_ ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY you can run
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'which, in the case of a successful authentication with AWS, should return your
+    UserId, Account, and Arn[⁷](#pgfId-1013184) values:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 2.2.3 Creating a serverless object storage bucket
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This section walks you through the steps for creating an S3 bucket and uploading
+    your DC taxi data files as objects to the bucket (figure 2.1). The steps in this
+    section are completed using the command line interface (CLI) for AWS, but if you
+    prefer, you can complete the same sequence of steps using the graphical user interface
+    of the AWS management console ([https://console.aws.amazon.com](https://console.aws.amazon.com)).
+    This book focuses on the CLI-based approach because it allows for the steps to
+    be easily explained, tested, and re-used as part of a script-based automation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![02-01](Images/02-01.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 2.1 To transfer the DC taxi data set to object storage in AWS, you are
+    going to create an S3 bucket using the aws s3api create-bucket command specifying
+    the region and a globally unique identifier for the bucket. Next, you are going
+    to use aws s3 sync to upload the data set files to a folder named “csv” in the
+    bucket.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The selection of the region (and as a consequence of the location) for the bucket
+    is important for low latency access to the data stored in the bucket. Going forward,
+    you should remember to run any of the code that processes your data from the same
+    region you placed your S3 bucket. This section assumes that you will be using
+    the us-east-2 region to store the data set.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To export the setting for the AWS_DEFAULT_REGION variable, which is going to
+    be used to specify the default region of the bucket, run
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: which should print back your chosen value for the bucket region.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Since bucket names are supposed to be globally unique, it makes no sense for
+    this book to publish a fixed and identical bucket name in the code listing. Instead,
+    listing 2.2 uses the $RANDOM environment variable, which always returns a pseudorandom
+    value. The value is then hashed using the MD5 hash function to a unique identifier
+    consisting of a sequence of numbers and characters. The BUCKET_ID variable is
+    then set to the value of the first 32 characters of the hash string, as returned
+    by the output of the cut command.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 2.2 Using a pseudorandom generator for a likely unique value of the
+    bucket ID
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Use the first 32 characters of an MD5 hash of the Linux pseudorandom number
+    generator.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note If you are running the commands in listing 2.2 using Mac OSX or BSD, you
+    may need to use md5 instead of md5sum.
+  prefs: []
+  type: TYPE_NORMAL
+- en: At this point, you should have exported the environment variables specifying
+    the globally unique identifier (in BUCKET_ID) and the region (in AWS_DEFAULT_REGION)
+    for the bucket.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Before creating the bucket, run
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: to ensure that your shell is still configured with valid values for the environment
+    variables, AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, required to authenticate
+    with AWS.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Notice that the following command, which creates the bucket, uses the aws s3api
+    instead of the aws s3 you may have expected. This is for compatibility with the
+    legacy, fine-grained AWS CLI features that were made available prior to the introduction
+    of aws s3 commands.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note If you would like to use us-east-1 (the Northern Virginia region) instead
+    of us-east-2, you need to drop the LocationConstraint argument to the aws s3api
+    create-bucket command.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Create the bucket
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'and confirm that the command returns a result similar to the following JavaScript
+    object notation (JSON) response, using your values for the BUCKET_ID and AWS_
+    DEFAULT_REGION environment variables in place of the █ characters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: Although the response to the aws s3api create-bucket command returns an HTTP
+    URL for the bucket, you will usually refer to the bucket by an AWS specific naming
+    scheme that starts with the s3:// prefix. If you lose track of the name you can
+    recreate it using
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'You can also use the AWS CLI list-buckets command to print out all the buckets
+    that exist in your AWS account; however, the printed names will not use the s3://
+    prefix:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: The list-buckets command can provide you with a second confirmation that the
+    bucket was created successfully. Once you know that the bucket was created, change
+    the present working directory of your shell to the directory containing the data
+    set files from listing 2.1.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Next, use the aws s3 sync command to replicate the data set files to the bucket.
+    The command recursively transfers new and modified files to or from a location
+    in an S3 bucket. While running, the command relies on multiple threads to speed
+    up the transfer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Transfer the CSV files from your local working directory to a csv folder in
+    your bucket using
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: The time that it takes to transfer the data depends on the bandwidth you have
+    available. In most cases, you should expect that it will take over 10 minutes,
+    so this is a good point to take a break and resume once the transfer is over.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'After the sync command completes, you can confirm that the data set files are
+    stored under the csv folder in the bucket using the aws s3 ls command. Just as
+    with Unix-like operating systems, the ls command in S3 lists the contents of a
+    folder. Try running the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: Notice that you have transferred 11.2 GiB of CSV files to your object storage
+    bucket. This quantity of data transferred to the bucket should match the size
+    of the data set contents from listing 2.1.
+  prefs: []
+  type: TYPE_NORMAL
+- en: After the files have been uploaded to the object storage, they are available
+    for download and processing; however, the data is not yet distinguishable from
+    unstructured binary large objects (BLOBs). To catalog the data structure in the
+    CSV files, you are going to have to crawl the files and discover the data schema.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.3 Discovering the schema for the data set
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: At this point, you have created a csv folder in your object storage bucket and
+    have transferred the DC taxi data set consisting of 11.2 GiB worth of CSV files
+    to the folder. Before starting with the analysis of the files, it is important
+    to identify and understand the data set’s schema. While it is possible to discover
+    the data set schema manually, for example, by searching the opendata.dc.gov website
+    for the schema specification or by exploring the contents of the CSV files directly,
+    an automated approach can simplify and accelerate the process of schema discovery.
+    In this section, you will learn about a data crawler service that can help you
+    automate schema discovery for your data sets so you can better keep up with schema
+    changes in your data. You are also going to crawl the CSV files of the DC taxi
+    data set and persist the schema of the data set in a data catalog.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.3.1 Introducing AWS Glue
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Glue is as an umbrella name for a toolkit of different AWS services that you
+    can use to prepare your data set for analysis. In this book, you will learn about
+    the Glue data catalog, Glue extract-transform-load (data processing) jobs, and
+    the Glue library for distributed data processing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The Glue data catalog is a metadata repository designed to store information
+    about data assets, data schemas, and data provenance. The data catalog consists
+    of one or more databases, which exist to organize a collection of tables together.
+    Since Glue databases and tables are designed to store metadata, your project data
+    must exist in storage outside of Glue. For example, Glue tables can store schema
+    for data stored in object storage, relational (for example MySQL or PostgreSQL),
+    or NoSQL databases.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In addition to data schemas, Glue tables maintain information about the time
+    when the schema was inferred from the data, as well as some basic statistics about
+    the data, such as the number of objects from object storage used to store the
+    data, the number of rows in the data, and the average amount of space occupied
+    by a row in object storage.
+  prefs: []
+  type: TYPE_NORMAL
+- en: While it is possible to manually create a table in the Glue database, in this
+    section you will learn about using a Glue crawler to create a table automatically.
+    If you are familiar with the term *crawler* in the context of web search engines,
+    keep in mind that Glue crawlers are different. They are designed to process and
+    analyze structured data formats rather than web pages. A Glue crawler is a process
+    that
+  prefs: []
+  type: TYPE_NORMAL
+- en: Establishes a connection to a storage location with structured data (e.g., to
+    an object storage bucket)
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Identifies the format used by the data (e.g., CSV)
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Analyzes the data to infer the data schema, including the various column data
+    types, such as integers, floating point numbers, and strings
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Crawlers can be scheduled to periodically recrawl the data, so if the schema
+    of your data changes over time, a crawler will be able to detect that change the
+    next time it runs and update the schema in a table.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To create a crawler, you need to provide a crawler configuration that specifies
+    one or more targets, in other words, the unique identifiers specifying storage
+    locations with the data that should be processed by the crawler. In addition,
+    a crawler in AWS must assume a security role to access the data in the crawler
+    configuration target. The cloud providers like AWS require you to create a security
+    identity, known as a *role*, whenever an application, service, or a process (e.g.,
+    an AWS Glue crawler) is accessing cloud resources on your behalf.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.3.2 Authorizing the crawler to access your objects
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Prior to creating a crawler for the DC taxi data, you should complete the steps
+    in listing 2.3 to create a role called AWSGlueServiceRole-dc-taxi. The aws iam
+    create-role command (listing 2.3 ❶), creates the role with a policy document that
+    permits the Glue service ([https://aws.amazon.com/glue](https://aws.amazon.com/glue))
+    to assume the AWSGlueServiceRole-dc-taxi security role as specified by the sts:AssumeRole
+    permission. In short, the policy document specifies that the Glue crawler should
+    use the AWSGlueServiceRole-dc-taxi role.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 2.3 Allowing AWS Glue crawler to access the files in your object storage
+    bucket
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Create a security role named AWSGlueServiceRole-dc-taxi.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Attach the AWS Glue policy to the AWSGlueServiceRole-dc-taxi role.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Assign a policy document to AWSGlueServiceRole-dc-taxi to enable crawling
+    of the data set S3 bucket.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The aws iam attach-role-policy command (listing 2.3 ❷) attaches an existing
+    service role defined by AWS Glue (AWSGlueServiceRole) to the AWSGlueServiceRole-dc-taxi
+    role. Attaching the role ensures that the AWSGlueServiceRole-dc-taxi role can
+    access Glue databases and tables and perform other required operations with AWS
+    resources. The details of the AWSGlueServiceRole specification are available from
+    the AWS documentation ([http://mng.bz/XrmY](http://mng.bz/XrmY)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: The aws iam put-role-policy command (listing 2.3 ❸) specifies that the AWSGlueServiceRole-dc-taxi
+    role is allowed to access the contents of the object storage bucket you created
+    and populated with the DC taxi CSV files earlier in this chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.3.3 Using a crawler to discover the data schema
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: In this section you will create a database and a crawler in Glue, configure
+    the crawler to process the DC taxi data, and run the crawler to populate the database
+    with a table containing the data schema. You have the option of using a browser
+    interface to AWS[⁸](#pgfId-1014877) to complete these steps. However, listing
+    2.4 and upcoming listings in this chapter will explain the CLI-based commands
+    to create a Glue database and a crawler, and to start the crawler to discover
+    the DC taxi data schema.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In listing 2.4 ❶, the aws glue create-database command creates the Glue metadata
+    database named dc_taxi_db, which is going to be used to store a schema for the
+    DC taxi data set along with a table based on the schema.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 2.4 Creating a database and confirming the database exists
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Create the database named dc_taxi_db.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Confirm the database named dc_taxi_db was created.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Since it is a process, a Glue crawler cycles through a sequence of states. Once
+    a crawler is created successfully, it begins its existence in a READY state. After
+    is it started, the crawler transitions to a RUNNING state. While in a RUNNING
+    state, it establishes a connection to a storage location specified in the crawler
+    configuration. Based on the crawler configuration, the crawler identifies what
+    locations in storage are included or excluded from processing and uses the data
+    in the locations to infer the data schema. The RUNNING state often takes the longest
+    period of time for the crawler to complete because it is the state in which the
+    crawler is doing most of the work. Next, the crawler transitions to a STOPPING
+    state to populate a Glue data catalog table with the schema and other metadata
+    discovered during the process. Assuming that the process completes successfully,
+    the crawler returns to a READY state.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 2.5 Creating and starting a Glue crawler
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Use dc-taxi-csv-crawler as the crawler name.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Store crawler output in dc_taxi_db.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Tables created by the crawler should start with dc_taxi_ prefix.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Use the AWSGlueServiceRole-dc-taxi role for the crawler.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Configure the crawler to crawl the csv folder of the data set bucket.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❻ Exclude the README_DC_Taxicab_trip documentation file from crawler.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❼ Start the crawler.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In listing 2.5, the crawler is created using dc-taxi-csv-crawler ❶ and is configured
+    to store the metadata discovered during the crawling process in the dc_taxi_db
+    database. The crawler is also configured to use a table prefix of dc_taxi_ for
+    any tables created by the crawler in the database.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Notice that the command specified by listing 2.5 ❹, is more complex than other
+    shell commands you have encountered in this chapter. In bash, a command enclosed
+    in $( ) characters are evaluated first, and the output of the evaluation is used
+    in the original command. So, the aws iam get-role command nested in $( ) is used
+    to find out the Amazon resource name (Arn) for the role you created in listing
+    2.3.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In listing 2.5, the crawler is configured to crawl the csv folder in the object
+    storage bucket where you uploaded the DC taxi data files, taking care to ignore
+    objects with ❺a README prefix ❻.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Finally, dc-taxi-csv-crawler is started using the aws glue start-crawler command
+    per listing 2.5 ❼.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In case of the DC taxi data set, the crawling process should take just over
+    a minute. To monitor the state of the crawler, you can use the AWS management
+    console from your browser, or run the following command to print out the state
+    of the crawler:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: While the crawler is running, the state should be running. As soon as the crawler
+    is done it should change to ready.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note To print a refreshed state of the crawler every two seconds, you can type
+    in “watch” before the aws glue get-crawler command.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Once the crawler returns to the READY state, you can find out whether the crawl
+    succeeded using
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: The last crawl details requested by the --query 'Crawler.LastCrawl' argument
+    include a status message indicating whether the last run of the crawler succeeded
+    or failed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Assuming the crawler completed successfully, you can list the column names and
+    the column data types of the schema discovered by the crawler using
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: Notice that the table name “dc_taxi_csv” was automatically assigned by the crawler
+    based on the combination of the crawler table prefix from listing 2.5 ❷, and the
+    csv folder name in the crawled bucket, as specified by ❸ in listing 2.5.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Keep in mind that you can also view the schema printed by the aws glue get-table
+    command using your browser by navigating to the Glue service in AWS,[⁹](#pgfId-1015821)
+    choosing “Data Catalog > Databases > Tables” on the left sidebar, and clicking
+    on the dc_taxi_csv table on the right.
+  prefs: []
+  type: TYPE_NORMAL
+- en: At this point, your project has progressed beyond treating the DC taxi data
+    as a collection of BLOBs and created a more detailed specification for the structure
+    of the data, enumerating the data columns and their data types. However, the CSV
+    data format you have been using so far is poorly suited for efficient and scalable
+    analysis. In the upcoming sections of this chapter, you will learn how you can
+    modify your data format to reduce latency for your analytical data queries.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.4 Migrating to columnar storage for more efficient analytics
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In the next chapter of this book, you will learn about an interactive query
+    service that can help you query the DC taxi data set using the table and data
+    schema you discovered with the Glue crawler. However, as explained in this section,
+    analytical queries against row-oriented data storage formats such as CSV are inefficient
+    when working with large data sets. Although you could dive into the analysis of
+    the DC data set right away, this section is going to first introduce you to the
+    benefits of using column-oriented (columnar) data storage formats like Apache
+    Parquet instead of CSV for analytics. After explaining the advantages and disadvantages
+    of column-oriented formats, the remainder of the section will cover another serverless
+    capability of AWS for distributed data processing using PySpark (Apache Spark).
+    By the conclusion of the section, you will learn an example of a typical PySpark
+    job that can help you re-encode your CSV files into the Parquet format so that
+    in the upcoming chapters you can analyze the data set faster and more efficiently.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.4.1 Introducing column-oriented data formats for analytics
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The CSV data format used by the DC taxi data set is an example of a row-oriented
+    format. With CSV files, every line in a file stores a single row of data from
+    the structured data set. Row-oriented data formats (illustrated on the left side
+    of figure 2.2) are commonly used by traditional relational databases to store
+    sequences of data records. The row-oriented format works well for transactional
+    workloads that are typical for relational databases. Transactional workloads operate
+    on individual rows of data and often just on a single row at a time. For example,
+    consider a transactional database that stores a record of a taxi trip. If a passenger
+    decides to change the destination of the trip halfway there, a transactional database
+    can easily handle identifying the row of data about the trip, updating the latitude
+    and the longitude coordinates for the destination, and then saving the changes
+    back to the database.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![02-02](Images/02-02.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 2.2 Row-oriented storage (left) used by CSV files and traditional relational
+    databases, is designed for transactional processing, enabling changes to a row
+    of data at a time. Column-oriented storage (right) used by Apache Parquet and
+    many modern data warehouses, works best with analytical queries over immutable
+    datasets.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Analytical workloads are significantly different from transactional ones. While
+    performing an analytical query on a data set, it is typical to process all of
+    the rows in a data set, for example to identify rows with taxi trips during specific
+    hours of a day or to exclude rows with trips where the fare is more than $20\.
+    Analytical queries often include aggregation functions that process a set of values
+    across matching rows and compute a single value based on the set. Examples of
+    aggregation functions include sum, average (arithmetic mean), minimum, and maximum.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To perform an analytical query on data in a row-oriented storage format, a processing
+    node needs to fetch and operate on a block of rows at a time. For example, consider
+    a query that computes the average taxi trip duration for the trips started between
+    the hours of 11:00 a.m. and 1:00 p.m. To filter the rows with matching trip times,
+    it is necessary to transfer blocks of rows from storage to the processing node,
+    despite the fact that most of the data in the block will consist of information
+    unrelated to the query, such as the pickup and drop-off coordinates, drop-off
+    time, and more.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In addition to the unnecessarily long transfer times for the data moved between
+    the storage and the node, row-oriented formats waste precious, high-speed cache
+    memory in the processor. Since most of the data per row is unusable for performing
+    the query, the contents of the caches need to be evicted frequently and unnecessarily
+    to replace one block of rows with another.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In contrast, column-oriented data formats (right side of figure 2.2) store data
+    in columns instead of rows. Most modern data warehouse systems use columnar storage,
+    and the format was also adopted by open source projects like Apache Parquet[^(10)](#pgfId-1038861)
+    to improve efficiency of analytical workloads.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Consider how the analytical query to find the average taxi trip duration for
+    a midday trip would work in the column-oriented format. To filter the matching
+    trip times, only the data for the trip start time column needs to be transferred
+    to the processing node. Once the trips with matching start times are found, only
+    the corresponding entries from the trip duration column need to be fetched to
+    compute the average.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In both steps there are significant savings with the amount of data that needs
+    to be transferred to the processing node and to its cache. In addition, columnar
+    formats support various encoding and compression schemes to convert text data
+    to binary to further reduce the amount of storage space occupied by data.[^(11)](#pgfId-1019201)
+  prefs: []
+  type: TYPE_NORMAL
+- en: Keep in mind that columnar formats are not designed for transactional workloads.
+    The compression and encoding schemes used by formats such as Parquet add latency
+    to write operations compared to simple file appends or row-specific changes that
+    are possible with row-oriented formats in CSV files or traditional databases.
+    If you are planning to adopt Parquet or another columnar format, you need to remember
+    that these formats are best suited for immutable data sets. For example, the records
+    of DC taxi trip data are not expected to change, making Parquet a great format
+    to adopt for more efficient storage and for lower latency analytical queries.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.4.2 Migrating to a column-oriented data format
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: As you learned earlier in this chapter, AWS Glue includes the capability to
+    create and run data-processing jobs, including jobs that extract-transform-load
+    (ETL) data into destination storage for analysis. In this section, you will create
+    and use ETL jobs in Glue to transform the original, row-oriented, CSV-based DC
+    taxi data set to a column-oriented Parquet format and load the resulting Parquet
+    objects to a location in your S3 bucket.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Glue data-processing jobs can be implemented using the Python programming language.
+    Since Glue is serverless, as a machine learning practitioner you will simply need
+    to implement the job and submit the job code to the Glue service. The service
+    will be responsible for validating your code, ensuring that it can execute, provisioning
+    the distributed infrastructure, completing the job using the infrastructure, and
+    tearing down the infrastructure once the job is finished.
+  prefs: []
+  type: TYPE_NORMAL
+- en: An example of a Python-based job to convert the CSV data set to the Parquet
+    format and store the converted data as objects in S3 is shown in listing 2.6.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The code in the listing, starting from the beginning of the file until ❶, consists
+    of standard library imports for the objects and functions needed by the code.
+    Code between ❶ and ❷ is the boilerplate heading for an instantiation of a Glue
+    job and amounts to initialization of the job based on the runtime arguments passed
+    to the job instance.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The key steps in the code are annotated with ❸ and ❹. The createOrReplaceTempView
+    method used at ❸ modifies the state of the Spark session to declare a temporary
+    (nonmaterialized) view named dc_taxi_csv that can be queried using a SQL statement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The method at ❹ executes a SQL query against the dc_taxi_csv view so that the
+    job can process the contents of the CSV files from the data set and output a selection
+    of columns, while casting the content of the columns into both DOUBLE and STRING
+    data types.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The job commit operation at ❺ simply instructs the job to persist the output
+    of the transformation to storage.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 2.6 Saving the code in the listing to a file named “dctaxi_csv_to_parquet.py”
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Import AWS Glue Job to later manage the job life cycle.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Retrieve the JOB_NAME parameter passed to the job.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Read the CSV files located at BUCKET_SRC_PATH into a Spark DataFrame.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Eliminate the new lines in the Python multiline string of the SQL query for
+    Spark SQL compatibility.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Save using Parquet format to the object storage location specified by BUCKET_DST_PATH.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that you need to save the contents of listing 2.6 to a file named dctaxi_csv_
+    to_parquet.py. As shown in listing 2.7, you need to upload the job source code
+    file to a location in your S3 bucket to ensure that the Glue service can access
+    it to start a job.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 2.7 Uploading to glue/dctaxi_csv_to_parquet.py in your project’s bucket
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Copy the PySpark job file to the Glue folder of the S3 bucket.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Confirm that the file uploaded as expected.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You should expect an output similar to the following, with a different timestamp
+    in the first column:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: After the job file is uploaded, you should create and start the job as shown
+    in listing 2.8.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 2.8 Creating and starting the dc-taxi-csv-to-parquet-job Glue job
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To monitor the execution of the job you can use the following command directly,
+    or prefix it with a watch command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: After the job succeeds, you can list the contents of the parquet folder in the
+    bucket using
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: and confirm that the compression caused by the conversion to the Parquet format
+    reduced the data size to 940.7 MiB from 11.2 GiB of CSV data stored in the row-oriented
+    format.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Then, you can create a new table in the Glue data catalog and have the table
+    describe the newly created data stored in the Apache Parquet format. Use the approach
+    from listing 2.5, with a few changes, including the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Renaming the crawler to dc-taxi-parquet-crawler ❶, ❸, ❹
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Changing the bucket location to use the parquet folder ❷
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Dropping the Exclusions option, since the Parquet-formatted data does not include
+    a README file ❷
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Create an instance of the dc-taxi-parquet-crawler crawler.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Crawl the parquet subfolder of the S3 bucket containing the converted data
+    set.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Start the crawler.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Get the current crawler state.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can confirm that the transformation of the data from CSV to Parquet resulted
+    in a new Glue table. If you execute
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: then the output should be similar to the one from when you ran the aws glue
+    get-table command against the dc_taxi_csv table, with the exception of the change
+    in the value for the Parameters.classification key. The value should change from
+    csv to parquet.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: A machine learning approach to building a taxi fare estimation service can help
+    you reduce operational costs and avoid hardcoding city-specific business rules.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: You will use a publicly available data set of taxi trips in DC to learn how
+    to build a taxi fare estimation API using serverless machine learning.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Serverless object storage services (such as S3) help you take what you already
+    know about managing data as files on filesystems and apply that to storing and
+    managing large data sets (gigabytes to petabytes of data) as objects in object
+    storage.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: AWS Glue data crawlers help you discover the schema of your data regardless
+    of whether your data is in filesystems, object storage, or relational databases.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: AWS Glue extract-transform-load job services help you move data across various
+    storage locations, transforming the data in the process to prepare it for analysis.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The column-oriented data format improves data-processing efficiency for analytical
+    queries.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '^(1.)January 2018 archive.org snapshot of the taxi fares: [http://mng.bz/6m0G](http://mng.bz/6m0G).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ^(2.) The schema data types are illustrated using the ANSI SQL format.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ^(3.) The timestamp is stored as a string using the month/day/year hour:minute
+    format.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '^(4.)Catalog of DC taxi rides from 2015 through 2019: [http://mng.bz/o8nN](http://mng.bz/o8nN).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '^(5.)Catalog of DC taxi rides from 2015 through 2019: [http://mng.bz/o8nN](http://mng.bz/o8nN).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '^(6.)A redundant array of independent disks is used to ensure data redundancy
+    in server hardware: [http:// mng.bz/v4ax](http://mng.bz/v4ax).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ^(7.)Amazon Resource Name (ARN) is an AWS-specific, globally unique identifier
+    for resources, including user IDs and accounts in AWS. You can learn more about
+    ARNs from [http://mng.bz/4KGB](http://mng.bz/4KGB).
+  prefs: []
+  type: TYPE_NORMAL
+- en: ^(8.)AWS Glue user interface is available from [https://console.aws.amazon.com/glue](https://console.aws.amazon.com/glue).
+  prefs: []
+  type: TYPE_NORMAL
+- en: ^(9.)AWS Glue user interface is available from [https://console.aws.amazon.com/glue](https://console.aws.amazon.com/glue).
+  prefs: []
+  type: TYPE_NORMAL
+- en: ^(10.)Apache Parquet is an open source columnar data storage format developed
+    as a collaboration between Twitter and Cloudera and maintained by the Apache Software
+    Foundation project. You can learn more about the format from [https://github.com/apache/parquet-mr](https://github.com/apache/parquet-mr).
+  prefs: []
+  type: TYPE_NORMAL
+- en: ^(11.)Examples of encoding and compression schemes used by Apache Parquet columnar
+    storage format are available from [http://mng.bz/yJpJ](http://mng.bz/yJpJ).
+  prefs: []
+  type: TYPE_NORMAL

@@ -1,0 +1,587 @@
+- en: 11 Hyperparameter optimization
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter covers
+  prefs: []
+  type: TYPE_NORMAL
+- en: Understanding machine learning with hyperparameter optimization
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Introducing hyperparameter optimization for the DC taxi model
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Visualizing the outcomes of hyperparameter optimization trials
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In chapter 10, you integrated your DC taxi model with the PyTorch Lightning
+    framework, factoring out boilerplate engineering code and paving the way to hyperparameter
+    optimization support. In this chapter, you are going to adopt Optuna, a hyperparameter
+    optimization framework, to progress beyond a trial-and-error approach to selection
+    of your machine learning hyperparameter values. You will train a collection of
+    DC taxi model instances based on the hyperparameter values selected using Optuna’s
+    Tree-Structured Parzen Estimator(TPE) that fits a Gaussian mixture model (GMM)
+    to the hyperparameters in your machine learning system. The performance of these
+    model instances is compared using various Optuna visualization plots.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 11.1 Hyperparameter optimization with Optuna
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: This section teaches about Optuna for hyperparameter optimization (HPO) and
+    how to add support for HPO to the DC taxi fare estimation model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Optuna is one of many open source HPO frameworks available for PyTorch. Like
+    other HPO frameworks, Optuna includes a collection of gradient-free[¹](#pgfId-1011837)
+    optimization algorithms that range from random search, and Bayesian optimization,
+    to TPE. Optuna uses the concept of a *trial* to describe an instance of a process
+    to compute the value of a loss function, for example an instance of an experiment
+    on the DcTaxiModel model to compute its test loss based on a set of hyperparameter
+    values.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In Optuna, a trial must produce a value for the loss function that you seek
+    to minimize (or maximize). The implementation of the process to compute the loss
+    value is usually captured in an objective function. Note that the implementation
+    is intentionally incomplete ❸ to explain just the parts relevant to understanding
+    the Optuna API.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 11.1 A starter for DC taxi HPO with objective function
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ An objective function is a standard interface to the Optuna trial.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ suggest_int returns integers chosen by Optuna to optimize the objective function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ hparams’s implementation is completed later in this chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Optuna suggests hyperparameters for each trial to reduce the value of train_val_rmse.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Notice that, in the hparams dictionary, there is a single int hyperparameter
+    value requested from Optuna for the seed. The suggest_int method is one of several
+    methods available from the Optuna trial API to obtain a value for a hyperparameter.
+    (Other methods available from the trial interface are described here: [http://mng.bz/v4B7](http://mng.bz/v4B7).)
+    In the example, the suggest_int(''seed'', 0, pt.iinfo(pt.int32).max - 1) method
+    call specifies that Optuna should recommend values for the pseudorandom number
+    seed generator from 0 up to and excluding the maximum positive 32-bit integer.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Recall that the implementation of the DcTaxiModel depends on additional hyperparameter
+    values, including, optimizer, bins, lr (the learning rate), max_batches, and potentially
+    more. To enable support for these hyperparameters in the implementation of the
+    DcTaxiModel, you need to expand the hparams dictionary with Optuna specification
+    for the other hyperparameter values. Since the strategies for sampling these hyperparameters
+    are more complex than suggest_int, the next section explains some foundational
+    concepts.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 11.1.1 Understanding loguniform hyperparameters
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This section puts forward the rationale for using log-uniform hyperameters during
+    training and proposes the hyperparameters that should be set as log-uniform for
+    the DC taxi model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For many continuous valued hyperparameters such as the learning rate, it is
+    convenient to use the suggest_loguniform method of the Optuna trial API, which
+    is invoked using the upper and lower boundary values for the hyperparameter. Since
+    in the Optuna trial API there are several options for continuous hyperparameter
+    values, it is useful to clarify why the learning rate should use Optuna suggest_loguniform
+    as opposed to suggest_uniform. In general, loguniform is preferred to search over
+    a range where the upper bound is more than one order of magnitude larger than
+    the lower bound. The rationale has to do with how the base-10 numeric system works
+    and is illustrated in the following example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: which outputs
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: Since x is assigned to contain 300 floating point values from 0 to 1,000 (three
+    orders of magnitude), the print statement outputs the count of values that appears
+    within a range for each of the orders of magnitude (i.e., 0 to 10, 10 to 100,
+    and 100 to 1,000). In this example, there is approximately a 100-times difference
+    in the number of values of x that fall in the 0 to 10 range versus the number
+    of the values in the 100 to 1,000 range, or more precisely 3 versus 269.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In general, when sampling with uniform likelihood from a linear range that
+    is 10*N* larger, you can expect to obtain on average 10*N* times more samples
+    from the larger range. Application of the log function eliminates this unintended
+    skew due to the base-10 numeric system, as evidenced by the following example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: which outputs
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: illustrating a roughly equal distribution of the 300 samples across the entire
+    range from 1 to 1,000 due to the use of the log-base 10 scale as opposed to the
+    regular unit scale.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The concept of using the sampling hyperparameter values over log-scaled ranges
+    applies to discrete integer values as much as to the continuous values. For example,
+    the max_batches hyperparameter can be initialized using log = True in the Optuna
+    Trial API function call suggest_int('max_batches', 40, 4000, log = True) since
+    the lower and upper boundary values in the call span a range greater than an order
+    of magnitude.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 11.1.2 Using categorical and log-uniform hyperparameters
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This section builds on what you learned about log-uniform hyperparameters to
+    explain how the optimizer learning rate can be initialized using a hyperparameter
+    sampled from a log-uniform scale by Optuna.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The optimizer and the corresponding learning rate are some of the other hyperparameters
+    you may want to include in the HPO trials. As the optimizer learning rate is best
+    represented with a continuous value over a range that spans several orders of
+    magnitude, it should be optimized in the trial using the suggest_loguniform method.
+    This can be implemented as follows, for values of candidate learning rates in
+    the range [0.001, 0.1):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Use an optimizer learning rate from the log-uniform range [0.001, 0.1).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Since the existing implementation of the configure_optimizers method of the
+    DcTaxiModel already includes support for stochastic gradient descent and Adam,
+    you can have Optuna suggest the choice of these values (SGD or Adam) in the implementation
+    of the objective method. This requires the use of the suggest_categorical method
+    of the trial object as shown:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Use Adam and SGD as optimizer options in each HPO trial.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The arguments for the trial API are computed at program runtime, which means
+    that you can use standard Python features for a more expressive specification
+    of the hyperparameter values. For example, the batch_size hyperparameter can be
+    specified using a list of integers, where the integers are generated dynamically,
+    resolving to powers of two from 2^(16) up to and including 2^(21)—in other words,
+    the values [65536, 131072, 262144, 524288, 1048576, 2097152]:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Pre-compute a Python list of hyperparameter values before using suggest_categorical.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A more interesting application of suggest_categorical is shown, with implementation
+    of the specification for the num_hidden_neurons hyperparameter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 11.2 Optuna trials to discover the neural net architecture
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Specify the network architecture as a hyperparameter (for example, [5, 11,
+    7]).
+  prefs: []
+  type: TYPE_NORMAL
+- en: The DcTaxiModel can use a string representation of the number of neurons in
+    hidden layers to build its model layers. For example, a string representation
+    [3, 5, 7, 8] can represent four hidden torch.nn.Linear layers with three neurons
+    in the first layer, five in the second, and so on.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This type of a specification can be implemented as an Optuna hyperparameter
+    using a combination of suggest_categorical calls. First, the hyperparameter for
+    the total number of hidden layers (num_layers) is assigned a value by Optuna based
+    on a set of possible hidden layer quantities from the list in listing 11.2 with
+    the integer values [11, 13, 17, 19]. Next, depending on the value selected by
+    Optuna for the number of hidden layers (num_layers), the next suggest_categorical
+    call is invoked multiple times by the for operator, once for each hidden layer.
+    Each of the invocations changes the assignment to the layer variable and instantiates
+    a new hyperparameter, for example num_hidden_layer_0_neurons for the first layer
+    in the architecture, num_hidden_layer_1_neurons for the second, and so on, depending
+    on the value of the number of hyperparameter layers (num_layers). The value for
+    each of these hyperparameters (each describing the number of neurons per hidden
+    layer) is assigned from a different suggest_categorical list, specified as [7,
+    11, 13, 19, 23]. Ultimately, num_hidden_neurons resolves to a Python list with
+    an Optuna-proposed configuration of hidden layers and neurons.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Combining these hyperparameters with the an entire implementation of the objective
+    function results in the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 11.2 Neural network layers configuration as a hyperparameter
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: This section teaches how to extend the DC taxi model to enable support for deep
+    learning models, with an arbitrary number of hidden layers and neurons per layer.
+    The section also describes how a hyperparameter value can be used to specify this
+    configuration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Instead of arbitrarily choosing the configuration of the neural network parameters
+    (e.g., the number of layers or the number of the neurons per layer), it is valuable
+    to treat the configuration as a hyperparameter to be optimized. Although neither
+    PyTorch nor PyTorch Lightning has a straightforward technique for optimizing over
+    your neural net configuration, you can easily implement a utility method to convert
+    a string representation of a network’s hidden layers into a collection of nn.Module
+    instances that mirror the string. For example, a string [3, 5, 8] can represent
+    the three hidden layers of a neural network with three neurons in the first layer,
+    five in the second layer, and eight in the third layer. The build_hidden_layers
+    utility method shown in the following code snippet implements this conversion
+    from a string to the torch.nn.Linear instances along with an arbitrary activation
+    function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Create a Python list of the linear (feedforward) layers . . .
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ . . . and create a list of matching length consisting of activation classes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Convert activation classes to activation instances.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Zip the linear layers with the activation function instances.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Return the result as a flat Python list.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'With the build_hidden_layers utility method added to the implementation of
+    DcTaxiModel, you are ready to modify the __init__ method to use the build_hidden_
+    layers as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Create a list of hidden layer neurons (for example, [3, 5, 8]).
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Use sequences of feed-forward hidden layers for the model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Specify the hidden layers using a string format.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the example, the json.loads method is used to convert the hidden layer string
+    representation of a list, for example [3, 5, 8], to a Python list of integer values.
+    Also, while the self.layers reference to the neural network model still has four
+    input features and one output value, the hidden values are specified by unrolling
+    the list of the torch.nn.Linear instances from the build_hidden_layers method
+    as individual objects passed to the torch.nn.Sequential initializer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 11.3 Experimenting with the batch normalization hyperparameter
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Batch normalization is a widely used technique to increase the rate of gradient
+    descent convergence.[²](#pgfId-1014577) Despite the widespread use of batch normalization,
+    it is useful to collect data that demonstrates it can help create more effective
+    DC taxi models.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Since the batch normalization feature should be enabled or disabled depending
+    on a Boolean HPO flag, it is useful to introduce an automatic way of rewiring
+    the layers of the DC taxi model to take advantage of the feature. The following
+    batch_ norm_linear method implements an automatic insert of PyTorch torch.nn.BatchNorm1d
+    class instances before each torch.nn.Linear layer in the model. The following
+    implementation also correctly configures each of the BatchNorm1d instances to
+    have the right number of inputs, matching the number of inputs in the corresponding
+    Linear layer, which should follow the BatchNorm1d:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Build a list with the positional index of the Linear classes in the model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Use the maximum int value as the last element of the list to represent an
+    infinite value.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Create sublists with s as an index of each Linear and e as an index before
+    each Linear.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Instantiate BatchNorm1d with inputs matching the inputs of the corresponding
+    Linear.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Insert the BatchNorm1d instances before the corresponding Linear.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❻ Package the entire sequence of BatchNorm1d and Linear layers into Sequential.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Once the batch_norm_linear method is added to the DcTaxiModel class, the __init__
+    method of the class should be modified (listing 11.3 ❶) to apply batch normalization
+    depending on the value of the batch_norm_linear_layers hyperparameter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 11.3 Using optional batch normalization
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Batch normalize Linear layers if batch_norm_linear_layers is True.
+  prefs: []
+  type: TYPE_NORMAL
+- en: With the batch normalization in place, DcTaxiModel and the matching build method
+    are ready for HPO.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 11.4 DcTaxiModel implementation with HPO support
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 11.3.1 Using Optuna study for hyperparameter optimization
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This section introduces the concept of an Optuna study, describes its relationship
+    to the Optuna trials, and helps you use a study instance to run and analyze a
+    collection of trials in your HPO implementation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The objective function in Optuna is responsible for the execution of a single
+    trial, including the steps to retrieve the hyperparameter values from Optuna,
+    train a model, and then evaluate the trained model in terms of the validation
+    loss. Hence, each trial returns just a single evaluation measure to the Optuna
+    HPO algorithm in order to make the decision about the next set of hyperparameter
+    values to suggest for the next trial. A typical HPO process involves tens or hundreds
+    of trials; therefore, it is important to have the capability to organize the trials,
+    compare their outcomes, and analyze the hyperparameters involved in the trials.
+    In Optuna, a study serves the role of a container for related trials and provides
+    tabular as well as visual data about the trial outcomes and associated hyperparameters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As shown in listing 11.5, with an objective function in place, a study is defined
+    by the direction of optimization (e.g., to minimize or maximize a function) and
+    by a sampler, which is instantiated based on one of many HPO algorithms and frameworks
+    supported by Optuna. The seed (listing 11.5 ❷) used to initialize a study is different
+    from the seed values used to initialize PyTorch and NumPy. When using HPO, this
+    seed can be used to create the seed values for downstream random number generators,
+    including Python’s own random number generator. Although the HPO seed value is
+    useless from the standpoint of the optimization of the DcTaxiModel machine learning
+    performance, it serves the important purpose of ensuring the reproducibility of
+    the HPO trials.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The entire HPO implementation for the DcTaxiModel from listing 11.4 is shown.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 11.5 An Optuna study used to execute HPO
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Configure the study to minimize MSE loss of the DcTaxiModel.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Use the TPE algorithm for HPO.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Start the HPO using 100 trials.
+  prefs: []
+  type: TYPE_NORMAL
+- en: After executing the code in listing 11.5, the study.optimize method completes
+    100 trials of HPO. The details of the individual trials are made available using
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'which should return a pandas data frame with the values resembling the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| number | value | params_seed |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 96 | 2.390541 | 1372300804 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 56 | 7.403345 | 1017301131 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 71 | 9.006614 | 939699871 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 74 | 9.139935 | 973536326 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 94 | 9.817746 | 1075268021 |'
+  prefs: []
+  type: TYPE_TB
+- en: where the number column specifies the index of the trial suggested by Optuna,
+    the value is the corresponding value of the loss function returned by trainer.callback_
+    metrics['train_val_rmse'].item() in the objective method, and the params_seed
+    is the seed value used to initialize the model parameters (weights) of the DcTaxiModel.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 11.3.2 Visualizing an HPO study in Optuna
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This section illustrates the HPO study executed in this chapter using three
+    different Optuna visualizations and compares the visualizations in terms of their
+    relevance to HPO.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A completed study instance can also be visualized using the Optuna visualization
+    package. While a comprehensive overview of the various visualizations in Optuna
+    is outside the scope of this book, I found myself reusing just three visualizations
+    consistently across a range of machine learning models. These visualizations are
+    explained in the rest of this section in the order of declining importance.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The hyperparameter importance plot reveals surprising information about the
+    relative influence of the study of hyperparameters on the objective function.
+    It is particularly useful to have the seed hyperparameter included in the list
+    to assess whether some hyperparameters had more or less importance than just a
+    random variable used for model initialization. The hyperparameters that are more
+    important than the random seed deserve further study, while the hyperparameters
+    that are less important than a random variable should be de-prioritized.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To create an importance plot you can use
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: which should render a bar graph resembling the one in figure 11.1.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![11-01](Images/11-01.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 11.1 The importances plot assists in guiding later HPO iterations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Once you have identified a subset of hyperparameters that you wish to explore
+    in more detail, the next step is to plot them on a parallel coordinates chart.
+    You can instantiate this plot using
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: which plots the relationship between the lr (learning rate), batch_size, and
+    num_hidden_layer_0_neurons hyperparameters. Notice that in figure 11.2, the lines
+    represent the individual trial configurations, with those of the darker shade
+    corresponding to the trials with a lower value for the objective function. Hence,
+    a collection of the darker lines that pass though a certain interval for a hyperparameter
+    indicate that the hyperparameter interval deserves closer inspection and may warrant
+    another iteration of HPO.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![11-02](Images/11-02.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 11.2 The parallel coordinate plot is useful in pinpointing the impactful
+    intervals for hyperparameter values.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Out of the plots described so far, the contour plot comes in last in terms of
+    its ability to generate insights about the outcomes in a study. Since the contour
+    plot is limited to visualization of pairs of hyperparameter values, you will find
+    yourself generating multiple contour plots, often based on hyperparameters selected
+    from either the importance or the parallel coordinate plots. As an example, to
+    contour plot the relationship among batch_size, lr, and the objective function,
+    you can run
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: which should produce a plot resembling the one in figure 11.3.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![11-03](Images/11-03.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 11.3 The contour plot helps in the analysis of hyperparameter pairs relative
+    to the loss function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Optuna is a hyperparameter optimization framework with the native Python integration
+    to support nontrivial hyperparameter configurations for your machine learning
+    model experiments.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: When using HPO for hyperparameters with ranges that span orders of magnitude,
+    it is useful to adopt log-uniform sampling to ensure even (not skewed) distribution
+    of samples over the range.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: After the execution of HPO trials, Optuna visualization features help with the
+    analysis of the trial outcomes and the associated hyperparameters.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: ^(1.)Gradient-free algorithms do not require computation of the gradient of
+    a loss (or any objective) function to optimize the function parameters. In other
+    words, gradient-free hyperparameter optimization can optimize an objective function
+    even when the function does not have computable gradients.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '^(2.)The original, widely cited paper “Batch Normalization: Accelerating Deep
+    Network Training by Reducing Internal Covariate Shift” that introduced batch normalization
+    is available from [https://arxiv.org/abs/1502.03167](https://arxiv.org/abs/1502.03167).'
+  prefs: []
+  type: TYPE_NORMAL

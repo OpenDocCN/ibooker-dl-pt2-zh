@@ -1,0 +1,1178 @@
+- en: '6 Core PyTorch: Autograd, optimizers, and utilities'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter covers
+  prefs: []
+  type: TYPE_NORMAL
+- en: Understanding automatic differentiation
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using automatic differentiation with PyTorch tensors
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Getting started with PyTorch SGD and Adam optimizers
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Applying PyTorch to linear regression with gradient descent
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using data set batches for gradient descent
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: PyTorch Dataset and DataLoader utility classes for batches
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In chapter 5, you learned about the tensor, a core PyTorch data structure for
+    n-dimensional arrays. The chapter illustrated the significant performance advantages
+    of PyTorch tensors over native Python data structures for arrays and introduced
+    PyTorch APIs for creating tensors as well as performing common operations on one
+    or more tensors.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This chapter teaches another key feature of the PyTorch tensors: support for
+    calculation of gradients using *automatic differentiation* (autodiff). Described
+    as one of the major advances in scientific computing since 1970, autodiff is suprisingly
+    simple and was invented by Seppo Linnainmaa, a master’s student at the University
+    of Helsinki.[¹](#pgfId-1011886) The first part of this chapter introduces you
+    to the fundamentals of autodiff by showing how you can implement the core algorithm
+    for a scalar tensor using basic Python.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The remainder of this chapter explains how to use the autodiff feature of the
+    PyTorch tensor APIs to calculate machine learning model gradients in a simple
+    example of applying gradient descent to a linear regression problem based on a
+    tiny, synthetic data set. In the process, you will learn the PyTorch autodiff
+    APIs and how to use them to implement the standard sequence of steps used in machine
+    learning with gradient descent. The chapter concludes by demonstrating the torch.optim
+    package with various gradient descent optimizers and showing you how to take advantage
+    of the optimizers as part of your machine learning code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 6.1 Understanding the basics of autodiff
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: This section introduces the ideas behind autodiff and teaches its fundamentals
+    by walking you through a simple example of implementing autodiff using only core
+    Python programming language constructs, without PyTorch. In the process, you will
+    gain a deeper understanding of the PyTorch autodiff functionality and develop
+    the knowledge that will help you troubleshoot PyTorch autodiff in your projects.
+    In this section, you will see that while autodiff is surprisingly straightforward,
+    it is an algorithm that supports complex applications of the calculus chain rule.
+    In later sections, you will apply what you learned and use autodiff features of
+    PyTorch tensors.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The autodiff feature of PyTorch tensors is one of the core reasons the framework
+    became popular for deep learning and for many machine learning algorithms that
+    depend on gradient descent as well as related optimization techniques. While it
+    is possible to use autodiff by treating it as a black box without fully understanding
+    how it works, if you wish to develop the skills for troubleshooting autodiff in
+    production scenarios, it is valuable to have at least a basic understanding of
+    this critical PyTorch feature.
+  prefs: []
+  type: TYPE_NORMAL
+- en: PyTorch implements an autodiff approach known as *reverse-mode accumulation
+    automatic differentiation*, which is an efficient approach for computing gradients
+    (defined in appendix A) of the kinds of loss functions that are commonly used
+    in machine learning, including mean squared error and cross entropy. More precisely,
+    PyTorch autodiff has O(n) computational complexity, where n is the total number
+    of operations (e.g., addition or multiplication operations) in the function, as
+    long as the function has more input than output variables.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you are already familiar with reverse-mode accumulation automatic differentiation,
+    feel free to skip to section 6.2, which explains how to use PyTorch autodiff APIs
+    for machine learning. Otherwise, this section will help you gain a deeper understanding
+    of the PyTorch autodiff API design and its use.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you are just starting to learn about autodiff, you need to know that it is
+    distinct from other popular differentiation techniques such as numeric or symbolic
+    differentiation. Numeric differentiation is commonly taught in undergraduate computer
+    science courses and is based on an approximation of ![006-01_EQ01](Images/006-01_EQ01.png).
+    Unlike numeric differentiation, autodiff is numerically stable, meaning that it
+    provides accurate values of gradients even at the extreme values of the differentiated
+    functions and is resilient to the accumulation of small errors introduced by floating
+    point number approximations to real numbers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Unlike symbolic differentiation, autodiff does not attempt to derive a symbolic
+    expression of the differentiated function. As a result, autodiff typically requires
+    less computation and memory. However, symbolic differentiation derives a differentiated
+    function that can be applied across arbitrary input values, unlike autodiff, which
+    differentiates a function for specific values of the function’s input variables
+    one at a time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A great way to understand autodiff is to implement a toy example of it yourself.
+    In this section, you will implement autodiff for a trivial tensor, a scalar, add
+    support for computing gradients of functions that use addition as well as multiplication,
+    and then explore how you can use your implementation to differentiate common functions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To start, define a Scalar Python class, storing the value of the scalar (val)
+    and its gradient (grad):[²](#pgfId-1012089)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In order to better track the contents of the Scalar instances and to support
+    a nicer printout of the instance values, let’s also add a __repr__ method, returning
+    a string representation of the instance:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: With this implementation in place, you can instantiate an object of the Scalar
+    class, for example using Scalar(3.14).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 6.1 grad attribute to store the gradient of the Scalar tensor
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: Once executed, this should return the output
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: which corresponds to the string returned by the __repr__ method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, let’s enable addition and multiplication of Scalar instances by overriding
+    the corresponding Python methods. In reverse-mode autodiff, this is know as the
+    implementation of the *forward* *pass* which simply computes the values from the
+    Scalar operations:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: At this point, you can perform basic arithmetic on Scalar instances, so that
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: correctly evaluates to
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: and confirms that the implementation respects arithmetic precedence rules.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The entire implementation at this point amounts to exactly a dozen lines of
+    code that should be easy to understand. You are already more than halfway done,
+    because this implementation correctly computes the forward pass of autodiff.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To support the *backward pass* that calculates and accumulates the gradients,
+    you need to make a few small changes to the implementation. First, the Scalar
+    class needs to be initialized with a backward function that is set to be a no-op
+    by default ❶.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 6.2 backward method placeholder for backward pass support
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: '❶ Use lambda: None as the default implementation.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Surprisingly, this implementation is enough to start computing gradients of
+    trivial linear functions. For instance, to find out the gradient of ![006-01_EQ02](Images/006-01_EQ02.png)
+    for a linear function *y* = *x* at x = 2.0, you can start by evaluating
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: which initializes the x variable to have a value of a Scalar(2.0) and declares
+    the function *y* = *x*. Also, since it is such a simple case, the forward pass
+    of computing y is just a no-op and does nothing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, prior to using the backward function you have to perform two prerequisite
+    steps: first, zero out the gradient of the variable (I will explain why shortly),
+    and second, specify the gradient of the output y. Since x is a single variable
+    in your function, zeroing out its gradient amounts to running'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: If you find the step of setting x.grad = 0.0 unnecessary since grad is already
+    set to zero as part of the __init__ method, keep in mind that this example is
+    for a trivial function, and as you later extend the implementation to more complex
+    functions, the need for setting gradients to zero is going to become more clear.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The second step is to specify the value of the gradient of the output, y.grad,
+    with respect to itself, which can be expressed as ![006-01_EQ02](Images/006-01_EQ02.png).
+    Luckily, this value is trivial to figure out if you have ever divided a number
+    by itself: y.grad is just 1.0.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: So, to perform reverse-mode accumulating autodiff on this trivial linear function,
+    you simply execute
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: and then discover the value of ![006-01_EQ02](Images/006-01_EQ02.png) using
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: which correctly outputs 1.0.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If you have been paying attention to the definition of y = x, you are well
+    within your rights to protest that this entire sequence of calculations simply
+    took the gradient from the y.grad = 1.0 statement and printed it back. If that’s
+    your line of thinking, you are absolutely correct. Just as with the example of
+    ![006-01_EQ03](Images/006-01_EQ03.png), when computing the gradient for ![006-01_EQ02](Images/006-01_EQ02.png),
+    for a function y = x, the ratio of change to y, in terms of a change to x, is
+    just 1.0. However, this simple example illustrates an important sequence of autodiff
+    operations that stay the same even with complex functions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Specifying the values of the variables
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Specifying the output in terms of the variables (forward pass)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Ensuring the gradients of the variables are set to zero
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Calling backward() to compute the gradients (backward pass)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'If you are comfortable with the reasoning about differentiation so far, you
+    should be ready to move on to computing gradients of more complex functions. With
+    autodiff, computation of the gradients happens within the functions that implement
+    mathematical operations. Let’s start with the easier one, addition:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: Notice that the direct computation, accumulation, and recursive computations
+    of the gradient happen in the body of the backward function assigned to the Scalar
+    produced by the addition operation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To understand the logic behind self.grad += out.grad and the similar other.val
+    += out.grad instruction, you can either apply basic rules of calculus or some
+    straightforward reasoning about change. The relevant fact from calculus informs
+    you that for a function *y* = *x* + *c*, where c is some constant, then ![006-01_EQ02](Images/006-01_EQ02.png)
+    = 1.0\. This is nearly identical to the previous example with the computation
+    of the gradient for y = x: despite adding a constant value to x, the ratio of
+    change to y, in terms of a change to x, is still just 1.0. With respect to the
+    code, this means that the amount of change contributed by self.grad to out.grad
+    is identical to the value of out.grad.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: What about cases where the code is computing gradients for a function without
+    a constant, in other words *y* = *x* + *z*, where both x and z are variables?
+    In terms of the implementation, why should out.grad be treated as a constant when
+    computing self.grad? The answer comes down to the definition of a gradient, or
+    a partial derivative with respect to one variable at a time. Finding the gradient
+    of self.grad is equivalent to answering the question “Assuming all variables,
+    except for self.grad, stay constant, what is the ratio of a change in y to a change
+    of self.grad?” Hence, when computing the gradient self.grad, other variables can
+    be treated as constant values. This reasoning also applies when computing the
+    gradient for other.grad, except in this case self.grad is treated as a constant.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Also, note that as part of the calculation of the gradient in the __add__ method,
+    both self.grad and other.grad are accumulating gradients using the += operator.
+    Understanding this part of the autodiff is critical to understanding why the gradients
+    need to be zeroed out before running the backward method. Simply put, if you invoke
+    the backward method more than once, the values in the gradients will continue
+    to accumulate, yielding undesirable results.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Last but not least, the lines of code self.backward() and other.backward()
+    that invoke the backward method recursively ensure that the implementation of
+    autodiff also handles function composition, such as f(g(x)). Recall that in the
+    base case the backward method is just a no-op lambda: None function, which ensures
+    that the recursive calls always terminate.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To try out the __add__ implementation with a backward pass support, let’s look
+    at a more complex example by redefining y as a sum of x values:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: From calculus, you may recall that the derivative of *y* = *x* + *x* = 2 * *x*
+    is just 2.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s confirm this using your implementation of the Scalar. Again, you need
+    ensure that the gradients of x are zeroed out, initialize ![006-01_EQ03](Images/006-01_EQ03.png)
+    = 1, and execute the backward function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: At this point, if you print out
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: it returns the correct value of
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: To get a better understanding of why ![006-01_EQ02](Images/006-01_EQ02.png)
+    evaluated to 2.0, recall the definition of the backward function implemented in
+    the __add__ method. Since y is defined as y = x + x, both self.grad and other.grad
+    reference the same instance of the x variable within the backward method. Hence,
+    a change to x translates to twice the change to y, or the gradient, ![006-01_EQ02](Images/006-01_EQ02.png)
+    is 2.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, let’s extend the implementation of the Scalar class to support gradient
+    calculations when multiplying Scalars. The implementation is just six additional
+    lines of code in the __mul__ function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: With multiplication, the logic behind the gradient derivation is more complex
+    than with addition, so it is worthwhile to review it in more detail. Just as with
+    addition, suppose you are trying to derive the gradient with respect to self.grad,
+    which means that for the calculation, other.val can be considered a constant c.
+    When computing the gradient of *y* = *c* * *x* with respect to x, the gradient
+    is just c, meaning that for every change to x, y changes by c. When computing
+    the gradient of the self.grad, c is just the value of other.val. Similarly, you
+    can flip the calculation of the gradient for other.grad and treat self Scalar
+    as a constant. This means that other.grad is a product of self.val and the out.grad.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'With this change in place, the entire implementation of the Scalar class is
+    just the following 23 lines of code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To gain more confidence that the implementation is working correctly, you can
+    try running the following test case:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Repeat the earlier steps to zero out the gradients and specify the value of
+    the output gradient as 1.0:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Using calculus rules, it is straightforward to figure out the expected result
+    analytically: given *y* = *x*², the ![006-01_EQ02](Images/006-01_EQ02.png) = 2
+    * x. So for x = 3.0, your implementation of the Scalar should return the gradient
+    value of 6.0.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can confirm this by printing out
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: which returns
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: The Scalar implementation also scales to more complex functions. Using *y* =
+    *x*³ + 4**x* + 1 as an example, where the gradient ![006-01_EQ02](Images/006-01_EQ02.png)
+    = 3 * *x*² + 4 so ![006-01_EQ02](Images/006-01_EQ02.png) = 31 when *x* = 3, you
+    can implement this function y using your Scalar class by specifying
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: and then running
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: to confirm that the implementation correctly returns the value of 31.0.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The implementation of autodiff for the Scalar is trivial compared to the features
+    available with PyTorch tensors. However, it can give you a deeper understanding
+    of the capabilities that PyTorch provides when you are computing gradients and
+    shed light on when and why you need to use the seemingly magical zero_grad and
+    backward functions of the PyTorch tensor autodiff APIs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 6.2 Linear regression using PyTorch automatic differentiation
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: This section builds on the explanation of the autodiff algorithm from section
+    6.1 and introduces you to autodiff support in PyTorch. As a motivating example,
+    the section walks you through the process of solving a single variable linear
+    regression problem using PyTorch autodiff and a basic implementation of gradient
+    descent. In the process, you will learn about using PyTorch autodiff APIs, practice
+    implementing the forward and backward passes for a differentiable model, and prepare
+    for a deeper dive into applying PyTorch in the upcoming chapters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To illustrate the autodiff feature in PyTorch, let’s use it along with the gradient
+    descent algorithm to solve the classic linear regression problem. To set up the
+    problem, let’s generate some sample data,
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'so that the variable X holds 100 values, evenly spaced in the range from –5
+    to 5\. In this example, suppose that *y* = 2*x* + ε, where ε is a random number
+    sampled from a standard normal distribution (ε ~ *N* (0,1)) so that y can be implemented
+    with PyTorch as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: The purpose of adding randn noise to the y function is to illustrate the ability
+    of the algorithm to correctly estimate the slope of the line, in other words,
+    to recover the value of 2.0 using just the training data tensors y, X.
+  prefs: []
+  type: TYPE_NORMAL
+- en: At this point, if you were to graph the values of X along the horizontal axis
+    and y on the vertical axis, you should expect to see a plot resembling the one
+    shown in figure 6.1\. Of course, your specific values may vary if you have used
+    a different random seed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![06-01](Images/06-01.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 6.1 A sample regression problem to explain the basics of PyTorch tensor
+    APIs
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, to set up a differentiable model for the gradient descent algorithm you
+    need to specify the model parameters along with an initial guess of the values
+    of the parameters. For this simplified case of linear regression without a bias,
+    the only model parameter you need to specify is the slope of the line. To initialize
+    the parameter you can use the randn function sampling from the standard normal
+    distribution:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: So far in this chapter you have not seen the requires_grad parameter used here
+    by the randn tensor factory method to instantiate the value of w. In section 6.1,
+    where I introduced the inner workings to the autodiff algorithm, you saw that
+    calculation of the gradient requires additional memory and computation overhead
+    for every data value in a tensor. For example, for every Scalar instance, autodiff
+    required an additional grad attribute along with a definition of a recursive backward
+    function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For machine learning models, supporting autodiff can more than double the amount
+    of memory a tensor needs. Hence, when instantiating a tensor using factory methods,
+    PyTorch disables tensor autodiff by default, requiring you to use the requires_grad
+    parameter to explicitly enable the support. However, if a tensor is derived from
+    a tensor that has requires_grad enabled, then the derived tensor (known as *non-leaf*
+    tensor) has requires_grad set to True automatically.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Once the model parameter w is initialized, the forward pass of the algorithm
+    is ready to be implemented. In this case, the forward pass is to simply guess
+    (predict) the y values using the value of the w parameter. The forward pass is
+    implemented as a forward method that returns the value of the mean squared error
+    of the predictions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: Take a careful look at the body of the forward method to count all the tensors
+    that get instantiated by PyTorch during the calculation of the mean squared error
+    formula. The first tensor y_pred contains the predicted values for y based on
+    a given value of w. The second tensor is y_pred - y and contains the individual
+    errors of the predictions, while the third tensor contains the squared errors
+    (y_pred - y) ** 2. Finally, the fourth tensor is computed using the mean function,
+    which returns a scalar with the value of the mean squared error of the predictions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: None of the four tensors instantiated in the forward method needed a manual
+    specification of requires_grad = True because PyTorch automatically deduced that
+    in order for the framework to support the computation of the gradients for the
+    w tensor, it also needed to enable requires_grad for the non-leaf tensors derived
+    from w. In general, given an arbitrary PyTorch tensor, you can check the values
+    of its requires_grad attribute to determine whether it can be used for gradient
+    calculations. For example, within the body of the forward method, y_pred.requires_grad
+    returns True.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this chapter you have not yet worked with PyTorch tensor aggregation functions
+    such as mean. In the forward method, the mean function simply computes an arithmetic
+    mean of the tensor values (i.e., the mean of the squared errors) and returns the
+    aggregated result as a scalar. In upcoming chapters you are going to learn more
+    about mean and other PyTorch tensor aggregation functions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: With the code for the forward pass in place, there is enough groundwork to complete
+    the implementation of gradient descent using PyTorch autodiff. Recall that the
+    values of y and X in the code are based on the equation *y* = 2*x* + ε. The following
+    code performs 25 iterations of gradient descent to estimate the value of 2.0,
+    which is used by the equation as a slope of the line.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 6.3 PyTorch autodiff for linear regression using gradient descent
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Empty (zero) the gradient of w.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You should expect the code to print out numbers close to the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the implementation of gradient descent, the learning rate is set arbitrarily
+    to 0.03 and the number of gradient descent iterations to 25\. In upcoming chapters,
+    you will learn more about hyperparameter tuning and more rigorous approaches for
+    choosing the values for learning rate, and number of gradient descent iterations,
+    as well as values for other machine learning hyperparameters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As you already know from section 6.1, when using autodiff it is critical to
+    zero out gradients before using the backward function to accumulate updated gradient
+    values. Note that in the case of PyTorch tensors, the grad attribute is zeroed
+    out by setting it to None ❶ rather than to the value of 0. Once the mse_loss tensor
+    is returned by the forward method, the gradients are updated by invoking the backward
+    function. The gradient descent step amounts to the update of the w parameter data
+    using the negative product of the learning rate and the updated gradient w.data
+    -= LEARNING_RATE * w.grad.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that due to the noise in the values of y, you should not expect the gradient
+    descent nor the analytical solution to linear regression to recover the exact
+    value of 2.0 used for generating the data. To confirm this, you can use the PyTorch
+    tensor APIs to calculate the analytical ordinary least squares solution based
+    on the formula (*X^T* *X*)^(-1)*X^Ty*,
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: which should return a value of roughly tensor(1.9876).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 6.3 Transitioning to PyTorch optimizers for gradient descent
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: This section covers the PyTorch torch.optim package and the Optimizer classes,
+    including Adam and SGD (*stochastic gradient descent*), which you can re-use in
+    your PyTorch-based machine learning models to improve how you train the model
+    parameters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In addition to the torch.autograd automated differentiation framework, PyTorch
+    also includes the torch.optim package with a collection of optimizers, which are
+    algorithms that implement alternative optimization heuristics for updating the
+    machine learning model parameters based on the loss function’s gradients. The
+    details of the optimizer algorithms’ implementation are outside the scope of this
+    book, but you should know that the PyTorch development team has been working diligently
+    to maintain links in the PyTorch torch.optim package documentation to the relevant
+    research papers that contain descriptions of the corresponding algorithm implementations.[³](#pgfId-1016733)
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The optimizer classes have been designed to be easily swappable, ensuring that
+    you can experiment with alternative optimizers without having to change the rest
+    of your machine learning model training code. Recall that in listing 6.3 you implemented
+    a trivial version of linear regression using your own simple rule for updating
+    the model parameter values based on the gradient and the learning rate:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: Instead of hardcoding this rule yourself, you can re-use the equivalent update
+    rule in the torch.optim.SGD optimizer by re-implementing the following code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 6.4 Linear regression using torch.optim optimizers
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Instantiate SGD optimizer using an iterable of model parameter(s) [w].
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Assume 25 epochs of gradient descent.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Perform a gradient update step using gradients computed by backward.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Zero out the gradients of the model parameter(s) for the next iteration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This should output the model’s estimate of the slope of the line w as roughly
+    2.0812765834924307. The changes needed to use the PyTorch optimizer are highlighted
+    ❶, ❸, and ❹. Notice that when instantiating the optimizer ❶, you are providing
+    the optimizer with a Python iterable (in this case a Python list) over the model
+    parameters. After gradient descent computes the gradients (i.e., after the backward()
+    method returns), the call to the optimizer’s step() method ❸ updates the model
+    parameters based on the gradients. The call to the zero_grad() method of the optimizer
+    ❹ clears (empties) the gradients to prepare the call to the backward() method
+    in the next iteration of the for-loop.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You may have encountered the Adam optimizer if you have prior experience training
+    machine learning models. With the PyTorch library of optimizers, swapping the
+    SGD optimizer ❶ for Adam is easy:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: In general, to use any PyTorch optimizer from the torch.optim package, you need
+    to first instantiate one using the constructor,
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: where the params is an iterable of model parameters and defaults are the named
+    arguments specific to an optimizer.[⁴](#pgfId-1017322)
+  prefs: []
+  type: TYPE_NORMAL
+- en: Both SGD and Adam optimizers can be instantiated with additional configuration
+    settings beyond the model parameters and the learning rate. However, these settings
+    will be covered in more detail in chapter 11 on hyperparameter tuning. Until then,
+    the examples will use the SGD optimizer since it is easier to both understand
+    and to explain.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As you progress to more complex training scenarios using gradient descent,
+    it is useful to have clear and comprehensive terminology. As you can see from
+    listing 6.4, training of a machine learning model by gradient descent consists
+    of multiple iterations, where each iteration consists of actions that include
+    the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Forward* pass, where you use the feature values and the model parameters to
+    return the predicted outputs, for example y_pred = forward(X) from listing 6.4.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Loss* calculation, where the predicted outputs and the actual outputs are
+    used to determine the value of the loss function, for example mse = loss(y_pred,
+    y) from listing 6.4.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Backward* pass, where the reverse mode autodiff algorithm computes the gradients
+    of the model parameters based on the calculations of the loss function, for example
+    mse.backward() from listing 6.4.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Parameter* or *weight updates*, where the model parameters are updated using
+    the values of the gradients computed from the backward pass, which should be optimizer.step()
+    if you are using the optimizers from the torch.optim package.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Clearing gradients*, where the gradient values in the model parameter PyTorch
+    tensors are set to None to prevent automatic differentiation from accumulating
+    gradient values across multiple iterations of gradient descent; if you are using
+    the optimizers from the torch.optim package, this should be done using optimizer
+    .zero_grad().'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In the industry, the terms *iteration* and *step of gradient descent* are often
+    used interchangeably. Confusingly, the word “step” is also sometimes used to describe
+    the specific action performed as part of gradient descent, for example a *backward
+    step* or a *forward step*. Since PyTorch uses *step* to refer specifically to
+    the action of updating the model parameters by the optimizer based on the gradients
+    of the loss function, this book is going to stick with the PyTorch terminology.
+    Keep in mind that some PyTorch frameworks, such as PyTorch Lightning, use *step*
+    to mean *iteration*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Before transitioning to the use of batches for model training with gradient
+    descent, it is also useful to clarify the definition of the term *epoch*. In machine
+    learning, an epoch describes one or more iterations of gradient descent needed
+    to train (update) machine learning model parameters using every example in a data
+    set exactly once. For example, listing 6.4 ❷ specifies that gradient descent should
+    be performed for 25 epochs. The use of the word “epoch” also corresponds to *iterations*,
+    for the simple reason that for every iteration of gradient descent all of the
+    examples from the data set are used to calculate the gradients and update the
+    weights of the model. However, as you will learn in the upcoming section on batches,
+    performing an epoch of training may require multiple iterations of gradient descent.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 6.4 Getting started with data set batches for gradient descent
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'This section teaches you about data set batches so that you can prepare for
+    using data set batches for gradient descent with PyTorch. The concept of a data
+    set batch for gradient descent is deceptively simple. A *batch* is just a non-empty
+    collection (or, in mathematical terminology, a *multiset*) of examples randomly
+    sampled[⁵](#pgfId-1019190) from a data set. Nevertheless, gradient descent using
+    batches is nuanced and complex: mathematicians have even dedicated an area of
+    research, known as *stochastic optimization*, to the topic. A training data set
+    batch is more than just a sample of a training data set: in a single iteration
+    of gradient descent, all the data examples from the training data set batch are
+    used to update the gradients of a model.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: While you don’t need a PhD in mathematical optimization to use gradient descent
+    with batches in PyTorch, it is worthwhile to have precise terminology related
+    to batches and gradient descent to better navigate the complexity of the topic.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The *batch size* is a positive (greater than zero) integer specifying the number
+    of examples in a batch. Many machine learning research papers and online courses
+    use the phrase *mini-batch gradient descent* to describe gradient descent with
+    batch sizes greater than one. However, in PyTorch, the SGD (torch.optim.SGD) optimizer,
+    as well as other optimizers in the torch.optim package, can be used with batch
+    sizes ranging anywhere from 1 to the number of examples in the entire data set.
+    Keep this in mind because often in machine learning literature the phrase *stochastic
+    gradient descent* is used to describe gradient descent with a batch size of exactly
+    one.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The choice of a batch size has as much to do with having enough memory in your
+    machine learning compute nodes as with the machine learning performance of the
+    gradient descent algorithm. This means that the upper bound on the batch size
+    should take into account the amount of the available memory per node of your machine
+    learning platform. The selection of the exact value for the batch size is covered
+    in more detail in chapter 11 on hyperparameter tuning, but first you should know
+    the maximum batch size that you can fit in the memory of your machine learning
+    platform nodes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Much confusion about application of batches in PyTorch stems from lack of recognition
+    that a batch should be treated as a fraction of data set size, which is the number
+    of examples in a data set. A batch interpreted as a fraction is simply ![06-01_EQ06](Images/06-01_EQ06.png)
+    so it is possible to categorize the choice of a batch size as producing either
+    complete or incomplete batches, where a *complete batch* has a batch size that
+    is an integer factor of the data set size, or more precisely
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![06-01_EQ07](Images/06-01_EQ07.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: for some positive integer batch_count representing the number of batches in
+    a data set.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 6.5 Data set batches with PyTorch Dataset and DataLoader
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: This section teaches you how to get started with using data set batches in PyTorch
+    and how to use PyTorch utility classes that can help you manage and load your
+    data sets as batches.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The PyTorch framework provides a collection of data utility classes organized
+    in the torch.utils.data package and implemented to support the use of data batches
+    with gradient descent. The classes in the package, including DataLoader, Dataset,
+    IterableDataset, and TensorDataset, are designed to work together to simplify
+    the development of scalable machine learning model training processes, including
+    scenarios where a data set does not fit in memory of a single node, and where
+    a data set is used by multiple nodes in a distributed computing cluster. While
+    the classes provide scalable implementations, that does not mean they are useful
+    only for large data sets or with large computing clusters. As you will see in
+    this section, the classes work fine (aside from a negligible overhead) with small,
+    in-memory data sets.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Dataset is a highly reusable class and can support a variety of machine learning
+    use cases based on map-style and iterable-style subclasses of the Dataset. The
+    map-style Dataset is the original data set class from the PyTorch framework and
+    is best suited for in-memory, index-addressable data sets. For example, if you
+    were to implement your own map-style Dataset by subclassing PyTorch’s Dataset
+    as a MapStyleDataset, you would have to implement the required __getitem__ and
+    __len__ methods.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 6.5 PyTorch map-style Dataset designed to be subclassed
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Map style interface methods to retrieve a specific item from the data set
+    . . .
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ . . . and to return the total number of items in the entire data set.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Note that the map-style data set makes two assumptions as part of the interface:
+    each example (item) from a data set is expected to be addressable by an index
+    value ❶, and the size of the data set is expected to be known and available at
+    any time ❷.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In most cases, if you are working with an in-memory data set, you can avoid
+    having to implement your own map-style data set subclass, and instead re-use the
+    TensorDataset class. The TensorDataset is also a part of the torch.utils.data
+    package and implements the required Dataset methods by wrapping tensors or NumPy
+    n-dimensional arrays. For example, to create a map-style training Dataset for
+    the sample data values in tensors X and y, you can pass the data tensors directly
+    to TensorDataset ❶.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 6.6 TensorDataset simplifying batching of PyTorch tensors
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: This allows you to fetch an example at index 0 from the data set by using the
+    Python [0] syntax for the __getitem__ method,
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: which outputs
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: and allows you to confirm that the data set length is 100 using the __len__
+    method on the train_ds data set,
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: where the Boolean expression in the assertion evaluates to True.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When using an instance of a Dataset, the PyTorch code that implements the iterations
+    of gradient descent should not access the data set directly but rather use an
+    instance of DataLoader as an interface to the data. You will learn more about
+    the rationale for using the DataLoader in the upcoming section on using GPUs with
+    PyTorch.
+  prefs: []
+  type: TYPE_NORMAL
+- en: At its core, a DataLoader is a wrapper around a Dataset, so by wrapping an instance
+    of train_ds, described earlier, you can create a train_dl using
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Note that by default, when a DataLoader is used with a map-style Dataset, each
+    batch returned by a DataLoader instance is of size 1, meaning that the following
+    expression evaluates to True:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: This default behavior can be easily modified by specifying the batch_size named
+    parameter when instantiating the DataLoader so that the expression
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: evaluates to 25.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Both values of the batch_size, 1 and 25, produce complete batches. While all
+    complete batches have an identical batch_size, an *incomplete batch* has fewer
+    than batch_size examples. Specifically, given a batch_size and a data set, an
+    incomplete batch may include as few as
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*dataset_size* mod *batch_size*'
+  prefs: []
+  type: TYPE_NORMAL
+- en: examples, or in Python, dataset_size % batch_size.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For instance, when using a batch_size of 33, the following code produces an
+    incomplete batch with a batch_size of 1 during the fourth iteration of the for-loop:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE44]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This prints out the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE45]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'There are no universally accepted techniques for dealing with incomplete batches.
+    While it is possible to try to prevent the incomplete batch problem, it may not
+    have much value in practice: since batches are used when working with sufficiently
+    large volumes of data such that the data sets are too large to fit in memory,
+    ignoring or dropping incomplete batches are options if they do not have negative
+    and measurable impact on the overall performance of a machine learning model.
+    For example, the DataLoader class provides a drop_last option so that you can
+    ignore the smaller, incomplete batches:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE46]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This outputs the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE47]'
+  prefs: []
+  type: TYPE_PRE
+- en: Nevertheless, the drop_last option for incomplete batches should be used judiciously
+    when specifying a batch size, especially when working with batch sizes that are
+    a large fraction of a data set. For example, consider a situation where the batch
+    size is inadvertently set to be ![06-01_EQ09](Images/06-01_EQ09.png). Since this
+    selection of the batch size yields two batches, the sole incomplete batch of the
+    two, with a batch size of ![06-01_EQ10](Images/06-01_EQ10.png), is dropped when
+    using the drop_last=True option, resulting in a waste of almost half of a data
+    set!
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'It is possible to prevent incomplete batches by training for multiple epochs
+    while concatenating the data set with itself and using the batch_size window as
+    a *rolling window* over the data set. With this technique, the number of training
+    epochs should be based on the least common multiple (lcm) of the batch size and
+    the data set size:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![06-01_EQ11](Images/06-01_EQ11.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: To illustrate this approach, suppose for the sake of the example that you are
+    working with a batch size of 12 and a data set size of 33, then
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE48]'
+  prefs: []
+  type: TYPE_PRE
+- en: outputs 4.0, indicating that the training data set needs to be concatenated
+    with itself four times to achieve the four training epochs needed to avoid incomplete
+    batches.[⁶](#pgfId-1021074)
+  prefs: []
+  type: TYPE_NORMAL
+- en: How is a batch selected from a data set? Since a batch is intended to be statistically
+    representative of the data set, the examples in the batch should be as independent
+    of each other as possible. This means ensuring that the taxi fare examples within
+    a batch are sampled randomly (without replacement) from the entire data set. In
+    practice, the most straightforward way of achieving such random shuffling of the
+    data set is to use the shuffle() method of the PySpark DataFrame API.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Since batches need to be statistically representative of the data set, you might
+    be tempted to re-use the batch size based on the test data set size you discovered
+    in chapter 4\. While the test data set size metric works as a *lower bound* for
+    batch size, re-using its value isn’t the right decision since the test data set
+    size was picked to be as small as possible while being statistically representative
+    of the development data set. Chapter 11 describes in detail how to use a principled
+    hyperparameter tuning approach to choose the right batch size with the lower and
+    upper bound values introduced in this chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 6.6 Dataset and DataLoader classes for gradient descent with batches
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: This section illustrates how to apply the Dataset and DataLoader classes using
+    a minimalistic example to teach the concepts that also apply when using data set
+    batches with more complex and realistic machine learning problems. To perform
+    linear regression using gradient descent with batches using Dataset and DataLoader,
+    you need to modify the solution from section 6.3.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 6.7 Basic linear regression using gradient data set with batches
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE49]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Provide a data set interface to y and X using TensorDataset.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Create a DataLoader for the data set using a batch size of 1 (default).
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Unpack each tuple of a batch of data while iterating over the DataLoader.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Perform the forward step over the batch of features to produce predictions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Calculate the loss using the batch of labels and the predictions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This should output the estimated w as roughly 2.0812765834924307. Once the original
+    tensors y and X are packaged into the map-style TensorDataset data set ❶, the
+    resulting train_ds instance is further wrapped using a DataLoader to produce the
+    train_dl.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To use the batches with gradient descent, for each epoch, the code performs
+    100 gradient descent iterations using individual batches returned in the for-loop
+    by in train_dl ❸. The 100 iterations are performed per epoch since the original
+    data set contains 100 examples and the default batch size of DataLoader is equal
+    to 1\. Since the batch size of 1 produces complete batches (recall from the definition
+    of a batch as a fraction of the data set),
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![06-01_EQ12](Images/06-01_EQ12.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: or alternatively, if you used batches with a batch size of 25 to
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE50]'
+  prefs: []
+  type: TYPE_PRE
+- en: then
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![06-01_EQ13](Images/06-01_EQ13.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'The changes in listing 6.7 ❹ and ❺ are straightforward: instead of using the
+    original data set, the code uses the batches returned by the train_dl instance.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In case you modified the batch size to a value that produces incomplete batches,
+    for example by specifying batch size of 51,
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE51]'
+  prefs: []
+  type: TYPE_PRE
+- en: the second iteration of the inner for-loop will produce batches with 49 examples
+    since DataLoader permits incomplete batches by default. In this specific case,
+    this is not an issue, since the parameter of the model with the shape of torch.Size([])
+    can broadcast to the incomplete batch with the shape of torch.Size([49]). However,
+    in general, you must take care to align the shape of the model parameters to the
+    shape of a batch. In chapter 7, you will learn from an example of aligning the
+    model parameters to the batch shape for the DC taxi data set.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Automatic differentiation is a fundamental algorithm for simplifying complex
+    chain rule applications.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Python-native data structures can be used to demonstrate the basics of how to
+    implement automatic differentiation for tensors.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: PyTorch tensors provide comprehensive support for automatic differentiation
+    of tensor gradients.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Optimizers from the torch.optim are a range of algorithms for optimizing parameters
+    in machine learning models using gradient descent.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: PyTorch tensor automatic differentiation and optimizer APIs are central to machine
+    learning with PyTorch.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Dataset and DataLoader interface classes simplify the use of batches in PyTorch
+    code.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: TensorDataset provides a ready-to-use implementation for in-memory data sets.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '^(1.)The story of automatic differentiation and back propagation is described
+    in detail here: [http://people.idsia .ch/~juergen/who-invented-backpropagation.html](http://people.idsia.ch/~juergen/who-invented-backpropagation.html).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ^(2.)In dense mathematical papers about automated differentiation, the Scalar
+    class is known as a dual number and the grad as the adjoint.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ^(3.)For example, the documentation for SGD is available from [http://mng.bz/zEpB](http://mng.bz/zEpB)
+    and includes a link to both the relevant research paper and to the details of
+    the SGD implementation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '^(4.)The base Optimizer class and its constructor are documented here: [https://pytorch.org/docs/stable/optim
+    .html#torch.optim.Optimizer](https://pytorch.org/docs/stable/optim.html#torch.optim.Optimizer).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ^(5.)More precisely, by using random sampling without replacement, or equivalently
+    by randomly shuffling the order of examples in a data set.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ^(6.)Increasing the epoch count based on the least common multiple of the batch
+    size and the data set size produces the minimum number of training epochs needed
+    to avoid incomplete batches. It is also possible to train for any multiple of
+    lcm(batch_size, data set_size) and avoid incomplete batches.
+  prefs: []
+  type: TYPE_NORMAL

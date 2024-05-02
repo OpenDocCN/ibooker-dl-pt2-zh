@@ -1,0 +1,724 @@
+- en: 4 More exploratory data analysis and data preparation
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter covers
+  prefs: []
+  type: TYPE_NORMAL
+- en: Analyzing summary statistics of the DC taxi data set
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Evaluating alternative data set sizes for machine learning
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using statistical measures to choose the right machine learning data set size
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Implementing data set sampling in a PySpark job
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In the last chapter, you started with the analysis of the DC taxi fare data
+    set. After the data set was converted to an analysis-friendly Apache Parquet format,
+    you crawled the data schema and used the Athena interactive querying service to
+    explore the data. These first steps of data exploration surfaced numerous data
+    quality issues, motivating you to establish a rigorous approach to deal with the
+    garbage in, garbage out problem in your machine learning project. Next, you learned
+    about the VACUUM principles for data quality along with several case studies illustrating
+    the real-world relevance of the principles. Finally, you applied VACUUM to the
+    DC taxi data set to “clean” it and prepare a data set of sufficient quality to
+    proceed with sampling from the data set for machine learning.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This chapter picks up with using the VACUUM-ed data set for a more in-depth
+    data exploration. In this chapter, you will analyze the summary statistics (arithmetic
+    means, standard deviations, and more) of the data set in order to make a better-informed
+    decision about the sizes of the training, validation, and test data sets for machine
+    learning. You’ll compare common approaches for the selection of the data set sizes
+    (e.g., using a 70/15/15% split) to an approach that takes the statistics of the
+    data sets into account to pick the right size. You will learn about using statistical
+    measures such as the standard error of the mean, z-scores, and p-values to help
+    you evaluate alternative data set sizes and how to implement data-driven experiments
+    for selecting the right size using PySpark.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.1 Getting started with data sampling
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: This section introduces you to a more rigorous, data-driven, and reusable approach
+    for choosing the right training, validation, and test data set split sizes for
+    your data set. Using examples from the DC taxi data, you are going to explore
+    the key statistical measures important for choosing the right data set size and
+    then implement a PySpark job using a data set size-selection approach that can
+    be re-used for other data sets.
+  prefs: []
+  type: TYPE_NORMAL
+- en: One of the most common questions I hear from junior machine learning practitioners
+    is about the selection of the data set size for training, validation, and test
+    data sets. This should not come as a surprise since online courses, blogs, and
+    machine learning tutorials often use numbers like 70/15/15%, meaning that 70%
+    of the project data set should be allocated to training, 15% to validation, and
+    15% to held-out test data. Some courses argue for 80/10/10% splits or 98/1/1%
+    for “big data” data sets. The well-known Netflix Prize used a roughly 97.3/1.35/1.35%
+    split for a data set on the order of 100 million records, but with less than 1
+    GB in volume, should it qualify as “big data?”
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.1.1 Exploring the summary statistics of the cleaned-up data set
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: In this section, you are going to load the cleaned-up data set metadata as a
+    pandas DataFrame and explore the summary statistics (including counts, arithmetic
+    means, standard deviations, and more) of the data set.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'At the conclusion of chapter 3, along with the cleaned-up version of the data
+    set, the dctaxi_parquet_vacuum.py PySpark job used a save_stats_metadata function
+    to save some metadata information with the statistical description for the data
+    set, including the total number of rows, means, standard deviations, minimums,
+    and maximums for every column of values. To read this information into a pandas
+    DataFrame named df, execute the following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Install the Python packages needed by pandas to read from S3.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Read the metadata into a pandas DataFrame.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The code installs the s3fs library in your environment to access data from S3
+    using pandas read_csv API. The rest of the code lists the objects from the parquet/vacuum/.meta/stats/*
+    subfolder of your S3 bucket and reads the contents of the CSV file from the folder
+    into a pandas DataFrame.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The output of the info method of the data frame reports the schema of the data
+    stored as well as the amount of memory consumed by the data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.1 Output of df.info() for dctaxi_parquet_vacuum.py metadata
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Note that the schema in listing 4.1 aligns with the schema used by SQL queries
+    from chapter 2, with a few minor changes: instead of DOUBLE, the data frame uses
+    float64 and object instead of STRING. Also, there is a new summary column that
+    did not exist in the DC taxi data set in S3\. The summary column was created by
+    the describe method of the dctaxi_parquet_vacuum.py PySpark job from chapter 3
+    and is used to store the name of the statistical functions, such as mean and count,
+    for each row in the metadata table.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: To get started, you can index the data frame using the summary column and look
+    at the result
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: which produces
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![04_table_4-1color](Images/04_table_4-1color.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Let’s save the size of the data set (i.e., in terms of the number of the values
+    per column) to a separate variable ds_size, which is going to be used later:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: Once executed, this prints 14262196.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The code to obtain the size of the data set relies on the max method to find
+    the largest count of values across all the columns in the data set. In the case
+    of the cleaned-up DC taxi data set, all columns return an identical count because
+    none contain NULL, None, or NaN values. Although for the DC taxi data set max
+    is unnecessary, it is good practice to keep using the function to correctly count
+    the largest number of rows needed to store the data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Since the upcoming part of the chapter is focused on sampling from the data,
+    create two separate series to gather the data set mean (mu)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: which should output
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: and the standard deviation (sigma) statistics
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'which print the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 4.1.2 Choosing the right sample size for the test data set
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: In this section, you are going to explore the effectiveness of using machine
+    learning “rules of thumb” for choosing data set sizes and decide the appropriate
+    sizes for the DC taxi data set. Although this section uses the DC taxi data set
+    as an example, you will learn about an approach for choosing the right sizes for
+    the training, test, and validation data sets regardless of the actual data set
+    you are using.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now that you know about the average values of the numeric columns in the cleaned-up
+    data set, you are prepared to tackle the question of how many records from the
+    data set should be allocated to training your machine learning model and how many
+    should be held out for the test and validation data sets. When preparing training,
+    validation, and test data sets, many machine learning practitioners rely on rules
+    of thumb or heuristics to decide on the sizes. Some argue for an 80/10/10% split
+    across training, validation, and test, while others claim that the split should
+    be 98/1/1% when the data set is large, without specifying what “large” means.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When approaching the issues of the number of records to allocate to training,
+    validation, and test data sets, it is valuable to recall the basic rationale behind
+    them. What makes the selection of the right percentage for the training versus
+    test data set difficult is that they are fundamentally in opposition to one another.
+    On one hand, the percentage of the data set used for the machine learning model
+    training should be as large as possible. On the other hand, the percentage of
+    the data set held out for the test should be large enough so that the performance
+    of a trained machine learning model on the test data set is a meaningful estimate
+    for how the model is expected to perform on unseen samples from the population
+    data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Test and validation data sets
+  prefs: []
+  type: TYPE_NORMAL
+- en: The test data set described in this book will not be used to check the model
+    for overfitting. Although some machine learning literature uses test data sets
+    to ensure that the model is generalizing, this book will use a separate validation
+    data set for this purpose. The approach used in this book is illustrated in this
+    figure.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![004-UN01](Images/004-UN01.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: The cleaned-up project data set is split into development and test sets in this
+    chapter. Upcoming chapters cover further splits of the development data set into
+    training and validation data sets.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can use some basic results from statistics to help you with the choice of
+    the size. The idea is to ensure that the test data set is large enough so that
+    it is statistically similar to the entire data set.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To start, consider the upper and the lower bounds for the fraction of the data
+    set to use for test data. With respect to the upper bound, when using 70% for
+    training, you can allocate 15% for validation and test. On the lower bound, you
+    may consider allocating as little as 1% for test and validation. To better illustrate
+    the idea of a lower bound, let’s consider a more extreme case of allocating just
+    0.5% of data for testing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can obtain the number of records for various percentages (fractions) using
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: which returns
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: When working with sample sizes, it helps to put the sizes in terms of powers
+    of two. This is helpful for several reasons. When computing statistics from samples
+    (e.g., standard error of the mean of samples), you are going to find that exponential
+    changes in the size of the data set are needed to achieve linear changes to the
+    values of the statistics. Also, in statistical formulas it is common to take square
+    roots of the sample size, and starting with powers of two simplifies the calculations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To find the power of two estimates for the fractions of the data set, you can
+    use the following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note that the code takes the base 2 logarithm of the actual number of records
+    that correspond to the fractions from 30% to 0.5% of the data set. Since the value
+    of the logarithm can be a non-integer value, the floor function returns the data
+    set size at the power of two that can store up an approximated fraction of the
+    data set.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Hence, the output of the code
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: corresponds to a range from 2^(22) = 4,194,304 to 2^(16) = 65,536.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Although data sets in this range can easily fit in the memory of a modern laptop,
+    let’s attempt an experiment to identify the smallest fraction of the data set
+    that can be sampled and still be used to report an accurate performance metric
+    for a machine learning model. The valuable part of the experiment isn’t the finding,
+    but rather the illustration of the process for finding the right sample size.
+    The process is valuable because it can be repeated even with larger data sets.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For the experiment, let’s continue using the upper part of the range as the
+    largest sample size, 2^(22) = 4,194,304, but start with a much smaller part of
+    the range of 2^(15) = 32,768:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The maximum and the minimum values returned by the code are as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: Given the range, you can figure out how well it approximates fractions of the
+    data set by running
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: which results in
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: which shows that a test data set size of 2^(15) covers only about 0.23% of the
+    data set while a test data size of 2^(22) covers roughly 29.4%.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.1.3 Exploring the statistics of alternative sample sizes
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This section describes how to use a standard error of the mean statistic along
+    with diminishing returns (a marginal) to produce candidate sizes (in terms of
+    the number of records) for the test data set. In the following listing, the function
+    sem_over_range from listing 4.2 computes a pandas DataFrame specifying the standard
+    error of the mean (SEM) for every column in the data set and every sample size
+    from sample_ size_lower to sample_size_upper. In this example, the range corresponds
+    to values from 32,768 to 4,194,304.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.2 SEM for every column across candidate sample sizes
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ The sem_over_range function uses the sample ranges along with the data sets
+    mu and sigma.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Convert the sample ranges to a pandas Series.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Create a pandas DataFrame by computing standard error of the mean for each
+    sample size and column sigma.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The function sem_over_range from listing 4.2 computes a pandas DataFrame specifying
+    the standard error of the mean (SEM) for every column in the data set and every
+    sample size from sample_size_lower to sample_size_upper. In this example, the
+    range corresponds to values from 32,768 to 4,194,304.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Recall that for any of the columns in the data set, given its population standard
+    deviation (σ) and the number of records (observations) in the column (*n*), the
+    SEM is defined as ![004-UN01_EQ01](Images/004-UN01_EQ01.png).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Since the raw SEM values returned in the sem_df DataFrame from listing 4.2 are
+    not easily interpretable, it is valuable to plot a graph to illustrate the overall
+    trend of change in the SEM as the sample size grows. You can display this trend
+    using the matplotlib library, plotting the average SEM values in the sem_df data
+    frame across columns using
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: which results in figure 4.1.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![04-01](Images/04-01.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 4.1 Exponential increase in sample size is expensive: larger samples
+    require exponentially more memory, disk space, and compute while yielding less
+    improvement in terms of the reduction in the standard error of the mean.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The plot in figure 4.1 uses powers of two for the annotations on the horizontal
+    axis to describe the sample sizes in the data frame. Notice that the plot captures
+    the trend of diminishing returns on the increase in the sample size. Although
+    the sample size grows exponentially, the slope (the instantaneous rate of change
+    in the SEM given a sample size) of the average SEM flattens with every doubling.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Since it is valuable to allocate as much data as possible to the training data
+    set, you can take advantage of the diminishing returns heuristic to discover a
+    lower bound size for the test data set. The idea is to find a sample size such
+    that if it were any larger, the improvements to the SEM would yield diminishing
+    returns.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To identify the point of diminishing returns (also known as the *marginal*
+    ) on the doubling of the sample size, you can start by looking at the total reduction
+    in the SEM for each increase in the sample size. This is computed using sem_df.cumsum()
+    in the following code snippet. Then, to obtain a single aggregate measure for
+    each sample size, the mean(axis = 1) computes the average of the total reduction
+    in SEM across the columns in the data set:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: which produces
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: The values of the agg_change pandas series are plotted in figure 4.2\. Notice
+    that the sample size highlighted with an arrow corresponds to the sample size
+    of 220 and is also the point where the SEM reduction due to increase in the sample
+    size begins to yield diminishing returns.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![04-02](Images/04-02.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.2 The marginal sample size corresponds to the largest sample size before
+    the point of diminishing returns.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This point, the marginal, can be computed in Python using the following marginal
+    function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Create a NumPy array of data points with sample sizes on the x-axis and SEM
+    values on the y-axis.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Compute the distances from the data points to an imaginary line connecting
+    the largest and the smallest sample size data points.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Here, the marginal is computed by looking at data points of sample sizes against
+    cumulative reduction in SEM, drawing an imaginary line between the smallest and
+    largest sample sizes (dashed line in figure 4.2) and identifying the data point
+    with the furthest distance at the right angle to the imaginary line.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When applied to the DC taxi data set, the marginal function computes the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here, the marginal test sample size chosen by the diminishing returns heuristic
+    corresponds to 1,048,576 records, or roughly 7% of the data set.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If it were possible to use a sample of any 1,048,576 records as a test data
+    set, it would be valuable for maximizing the amount of data available to machine
+    learning model training. However, the SEM measure is designed to identify a *lower*
+    bound for the sample size and does not indicate that an arbitrary data set of
+    this size is the right one to use for the test data set.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You can use p-values of a sample of 1,048,576 records to establish confidence
+    in the sample by answering the fundamental question of statistical hypothesis
+    testing: what is the degree of certainty that the sample comes from the population?'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.1.4 Using a PySpark job to sample the test set
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: In this section, you are going to experiment by randomly sampling 1,048,576
+    records (the size identified in the previous section) using a PySpark job in order
+    to create the test data set. Once the test set is sampled, the remaining records
+    are persisted to a separate DC taxi development data set. Both development and
+    test data sets are also analyzed to compute p-values as well as other summary
+    statistics.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Since the implementation of the entire PySpark job is roughly 90 lines of code,
+    in this section the job is introduced as a series of code snippets. The preamble
+    to the job, shown in listing 4.3, resembles the PySpark jobs in chapters 2 and
+    3\. As in the earlier chapters, this part of the job implementation imports the
+    relevant libraries and resolves job arguments.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.3 PySpark DataFrame reading code in dctaxi_dev_test.py
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Construct a pandas DataFrame df based on the BUCKET_SRC_PATH parameter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The implementation related to sampling of the test set from the cleaned-up DC
+    taxi data set begins in listing 4.4 where the sample fraction of the entire data
+    set size is computed and saved to the variable sample_frac. In order to compute
+    the summary statistics of the cleaned-up data set in PySpark, the implementation
+    relies on the Kaen library PySpark utility function spark_df_to_stats_pandas_df,
+    which returns a pandas DataFrame from the PySpark DataFrame instance named df.
+    The pandas summary_df in turn provides standard pandas DataFrame API access to
+    data set averages (mu) and standard deviations (sigma) for each of the columns
+    in the cleaned-up data set.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.4 PySpark DataFrame reading code in dctaxi_dev_test.py
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ The sample size in terms of a fraction as needed for Spark randomSplit method
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Import Spark and pandas utilities from the kaen package.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Create the pandas DataFrame with statistics of the Spark DataFrame.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Save the data set mean as mu.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Save the data set standard deviation as sigma.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The summary statistics along with the sample_frac values are used in listing
+    4.5 to perform random sampling. The PySpark randomSplit method partitions the
+    cleaned-up DC taxi data set into the test_df consisting of a maximum of SAMPLE_SIZE
+    rows and totaling roughly sample_frac of the entire data set from the df data
+    frame.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.5 PySpark DataFrame reading code in dctaxi_dev_test.py
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Use the SEED to initialize pseudorandom number generators.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Work around a poor choice (p-value < 0.05) for a SEED value using at most
+    SAMPLE_COUNT samples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Sample the test data set into Spark test_df DataFrame, the rest to dev_df.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Use the sample_frac fraction of the records in the df for the test data set.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Ensure that the test_df is limited to at most SAMPLE_SIZE records.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❻ Create a pandas test_stats_df DataFrame with summary statistics of test_df.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❼ Sample again in case of a poor sample (pvalue < 0.05), up to SAMPLE_COUNT
+    times.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The part of the job implementation shown in listing 4.6 is responsible for
+    saving the development (dev_df) and the test (test_df) data sets to S3\. For each
+    of the data sets, Spark saves the records in a CSV format to the BUCKET_DST_PATH
+    with the header information. Also, for both development and test the implementation
+    saves additional metadata (which is shown later in this section) to the BUCKET_DST_PATH
+    subfolders: .meta/stats and .meta/shards.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The stats subfolder stores a CSV file with the summary statistics, including
+    the count, mean, p-values, and others. The shards subfolder is stored to facilitate
+    processing of the data set during training and store the metadata about the number
+    of CSV part files and the number of records per part file used to save the data
+    sets in S3.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.6 PySpark DataFrame reading code in dctaxi_dev_test.py
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: For convenience, the full implementation of the PySpark job as it should be
+    persisted in a file named dctaxi_dev_test.py is shown next.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.7 PySpark dctaxi_dev_test.py job to sample dev and test data sets
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Before the PySpark job in the dctaxi_dev_test.py file can be executed in AWS
+    Glue, you need to configure several environment variables. The SAMPLE_SIZE and
+    SAMPLE_ COUNT operating system environment variables should be set using the values
+    of the corresponding Python variables:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As in the previous chapter, the PySpark job is executed using the convenience
+    functions from the utils.sh script. Start by downloading the script to your local
+    environment using the following command in your bash shell:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Once the utils.sh script is downloaded, you can use it to launch and monitor
+    the PySpark job implemented in the dctaxi_dev_test.py file. Launch the job by
+    running the following in your shell environment:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Note that the job is going to read the Parquet files saved in chapter 3 from
+    the parquet/vacuum subfolder and save the development and test data set under
+    the csv/dev and csv/test subfolders in your S3 bucket. This job should take about
+    eight minutes to finish on AWS Glue. Assuming it completes successfully, it should
+    produce an output resembling the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Since the PySpark job persists metadata about the data sets, you can use pandas
+    to review the contents of the metadata. To preview the statistical summary of
+    the test set, execute the following Python code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Assuming the PySpark job executed correctly, the printout of the test_stats_df
+    for the test data set should resemble the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![04_table_4-2color](Images/04_table_4-2color.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: The metadata about the CSV part files (shards) of the development data set should
+    have been saved to the csv/dev/.meta/shards subfolder of your S3 bucket. If you
+    preview this metadata in a pandas DataFrame using the following code
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'the output should consist of a three-column table, where the id column stores
+    the ID of the CSV part file from the csv/dev subfolder in S3 and the corresponding
+    entry in the count column specifies the number of the rows in the part file. The
+    contents of the data frame should resemble the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '|  | id | count |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 39 | 0 | 165669 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 3 | 1 | 165436 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 56 | 2 | 165754 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 53 | 3 | 165530 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 63 | 4 | 165365 |'
+  prefs: []
+  type: TYPE_TB
+- en: '...'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| 72 | 75 | 164569 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 59 | 76 | 164729 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 2 | 77 | 164315 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 11 | 78 | 164397 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 22 | 79 | 164406 |'
+  prefs: []
+  type: TYPE_TB
+- en: Summary
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Using a fixed percentage—based heuristic to pick the size of a held-out test
+    data set can waste valuable machine learning model training data.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Measuring diminishing results from increasing the size of a data set can help
+    with choosing the lower bound for the size of the test and validation data sets.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Ensuring that a test data set has sufficient z-score and p-values can prevent
+    choosing a data set size that’s too small for machine learning.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Serverless PySpark jobs can be used to evaluate alternative test data sets and
+    report on their statistical summaries.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL

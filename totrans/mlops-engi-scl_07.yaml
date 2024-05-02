@@ -1,0 +1,912 @@
+- en: '5 Introducing PyTorch: Tensor basics'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter covers
+  prefs: []
+  type: TYPE_NORMAL
+- en: Introducing PyTorch and PyTorch tensors
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using PyTorch tensor creation methods
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Understanding tensor operations and broadcasting
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Exploring PyTorch tensor performance on CPUs
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'In the previous chapter, you started with a cleaned-up version of the DC taxi
+    data set and applied a data-driven sampling procedure in order to identify the
+    right fraction of the data set to allocate to a held-out, test data subset. You
+    also analyzed the results of the sampling experiments and then launched a PySpark
+    job to generate three separate subsets of data: training, validation, and test.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: This chapter takes you on a temporary detour from the DC taxi data set to prepare
+    you to write scalable machine learning code using PyTorch. Don’t worry; chapter
+    7 returns to the DC taxi data set to benchmark a baseline PyTorch machine learning
+    model. In this chapter, you will focus on learning about PyTorch, one of the top
+    frameworks for deep learning and many other types of machine learning algorithms.
+    I have used TensorFlow 2.0, Keras, and PyTorch for machine learning projects that
+    required distributed training on a machine learning platform and found PyTorch
+    to be the best one. PyTorch scales from mission-critical, production machine learning
+    use cases at Tesla[¹](#pgfId-1178834) to state-of-the-art research at OpenAI.[²](#pgfId-1179232)
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Since you will need a practical understanding of core PyTorch concepts before
+    you can start applying them to machine learning with the DC taxi data set, this
+    chapter focuses on equipping you with an in-depth knowledge of the core PyTorch
+    data structure: a tensor. Most software engineers and machine learning practitioners
+    have not used tensors as a part of their mathematics, programming, or data structures
+    curricula, so you should not be surprised if this is new.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In section 5.1, I introduce a comprehensive definition of a PyTorch tensor.
+    For now, keep in mind that if you have ever implemented a matrix in a programming
+    language using an array of arrays (i.e., an array containing other arrays), you
+    are well on your way to understanding tensors. As a working definition, you can
+    consider a *tensor* to be a generic data structure that can store and operate
+    on variables, arrays, matrices, and their combinations. In this book, the most
+    complex tensors you encounter are effectively arrays of matrices, or arrays of
+    arrays of arrays, if you prefer a more recursive description.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.1 Getting started with tensors
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: This section defines a tensor in the context of machine learning use cases,
+    explains the attributes of tensors, including tensor dimension and shape, and
+    finally introduces you to the basics of creating tensors using PyTorch as opposed
+    to using native Python data types. By the conclusion of this section, you should
+    be prepared to study the advantages of PyTorch tensors over native Python data
+    types for machine learning use cases.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The term *tensor* has subtly different definitions depending on whether it is
+    used in mathematics, physics, or computer science. While learning about a geometric
+    interpretation of tensors from mathematics or a stress mechanics interpretation
+    from physics can enrich your understanding of the abstract aspects of a tensor,
+    this book uses a narrower definition that is more relevant for a practitioner
+    applying tensors to machine learning. Throughout this book the term describes
+    a data structure (i.e., a data container) for basic data types such as integers,
+    floats, and Booleans.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Since tensors are closely related to arrays, it is worthwhile to spend a moment
+    reviewing the key attributes of an array or a Python list. An *array* is just
+    an ordered collection of data values. In most programming languages, an array
+    index can take on a value from a finite set of integers, based on a range of values
+    from zero to one less than the number of elements in the array.[³](#pgfId-1012456)
+    For example, in Python, this range is
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: where a_list is the name of an instance of a Python list. Hence, different arrays
+    have different valid index values. In contrast, all arrays consisting of basic
+    data types, regardless of length, have a tensor dimension equal to one.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A *dimension* is defined here as the total number of indices (not the values
+    of indices) needed to access a value in a data structure. This definition is convenient
+    because it helps describe different data structures using a single number. For
+    example, a matrix has a dimension of two because it takes two indices, a row index
+    and a column index, to pinpoint a data value in a matrix. For example, using Python,
+    a naive matrix implementation can use a list of lists:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: where mtx evaluates to
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: and the value of mtx[1][2] is printed out as 5. Since the matrix has a dimension
+    of two, two index values—1 for the row index and 2 for the column index—had to
+    be specified to access the value of 5 in the matrix.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The dimension also specifies a measure of array nesting that is needed to implement
+    a data structure. For example, mtx, with a dimension of 2, requires an array of
+    arrays, while an array of matrices (dimension 3), requires an array of arrays
+    of arrays. If you consider a data structure with a dimension of 0, in other words
+    one that requires zero indices to access a value, you’ll soon realize that this
+    data structure is just a regular variable. For a visualization of tensors with
+    dimensions (also known as *tensor* *rank*) 0, 1, 2, and 3, look at figure 5.1.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![05-01](Images/05-01.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.1 Tensor rank (dimension) equals the number of indices needed to access
+    a data value in a tensor. Unlike tensors of lower rank, tensors of rank 3 and
+    higher do not have commonly accepted names in machine learning.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A tensor is a data structure capable of storing arrays of an arbitrary number
+    of dimensions, or more concisely, a tensor is an n-dimensional array. Based on
+    this definition, a flat Python list, or any flattened array, is a one-dimensional
+    tensor, sometimes also described as a rank 1 tensor. A Python variable is a zero-dimensional
+    tensor, commonly described as a scalar, or less often as a rank 0 tensor. A two-dimensional
+    tensor is usually called a matrix. For higher dimensional examples, consider a
+    matrix used to represent grayscale images in terms of pixel values, where a value
+    of 0 is black, 255 is white, and the numbers in between are gray colors of increasing
+    brightness. Then, a three-dimensional tensor is a convenient data structure for
+    an ordered collection of grayscale images, so the first of the three indices specifies
+    an image and the remaining two specify the row and column location of a pixel
+    in the image. A three-dimensional tensor also works well for a color image (but
+    not a collection of color images), such that the first index specifies red, green,
+    blue, or opacity (alpha) channels for the color, while the remaining indices specify
+    a pixel location in the corresponding image. Continuing with this example, a four-dimensional
+    tensor can be used for a sequential collection of color images.
+  prefs: []
+  type: TYPE_NORMAL
+- en: With this foundational knowledge in place, you are ready to create your first
+    tensor in PyTorch.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 5.1 A rank 0 tensor implemented using PyTorch
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Import PyTorch library and alias it as pt.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Create a rank 0 tensor (scalar) with a value of 42.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Once this code is executed, it outputs
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: After you have imported the PyTorch library and aliased it as pt ❶, the next
+    line of the code ❷ simply creates a scalar (rank 0) tensor and assigns it to a
+    variable named alpha. When executed on 64-bit Python runtimes, where the value
+    of 42 from listing 5.1 is represented as a 64-bit integer, the alpha tensor is
+    instantiated using the PyTorch torch.LongTensor class.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For any PyTorch tensor, you can use the type method to discover the specific
+    tensor class used to instantiate the tensor:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: This outputs
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: The torch.LongTensor, as well as torch.FloatTensor and other tensor classes
+    for various basic Python data types, are subclasses of the torch.Tensor class.[⁴](#pgfId-1013029)
+    The subclasses of torch.Tensor include support for different processor architectures
+    (devices); for example, torch.LongTensor is a class with a CPU-specific tensor
+    implementation, while torch.cuda.LongTensor is a GPU-specific tensor implementation.
+    PyTorch support for GPUs is described in more detail in chapter 7.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In your machine learning code, you should primarily rely on the tensor dtype
+    attribute instead of the type method because dtype returns the tensor’s type in
+    a device-independent fashion, ensuring that your code can be easily ported across
+    devices. The dtype for alpha,
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: outputs a device-independent description of the data type[⁵](#pgfId-1015715)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: To access the value stored by the tensor, you can use the item method
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: which in this case displays 42.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To confirm that alpha tensor is a scalar, you can access the tensor’s shape
+    attribute,
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: which prints out torch.Size([]).
+  prefs: []
+  type: TYPE_NORMAL
+- en: The PyTorch library uses the torch.Size class to specify the details of the
+    size (also known as the shape) of a tensor. Here, the size consists of an empty,
+    zero-length list since the alpha scalar is rank 0\. In general, the length of
+    the torch.Size list is equal to the dimension of the tensor. For example,
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: outputs 0. The shape of a tensor specifies the number of elements stored in
+    a tensor along the tensor’s dimensions. For example, a one-dimensional PyTorch
+    tensor created from a Python list of the first five Fibonacci numbers,
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: produces torch.Size([5]) which confirms that there are five elements in the
+    first and only dimension of the arr tensor.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you create a PyTorch matrix (rank 2 tensor) from a Python list of lists,
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: then mtx.shape returns the size of torch.Size([2, 5]) since there are two rows
+    and five columns in the mtx matrix.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Standard Python indexing and the item method continue to work as expected:
+    to retrieve the value in the upper left-hand corner of the mtx tensor, you use
+    mtx[0][0].item(), which returns 2.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When working with tensors of rank 2 or higher in PyTorch you need to know about
+    an important default limitation: the number of elements in the trailing dimensions;
+    in other words, second and higher dimensions must be consistent, such as if you
+    attempt to create a matrix with four elements in the second (column) dimension
+    while the other columns have five elements.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 5.2 PyTorch tensors with support variable
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'PyTorch reports an error:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: Since PyTorch uses zero-based indexing for the dimensions, the second dimension
+    has an index of 1 as reported by the ValueError. Although the default PyTorch
+    tensor implementation does not support “ragged” tensors, the NestedTensor package
+    aims to provide support for this category of tensors.[⁶](#pgfId-1016285)
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.2 Getting started with PyTorch tensor creation operations
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Previously, you saw that you can create a PyTorch scalar tensor from a value
+    (e.g., a Python integer) and an array tensor from a collection of values (e.g.,
+    from a Python list); however, there are other factory methods that can help you
+    create tensors. In this section, you will practice creating PyTorch tensors using
+    factory methods from the PyTorch APIs. These methods are useful when creating
+    tensors for mathematical operations common in machine learning code, and in general,
+    when a tensor is based on non-data set values.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When instantiating a tensor using the factory methods, the shape of the desired
+    tensor is explicitly specified unless the desired shape can be inferred by PyTorch
+    from the method’s arguments (as explained later in this section). For example,
+    to create a two-row and three-column matrix of zeros using the zeros factory method,
+    use
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: which produces
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: Given an instance of a tensor, you can confirm that the tensor has the desired
+    shape by using the tensor’s shape attribute,
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'which returns an instance of torch.Size for the shape, in this case, matching
+    what you have passed to the zeros method:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: PyTorch tensor factory methods let you specify the tensor shape by passing one
+    or more integers to a method. For example, to create an array of 10 ones, you
+    can use the ones method,
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: which returns an array of length 10,
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'while pt.ones(2, 10) returns a matrix of 2 rows and 10 columns:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: When working with factory methods you can specify the data type for the values
+    in a tensor. While methods like ones return tensors of float values by default,
+    you can override the default data type using the dtype attribute. For example,
+    to create an array of integer ones, you can invoke
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: which returns
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: Other PyTorch-supported data types include 16- and 32-bit integers, 16-, 32-,
+    and 64-bit floats, bytes (unsigned 8-bit integers), and Booleans.[⁷](#pgfId-1186358)
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.3 Creating PyTorch tensors of pseudorandom and interval values
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: This section introduces you to the PyTorch APIs used to create tensors populated
+    with data values sampled from commonly used probability distributions, including
+    standard normal, normal (Gaussian), and uniform distribution. The section also
+    describes how to create tensors consisting of interval (regularly spaced) values.
+    Learning the APIs described in this section is going to help you generate synthetic
+    data sets valuable for testing and troubleshooting machine learning algorithms.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Deep learning and many machine learning algorithms depend on the capability
+    of generating pseudorandom numbers. Before using PyTorch random sampling factory
+    methods, you want to invoke the manual_seed method to set the seed value used
+    to sample the pseudorandom numbers. If you invoke the manual_seed using the same
+    seed value as used in this book, you will be able to reproduce the results described
+    in this section. Otherwise, your results look different. The following code snippets
+    assume that you are using a seed value of 42 set:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: After the seed is set, if you are using PyTorch v1.9.0, you should expect to
+    obtain pseudorandom numbers identical to the ones in the following examples. The
+    randn method samples from the standard normal distribution, so you can expect
+    the values to have a mean of 0 and a standard deviation of 1\. To create a 3 ×
+    3 tensor of the sampled values, invoke
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: which outputs
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To sample values from a normal distribution having the mean and standard deviation
+    different from 1 and 0, respectively, you can use the normal method, for example,
+    specifying the mean of 100, standard deviation of 10, and a rank 2 tensor of 3
+    rows and 3 columns:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: resulting in
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'For tensors of pseudorandom values sampled from a uniform distribution, you
+    can use the randint method, for example, to sample uniformly from 0 (inclusive)
+    to 10 (exclusive), and return a 3 × 3 matrix:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: which produces
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: The randint and normal methods are the ones most frequently used in this book.
+    PyTorch provides a comprehensive library of pseudorandom tensor generators,[⁸](#pgfId-1021730)
+    but covering them all is beyond the scope of this book.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As explained in more detail in section 5.5, there is significant memory overhead
+    involved in creating a Python list of integer values. Instead, you can use the
+    arange method to create PyTorch tensors with interval (regularly spaced) values
+    in a specified range. PyTorch arange behaves similarly to the range operator in
+    Python, so
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: returns
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: As you would expect from your experience using Python, arange in PyTorch can
+    be called with additional parameters for the range start, end, and step (sometimes
+    called a stride), so to create a tensor of odd numbers from 1 to 11, you can use
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: which outputs
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: Just as with the Python range, the resulting sequence excludes the end sequence
+    parameter value (the second argument), while the step is specified as the third
+    argument to the method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Instead of having to calculate the value of the step size for the arange method,
+    it can be more convenient to use the linspace method and specify the number of
+    elements that should exist in the resulting tensor. For example, to create a tensor
+    of 5 elements with values in the range that starts with 0 and ends with and includes
+    the value of 10, you can use the linspace method,
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: which results in
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: As a part of the implementation, the linspace method calculates the appropriate
+    step size to use such that all elements in the resulting tensor are within an
+    equal distance of each other. Also, by default, linspace creates a tensor of floating
+    point values.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now that you are familiar with functions that create tensors, you are prepared
+    to move on to performing common tensor operations such as addition, multiplication,
+    exponentiation, and others.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.4 PyTorch tensor operations and broadcasting
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: This section introduces you to the PyTorch features for performing common mathematical
+    operations on PyTorch tensors and clarifies the rules for applying operations
+    to tensors of various shapes. Upon completion of this section, you should be prepared
+    to use PyTorch tensors as part of mathematical expressions that are used in machine
+    learning code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Since PyTorch overloads standard Python mathematical operators, including +,
+    —, *, /, and **, it is easy to get started with tensor operations. For example,
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: is equivalent to invoking pt.arange(10).add(1), and both output
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: When adding a PyTorch tensor and a compatible Python basic data type (float,
+    integer, or Boolean), PyTorch atomically converts the latter to a PyTorch scalar
+    tensor (this is known as *type coercion*). Hence, the operations
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: and
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: are equivalent.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The default implementations of the PyTorch APIs perform immutable operations
+    on tensors. So, when developing PyTorch machine learning code, it is critical
+    that you remember that the addition operation as well as the other standard Python
+    math operations overloaded by PyTorch return a new tensor instance. You can easily
+    confirm that by running
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: which outputs a tuple of PyObject identifiers with two distinct values, one
+    for each tensor. PyTorch also provides a collection of in-place operators that
+    mutate (modify) a tensor. This means that PyTorch replaces the tensor’s values
+    directly in the memory of the tensor’s device, without allocating a new PyObject
+    instance for a tensor. For example, using the add_ method
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: returns a tuple with two identical object identifiers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note In PyTorch API design, all operations that mutate (change) a tensor in
+    place use a _ postfix, for example, mul_ for in-place multiplication, pow_ for
+    in-place exponentiation, abs_ for in-place absolute value function, and so on.[⁹](#pgfId-1188847)
+  prefs: []
+  type: TYPE_NORMAL
+- en: When working on machine learning code you will surely find yourself having to
+    perform common mathematical operations on nonscalar tensors. For example, if you
+    are given two tensors a and b, what does it mean for PyTorch to find the value
+    of a + b?
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 5.3 Tensors added element-wise as they have identical shapes
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE44]'
+  prefs: []
+  type: TYPE_PRE
+- en: As you should expect, since a has the value of
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE45]'
+  prefs: []
+  type: TYPE_PRE
+- en: and b has the value of
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE46]'
+  prefs: []
+  type: TYPE_PRE
+- en: their sum is equal to
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE47]'
+  prefs: []
+  type: TYPE_PRE
+- en: so here a + b is equivalent to incrementing each element of the tensor a by
+    1. This operation can be described as an element-wise addition of the tensors
+    a and b since for each element of the tensor a PyTorch finds a value with a corresponding
+    element index in the tensor b and adds them together to produce the output.
+  prefs: []
+  type: TYPE_NORMAL
+- en: What if you try to add
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE48]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'where the logic of element-wise addition does not make immediate sense: which
+    elements of tensor a should be increased by one? Should the first, second, or
+    both rows of tensor a be incremented by one?'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To understand how addition works in this example and other situations where
+    the shapes of the tensors in an operation are different, you need to become familiar
+    with *broadcasting*,[^(10)](#pgfId-1189687) which PyTorch performs behind the
+    scenes to produce the following result for a + b:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE49]'
+  prefs: []
+  type: TYPE_PRE
+- en: PyTorch attempts tensor broadcasting whenever the shapes of the tensors used
+    in an operation are not identical. When performing an operation on two tensors
+    with different sizes, some dimensions might be re-used, or “broadcast,” to complete
+    the operation. If you are given two tensors, a and b, you can check whether an
+    operation involving both can be performed using broadcasting by invoking can_broadcast.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 5.4 Broadcasting possible when can_broadcast returns true
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE50]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This broadcasting rule depends on the trailing dimensions of the tensors, or
+    the dimensions of the tensors aligned in the reverse order. Even the simple example
+    of adding a scalar to a tensor involves broadcasting: when a = pt.ones(5) and
+    b = pt.tensor(42), the shapes are torch.Size([5]) and torch.Size([]), respectively.
+    Hence, the scalar must be broadcast five times to tensor a as shown in figure
+    5.2.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![05-02](Images/05-02.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.2 Broadcasting a scalar b to a rank 1 tensor a
+  prefs: []
+  type: TYPE_NORMAL
+- en: Broadcasting does not require copying or duplicating tensor data in memory;
+    instead, the contents of the tensor that result from broadcasting are created
+    by directly computing from the values of the tensors used in the operation. Effective
+    use and understanding of broadcasting can help you reduce the amount of memory
+    needed for your tensors and increase the performance of your tensor operations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To illustrate broadcasting with a more complex example where a = pt.ones([2,
+    5]) and b = pt.ones(5), notice that the broadcasting re-uses the values from the
+    tensor b (right side of figure 5.3) such that the indices along the trailing dimension
+    are aligned in the resulting a + b tensor, while the leading dimension is preserved
+    from tensor a.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![05-03](Images/05-03.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.3 Broadcasting a rank 1 tensor b to a rank 2 tensor a
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Based on the broadcasting examples you have seen so far, you might come away
+    with an incorrect impression that broadcasting happens only in one direction:
+    from one of the tensors in an operation to another. This is false. Notice that
+    according to the rule from listing 5.4, both tensors involved in an operation
+    can broadcast data to each other. For instance, in figure 5.4, tensor a is broadcast
+    to tensor b three times (based on the first dimension), and then contents of tensor
+    b are broadcast in the opposite direction (along the second dimension) to produce
+    the resulting tensor a+b of the size torch.Size([3, 2, 5]).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![05-04](Images/05-04.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.4 Broadcasting is bidirectional with the first dimension of b broadcast
+    to a and the second dimension of a broadcast to b.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.5 PyTorch tensors vs. native Python lists
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In this section, you will dive into the details of how native Python data structures
+    compare to PyTorch tensors with respect to memory use and into why PyTorch tensors
+    can help you make more efficient use of memory for machine learning use cases.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Most modern-day laptops use central processing units (CPUs) that run at frequencies
+    from 2 to 3 Ghz. To keep the calculations simple, let’s ignore some of the advanced
+    instruction for execution pipelining features of modern processors and interpret
+    a 2-Ghz processor frequency to mean that it takes a processor roughly half a nanosecond
+    (ns) to execute a single instruction, such as an instruction to add two numbers
+    and store the result. While a processor can execute an instruction in less than
+    1 ns, the processor has to wait over 100 times as long, anywhere from 50 to 100
+    ns, to fetch a piece of data from the main computer memory (dynamic random access
+    memory). Of course, some data a processor uses resides in a cache, which can be
+    accessed within single-digit nanoseconds, but low-latency caches are limited in
+    size, typically measured in single-digit MiB.[^(11)](#pgfId-1207914)
+  prefs: []
+  type: TYPE_NORMAL
+- en: Suppose you are writing a computer program where you need to perform some computations
+    with a tensor of data, such as processing an array of 4,096 integers and incrementing
+    each by 1\. To achieve high performance for such a program, lower-level programming
+    languages such as C or C++ can allocate the input data array within a single chunk
+    in computer memory. For example, in the C programming language, an array of 4,096
+    integer values, each 64 bits in width, can be stored as a sequence of 64-bit values
+    within some contiguous memory range, such as from address 0x8000f to address 0x9000f.[^(12)](#pgfId-1044906)
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Assuming all of the 4,096 integer values are in a contiguous memory range,
+    the values can be transferred from the main memory to the processor cache as a
+    single chunk, helping to reduce the total latency of the addition calculation
+    for the values. As shown on the left side of figure 5.5, a C integer occupies
+    just enough memory needed to store the integer’s value so that an array of C integers
+    can be stored as a sequence of addressable memory locations. Note that the number
+    4,096 is chosen deliberately: since 4,096 * 8 (bytes per 64-bit integer) = 32,768
+    bytes is a common L1 cache size for x86 processors in the year 2020\. This means
+    that the roughly 100-ns latency penalty is incurred every time the cache needs
+    to be flushed and refilled with another 4,096 integers that need to be fetched
+    from the computer memory.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![05-05](Images/05-05.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.5 Values of C integers (left) are stored directly as addressable memory
+    locations. Python integers (right) are stored as address references to a generic
+    PyObject_HEAD structure, which specifies the data type (integer) and the data
+    value.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This high-performance approach does not work with native Python integers or
+    lists. In Python, all data types are stored in the computer memory as Python objects
+    (PyObjects). This means that for any data value, Python allocates memory to store
+    the value along with a metadata descriptor known as PyObject_HEAD (right side
+    of figure 5.5), which keeps track of the data type (e.g., whether the data bits
+    describe an integer or a floating point number) and supporting metadata, including
+    a reference counter to keep track of whether the data value is in use.[^(13)](#pgfId-1044986)
+    For floating point and other primitive data values, the overhead of the PyObject
+    metadata can more than triple the amount of memory required to store a data value.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To make matters worse from a performance standpoint, Python lists (e.g., a list
+    PyObject as illustrated on the left side of figure 5.6) store the values by reference
+    to their PyObject memory addresses (right side of figure 5.6) and rarely store
+    all the values within a continuous chunk in memory. Since each PyObject stored
+    by a Python list may be scattered across many dispersed locations in computer
+    memory, in the worst case scenario, there is a potential for 100-ns latency penalty
+    per value in a Python list, due to the need to flush out and refill the cache
+    for each of the values.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![05-06](Images/05-06.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.6 Integers in a Python list (PyListObject) are accessed by reference
+    (memory address) as items in the PyListObjects, requiring an additional memory
+    access to find the PyObject for each integer. Depending on memory fragmentation,
+    individual-integer PyObjects can be scattered across memory, leading to frequent
+    cache misses.
+  prefs: []
+  type: TYPE_NORMAL
+- en: PyTorch tensors (as well as other libraries such as NumPy) implement high-performance
+    data structures using low-level, C-based code to overcome the inefficiencies of
+    the higher-level Python-native data structures. PyTorch, specifically, uses a
+    C-based ATen tensor library[^(14)](#pgfId-1208747) to ensure that PyTorch tensors
+    store the underlying data using cache-friendly, contiguous memory chunks (called
+    *blobs* in ATen) and provides bindings from Python to C++ to support access to
+    the data via PyTorch Python APIs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To illustrate the difference in performance, look at the following code snippet
+    that uses the Python timeit library to measure the performance of processing lists
+    of integer values ranging from 2 to roughly 268 million (2^(28)) in length and
+    incrementing each value in a list by 1,
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE51]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'and using a similar approach to measure the time it takes to increment the
+    values in a tensor array by 1:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE52]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As shown in figure 5.7, you can compare the performance of PyTorch tensors
+    over native Python lists by plotting the sizes on the x-axis versus ratio on the
+    y-axis, where the ratio is defined as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE53]'
+  prefs: []
+  type: TYPE_PRE
+- en: '![05-07](Images/05-07.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.7 The ratio of Python to PyTorch performance shows consistently faster
+    PyTorch performance for the increment operation benchmark, starting with lists
+    of 10,000 elements and higher.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: PyTorch is a deep learning—oriented framework with support for high-performance
+    tensor-based machine learning algorithms.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: PyTorch tensors generalize scalars, arrays (lists), matrices, and higher-dimensional
+    arrays into a single high-performance data structure.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Operations that use multiple tensors, including tensor addition and multiplication,
+    depend on broadcasting to align tensor shapes.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: C/C++-based tensors in PyTorch are more memory efficient and enable higher compute
+    performance compared to Python-native data structures.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '^(1.)Tesla machine learning use cases for PyTorch are presented by Andrej Karpathy,
+    director of AI at Tesla: [https://www.youtube.com/watch?v=oBklltKXtDE](https://www.youtube.com/watch?v=oBklltKXtDE).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '^(2.)OpenAI is well known for creating state-of-the-art natural language processing
+    GPT models, standardized on PyTorch: [https://openai.com/blog/openai-pytorch/](https://openai.com/blog/openai-pytorch/).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ^(3.)Of course in Python it is possible to use slicing notation, but that is
+    not relevant to this explanation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '^(4.)Refer to the torch.Tensor documentation for the complete list of the subclasses
+    in PyTorch: [https:// pytorch.org/docs/stable/tensors.html#torch-tensor](https://pytorch.org/docs/stable/tensors.html#torch-tensor).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ^(5.)The comprehensive listing of the PyTorch supported dtype values is available
+    at [http://mng.bz/YwyB](http://mng.bz/YwyB).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '^(6.)The NestedTensor class is available as a PyTorch package here: [https://github.com/pytorch/nestedtensor](https://github.com/pytorch/nestedtensor).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ^(7.)Detailed information about the PyTorch tensor data types is available from
+    [https://pytorch.org/docs/stable/ tensors.html](https://pytorch.org/docs/stable/tensors.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: ^(8.)For detailed documentation of the PyTorch random sampling factory methods,
+    visit [http://mng.bz/GOqv](http://mng.bz/GOqv).
+  prefs: []
+  type: TYPE_NORMAL
+- en: ^(9.)For a detailed reference on in-place tensor operations, visit [https://pytorch.org/docs/stable/tensors.html](https://pytorch.org/docs/stable/tensors.html)
+    and search for “in-place.”
+  prefs: []
+  type: TYPE_NORMAL
+- en: ^(10.)Broadcasting is a popular technique used by various computing libraries
+    and packages such as NumPy, Octave, and others. For more information about PyTorch
+    broadcasting, visit [https://pytorch.org/docs/stable/ notes/broadcasting.html](https://pytorch.org/docs/stable/notes/broadcasting.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: ^(11.)For a comprehensive breakdown of latency numbers that every computer programmer
+    should know, visit [https://gist.github.com/jboner/2841832](https://gist.github.com/jboner/2841832).
+  prefs: []
+  type: TYPE_NORMAL
+- en: ^(12.)Of course, actual memory addresses for a program in a modern computer
+    are unlikely to have values like 0x8000f or 0x9000f; these values are used here
+    for illustration purposes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ^(13.)Python uses this reference counter to decide whether the data value is
+    no longer in use so that the memory used for the data can be safely de-allocated
+    and released for use by other data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ^(14.)For ATen documentation, visit [https://pytorch.org/cppdocs/#aten](https://pytorch.org/cppdocs/#aten).
+  prefs: []
+  type: TYPE_NORMAL

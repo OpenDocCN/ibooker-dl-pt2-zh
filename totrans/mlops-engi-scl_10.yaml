@@ -1,0 +1,1019 @@
+- en: 8 Scaling out with distributed training
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter covers
+  prefs: []
+  type: TYPE_NORMAL
+- en: Understanding distributed data parallel gradient descent
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using gradient accumulation in gradient descent for out-of-memory data sets
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Evaluating parameter server versus ring-based approaches for distributed gradient
+    descent
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Understanding reduce-scatter and all-gather phases of ring-based gradient descent
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Implementing a single node version of ring-based gradient descent using Python
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In chapter 7, you learned about scaling up your machine learning implementation
+    to make the most of the compute resources available in a single compute node.
+    For example, you saw examples for taking advantage of the more powerful processors
+    in GPU devices. However, as you will discover by launching a machine learning
+    system in production, the rate of growth in the number of training examples and
+    the size of the training data sets can outpace the compute capacity of even the
+    most capable servers and workstations. Although with contemporary public cloud
+    infrastructure scaling up by upgrading to a more powerful processor or by adding
+    more memory or more GPU devices can get you far, you should have a better plan
+    for the long run.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Distributed data parallel* (DDP) training is a category of machine learning
+    model training that relies on scaling out rather than scaling up. With scaling
+    out, as the training data set size grows, you scale by partitioning and performing
+    the computational workload involved in model training across a cluster of networked
+    compute servers, or nodes. Here, a *node* is a virtual or physical server on a
+    network connecting the nodes into a cluster. Instead of upgrading to the more
+    capable (and often more expensive) compute nodes to perform machine learning model
+    training (the scale-up approach), with scale out you can network a cluster of
+    less powerful, even commodity compute nodes, and open the possibility of finishing
+    training sooner by distributing and doing work across the nodes in parallel. In
+    effect, scaling out to larger training data sets means adding more nodes to a
+    cluster.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: DDP model training is more than just scaling out by adding nodes to a cluster.
+    The “data parallel” aspect of DDP describes that, in the cluster, every node computes
+    gradients using only independent and mutually exclusive partitions (also known
+    as *shards*) of the training data set. Typically, the number of training examples
+    in a shard is selected to ensure that the shard can fit in the memory of each
+    of the nodes in the cluster. Although in a DDP approach every training node in
+    the cluster uses a distinct shard of the data set for every iteration of gradient
+    descent, within the scope of the iteration, all nodes must use an identical copy
+    of the model in training to compute the model parameter gradients. Hence, after
+    the nodes compute the gradients based on the training data set (or a batch of
+    training examples), the nodes must all synchronize to an updated version of the
+    model parameters using the computed gradients.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this chapter, you will learn about alternative approaches to distributed
+    gradient descent and how DDP gradient descent implementations can help you efficiently
+    scale out training across an arbitrary number of nodes while using practical nodes
+    with limited compute, memory, storage, and bandwidth resources.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 8.1 What if the training data set does not fit in memory?
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: This section and its subsections provide a step-by-step introduction to gradient
+    accumulation and the role that gradient accumulation plays in gradient descent
+    to enable support for out-of-memory training data sets.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 8.1.1 Illustrating gradient accumulation
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This section demonstrates gradient accumulation using the autograd library of
+    PyTorch. While the example in this section is based on using autograd with a trivial
+    function, later sections apply gradient accumulation to more realistic examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When using gradient descent with reverse mode accumulating autodiff it is necessary
+    to clear out the values of the tensor’s gradients after performing an optimization
+    step of gradient descent.[¹](#pgfId-1011924) In PyTorch, this is done by setting
+    the tensor’s gradients to None or using a torch.optim.Optimizer helper method,
+    zero_grad. Unless the gradients are zeroed (cleared) out, calls to the backward
+    method of the tensor produced by the loss function can result in accumulation
+    of the gradient values in the model’s tensors. This behavior is shown in the following
+    listing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 8.1 Illustration of gradient accumulation for repeated calls to backward
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Use requires_grad=True to enable differentiation of y with respect to x.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Set retain_graph=True to prevent PyTorch from de-allocating memory.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This outputs
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: Based on five repeated calls to backward accumulates the value for ![008-01_EQ01](Images/008-01_EQ01.png)
+    of *y* = *x*² at 3, which is 6. As the result of accumulation, the output of x.grad
+    skips counts by 6 for each of the 5 iterations of the for-loop. Although gradient
+    accumulation may seem like an inconvenient side effect of autodiff, it can serve
+    a useful purpose when scaling gradient descent to out-of-memory data sets and
+    distributed clusters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 8.1.2 Preparing a sample model and data set
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This section describes how to prepare a sample model and a training data set
+    to illustrate the role that gradient accumulation plays in scaling to out-of-memory
+    data sets. In the next section, you will learn how the model and the data set
+    can be used in gradient descent.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Suppose you are working with a training data set of 1,000 structured records
+    and the compute node executing your gradient descent algorithm has just enough
+    memory to hold 250 examples at a time. Of course, modern compute environments
+    can scale to much larger data sets; however, this choice of numbers will prove
+    useful as an illustration. Let’s look at a gradient accumulation with a made-up
+    data set that does fit in memory before jumping directly into the complexity of
+    a real-world out-of-memory data set.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 8.2 Preparing a sample multivariate linear regression data set
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Set the pseudo-random number seed for reproducibility.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Create a data set for a multivariate linear regression problem.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Use 1,000 records (rows) in the training examples data set.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Use multivariate_normal to generate the synthetic training data set.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Use different means for the independent variables.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❻ Specify that the independent variables should be uncorrelated.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❼ Multiply the features in X_train by coefficients.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The listing created a training data set with four features (independent variables)
+    and a dependent variable (label) based on four coefficients, 1, 2, 3, 4, for each
+    of the four features. For example, assuming that you used seed value 42 when generating
+    the X_train values, the value of the y_train[0] is computed from X_train[0, :]:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: which should output
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: You can also confirm the expected shapes of the training data set tensors X_train
+    and y_train by printing
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'which should output the following based on the values of 1,000 and 4 for the
+    TRAINING_ DATASET_SIZE and FEATURES, respectively:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: With the training data set tensors in place, you can prepare a linear regression
+    model and the supporting methods to train the model using gradient descent. The
+    model w is initialized with random values sampled from a standard normal distribution.
+    Also, since the w model parameter tensor is created with requires_grad=True, the
+    tensor has the initial gradient values set to None.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 8.3 Defining a model w and utility methods for gradient descent
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Create the model for the multivariate linear regression problem.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Implement the forward step of gradient descent based on the model w.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Compute the errors (residuals) of the target (y).
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Return the value of the mean squared error.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Although you could have initialized w using a more sophisticated technique,[²](#pgfId-1013157)
+    in this case the multivariate linear regression problem is simple enough that
+    the added complexity is not warranted.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 8.1.3 Understanding gradient descent using out-of-memory data shards
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: In this section, the model and the data set prepared in section 8.1.2 are used
+    with gradient descent to use the gradient accumulation feature of autodiff to
+    scale to out-of-memory data sets.
+  prefs: []
+  type: TYPE_NORMAL
+- en: By relying on gradient accumulation, gradient descent can compute the gradients
+    based on the entire training data set (i.e., an epoch of gradient descent) using
+    the approach illustrated in figure 8.1\. Be careful not to confuse the shards
+    shown in figure 8.1 with batches as used in mini-batch gradient descent; the difference
+    is clarified in the following paragraphs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![08-01](Images/08-01.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 8.1 Gradient accumulation re-uses shard memory to enable scaling to out-of-memory
+    data sets.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The left side of figure 8.1 shows the shards of the training dataset using [0:250][0]
+    to represent the first shard of 250 examples (records) out of the 1,000 in the
+    training data set, [0:250][1], for the second shard of records 250 up to 500,
+    and so on. Here, the Python slicing notation (e.g., [0:250]) is used to specify
+    which of the 1,000 examples in the training data set are included in a shard.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Notice that in figure 8.1 each shard is processed (in the forward and backward
+    steps of gradient descent) using the same model w, or, more precisely, using identical
+    values of the w model parameters. Although the model parameter values are identical
+    in the four sequential steps of gradient accumulation in figure 8.1, since each
+    shard contains a distinct collection of the training examples, the gradients computed
+    for each shard are also distinct and are shard-specific. In the figure, this relationship
+    between the shard and its corresponding gradient is denoted using the subscript
+    so that the shard [0:250][0] produces the gradient *g*[0], and so on.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Once the gradients are computed per shard’s worth of training examples (listing
+    8.4), the shard gradients are not used to update the model parameters. Instead,
+    the gradients are left to accumulate in the model’s tensors. Thus, after the second
+    shard of the training examples is processed by the forward method and then the
+    backward method computes the corresponding gradient *g*[1], the model’s tensor
+    w.grad contains the sum (accumulation) of the gradients *g*[0] + *g*[1].
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that computation with shards is different from computation with batches
+    in mini-batch gradient descent, where the gradients computed from each batch are
+    used to update the model parameters and are subsequently cleared out. It is useful
+    to distinguish batches from shards because both can be used with gradient descent;
+    for example, a shard can be a partition of a batch in cases where a batch of data
+    does not fit into node memory. A shard can also consist of multiple batches so
+    that gradient descent can be sped up by processing multiple batches stored in
+    a memory of a node. Although shards can be used with mini-batch gradient descent,
+    this section focuses on explaining a more basic example of using shards with ordinary
+    gradient descent, where the gradients are computed based on an entire set of training
+    examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Only after processing the entire training data set, one shard at a time, does
+    the algorithm illustrated in figure 8.1 perform an optimization step of gradient
+    descent based on the accumulated gradient *g*[0] + *g*[1] + *g*[2] + *g*[3].
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 8.4 Gradient descent using IN_MEMORY_SHARD_SIZE examples
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Perform TRAINING_DATASET_SIZE // IN_MEMORY_SHARD_SIZE iterations per epoch.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Assign training examples to y_shard and X_shard.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Perform the forward step of gradient descent.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Compute the shard-size adjusted training loss.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Perform back prop and accumulation of the gradients
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❻ Perform the gradient descent optimization step.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❼ Clear out the gradients of the model’s tensors.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Once the code is executed, the print statement
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: should output
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: which confirms that the gradient descent correctly recovered the coefficients
+    [1.0000, 2.0000, 3.0000, 4.0000] used in listing 8.2 to create the training data
+    set made up of y_train and X_train.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The fraction (IN_MEMORY_SHARD_SIZE / TRAINING_DATASET_SIZE) used in the calculation
+    of the loss in listing 8.4 is subtle but important. Recall that the listing is
+    intended to compute the gradient for the entire epoch of training examples, or,
+    more precisely, TRAINING_DATASET_SIZE examples. The default implementation of
+    the mse method, which computes the mean squared error of the model’s estimates
+    y_est, assumes IN_MEMORY_SHARD_SIZE of examples during the computation. In other
+    words, every iteration of the inner for-loop in the listing computes mse by calculating
+    ![08-01_EQ02](Images/08-01_EQ02.png), or equivalently in PyTorch using
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: which returns the mean squared error per IN_MEMORY_DATASET_SIZE examples. The
+    (IN_MEMORY_SHARD_SIZE / TRAINING_DATASET_SIZE) fraction used in ❹ rescales the
+    mean squared error to the TRAINING_DATASET_SIZE examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: With this multiplication, expressed in terms of an equation, notice that rescaling
+    amounts to IN_MEMORY_DATASET_SIZE, which cancels out in the numerator and denominator
+    of
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![08-01_EQ03](Images/08-01_EQ03.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: When the inner for-loop finishes, the w.grad contains the sum of the training
+    example gradients, so the code w.data -= LEARNING_RATE * w.grad computes the optimization
+    step for the entire epoch of shards. In other words, in the gradient descent implementation
+    in listing 8.4, the gradient optimization step is performed once per every epoch
+    of a training example. This confirms that the implementation in listing 8.4 is
+    not a mini-batch gradient descent.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Although the approach illustrated in figure 8.1 enables scaling to out-of-memory
+    data sets while using arbitrary shard sizes, it suffers from a significant algorithm
+    complexity problem: the inner for-loop is sequential, which changes the big-zero
+    performance of the gradient descent implementation from *O*(EPOCHS) to *O*(EPOCHS
+    * SHARDS).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Distributing the inner for-loop from listing 8.4 across a cluster of parallel
+    worker nodes can return the implementation to the original *O*(EPOCHS) worst-case
+    performance. But how can this be implemented efficiently?
+  prefs: []
+  type: TYPE_NORMAL
+- en: 8.2 Parameter server approach to gradient accumulation
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: This section introduces parameter server-based implementation of distributed
+    gradient descent and explains the role that gradient accumulation plays in the
+    implementation. This section clarifies the limitations of the parameter server-based
+    approach and motivates a more efficient, ring-based implementation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Legacy machine learning frameworks like TensorFlow 1.x popularized the parameter
+    server-based approach to distributing gradient descent across multiple nodes in
+    a cluster. The parameter server approach illustrated in figure 8.2 is straightforward
+    to understand and implement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![08-02](Images/08-02.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 8.2 Gradient descent distributed across worker and parameter servers
+    to support scaling out
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the figure, each of the worker nodes (shown using dashed lines) performs
+    the forward and backward steps of gradient descent (e.g., the steps from the inner
+    for-loop in listing 8.4) based on a single shard of the training data set to compute
+    shard-specific gradients of the loss function. Notice that in figure 8.2, the
+    gradients have a subscript that corresponds to the subscript of the shard used
+    to compute the gradient just as in figure 8.1.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Once the worker node computes its gradient, it sends the gradient to a parameter
+    server (or a cluster of parameter servers) for processing. The parameter server(s)
+    (right side of figure 8.2) waits to accumulate the gradients from the worker nodes
+    and uses the accumulated gradients to perform an optimization step of gradient
+    descent, which computes the model parameters for the next iteration of gradient
+    descent. The next version of the model based on the newly computed model parameters
+    (shown as w' in figure 8.2) is then sent to the worker nodes, replacing the previous
+    model parameters (shown as w in figure 8.2) and ensuring that every node computes
+    the next iteration of gradient descent using the identical, updated copy of the
+    model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The parameter server implementation of distributed gradient descent from figure
+    8.2 is a kind of distributed data parallel (defined in the introduction to this
+    chapter) approach to gradient descent. In a distributed data parallel approach,
+    the training data set is partitioned (sharded) into independent and mutually exclusive
+    subsets such that there exists a one-to-one relationship between the training
+    data set shard and a worker node. Next, every worker node computes gradients using
+    a shard and an identical copy of the model parameters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Unlike alternative distributed data parallel approaches (explained in the remainder
+    of the chapter), parameter server implementation of distributed gradient descent
+    suffers from a significant scalability issue: the network connectivity between
+    the worker and parameter servers is a communications bottleneck. Specifically,
+    the limited bandwidth available to communicate between the worker and parameter
+    server nodes is saturated in both communication phases of the implementation:
+    during the many-to-one (or many-to-few) communication of the gradients from the
+    workers to the parameter servers, as well as during the one-to-many (or few-to-many)
+    communication of the updated model parameters from the parameter server(s) to
+    the worker nodes.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 8.3 Introducing logical ring-based gradient descent
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: This section introduces the fundamental concepts of nodes communicating in a
+    logical ring network. Instead of provisioning actual nodes and having them communicate
+    over a network, this section explains the networking concepts using a simple Python
+    program running in a single-node environment. Once you have a firm grasp of the
+    concepts, you will apply them to the more complex, distributed, multi-node environments.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As opposed to relying on a centralized cluster of parameter servers (the approach
+    illustrated in section 8.2), logical ring-based distributed data parallel algorithms
+    (e.g., Horovod; [https://github.com/horovod/horovod](https://github.com/horovod/horovod))
+    avoid one-to-many and many-to-one communications bottlenecks and rely on nodes
+    communicating just with the two logical neighbors in a ring: the predecessor and
+    the successor nodes.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The illustration in figure 8.3 (left side) shows four nodes, each shown using
+    dashed lines and denoted as nodes *n*[0] through *n*[3] that are organized in
+    a logical ring. Note that with contemporary virtual networks in public cloud environments
+    the nodes do not have to be physically connected to each other in a ring: standard
+    ethernet networking is sufficient. However, in the logical ring network shown
+    in the figure, every node is constrained such that it communicates only with its
+    predecessor and successor nodes. As you will learn in section 8.4, this helps
+    limit the networking bandwidth needed per iteration of the distributed gradient
+    descent.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![08-03](Images/08-03.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 8.3 A logical networking ring (left) explained using sample values (right)
+  prefs: []
+  type: TYPE_NORMAL
+- en: For a node with an identifier *n*[i], the identifier of the successor node is
+    defined as *n*[(i+1) %] *NODES*, where NODES is the total number of nodes in the
+    logical ring. The modulo operation ensures that the communication pattern forms
+    a ring by having the node with the highest identifier (which is always *n[NODES-1]*)
+    communicate with the node with the identifier 0, and vice versa. In ring networking,
+    as described in this chapter, every node *sends* data only to the successor node.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using similar logic, the identifier of the predecessor node is defined as *n*[(i-1)
+    %] *NODES* for the ring-based networking so that node 0 can communicate with both
+    node 1 and the node with the highest identifier value, (NODES - 1). Every node
+    in the ring network used in this chapter *receives* data only from the predecessor
+    node.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As with the parameter server-based approach explained in section 8.2, the nodes
+    in figure 8.3 process independent shards of the training data set such that *g*[0](*n*[0])
+    represents the gradient values computed from a shard having an index of 0 by the
+    node *n*[0]. Continuing with the example from section 8.2, if [0:250]0 is the
+    first of four shards, then *g*[0](*n*[0]) denotes the gradient values from the
+    first shard computed by the node *n*[0], using model parameter values w. Hence,
+    just like with the parameter server-based approach, the ring-based approach is
+    data-parallel distributed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the ring-based distributed data parallel implementation, the dedicated parameter
+    servers do not exist. Instead, after every node in the cluster completes the forward
+    and backward steps of an iteration of gradient descent, the nodes communicate
+    in the logical ring network so that the gradients from all the shards are accumulated
+    on every node in the ring.
+  prefs: []
+  type: TYPE_NORMAL
+- en: What kind of information needs to be communicated between the nodes to ensure
+    that model parameter values and the accumulated gradient values are perfectly
+    synchronized and identical? In the logical ring, since every node can send data
+    only to the successor node, a node can receive accumulated gradients only from
+    a series of iterations of gradient send/receive operations from the predecessor
+    nodes. For instance, in order for the node *n*[0] to accumulate gradients from
+    nodes *n*[1] through *n*[3] (right-most side of figure 8.4), three iterations
+    of the send/receive operations are required. These three iterations are shown
+    in sequence from the left side to the right side of figure 8.4\. As you will observe
+    throughout this chapter, it takes (NODES - 1) iterations of send/receive communication
+    in a multi-node cluster consisting of NODES number of nodes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![08-04](Images/08-04.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 8.4 Reduce (sum) gradients to node 0 in a ring of four nodes, a reduce-all
+    algorithm to distribute gradients across nodes
+  prefs: []
+  type: TYPE_NORMAL
+- en: The source code from listing 8.5 provides the Python pseudocode implementation
+    of the logic described by figure 8.4\. In the implementation, the variable NODES
+    is defined using the relationship between the number of the training examples
+    in the training data set (the value of the constant TRAINING_DATASET_SIZE) floor
+    divided by the number of training examples that fit in memory of a node in the
+    multi-node cluster (the value of IN_MEMORY_SHARD_SIZE). The floor division operation
+    // is used to ensure that the value of the NODES constant is set to be an integer
+    value since it is later used as an argument to the Python range operation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 8.5 Python pseudocode to illustrate reduction of the gradient to node
+    0
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Calculate the number of the NODES needed for the training data set.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Assign arbitrary GRADIENT values, one per node for an illustration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Create a dictionary to track the gradient computed by a node.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Perform NODES - 1 iterations of communication.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Start with node iter+1 so that after NODES-1 . . .
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❻ . . . iterations, node 0 accumulates the gradients.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❼ The identifier of the next node closes the ring.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❽ Accumulate the gradient in node_to_gradient.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Once the code is done executing, printing the value of the node_to_gradients
+    dictionary
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'outputs the result:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: where the entry for the key 0 corresponds to the expected gradient computed
+    for *n*[0], with the value of 11 based on the accumulated gradient 5 + 3 + 2 +
+    1. Also, notice that since figure 8.4 does not include accumulation of gradients
+    to any nodes other than *n*[0], the gradients for nodes *n*[1] through *n*[3]
+    remain unchanged. Upcoming sections explain how to ensure that identical gradients
+    are accumulated on all nodes in the ring.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'During the first (shown with a zero-based index in figure 8.4 as Iteration
+    0) of the three (NODES - 1) iterations, node *n*[1] sends and node *n*[2] receives
+    the gradient values *g*[1](*n*[1]) computed by node *n*[1] prior to the start
+    of the iteration 0. Since the purpose of the communication in the ring is to arrive
+    to the accumulated gradient, upon receiving the *g*[1](*n*[1]) gradient values,
+    the node *n*[2] can accumulate (add to) the gradient values directly to the memory
+    occupied by the gradient *g*[2](*n*[2]), which ensures the re-use of memory to
+    store the accumulated gradient values: *g*[1](*n*[1]) + *g*[2](*n*[2]). For example,
+    if each of the gradient tensors on each of the nodes is 400 MB, then 400 MB’ worth
+    of data is communicated between the nodes in the ring, and 400 MB’ worth of memory
+    is consumed by each of the nodes to store the accumulated gradient values. By
+    the conclusion of the iteration 0, node *n*[2] accumulates the added (i.e., reduced
+    using a sum operation) gradients.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Hence, during the second iteration (labeled as Iteration 1 in figure 8.4), the
+    accumulated gradient values are sent from node *n*[2] to node *n*[3], resulting
+    in the gradient values *g*[1](*n*[1]) + *g*[2](*n*[2]) + *g*[3](*n*[3]) accumulating
+    on node *n*[3] at the end of the second iteration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The last and final iteration in this example (labeled Iteration 2 in figure
+    8.4) completes the accumulation of the gradients on the node *n*[0], adding the
+    gradient computed on the node *g*[0](*n*[0]) to the accumulated gradient received
+    from *n*[3] during this iteration. The resulting gradient, consisting of *g*[0](*n*[0])
+    + *g*[1](*n*[1]) + *g*[2](*n*[2]) + *g*[3](*n*[3]), is sufficient for *n*[0] to
+    compute the model parameter values for the next optimization step of gradient
+    descent to be performed by every node in the cluster.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'While the three iterations illustrated in figure 8.4 and listing 8.5 achieved
+    accumulation (reduce step) of the gradients to a single node, for the distributed
+    data parallel gradient descent to work, every node in the ring must have access
+    to the entire accumulated gradient: *g*[0](*n*[0]) + *g*[1](*n*[1]) + *g*[2](*n*[2])
+    + *g*[3](*n*[3]). Unless the accumulated gradient is available for every node,
+    the nodes are unable to perform the gradient descent step of changing the values
+    of the model parameters using the accumulated gradient. The upcoming sections
+    build on the reduce steps from listing 8.5 to explain the reduce-all phase of
+    the entire distributed gradient descent algorithm.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 8.4 Understanding ring-based distributed gradient descent
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: While the naive ring-based reduce operation described in section 8.3 can eliminate
+    the need for parameter servers and ensure that the values of the gradients are
+    reduced (accumulated) on the individual compute nodes in the ring-based multi-node
+    cluster, it suffers from several disadvantages. As the training data set size
+    grows (which is to be expected), the number of the nodes in the cluster must grow
+    to keep up. This also means that the total bandwidth the cluster needs must grow
+    along with the number of the nodes since each node must send the entire gradient
+    to the next node in the ring during each iteration. In this section, you will
+    learn about how ring-based distributed data parallel algorithms (e.g., the well-known
+    Horovod algorithm) help with an efficient use of bandwidth in scale-out situations
+    where both the number of training nodes and the training examples grow.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The Horovod algorithm can support the growth in the training data set (and
+    the number of the nodes in the cluster) while keeping the bandwidth demands constant
+    or even lowering the bandwidth requirements. To support this, Horovod relies on
+    two separate and district phases of ring-based communication: (1) reduce-scatter
+    and (2) all-gather. In both phases, instead of sending/receiving the entire gradient’s
+    worth of data between the nodes, Horovod communicates just a single segment of
+    the gradient such that by default the size of the segment is the size of the gradient
+    times ![08-04_EQ04](Images/08-04_EQ04.png), where *NODES* is the number of the
+    worker nodes in the ring cluster. Hence, increasing the number of the worker nodes
+    to scale with the training data set size reduces the bandwidth requirements in
+    node-to-node communication.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: So what is a *segment* of the gradient? You can consider each segment a logical
+    partition of the gradient, as illustrated in figure 8.5\. In the figure, the gradient
+    *g*[0] computed by node *n*[0], based on the training data set shard [0:250][0]
+    (where [0:250] is the Python slicing notation), is in turn partitioned into NODES
+    segments, such that by default, a roughly equivalent number of the gradient values
+    exists per segment. Continuing with an earlier example where the gradient occupied
+    400 MB’ worth of data (for example 4 bytes per 100,000,000 of 32-bit floating
+    point gradient values of the model parameters), each segment is 100 MB of the
+    mutually exclusive logical partitions of the segment. Note that in this case,
+    since the shard is computed by the node *n*[0], each *i* of the four segments
+    is annotated using *s[i]*(*n*[0]).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![08-05](Images/08-05.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 8.5 Gradient segments used by Horovod for node-to-node communication
+  prefs: []
+  type: TYPE_NORMAL
+- en: Also notice that while the segments cannot be accumulated (added) along the
+    horizontal axis of the frame in figure 8.5, it is possible to accumulate the segments
+    along the vertical axis. Further, the segments *s[i]* shown below the segment
+    frame in figure 8.5 correspond to the accumulation of the corresponding segments
+    computed by each node. For example, *s[0]* is equal to *s[0]*(*n*[0]) + *s[1]*(*n*[1])
+    + *s[2]*(*n*[2]) + *s[3]*(*n*[3]). Hence, the segments *s*[0]*s*[1]*s*[2]*s*[3]
+    shown below the frame in figure 8.5 are equivalent to a logical partition into
+    segments of the accumulated gradient *g*[0] + *g*[1] + *g*[2] + *g*[3] needed
+    to perform the optimization step of gradient descent.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As with an introduction to the ring-based reduce steps in listing 8.5, the rest
+    of this chapter uses Python pseudocode to explain the Horovod algorithm. Recall
+    that for a distributed data parallel algorithm (such as Horovod) to work correctly,
+    every node in the ring cluster must be initialized with an identical copy of the
+    model parameters. In listing 8.6, the Python list of tensors W is used to represent
+    the identical models. Notice that every tensor in W is initialized using the values
+    from w_src, a tensor of pseudorandom values sampled from a standard normal distribution.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 8.6 W storing the identical copies of the model tensor
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: In order to re-use the training data set tensors X_train and y_train from listing
+    8.4, the following explanation of the Horovod algorithm creates a PyTorch DataLoader,
+    which partitions the training data set into shards of IN_MEMORY_SHARD_SIZE records
+    each. Do not be confused by the batch_size argument to the DataLoader in listing
+    8.7; although this argument is used to shard the source TensorDataset, the individual
+    shards are not used as batches to update the parameters of the model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 8.7 A step of gradient descent using PyTorch DataLoader for sharding
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: Once the code is done executing, the expression
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: should output
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: representing the tensors of the model gradients, one per node in the ring cluster.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that after the forward and backward steps of gradient descent are performed
+    on each node using the code in the for-loop in listing 8.7, the Horovod algorithm
+    must perform two phases of ring-based networks in order to communicate the accumulated
+    gradient to every node in the ring. The first phase, known as *reduce-scatter*,
+    is explained in section 8.5, and the second phase, known as *all-gather*, is explained
+    in section 8.6\.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '8.5 Phase 1: Reduce-scatter'
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: This section explains the reduce-scatter phase of Horovod, under the assumption
+    that every node in the ring-based cluster is initialized with an identical copy
+    of the model parameters. The section continues with the example from listing 8.7,
+    where the identical copies of the model parameters are stored in W[node] and every
+    node completed the forward and backward steps of gradient descent, with the resulting
+    gradient values saved in W[node].grad. By the end of this section, you will learn
+    how the reduce-scatter phase of Horovod ensures that every node in the ring ends
+    up with a distinct segment of the accumulated gradient *g*[0] + *g*[1] + *g*[2]
+    + *g*[3].
+  prefs: []
+  type: TYPE_NORMAL
+- en: The first phase of Horovod, known as reduce-scatter, starts after each of the
+    nodes is done computing a gradient based on the node-specific shard of the data
+    set. As explained in the previous section, each node logically partitions the
+    computed gradient into NODES segments. The first iteration (of a total of three
+    iterations) of this phase is shown in figure 8.6, where the top side of the figure
+    illustrates that, at the start of the phase, each node *n*[i] stores the shard-specific
+    segments, *s*[0](*n*[i]) through *s[NODES-1]*(*n*[i]).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![08-06](Images/08-06.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 8.6 The first iteration of the reduce-scatter phase initiates gradient
+    segment transfer across nodes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Since reduce-scatter sends just a segment’s worth of data to the successor node
+    at every iteration, during the first iteration (shown using arrows on the bottom
+    side of figure 8.6), a node *n[i]* forwards a segment *s*[(i - 1)] % NODES(*n*[i])
+    to the successor node. By the conclusion of the first iteration (bottom side of
+    figure 8.6), each node *n[i]* accumulates a segment *s*[(i - t - 1) % NODES](*n*[(i
+    - 1) % NODES]) + *s*[(i - t - 1) % NODES](*n*[i]), where t=1 represents the first
+    iteration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In subsequent iterations, each node sends the segment that was accumulated
+    in the previous iteration to the successor node. For example, in the second iteration
+    (shown in figure 8.7), node *n*[1] sends the segment *s*[3](*n*[0] + *n*[1]),
+    node *n*[2] sends the segment *s*[0](*n*[1] + *n*[2]), and in general, for iteration
+    t, node *n*[i] sends the accumulated segment *s*[(i - t)] % NODES(*n*[i]). Since
+    in the example with four nodes only three iterations are needed to reduce-scatter
+    the segments, the bottom side of figure 8.7 shows that, by the conclusion of the
+    second iteration, only one part of each segment is missing on each of the nodes:
+    the segment specified by *s*[(i + 1) % NODES](*n*[i]).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![08-07](Images/08-07.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 8.7 The second reduce-scatter iteration propagates accumulated gradients.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This missing part is filled in the third and final iteration of the example,
+    whereby at the conclusion of the iteration (bottom side of figure 8.8), every
+    node *n[i]* accumulates the entire segment *s[i]*. For example, notice that in
+    figure 8.8, *n*[0] concludes the final iteration of this phase with *s*[0], node
+    *n*[1] with *s*[1], and so forth.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![08-08](Images/08-08.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 8.8 The third reduce-scatter iteration finishes gradient accumulation
+    for a four-node ring.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 8.8 Python pseudocode for the reduce-scatter phase
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ The first segment is accumulated on the first node.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Retrieve the gradient values corresponding to node and segment seg.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Accumulate gradient segment value on the next_node in the ring.
+  prefs: []
+  type: TYPE_NORMAL
+- en: After the code from listing 8.8 finishes executing, you can output the resulting
+    gradients using
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: which should print out
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: Notice that, as expected, the gradient values are scattered across the nodes
+    such that *n*[0] stores the segment *s*[0] of the accumulated gradient, *n*[1]
+    stores the segment *s*[1], and so on. In general, the accumulated segments of
+    the gradient after reduce-scatter can be printed out using
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'which outputs the values of accumulated segment on each node:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: The illustration in figure 8.9 summarizes the code from listing 8.8 for the
+    case when the reduce-scatter ring consists of four nodes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![08-09a](Images/08-09a.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 8.9a Iterations of reduce-scatter
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![08-09b](Images/08-09b.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 8.9b Iterations of reduce-scatter
+  prefs: []
+  type: TYPE_NORMAL
+- en: '8.6 Phase 2: All-gather'
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'This section explains the second and the final phase of the Horovod algorithm:
+    all-gather. In this section, you can observe how the scattered segments of the
+    accumulated gradient from the reduce-scatter phase are gathered, or sent around
+    the ring, so that by the conclusion of the phase, every node stores the entire
+    accumulated gradient *g*[0] + *g*[1] + *g*[2] + *g*[3]. This means that at the
+    conclusion of this phase, every node in the logical ring can perform the optimization
+    step of gradient descent and compute the next iteration of the model parameters
+    for further training.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Given that the reduce-scatter phase performs the nuanced steps of selectively
+    accumulating (reducing) the gradient segment values, the implementation of all-gather,
+    the second and the last phase, is easier to follow. Using an approach introduced
+    with the reduce-all algorithm, this phase involves simply sending the accumulated
+    segments from one node to the next. As with the reduce-scatter phase of the Horovod
+    algorithm, the all-gather phase takes NODES - 1 iterations of node-to-node communication
+    in the logical ring network of the cluster.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The three iterations for the four nodes in figure 8.10 are shown as the upper-left,
+    upper-right, and lower-right quadrants of the figure. The lower-left corner of
+    the figure shows the final state of the nodes in the cluster after the nodes have
+    completed all the steps of the Horovod algorithm. Note that the gradient segments
+    on each node (shown as *s*[0] through *s*[3]) store the entire accumulated gradient
+    (shown as *g*[0] + *g*[1] + *g*[2] + *g*[3]) computed from the corresponding shards
+    of the training data set.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![08-10a](Images/08-10a.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 8.10a Iterations of all-gather
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![08-10b](Images/08-10b.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 8.10b Iterations of all-gather
+  prefs: []
+  type: TYPE_NORMAL
+- en: The upper-left quadrant of the figure indicates that at the beginning of the
+    first iteration the state of the four nodes in the example is such that *n*[0]
+    stores segment *s*[0] of the accumulated gradient, and so forth. During the first
+    iteration of the phase (upper-left quadrant), each node sends only the accumulated
+    segment that it stores to the successor node in the ring, overwriting and replacing
+    any previous segment values stored in the successor node.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 8.9 Python pseudocode for the all-gather phase
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Start with the first node on the first iteration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Store the gradient values of the segment on the next node in the ring.
+  prefs: []
+  type: TYPE_NORMAL
+- en: At the beginning of the second iteration (upper-right quadrant in figure 8.10),
+    every node stores exactly two complete segments of the accumulated gradient. During
+    this and the remaining iterations, every node sends the segment received during
+    the previous iteration (e.g., *s*[3] in case of *n*[0] during the second iteration)
+    to the successor node in the ring. The last iteration (lower-right quadrant) completes
+    the transfer of the remaining segments of the gradient to the nodes in the cluster.
+    At the conclusion of this phase (lower-left quadrant) the accumulated gradient
+    *g*[0] + *g*[1] + *g*[2] + *g*[3] is available on every node in the ring cluster.
+  prefs: []
+  type: TYPE_NORMAL
+- en: At this point, printing the gradients of the model on each node,
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'outputs four identical gradient values for every node in the ring:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: Listing 8.10 Horovod ring-based distributed gradient descent algorithm
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This should output the recovered multivariable linear regression coefficients:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: Summary
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Distributed data parallel training is an approach to distributed gradient descent
+    where each node in a scale-out cluster uses an identical copy of the trained model
+    but a dedicated shard of the training data set.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The gradient accumulation feature of the reverse-mode accumulating autodiff
+    enables gradient descent to scale down to limited memory nodes or scale up to
+    out-of-memory data sets.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Legacy parameter server-based approaches to distributed data parallel gradient
+    descent require expensive, broadcast-style networking operations and do not scale
+    well under bandwidth constraints.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Horovod is a scalable and bandwidth-efficient algorithm for distributed data
+    parallel gradient descent based on two phases of ring-based networking operations:
+    reduce-scatter and all-gather.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: ^(1.)This feature of autodiff is covered in detail in chapter 5.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '^(2.)For example, many deep learning models are initialized using Kaiming initialization:
+    [http://mng.bz/5K47](http://mng.bz/5K47).'
+  prefs: []
+  type: TYPE_NORMAL
