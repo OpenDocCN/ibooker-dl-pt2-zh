@@ -1792,16 +1792,19 @@
   id: totrans-285
   prefs: []
   type: TYPE_NORMAL
+  zh: 实际上，模型并行仅用于那些太大而无法放在任何单个设备上的模型：它不是用于加速常规模型训练的方法，而是用于训练更大模型的方法。我们不会在这些页面上涵盖模型并行性；相反，我们将专注于你大部分时间都会使用的数据并行性。让我们看看它是如何工作的。
 - en: GETTING YOUR HANDS ON TWO OR MORE GPUS
   id: totrans-286
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 获取两个或更多 GPU
 - en: 'First, you need to get access to several GPUs. You will need to do one of two
     things:'
   id: totrans-287
   prefs: []
   type: TYPE_NORMAL
+  zh: 首先，你需要获取几个 GPU 的访问权限。你需要做以下两件事之一：
 - en: Acquire two to four GPUs, mount them on a single machine (it will require a
     beefy power supply), and install CUDA drivers, cuDNN, and so on. For most people,
     this isn’t the best option.
@@ -1809,6 +1812,7 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 获得两到四个 GPU，将它们安装在一台机器上（这将需要一个强大的电源供应器），并安装 CUDA 驱动程序、cuDNN 等。对于大多数人来说，这不是最佳选择。
 - en: Rent a multi-GPU virtual machine (VM) on Google Cloud, Azure, or AWS You’ll
     be able to use VM images with preinstalled drivers and software, and you’ll have
     very little setup overhead. This is likely the best option for anyone who isn’t
@@ -1817,88 +1821,108 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 在 Google Cloud、Azure 或 AWS 上租用一个多 GPU 虚拟机（VM）。你可以使用预安装了驱动程序和软件的 VM 映像，并且几乎没有设置开销。对于那些不是全天候训练模型的人来说，这可能是最佳选择。
 - en: We won’t cover the details of how to spin up multi-GPU cloud VMs, because such
     instructions would be relatively short-lived, and this information is readily
     available online.
   id: totrans-290
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们不会涵盖如何启动多 GPU 云 VM 的详细信息，因为这样的说明相对来说是短暂的，并且这些信息在网上很容易找到。
 - en: SINGLE-HOST, MULTIDEVICE SYNCHRONOUS TRAINING
   id: totrans-291
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 单主机、多设备同步训练
 - en: 'Once you’re able to call library(tensorflow) on a machine with multiple GPUs,
     you’re seconds away from training a distributed model. It works like this:'
   id: totrans-292
   prefs: []
   type: TYPE_NORMAL
+  zh: 一旦你能在拥有多个 GPU 的计算机上调用 library(tensorflow)，你距离训练分布式模型只有几秒钟的时间。它的工作方式如下：
 - en: library(tensorflow)
   id: totrans-293
   prefs: []
   type: TYPE_NORMAL
+  zh: library(tensorflow)
 - en: strategy <- tf$distribute$MirroredStrategy()➊
   id: totrans-294
   prefs: []
   type: TYPE_NORMAL
+  zh: strategy <- tf$distribute$MirroredStrategy()➊
 - en: cat("Number of devices:", strategy$num_replicas_in_sync, "\n")
   id: totrans-295
   prefs: []
   type: TYPE_NORMAL
+  zh: cat("设备数量:", strategy$num_replicas_in_sync, "\n")
 - en: with(strategy$scope(), { ➋
   id: totrans-296
   prefs: []
   type: TYPE_NORMAL
+  zh: with(strategy$scope(), { ➋
 - en: model <- get_compiled_model()➌
   id: totrans-297
   prefs: []
   type: TYPE_NORMAL
+  zh: model <- get_compiled_model()➌
 - en: '})'
   id: totrans-298
   prefs: []
   type: TYPE_NORMAL
+  zh: '})'
 - en: model %>% fit(➍
   id: totrans-299
   prefs: []
   type: TYPE_NORMAL
+  zh: model %>% fit(➍
 - en: train_dataset,
   id: totrans-300
   prefs: []
   type: TYPE_NORMAL
+  zh: train_dataset,
 - en: epochs = 100,
   id: totrans-301
   prefs: []
   type: TYPE_NORMAL
+  zh: epochs = 100,
 - en: validation_data = val_dataset,
   id: totrans-302
   prefs: []
   type: TYPE_NORMAL
+  zh: validation_data = val_dataset,
 - en: callbacks = callbacks
   id: totrans-303
   prefs: []
   type: TYPE_NORMAL
+  zh: callbacks = callbacks
 - en: )
   id: totrans-304
   prefs: []
   type: TYPE_NORMAL
+  zh: )
 - en: ➊ **Create a "distribution strategy" object. MirroredStrategy() should be your
     go-to solution.**
   id: totrans-305
   prefs: []
   type: TYPE_NORMAL
+  zh: ➊ **创建一个“分发策略”对象。MirroredStrategy() 应该是你的首选解决方案。**
 - en: ➋ **Use it to open a "strategy scope."**
   id: totrans-306
   prefs: []
   type: TYPE_NORMAL
+  zh: ➋ **使用它来打开“策略范围”。**
 - en: ➌ **Everything that creates variables should be under the strategy scope. In
     general, this is only model construction and compile().**
   id: totrans-307
   prefs: []
   type: TYPE_NORMAL
+  zh: ➌ **所有创建变量的操作都应该在策略范围内。一般来说，这只涉及模型构建和编译（compile()）。**
 - en: ➍ **Train the model on all available devices.**
   id: totrans-308
   prefs: []
   type: TYPE_NORMAL
+  zh: ➍ **在所有可用设备上训练模型。**
 - en: 'These few lines implement the most common training setup: *single-host, multidevice
     synchronous training*, also known in TensorFlow as the “mirrored distribution
     strategy.” “Single host” means that the different GPUs considered are all on a
@@ -1909,6 +1933,8 @@
   id: totrans-309
   prefs: []
   type: TYPE_NORMAL
+  zh: 这几行代码实现了最常见的训练设置：*单主机、多设备同步训练*，在 TensorFlow 中也称为“镜像分布策略”。“单主机”意味着考虑的不同 GPU 都在一台机器上（而不是许多机器的集群，每台机器都有自己的
+    GPU，在网络上进行通信）。“同步训练”意味着每个 GPU 模型副本的状态始终保持一致——在分布式训练的变体中，情况可能并非如此。
 - en: 'When you open a MirroredStrategy() scope and build your model within it, the
     MirroredStrategy() object will create one model copy (replica) on each available
     GPU. For example, if you have two GPUs, then each step of training unfolds in
@@ -1916,11 +1942,14 @@
   id: totrans-310
   prefs: []
   type: TYPE_NORMAL
+  zh: 当你在 MirroredStrategy() 范围内打开并在其中构建模型时，MirroredStrategy() 对象将在每个可用 GPU 上创建一个模型副本（replica）。例如，如果你有两个
+    GPU，那么每一步训练的过程如下（见 [图 13.2](#fig13-2)）：
 - en: '**1** A batch of data (called the *global batch*) is drawn from the dataset.'
   id: totrans-311
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: '**1** 从数据集中抽取一批数据（称为*全局批次*）。'
 - en: '**2** It gets split into two different sub-batches (called *local batches*).
     For instance, if the global batch has 256 samples, each of the two local batches
     will have 128 samples. Because you want local batches to be large enough to keep
@@ -2127,32 +2156,38 @@
   id: totrans-347
   prefs: []
   type: TYPE_NORMAL
+  zh: 在理想的情况下，使用 *N* 个GPU进行训练将会导致速度提升 *N* 倍。然而，在实践中，分布式训练会引入一些开销，特别是，合并来自不同设备的权重增量需要一些时间。你获得的有效加速度取决于所使用的GPU数量：
 - en: With two GPUs, the speedup stays close to 2×.
   id: totrans-348
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用两个GPU，加速度接近 2×。
 - en: With four, the speedup is around 3.8×.
   id: totrans-349
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用四个GPU时，速度提升约为 3.8×。
 - en: With eight, it’s around 7.3×
   id: totrans-350
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用八个GPU时，速度提升约为 7.3×。
 - en: This assumes that you’re using a large enough global batch size to keep each
     GPU used at full capacity. If your batch size is too small, the local batch size
     won’t be enough to keep your GPUs busy.
   id: totrans-351
   prefs: []
   type: TYPE_NORMAL
+  zh: 这假设你使用了足够大的全局批次大小，以使每个GPU都保持满负荷运行。如果你的批次大小太小，本地批次大小将不足以使GPU保持忙碌状态。
 - en: 13.2.3 TPU training
   id: totrans-352
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 13.2.3 TPU 训练
 - en: Beyond just GPUs, there is a trend in the deep learning world toward moving
     work-flows to increasingly specialized hardware designed specifically for deep
     learning workflows (such single-purpose chips are known as ASICs—application-specific
@@ -2162,12 +2197,15 @@
   id: totrans-353
   prefs: []
   type: TYPE_NORMAL
+  zh: 除了GPU之外，在深度学习世界中存在一种趋势，即将工作流程转移到专门设计用于深度学习工作流程的越来越专业的硬件上（这些专用芯片被称为ASICs——特定应用集成电路）。各种大大小小的公司都在研发新的芯片，但如今这方面最突出的努力是Google的Tensor
+    Processing Unit（TPU），它可在Google Cloud和Google Colab上使用。
 - en: 'Training on a TPU does involve jumping through some hoops, but it can be worth
     the extra work: TPUs are really, really fast. Training on a TPU V2 will typically
     be 15× faster than training an NVIDIA P100 GPU.'
   id: totrans-354
   prefs: []
   type: TYPE_NORMAL
+  zh: 在TPU上进行训练确实涉及一些复杂的步骤，但额外的工作可能是值得的：TPU的速度非常快。在TPU V2上进行训练通常比训练NVIDIA P100 GPU快15倍。
 - en: 'Here are some tips when using TPUs: when you’re using the GPU runtime in the
     cloud, your models have direct access to the GPU without you needing to do anything
     special. This isn’t true for the TPU runtime; there’s an extra step you need to
@@ -2176,31 +2214,38 @@
   id: totrans-355
   prefs: []
   type: TYPE_NORMAL
+  zh: 使用TPU时有一些技巧：当你在云中使用GPU运行时，你的模型可以直接访问GPU，无需进行任何特殊操作。但对于TPU运行时，情况并非如此；在构建模型之前，你需要执行额外的步骤：连接到TPU集群。操作如下：
 - en: tpu <- tf$distribute$cluster_resolver$TPUClusterResolver$connect()
   id: totrans-356
   prefs: []
   type: TYPE_NORMAL
+  zh: tpu <- tf$distribute$cluster_resolver$TPUClusterResolver$connect()
 - en: cat("Device:", tpu$master(), "\n")
   id: totrans-357
   prefs: []
   type: TYPE_NORMAL
+  zh: cat("Device:", tpu$master(), "\n")
 - en: strategy <- tf$distribute$TPUStrategy(tpu)➊
   id: totrans-358
   prefs: []
   type: TYPE_NORMAL
+  zh: 策略 <- tf$distribute$TPUStrategy(tpu)➊
 - en: with(strategy$scope(), { … })
   id: totrans-359
   prefs: []
   type: TYPE_NORMAL
+  zh: with(strategy$scope(), { … })
 - en: ➊ **Use TPUStrategy() just like tf$distribute$MirroredStrategy().**
   id: totrans-360
   prefs: []
   type: TYPE_NORMAL
+  zh: ➊ **像使用tf$distribute$MirroredStrategy()一样使用TPUStrategy()。**
 - en: You don’t have to worry too much about what this does—it’s just a little incantation
     that connects your runtime to the device. Open sesame.
   id: totrans-361
   prefs: []
   type: TYPE_NORMAL
+  zh: 你不必太担心这是做什么的——这只是一个将你的运行时连接到设备的小咒语。打开吧。
 - en: Much like in the case of multi-GPU training, using the TPU requires you to open
     a distribution strategy scope—in this case, a TPUStrategy() scope. TPUStrategy()
     fol-lows the same distribution template as MirroredStrategy()—the model is replicated
@@ -2208,6 +2253,7 @@
   id: totrans-362
   prefs: []
   type: TYPE_NORMAL
+  zh: 与多GPU训练类似，使用TPU也需要你打开一个分布策略作用域——在这种情况下是TPUStrategy()作用域。TPUStrategy()遵循与MirroredStrategy()相同的分布模板——模型会被复制一次，每个TPU核心一个，而且这些副本会保持同步。
 - en: 'Note there’s something else a bit curious about the TPU runtime: it’s a two-VM
     setup, meaning that the VM that hosts your notebook runtime isn’t the same VM
     that the TPU lives in. Because of this, you won’t be able to train from files
@@ -2217,12 +2263,14 @@
   id: totrans-363
   prefs: []
   type: TYPE_NORMAL
+  zh: 请注意，TPU运行时还有一点有趣的地方：它是一个双VM设置，这意味着托管笔记本运行时的VM与TPU所在的VM不同。因此，你将无法从存储在本地磁盘上的文件进行训练（即，从托管实例的VM链接的磁盘）。TPU运行时无法从那里读取。关于数据加载，你有两个选择：
 - en: Train from data that lives in the memory of the VM (not on disk). If your data
     is in an R array, this is what you’re already doing.
   id: totrans-364
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 从存储在VM内存中的数据进行训练（而不是在磁盘上）。如果你的数据是在R数组中，那么你已经在做这个了。
 - en: Store the data in a Google Cloud Storage (GCS) bucket, and create a dataset
     that reads the data directly from the bucket, without downloading locally. The
     TPU runtime can read data from GCS. This is your only option for datasets that
@@ -2338,3 +2386,5 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 你甚至可以通过使用 TPUStrategy() API 在 Google 的 TPU 上进行训练。如果你的模型很小，请确保利用步骤融合（通过 compile(…,
+    steps_per_execution = N) 参数）充分利用 TPU 核心。
