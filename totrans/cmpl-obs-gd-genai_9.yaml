@@ -1,0 +1,368 @@
+- en: 9 Building and Running Your Own Large Language Model
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter covers
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Why you might want to build your own large language model
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Selecting an LLM model to serve as your base for a custom configuration
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: How (in very general terms) model fine tuning works
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Build (or modify) your own LLM? But didn’t OpenAI (and their investors) spend
+    billions of dollars optimizing and training their GPT? Is it possible to generate
+    even remotely competitive results through a do-it-yourself project using local
+    hardware?
+  prefs: []
+  type: TYPE_NORMAL
+- en: Incredibly, at this point in the whirlwind evolution of LLM technologies, the
+    answer to that question is "yes." Due to the existence of Meta’s open source LLaMA
+    model, an unauthorized leak of the model’s weights (Which I’ll explain in just
+    a moment), and a lot of remarkable public contributions, there are now hundreds
+    of high-powered but resource-friendly LLMs available for anyone to download, optionally
+    modify, and run.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Having said that, if operating at this depth of technology tinkering isn’t your
+    thing - and especially if you don’t have access to the right kind of hardware
+    - feel free to skip to the next chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 9.1 Some background to building your own model
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Before we explain how all that works, we should address the bigger question:
+    why would anyone *want* to build their own LLM? Here are some things worth considering:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: By building your own LLM, you have greater control over its architecture, training
+    data, and fine-tuning. This allows you to tailor the model specifically to your
+    needs and domain. You can optimize it for a particular task, industry, or application,
+    which may lead to improved performance and more accurate results.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Some organizations may have strict data privacy requirements or sensitive information
+    that cannot be shared with a third-party service. In fact, Samsung recently banned
+    its employees from using GPT or Bard out of fear that their interactions could
+    inadvertently leak proprietary company information. Building your own LLM ensures
+    that all data and processing remain within your organization, reducing privacy
+    and security concerns.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If your application requires specialized knowledge or operates in a niche domain,
+    building your own LLM allows you to incorporate specific data sources and domain
+    expertise into the training process. This can enhance the model’s understanding
+    and generate more relevant responses tailored to your specific domain.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Pretrained models like GPT are designed to be general-purpose and work reasonably
+    well across various domains. However, for specific tasks, building a custom LLM
+    can potentially result in improved performance and efficiency. You can optimize
+    the architecture, training methods, and configuration settings to achieve better
+    results on your particular use case.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Building your own LLM gives you ownership and control over the model’s intellectual
+    property. You can modify, extend, and distribute the model to meet your requirements,
+    without being bound by the limitations or licensing agreements associated with
+    using existing models.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In the wake of the Meta leak, many smart individuals in the community focused
+    their attention on building LLM variations that could accomplish much more with
+    much less hardware. Quantization, for instance, involved compressing models so
+    they could even run on computers without graphic processor unit (GPUs). Ultra
+    efficient fine tuning techniques, including something called Low-Rank Adaptation
+    (LoRA), allowed for model fine tuning that consumes a tiny fraction of the resources
+    and time that were previously required.
+  prefs: []
+  type: TYPE_NORMAL
+- en: All of this was noted in a [widely-read internal Google document](p.html) that
+    somehow found its way to the open internet. The unknown author forcefully made
+    the point that the big players - including OpenAI, Meta, and Google - had, for
+    all intents and purposes, lost their competitive advantage in the AI space. From
+    here on in, big advances in the technology would be happening out in the wild,
+    far beyond the control of either big companies or governments.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'So why you might want your own LLM? Because, at this point, it’s possible to
+    enjoy whole new levels of customization and optimization. How will it work? Well,
+    since there’s really no reason I can think of that you would want to start your
+    own LLM project from the bottom up, I’ll assume you’re interested in an existing
+    platform. That’ll leave you with three choices: a model, a set of weights, and
+    whether you’ll also want to fine tune the model you do choose.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Building an LLM can mean different things to different people, and that’s because
+    what we call "LLMs" are made up of multiple moving parts. Technically, there’s
+    input encoding, the neural network architecture, an embedding layer, hidden layers,
+    an attention mechanism, training data, a decoding algorithm and boatloads of training
+    data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To be honest, I don’t really fully understand what most of those are or what
+    they’re supposed to do. For our purposes right now, it’s enough to think of the
+    code defining the encoding and general architecture as the *model* and, for transformer-based
+    LLMs at least (in other words, LLMs that are meant to work like GPT), and the
+    "attention mechanism" as being responsible for defining the *weights*. An attention
+    mechanism, by the way, permits the modelling of context and relationships between
+    words or tokens in a more sophisticated manner.
+  prefs: []
+  type: TYPE_NORMAL
+- en: What exactly are weights? In a neural network, each connection between neurons
+    is assigned a weight, which represents the strength or importance of that connection.
+    For a model, these weights are learnable parameters that are adjusted during the
+    training process, where the LLM is exposed to a large amount of training data
+    and learns to predict the next word or generate coherent text.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The weights determine how information flows through the network and how it influences
+    the final predictions or outputs of the LLM. By adjusting the weights, the model
+    can learn to assign higher importance to certain input features or patterns and
+    make more accurate predictions based on the training data it has been exposed
+    to. Without weights an LLM model is pretty much useless.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 9.2 Selecting a base LLM model for configuration
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: An excellent place to begin your research is the [Hugging Face Open LLM Leaderboard](HuggingFaceH4.html)
+    which lists the evaluated performance of many freely available transformer-based
+    LLMs. You can toggle each of the assessment columns to narrow down your search
+    by specific features. Those features include "ARC" - the A12 Reasoning Challenge
+    - which tests models on how they answer questions about high school science. Clicking
+    the About tab on that page will give you excellent descriptions of all the assessment
+    criteria.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As you browse the alternatives in that list, you’ll see that there are a few
+    key *families* of LLMs, like Meta’s LLaMA and Together Computer’s RedPajama. There
+    are also models that were derived from other models. [OpenLLaMA](openlm-research.html),
+    for instance, is a "reproduction of Meta AI’s LLaMA 7B" model that was "trained
+    on the RedPajama dataset."
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You’ll notice how model names usually include their parameter size (in billions):
+    7B, 13B, 33B, 65B, etc. As a rule, the more parameters used to build a model,
+    the better hardware you’ll need to run it. Clicking through to the individual
+    documentation pages for a model will often show you how many *tokens* were used
+    for the model’s training. A larger model might have incorporated well over a trillion
+    tokens.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Once you’ve selected a model, you’ll normally head over to its GitHub page where
+    there will usually be instructions for usage and for how to clone or download
+    the model itself. A good example of that is [the llama.cpp LLaMA inference](tree.html).
+    But even once you’ve got the software on your machine, you’ll usually still need
+    to download a set of weights separately.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Why don’t they just bundle weights with their models? For one thing, you might
+    need a custom combination for your specific task. But there’s something else going
+    on, too. Some weight sets are [available only once your request is approved](1FAIpQLSfqNECQnMkycAp2jP4Z9TFX0cGR4uf7b_fBxjY_OjhJILlKGA.html).
+    And many of the sets that are freely available come from…​shall we say…​dubious
+    sources. In that context, it’s probably just not practical to offer them all together
+    in one place.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Having said that, the [Alpaca-LoRA](tloen.html) and [RedPajama-INCITE-3B](blog.html)
+    models come with scripts that can fetch a weight set for you as part of the build
+    process. We’ll walk through a RedPyjama build example in just a minute.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'One final consideration when choosing an LLM: you’ll need to make sure that
+    the model will run on the hardware you’ve got. Because of their heavy reliance
+    on compute processing power, most models require graphic processor units (GPUs)
+    and, sometimes, significant free dedicated *video RAM* memory. If you’re planning
+    to use a regular consumer laptop or desktop for the task, make sure you’re working
+    with a CPU-only model. Alternatively, you can always rent all the GPU-power you
+    need from a cloud provider like [Amazon Web Services](nvidia.html).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 9.3 Configuring and building your model
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: If you try the following instructions for yourself, you may find yourself chugging
+    along happily as your LLM builds when, suddenly, everything grinds to a screeching
+    halt. "But" you exclaim, "I followed the model’s instructions perfectly."
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You did indeed. Too perfectly, in fact. You see, those instructions will often
+    require just a bit of customization before they’ll work. The most common change
+    involves this command parameter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'That `/path/to/downloaded/…​` bit is supposed to be updated to reflect the
+    actual file system location where the `.bin` pretrained weights files you’re supposed
+    to have downloaded is stored. Which might look something like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This [documentation page](blog.html) nicely walks us through the downloading
+    and launch of their model. You’d begin by cloning the base archive:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: You will then run `make` to, in this case, build the environment necessary for
+    a quantized (compressed) chat session.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This script will actually download and build the appropriate set of quantized
+    weights:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: Finally, you can fire up the chat with the `redpajama-chat` command that targets
+    the `ggml-RedPajama-INCITE-Chat-3B-v1-f16.bin` weights file and passes a long
+    list of configuration parameters (any of which can be altered to fit your needs).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: The Git archive comes with Python scripts to help you further customize your
+    experience. You can, for instance, experiment with various quantized methods by
+    passing arguments like `--quantize-output-type q4_1` against the `./examples/redpajama/scripts/quantize-gptneox.py`
+    script.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 9.4 Fine tuning your model
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Fine tuning involves much more work than the configuration we just saw. If you’ve
+    got a GPU, then you can consider fine tuning downloaded models for yourself. As
+    a benchmark, one popular high-end GPU card that’ll work for many LLM build operations
+    would include the Nvidia 3090 that was, once upon a time, primarily marketed for
+    gaming computers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As far as I can tell (never having owned one myself) the 3090 will come with
+    24GB of graphics RAM. That, apparently, will be good enough for fine tuning using
+    the [efficient LoRA method](training.html) we mentioned earlier. Otherwise, you
+    might have to chain together *multiple* Nvidia 3090s. That won’t be cheap (3090s
+    seem to go for $1,400 or so each), but it’s still in a different galaxy from the
+    way OpenAI, Meta, and Google have been doing things.
+  prefs: []
+  type: TYPE_NORMAL
+- en: One difference between fine tuning and simply configuring a model (the way we
+    just saw) is that fine tuning involves re-training your model on data sets typically
+    consisting of hundreds of billions of tokens (each of which us roughly equivalent
+    to a single word). It’s these large sets that, hopefully, allow the model to capture
+    general language patterns and knowledge. The real customization happens here,
+    where you’re free to use your own data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Having said all that, I’m not going to show you how any of this works on a practical
+    level. Not only do I lack the hardware to make it work, but I suspect that’s also
+    true for you. But it is worth at least thinking about it in general terms.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 9.4.1 Creating a data set
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: To build a model that’s specialized for use by lawyers or medical professionals,
+    as an example, you’d want a data set that’s heavy on legal or medical content.
+    But given the sheer volume of content necessary to train an effective model, you
+    can appreciate why you’ll want some more powerful hardware.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Building your data set and then executing the fine tuning build are way past
+    the scope of this book. Not to mention, of course, that the way they’re done will
+    almost certainly have changed unrecognizably by the time your read these words.
+    So if there’s a fine tuning event somewhere in your future this, sadly, is not
+    where you’re going to find out how it’ll go.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 9.4.2 Training your model
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Because they’re terms used a lot in the context of training and fine tuning
+    LLMs, I should briefly describe the **zero-shot** and **few-shot** approaches
+    to model training. Both zero-shot and few-shot training will normally follow the
+    pre-training phrase where the model is exposed to its large training data sets.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Zero-shot learning involves using a language model to perform a task for which
+    it hasn’t received any specific training. Instead, it leverages its general language
+    understanding to complete the task based on a prompt or instruction. The key idea
+    is that the model can generalize from its pre-trained knowledge and adapt it to
+    the new task at hand. By providing a detailed prompt that specifies the desired
+    task and format, the model can generate relevant outputs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example, you can instruct the model with a zero-shot prompt like, "Translate
+    the following English sentence into French: Hello, how are you?" even if the model
+    hasn’t been fine-tuned specifically for translation tasks. The model will then
+    generate the translated output based on its understanding of language and the
+    prompt.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Few-shot learning involves providing a limited amount of task-specific training
+    examples or demonstrations to the language model, allowing it to quickly adapt
+    to the new task. While zero-shot learning doesn’t involve any task-specific training,
+    few-shot learning provides a small number of examples to help the model better
+    understand the task. By conditioning the model on these few examples, it can learn
+    to perform the desired task more accurately.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For instance, if you want the model to summarize news articles, you might provide
+    a few examples of article summaries along with the articles themselves. The model
+    can then use this information to generate summaries for other articles.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Both zero-shot and few-shot learning approaches allow language models to perform
+    various tasks without requiring extensive fine-tuning or training on large datasets.
+    They showcase the impressive generalization capabilities of these models, enabling
+    them to apply their language understanding to a wide range of tasks.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 9.5 Summary
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Custom-build large language models can solve problems for which off-the-shelf
+    models aren’t appropriate
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Configuring your own model requires starting with a base LLM
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Fine tuning your a new model requires access to your own data set and significant
+    hardware resources
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
