@@ -911,26 +911,32 @@
   id: totrans-116
   prefs: []
   type: TYPE_NORMAL
+  zh: ❷ 将训练请求加入队列
 - en: ❸ Returns the job ID
   id: totrans-117
   prefs: []
   type: TYPE_NORMAL
+  zh: ❸ 返回作业ID
 - en: ❹ Four different job lists to track job status
   id: totrans-118
   prefs: []
   type: TYPE_NORMAL
+  zh: ❹ 跟踪工作状态的四个不同作业列表
 - en: ❺ Generates job ID
   id: totrans-119
   prefs: []
   type: TYPE_NORMAL
+  zh: ❺ 生成作业ID
 - en: ❻ Starts the job at the waiting queue
   id: totrans-120
   prefs: []
   type: TYPE_NORMAL
+  zh: ❻ 在等待队列中启动作业
 - en: Launching a training job (container)
   id: totrans-121
   prefs: []
   type: TYPE_NORMAL
+  zh: 启动训练作业（容器）
 - en: Once the job is in the waiting queue, the Docker job tracker will process it
     when there are enough system resources. Figure 3.6 shows the entire process. The
     Docker job tracker monitors the job-waiting queue and picks up the first available
@@ -943,19 +949,24 @@
   id: totrans-122
   prefs: []
   type: TYPE_NORMAL
+  zh: 一旦作业在等待队列中，当本地Docker引擎有足够的系统资源时，Docker作业跟踪器将处理它。图3.6展示了整个过程。Docker作业跟踪器监控作业等待队列，并在本地Docker引擎有足够容量时挑选出第一个可用作业（图3.6中的第1步）。然后，Docker作业跟踪器通过启动Docker容器执行模型训练作业（步骤2）。容器成功启动后，跟踪器将作业对象从作业队列移动到启动列表队列（步骤3）。图3.6的代码实现（`training-service/src/main/java/org/orca3/miniAutoML/training/
+    tracker/DockerTracker.java`）在清单3.4中突出显示。
 - en: '![](../Images/03-06.png)'
   id: totrans-123
   prefs: []
   type: TYPE_IMG
+  zh: '![图3.6](../Images/03-06.png)'
 - en: 'Figure 3.6 The training job launching workflow: the Docker job tracker launches
     training containers from the job queue when it has the capacity.'
   id: totrans-124
   prefs: []
   type: TYPE_NORMAL
+  zh: 图3.6 训练作业启动工作流程：当Docker作业跟踪器具有足够的容量时，它会从作业队列中启动训练容器。
 - en: Listing 3.4 Launching a training container with DockerTracker
   id: totrans-125
   prefs: []
   type: TYPE_NORMAL
+  zh: 清单3.4 使用 DockerTracker 启动训练容器
 - en: '[PRE5]'
   id: totrans-126
   prefs: []
@@ -965,40 +976,49 @@
   id: totrans-127
   prefs: []
   type: TYPE_NORMAL
+  zh: ❶ 检查系统的容量
 - en: ❷ Launches the training Docker container
   id: totrans-128
   prefs: []
   type: TYPE_NORMAL
+  zh: ❷ 启动训练Docker容器
 - en: ❸ Converts training parameters into environment variables
   id: totrans-129
   prefs: []
   type: TYPE_NORMAL
+  zh: ❸ 将训练参数转换为环境变量
 - en: ❹ Builds the Docker launch command
   id: totrans-130
   prefs: []
   type: TYPE_NORMAL
+  zh: ❹ 构建Docker启动命令
 - en: ❺ Sets the Docker image name; the value is from the algorithm name parameter.
   id: totrans-131
   prefs: []
   type: TYPE_NORMAL
+  zh: ❺ 设置Docker镜像名称；其值来自算法名称参数。
 - en: ❻ Passes the training parameter to the Docker container as environment variables
   id: totrans-132
   prefs: []
   type: TYPE_NORMAL
+  zh: ❻ 将训练参数作为环境变量传递给Docker容器
 - en: ❼ Runs the Docker container
   id: totrans-133
   prefs: []
   type: TYPE_NORMAL
+  zh: ❼ 运行Docker容器
 - en: It is important to note that the training parameters defined in the `train`
     API request are passed to the training container (training code) as environment
     variables by the `launch` function in code listing 3.4.
   id: totrans-134
   prefs: []
   type: TYPE_NORMAL
+  zh: 需要注意的是，在代码清单3.4中，`launch`函数将`train` API请求中定义的训练参数作为环境变量传递给训练容器（训练代码）。
 - en: Tracking training progress
   id: totrans-135
   prefs: []
   type: TYPE_NORMAL
+  zh: 跟踪训练进度
 - en: During the last step, the Docker job tracker continues tracking each job by
     monitoring its container’s execution status. When it detects a container status
     change, the job tracker moves the container’s job object to the corresponding
@@ -1006,6 +1026,7 @@
   id: totrans-136
   prefs: []
   type: TYPE_NORMAL
+  zh: 在最后一步，Docker作业跟踪器通过监控其容器的执行状态继续跟踪每个作业。当它检测到容器状态发生变化时，作业跟踪器将容器的作业对象移到内存存储中相应的作业列表中。
 - en: The job tracker will query the Docker runtime to fetch the container’s status.
     For example, if a job’s Docker container starts running, the job tracker will
     detect the change and put the job in the “running job list”; if a job’s Docker
@@ -1017,19 +1038,23 @@
   id: totrans-137
   prefs: []
   type: TYPE_NORMAL
+  zh: 作业跟踪器将查询Docker运行时以获取容器的状态。例如，如果作业的Docker容器开始运行，作业跟踪器将检测到此更改，并将作业放入“运行中作业列表”；如果作业的Docker容器完成，则作业跟踪器将作业移动到“已完成的作业列表”。作业跟踪器将在将作业放置在“已完成的作业列表”后停止检查作业状态，这意味着训练已完成。图3.7描述了此作业跟踪工作流程。清单3.5突出显示了此作业跟踪过程的实现。
 - en: '![](../Images/03-07.png)'
   id: totrans-138
   prefs: []
   type: TYPE_IMG
+  zh: '![图3.7](../Images/03-07.png)'
 - en: Figure 3.7 The Docker job tracker monitors the Docker container execution status
     and updates the job queues.
   id: totrans-139
   prefs: []
   type: TYPE_NORMAL
+  zh: 图3.7 Docker作业跟踪器监视Docker容器的执行状态并更新作业队列。
 - en: Listing 3.5 DockerTracker monitoring Docker and updating the job status
   id: totrans-140
   prefs: []
   type: TYPE_NORMAL
+  zh: 清单3.5 DockerTracker 监控 Docker 并更新作业状态
 - en: '[PRE6]'
   id: totrans-141
   prefs: []
@@ -1039,19 +1064,23 @@
   id: totrans-142
   prefs: []
   type: TYPE_NORMAL
+  zh: ❶ 检查启动作业列表中所有作业的容器状态
 - en: ❷ Queries the container’s execution status
   id: totrans-143
   prefs: []
   type: TYPE_NORMAL
+  zh: ❷ 查询容器的执行状态
 - en: ❸ Checks the container status for all jobs in the running job list
   id: totrans-144
   prefs: []
   type: TYPE_NORMAL
+  zh: ❸ 检查运行中作业列表中所有作业的容器状态
 - en: 3.3.5 Updating and fetching job status
   id: totrans-145
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 3.3.5 更新和获取作业状态
 - en: 'Now that you have seen how a training request is executed in the training service,
     let’s move on to the last stop of the code tour: obtaining the training execution
     status. After launching a training job, we can query the `GetTrainingStatus` API
@@ -1060,14 +1089,18 @@
   id: totrans-146
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在您已经看到了训练请求在训练服务中是如何执行的，让我们继续前往代码之旅的最后一站：获取训练执行状态。启动训练作业后，我们可以查询`GetTrainingStatus`
+    API 来获取训练状态。作为提醒，我们将图 3.5 重新发布，呈现为图 3.8，显示了服务的高级设计，如下所示。
 - en: '![](../Images/03-08.png)'
   id: totrans-147
   prefs: []
   type: TYPE_IMG
+  zh: '![](../Images/03-08.png)'
 - en: Figure 3.8 A high-level service design and user workflow
   id: totrans-148
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 3.8 高级服务设计和用户工作流程
 - en: Based on figure 3.8, we can see that obtaining the training status needs only
     one step, 1.b. Also, the latest status of a training job can be determined by
     finding which job list (in the memory store) contains the `jobId`. See the following
@@ -1075,10 +1108,12 @@
   id: totrans-149
   prefs: []
   type: TYPE_NORMAL
+  zh: 根据图 3.8，我们可以看到获取训练状态只需要一步，即 1.b。此外，通过查找哪个作业列表（在内存存储中）包含`jobId`，可以确定训练作业的最新状态。请参阅以下代码以查询训练作业/请求的状态（`training-service/src/main/java/org/orca3/miniAutoML/training/TrainingService.java`）。
 - en: Listing 3.6 Training status implementation
   id: totrans-150
   prefs: []
   type: TYPE_NORMAL
+  zh: 清单 3.6 训练状态实现
 - en: '[PRE7]'
   id: totrans-151
   prefs: []
@@ -1088,29 +1123,35 @@
   id: totrans-152
   prefs: []
   type: TYPE_NORMAL
+  zh: ❶ 在已完成的作业列表中搜索作业
 - en: ❷ Searches the job in the launching job list
   id: totrans-153
   prefs: []
   type: TYPE_NORMAL
+  zh: ❷ 在启动作业列表中搜索作业
 - en: ❸ Searches the job in the running job list
   id: totrans-154
   prefs: []
   type: TYPE_NORMAL
+  zh: ❸ 在运行中的作业列表中搜索作业
 - en: ❹ The job is still in the waiting job queue.
   id: totrans-155
   prefs: []
   type: TYPE_NORMAL
+  zh: ❹ 作业仍在等待作业队列中。
 - en: Because the Docker job tracker moves the job to the corresponding job list in
     real time, we can rely on using the job queue type to determine a training job
     status.
   id: totrans-156
   prefs: []
   type: TYPE_NORMAL
+  zh: 因为 Docker 作业跟踪器实时将作业移动到相应的作业列表中，我们可以依靠使用作业队列类型来确定训练作业的状态。
 - en: 3.3.6 The intent classification model training code
   id: totrans-157
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 3.3.6 意图分类模型训练代码
 - en: Until now, we have been working with the training service code. Now let’s look
     at the last piece, the model training code. Please do not be intimidated by the
     deep learning algorithms here. The purpose of this code example is to show you
@@ -1120,10 +1161,13 @@
   id: totrans-158
   prefs: []
   type: TYPE_NORMAL
+  zh: 到目前为止，我们一直在处理训练服务代码。现在让我们看看最后一部分，模型训练代码。请不要被这里的深度学习算法吓到。这个代码示例的目的是向您展示一个具体的示例，说明训练服务如何与模型训练代码交互。图
+    3.9 描绘了示例意图分类训练代码的工作流程。
 - en: '![](../Images/03-09.png)'
   id: totrans-159
   prefs: []
   type: TYPE_IMG
+  zh: '![](../Images/03-09.png)'
 - en: Figure 3.9 The intent classification training code workflow first reads all
     the input parameters from environment variables and then downloads the dataset,
     processes it, and starts the training loop. At the end, it uploads the output
@@ -1131,6 +1175,7 @@
   id: totrans-160
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 3.9 意图分类训练代码工作流程首先从环境变量中读取所有输入参数，然后下载数据集，处理数据集，并启动训练循环。最后，它上传输出模型文件。
 - en: Our sample training code trains a three-layer neural network to perform intent
     classification. It first obtains all the input parameters from environment variables
     that are passed by our training service (see section 3.3.4). The input parameters
@@ -1143,10 +1188,14 @@
   id: totrans-161
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们的示例训练代码训练一个三层神经网络以执行意图分类。首先，它从由我们的训练服务传递的环境变量中获取所有输入参数（请参阅第 3.3.4 节）。输入参数包括超参数（epoch
+    数、学习率等）、数据集下载设置（MinIO 服务器地址、数据集 ID、版本哈希）和模型上传设置。接下来，训练代码下载和解析数据集，并开始迭代学习过程。在最后一步中，代码将生成的模型和训练指标上传到元数据存储中。以下代码清单突出显示了前面提到的主要步骤（`train-service/text-classification/train.py`
+    和 `train-service/text-classification/Dockerfile`）。
 - en: Listing 3.7 Intent classification model training code and Docker file
   id: totrans-162
   prefs: []
   type: TYPE_NORMAL
+  zh: 清单 3.7 意图分类模型训练代码和 Docker 文件
 - en: '[PRE8]'
   id: totrans-163
   prefs: []
@@ -1784,12 +1833,14 @@
   id: totrans-244
   prefs: []
   type: TYPE_IMG
+  zh: '![](../Images/03-13.png)'
 - en: Figure 3.13 Integrating Kubeflow training operators into an existing deep learning
     system as training backend. The wrapper service can transform training requests
     to CRD objects and fetch the training status from the CRD objects.
   id: totrans-245
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 3.13 将 Kubeflow 训练运算符集成到现有深度学习系统中作为训练后端。包装器服务可以将训练请求转换为 CRD 对象，并从 CRD 对象中获取训练状态。
 - en: 'In figure 3.13, the front part of the existing system is untouched—for example,
     the front door website. At the computation backend, we changed the internal components
     and talked to the wrapper training service to execute model training. The wrapper
@@ -1801,6 +1852,9 @@
   id: totrans-246
   prefs: []
   type: TYPE_NORMAL
+  zh: 在图 3.13 中，现有系统的前端部分保持不变，例如前门网站。在计算后端，我们更改了内部组件，并与包装器训练服务对话以执行模型训练。包装器服务有三个功能：首先，它管理作业队列；其次，它将训练请求从现有格式转换为
+    Kubeflow 训练运算符的 CRD 对象；第三，它从 CRD 对象中获取训练状态。通过这种方法，通过添加包装器服务，我们可以轻松地将 Kubeflow
+    训练运算符作为任何现有深度学习平台/系统的训练后端。
 - en: Building a production-quality training system from scratch requires a lot of
     effort. You need to know not only every nuance of different training frameworks
     but also how to handle the reliability and scalability challenges on the engineering
@@ -1810,11 +1864,14 @@
   id: totrans-247
   prefs: []
   type: TYPE_NORMAL
+  zh: 从零开始构建一个生产质量的训练系统需要大量的努力。你不仅需要了解各种训练框架的微妙之处，还需要了解如何处理工程方面的可靠性和可扩展性挑战。因此，如果你决定在
+    Kubernetes 中运行模型训练，我们强烈建议采用 Kubeflow 训练运算符。这是一个开箱即用的解决方案，可以轻松移植到现有系统中。
 - en: 3.5 When to use the public cloud
   id: totrans-248
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 3.5 何时使用公有云
 - en: Major public cloud vendors like Amazon, Google, and Microsoft provide their
     deep learning platforms such as Amazon SageMaker, Google Vertex AI, and Azure
     Machine Learning Studio out of the box. All these systems claim to offer fully
@@ -1825,6 +1882,7 @@
   id: totrans-249
   prefs: []
   type: TYPE_NORMAL
+  zh: 主要的公有云供应商，如亚马逊、谷歌和微软，提供了他们的深度学习平台，如亚马逊 SageMaker、谷歌 Vertex AI 和 Azure 机器学习工作室，一应俱全。所有这些系统声称提供全面托管的服务，支持整个机器学习工作流程，以便快速训练和部署机器学习模型。事实上，它们不仅涵盖模型训练，还包括数据处理和存储、版本控制、故障排除、操作等方面。
 - en: In this section, we’re not going to talk about which cloud solution is the best;
     instead, we want to share our thoughts on when to use them. When we propose building
     services inside our company, such as training services or hyperparameter tuning
@@ -1835,11 +1893,14 @@
   id: totrans-250
   prefs: []
   type: TYPE_NORMAL
+  zh: 在本节中，我们不打算讨论哪种云解决方案是最好的；相反，我们想分享一下何时使用它们的想法。当我们提出在公司内部构建服务，如训练服务或超参数调整服务时，我们经常会听到诸如“我们可以使用
+    SageMaker 吗？我听说他们有一个功能……”或“你能在 Google Vertex AI 之上构建一个包装器吗？我听说……”这样的问题。这些问题有时是有效的，有时不是。你能负担得起什么真的取决于你的业务阶段。
 - en: 3.5.1 When to use a public cloud solution
   id: totrans-251
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 3.5.1 何时使用公有云解决方案
 - en: If you run a startup or want to validate your business idea quickly, using the
     public cloud AI platform is a good option. It handles all the underlying infrastructure
     management and provides a standard workflow for you to follow. As long as the
@@ -1849,6 +1910,7 @@
   id: totrans-252
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果你经营一家初创公司或想要快速验证你的业务理念，使用公有云 AI 平台是一个不错的选择。它处理所有底层基础设施管理，并为你提供了一个标准的工作流程供你遵循。只要预定义的方法对你有效，你就可以专注于开发你的业务逻辑、收集数据和实现模型算法。真正的好处在于节省了建立自己基础设施的时间，这样你就可以“早期失败，快速学习”。
 - en: Another reason to use the public cloud AI platforms is that you have only a
     few deep learning scenarios, and they fit the public cloud’s standard-use case
     well. In this event, it isn’t worth the resources to build a complicated deep
@@ -1856,21 +1918,25 @@
   id: totrans-253
   prefs: []
   type: TYPE_NORMAL
+  zh: 使用公共云AI平台的另一个原因是您只有少数深度学习场景，并且它们很好地适用于公共云的标准用例。在这种情况下，为仅几个应用程序构建复杂的深度学习系统并不值得消耗资源。
 - en: 3.5.2 When to build your own training service
   id: totrans-254
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 3.5.2 构建自己的训练服务的时机
 - en: Now, let’s talk about situations when you need to build your own training approach.
     If you have any of the following five requirements for your system, building your
     own training service is the way to go.
   id: totrans-255
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，让我们谈谈何时需要构建自己的训练方法的情况。如果您的系统具有以下五个要求之一，构建自己的训练服务是正确的选择。
 - en: Being cloud agnostic
   id: totrans-256
   prefs: []
   type: TYPE_NORMAL
+  zh: 云无关性
 - en: You can’t use Amazon SageMaker or Google Vertex AI platforms if you want your
     application to be cloud agnostic because these systems are cloud specific. Being
     cloud agnostic is important when your service stores customer data because some
@@ -1880,6 +1946,7 @@
   id: totrans-257
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果您希望您的应用程序具有云无关性，您就不能使用亚马逊SageMaker或Google Vertex AI平台，因为这些系统是特定于云的。当您的服务存储客户数据时，拥有云无关性是重要的，因为一些潜在客户对于他们不希望将数据放入的云有特定要求。您希望您的应用程序能够在各种云基础设施上无缝运行。
 - en: The common method of building a cloud-agnostic system on public clouds is to
     *only* use the foundation services, such as virtual machines (VM) and storage,
     and build your application logic on top of it. Using model training as an example,
@@ -1893,16 +1960,21 @@
   id: totrans-258
   prefs: []
   type: TYPE_NORMAL
+  zh: 在公共云上构建云无关系统的常见方法是*仅仅*使用基础服务，例如虚拟机（VM）和存储，并在其上构建您的应用程序逻辑。以模型训练为例，当使用亚马逊网络服务时，我们首先通过使用亚马逊EC2服务设置一个Kubernetes集群（Amazon弹性Kubernetes服务（Amazon
+    EKS））来管理计算资源，然后使用Kubernetes接口构建我们自己的训练服务来启动训练任务。通过这种方式，当我们需要迁移到谷歌云（GCP）时，我们可以简单地将我们的训练服务应用到GCP
+    Kubernetes集群（Google Kubernetes Engine）而不是Amazon EKS，并且大部分服务保持不变。
 - en: Reducing infrastructure cost
   id: totrans-259
   prefs: []
   type: TYPE_NORMAL
+  zh: 降低基础设施成本
 - en: Using the cloud provider’s AI platform will charge you premium dollars compared
     to operating on your own services. You may not care so much about your bill at
     the prototyping phase, but after the product is released, you certainly should.
   id: totrans-260
   prefs: []
   type: TYPE_NORMAL
+  zh: 使用云服务提供商的人工智能平台相比自行运营服务将会花费更多的资金。在原型设计阶段，您可能不太在意账单，但产品发布后，您肯定应该关心。
 - en: Using Amazon SageMaker as an example, at the time this book was written (2022),
     SageMaker charged $0.461 per hour for an m5.2xlarge type (eight virtual CPUs,
     32 GB memory) machine. If you launch an Amazon EC2 instance (VM) on this hardware
@@ -1913,10 +1985,12 @@
   id: totrans-261
   prefs: []
   type: TYPE_NORMAL
+  zh: 以亚马逊SageMaker为例，在撰写本书时（2022年），SageMaker为m5.2xlarge类型（八个虚拟CPU，32GB内存）的机器每小时收费0.461美元。如果直接在此硬件规格上启动亚马逊EC2实例（VM），则每小时收费0.384美元。通过构建自己的训练服务并直接在亚马逊EC2实例上运行，您平均可以节省近20％的模型构建成本。如果一家公司有多个团队每天进行模型训练，那么自建训练系统将使您在竞争中处于领先地位。
 - en: Customization
   id: totrans-262
   prefs: []
   type: TYPE_NORMAL
+  zh: 定制
 - en: Although the cloud AI platform gives you a lot of options for the workflow configuration,
     they are still black-box approaches. Because they are the one-for-all approach,
     these AI platforms focus on the most common scenarios. But there are always exceptions
@@ -1925,6 +1999,7 @@
   id: totrans-263
   prefs: []
   type: TYPE_NORMAL
+  zh: 尽管云AI平台为您提供了许多工作流配置选项，但它们仍然是黑匣子方法。因为它们是一刀切的方法，这些AI平台专注于最常见的场景。但总会有需要为您的业务定制的例外情况；当选择不多时，这不会是一种好的体验。
 - en: Another problem for the cloud AI platform is it always has a delay in adopting
     new technologies. For example, you have to wait for the SageMaker team’s decision
     on whether to support a training method and when to support it, and sometimes
@@ -1934,10 +2009,12 @@
   id: totrans-264
   prefs: []
   type: TYPE_NORMAL
+  zh: 云端 AI 平台的另一个问题是在采用新技术方面总是有所延迟。例如，您必须等待 SageMaker 团队决定是否支持某种训练方法以及何时支持它，而有时该决定可能不符合您的意愿。深度学习是一个快速发展的领域。构建自己的训练服务可以帮助您采用最新的研究并快速转变，从而使您在激烈的竞争中获得优势。
 - en: Passing compliance audits
   id: totrans-265
   prefs: []
   type: TYPE_NORMAL
+  zh: 通过合规审计
 - en: To be qualified to run some businesses, you need to obtain certificates for
     compliance laws and regulations—for example, HIPAA (Healthcare Insurance Portability
     and Accountability Act) or CCPA (California Consumer Privacy Act). These certifications
@@ -1949,10 +2026,13 @@
   id: totrans-266
   prefs: []
   type: TYPE_NORMAL
+  zh: 要有资格运行某些业务，您需要获得符合合规法律法规的证书，例如 HIPAA（医疗保险流动性和责任法）或 CCPA（加州消费者隐私法）。这些认证要求您不仅提供证据证明您的代码符合这些要求，还要提供您的应用程序运行的基础设施符合要求。如果您的应用程序是基于
+    Amazon SageMaker 和 Google Vertex AI 平台构建的，则它们也需要符合要求。由于云供应商是黑盒，通过合规检查清单并提供证据是一项不愉快的任务。
 - en: Authentication and authorization
   id: totrans-267
   prefs: []
   type: TYPE_NORMAL
+  zh: 身份验证和授权
 - en: Integrating authentication and authorization functionality into cloud AI platforms
     and in-house auth services (on-premises) requires a lot of effort. Many companies
     have their own version of auth services to authenticate and authorize user requests.
@@ -1964,17 +2044,22 @@
   id: totrans-268
   prefs: []
   type: TYPE_NORMAL
+  zh: 将身份验证和授权功能集成到云端 AI 平台和内部身份验证服务（内部部署）需要付出很大的努力。许多公司都有自己的版本身份验证服务来验证和授权用户请求。如果我们采用
+    SageMaker 作为 AI 平台并将其暴露给不同的内部服务以满足不同的业务目的，将 SageMaker 的身份验证管理与内部用户身份验证管理服务连接起来并不容易。相反，构建内部部署的训练服务要容易得多，因为我们可以自由更改
+    API 并简单地将其集成到现有的身份验证服务中。
 - en: Summary
   id: totrans-269
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 总结
 - en: The primary goal of the training service is to manage the computing resources
     and training executions.
   id: totrans-270
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 训练服务的主要目标是管理计算资源和训练执行。
 - en: 'A sophisticated training service follows four principles: it supports all kinds
     of model training code through a unified interface; it reduces training cost;
     it supports model reproducibility; and it has high scalability and availability
@@ -1983,18 +2068,21 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 一种先进的训练服务遵循四个原则：通过统一接口支持各种模型训练代码；降低训练成本；支持模型可复现性；具有高可伸缩性和可用性，并处理计算隔离。
 - en: Understanding the general model training code pattern allows us to treat the
     code as a black box from the perspective of the training service.
   id: totrans-272
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 了解常见的模型训练代码模式可以让我们从训练服务的角度将代码视为黑盒。
 - en: Containerization is the key to using a generic method to handle the diversities
     of deep learning training methods and frameworks.
   id: totrans-273
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 容器化是处理深度学习训练方法和框架多样性的关键。
 - en: By Dockerizing training code and defining clear communication protocol, a training
     service can treat training code as a black box and execute the training on a single
     device or distributively. This also benefits data scientists because they can
@@ -2003,6 +2091,7 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 通过将训练代码 Docker 化并定义明确的通信协议，训练服务可以将训练代码视为黑盒并在单个设备或分布式环境中执行训练。这也使得数据科学家可以专注于模型算法开发，而不必担心训练执行。
 - en: Kubeflow training operators are a set of Kubernetes-based open source training
     applications. These operators work out of the box, and they can be easily integrated
     into any existing systems as a model training backend. Kubeflow training operators
@@ -2011,6 +2100,8 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: Kubeflow 训练 operators 是一组基于 Kubernetes 的开源训练应用程序。这些 operators 可以开箱即用，并且可以轻松地集成到任何现有系统中作为模型训练后端。Kubeflow
+    训练 operators 支持分布式和非分布式训练。
 - en: Using public cloud training services can help to build deep learning applications
     quickly. On the other hand, building your own training services can reduce training
     operation costs, provide more customized options, and remain cloud agnostic.
@@ -2018,3 +2109,4 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用公共云训练服务可以帮助快速构建深度学习应用程序。另一方面，建立自己的训练服务可以减少训练操作成本，提供更多的定制选项，并保持云无关。
