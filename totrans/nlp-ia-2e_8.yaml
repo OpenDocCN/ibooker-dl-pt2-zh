@@ -1,39 +1,57 @@
 - en: 8 Reduce, Reuse, Recycle Your Words (RNNs and LSTMs)
+  id: totrans-0
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 8 减少、重用和回收单词（RNN 和 LSTMs）
 - en: This chapter covers
+  id: totrans-1
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 本章涵盖的内容
 - en: Unrolling recursion so you can understand how to use it for NLP
+  id: totrans-2
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 卷积递归展开，以便您可以了解如何将其用于 NLP。
 - en: Implementing word and character-based RNNs in PyTorch
+  id: totrans-3
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 在 PyTorch 中实现基于单词和字符的 RNN。
 - en: Identifying applications where RNNs are your best option
+  id: totrans-4
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 识别 RNN 是您最好的选择的应用程序。
 - en: Re-engineering your datasets for training RNNs
+  id: totrans-5
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 重新设计您的数据集以进行 RNN 训练。
 - en: Customizing and tuning your RNN structure for your NLP problems
+  id: totrans-6
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 定制和调整您的 RNN 结构以解决 NLP 问题。
 - en: Understanding backprop (backpropagation) in time
+  id: totrans-7
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 理解时间反向传播（backprop）。
 - en: Combining long and short-term memory mechanisms to make your RNN smarter
+  id: totrans-8
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 将长期和短期记忆机制相结合，使您的 RNN 变得更加智能。
 - en: An *RNN* (Recurrent Neural Network) recycles tokens. Why would you want to recycle
     and reuse your words? To build a more sustainable NLP pipeline of course! ;) *Recurrence*
     is just another word for recycling. An RNN uses recurrence to allow it to remember
@@ -41,8 +59,12 @@
     variable. And if you use RNNs to predict the next word, RNNs can generate, going
     on and on and on, until you tell them to stop. This sustainability or regenerative
     ability of RNNs is their superpower.
+  id: totrans-9
   prefs: []
   type: TYPE_NORMAL
+  zh: 一个 *RNN*（递归神经网络）会重复使用词汇。为什么要重复和重用您的单词？当然是为了构建更可持续的 NLP 管道！;) *递归* 只是另一个词汇，用于循环利用。RNN
+    使用递归来记住它已经阅读过的标记，并重复利用这种理解来预测目标变量。如果您使用 RNN 来预测下一个单词，RNN 可以生成一直生成，直到你告诉它停止。 RNN
+    的这种可持续性或再生能力是它们的超级能力。
 - en: It turns out that your NLP pipeline can predict the next tokens in a sentence
     much better if it remembers what it has already read and understood. But, wait,
     didn’t a CNN "remember" the nearby tokens with a kernel or filter of weights?
@@ -51,8 +73,11 @@
     one, an RNN can remember something about *all* of the tokens it has read. This
     makes your machine reader much more sustainable, it can keep reading and reading
     and reading…​for as long as you like.
+  id: totrans-10
   prefs: []
   type: TYPE_NORMAL
+  zh: 原来，您的 NLP 管道可以更好地预测句子中的下一个标记，如果它记得它已经阅读并理解了什么。但是，等一下，之前的 CNN 是用一组权重来“记住”附近的标记的吗？是的！但是
+    CNN 只能 *记住* 有限的窗口，即几个单词长。通过在转到下一个标记之前循环利用机器对每个标记的理解，RNN 可以记住关于它阅读过的 *所有* 标记的内容。这使得您的机器阅读器更具可持续性，它可以不停地读下去……您喜欢多久它就能读多久。
 - en: But wait, isn’t recursion dangerous? If that’s the first thought that came to
     you when you read recurrence, you’re not alone. Anyone who has taken an algorithms
     class has probably broken a function, an entire program, or even taken down an
@@ -63,12 +88,17 @@
     that input. For your NLP RNN, this comes naturally as you *pop* (remove) a token
     off of the *stack* (the text string) before you feed that input back into your
     network.
+  id: totrans-11
   prefs: []
   type: TYPE_NORMAL
+  zh: 但是等一下，递归不危险吗？如果您在读到递归时第一个想到的是危险，那么您并不孤单。任何学过算法的人都可能使用不正确的递归方式，破坏了函数、整个程序，甚至拖垮了整个网络服务器。正确和安全地使用递归的关键是您必须始终确保您的算法在每次输入回收时*减少*它必须进行的工作量。这意味着您需要在再次使用该输入之前从输入中删除一些内容。对于您的
+    NLP RNN，这是自然而然的，因为您会在将输入馈送回网络之前，*弹出*（删除）堆栈（文本字符串）上的一个标记。
 - en: Note
+  id: totrans-12
   prefs:
   - PREF_H5
   type: TYPE_NORMAL
+  zh: 注
 - en: Technically "recurrence" and "recursion" are two different things. ^([[1](#_footnotedef_1
     "View footnote.")]) But most mathematicians and computer scientists use both words
     to explain the same concept - recycling a portion of the output back into the
@@ -78,16 +108,23 @@
     As you’ll see in the code for this chapter, an RNN doesn’t have a function that
     calls itself recursively the way you normally think of recursion. The `.forward(x)`
     method is called in a `for` loop that is outside of the RNN itself.
+  id: totrans-13
   prefs: []
   type: TYPE_NORMAL
+  zh: 从技术上讲，“循环”和“递归”是两个不同的概念。^[[1]](#_footnotedef_1) 但是大多数数学家和计算机科学家使用这两个词来解释相同的概念
+    - 将部分输出循环回输入，以便重复执行序列中的操作。^[[2]](#_footnotedef_2) 但是像所有自然语言词汇一样，这些概念是模糊的，当构建 *循环*
+    神经网络时理解它们可能会有所帮助。正如你将在本章的代码中看到的那样，RNN 并没有像你通常认为的那样具有调用自身的递归函数。`.forward(x)` 方法是在
+    RNN 本身之外的 `for` 循环中调用的。
 - en: RNNs are *neuromorphic*. This is a fancy way of saying that researchers are
     mimicking how they think brains work when they design artificial neural nets such
     as RNNs. You can use what you know about how your own brain works to come up with
     ideas for how to process text with artificial neurons. And your brain is recurrently
     processing the tokens that you are reading right now. So recurrence must be a
     smart, efficient way to use your brain resources to understand text.
+  id: totrans-14
   prefs: []
   type: TYPE_NORMAL
+  zh: RNN 是 *类神经形* 的。这是一种花哨的说法，意思是研究人员在设计诸如 RNN 这样的人工神经网络时模仿了他们认为大脑如何工作的方式。你可以利用你对自己大脑运作方式的了解来想出如何使用人工神经元处理文本的方法。你的大脑正在循环处理你正在阅读的标记。所以循环必定是一种聪明、高效的利用大脑资源来理解文本的方式。
 - en: As you read this text you are recycling what you already know about the previous
     words before updating your prediction of what’s going to happen next. And you
     don’t stop predicting until you reach the end of a sentence or paragraph or whatever
@@ -97,16 +134,24 @@
     the text. And because RNNs are always predicting, you can use them to predict
     words that your NLP pipeline should say. So RNNs are great not only for reading
     text data but also for tagging and writing text.
+  id: totrans-15
   prefs: []
   type: TYPE_NORMAL
+  zh: 当你阅读这段文字时，你会利用你已经了解的先前单词的知识来更新你对接下来会发生什么的预测。并且在你达到句子、段落或者你试图理解的任何东西的结尾之前，你不会停止预测。然后你可以在文本的结尾停顿一下，处理你刚刚阅读过的所有内容。就像本章中的
+    RNN 一样，你大脑中的 RNN 利用这个结尾的停顿来对文本进行编码、分类和 *得到一些* 信息。由于 RNN 总是在预测，你可以用它们来预测你的 NLP
+    流水线应该说的单词。所以 RNN 不仅适用于阅读文本数据，还适用于标记和撰写文本。
 - en: RNNs are a game changer for NLP. They have spawned an explosion of practical
     applications and advancements in deep learning and AI.
+  id: totrans-16
   prefs: []
   type: TYPE_NORMAL
+  zh: RNN 对 NLP 是一个颠覆性的改变。它们引发了深度学习和人工智能的实际应用和进步的爆炸性增长。
 - en: 8.1 What are RNNs good for?
+  id: totrans-17
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 8.1 RNN 适用于什么？
 - en: The previous deep learning architectures you’ve learned about are great for
     processing short bits of text - usually individual sentences. RNNs promise to
     break through that text length barrier and allow your NLP pipeline to ingest an
@@ -114,23 +159,33 @@
     but they can also *generate* text for as long as you like. RNNs open up a whole
     new range of applications like generative conversational chatbots and text summarizers
     that combine concepts from many different places within your documents.
+  id: totrans-18
   prefs: []
   type: TYPE_NORMAL
+  zh: 你已经学过的先前的深度学习架构对处理短小的文本片段非常有效 - 通常是单个句子。 RNN 承诺打破文本长度的限制，并允许你的自然语言处理流水线摄入无限长的文本序列。它们不仅可以处理无穷尽的文本，还可以
+    *生成* 你喜欢的文本。RNN 打开了一系列全新的应用，如生成式对话聊天机器人和将来自文档的许多不同地方的概念结合起来的文本摘要器。
 - en: '| **Type** | **Description** | **Applications** |'
+  id: totrans-19
   prefs: []
   type: TYPE_TB
+  zh: '| **类型** | **描述** | **应用** |'
 - en: '| One to Many | One input tensor used to generate a sequence of output tensors
     | Generate chat messages, answer questions, describe images |'
+  id: totrans-20
   prefs: []
   type: TYPE_TB
+  zh: '| 一对多 | 一个输入张量用于生成一系列输出张量 | 生成聊天消息、回答问题、描述图像 |'
 - en: '| Many to One | sequence of input tensors gathered up into a single output
     tensor | Classify or tag text according to its language, intent, or other characteristics
     |'
+  id: totrans-21
   prefs: []
   type: TYPE_TB
+  zh: '| 多对一 | 被收集成单个输出张量的输入张量序列 | 根据语言、意图或其他特征对文本进行分类或标记 |'
 - en: '| Many to Many | a sequence of input tensors used to generate a sequence of
     output tensors | Translate, tag, or anonymize the tokens within a sequence of
     tokens, answer questions, participate in a conversation |'
+  id: totrans-22
   prefs: []
   type: TYPE_TB
 - en: This is the superpower of RNNs, they process sequences of tokens or vectors.
@@ -140,93 +195,116 @@
     on and on forever if you like. You don’t have to stop or truncate the output at
     some arbitrary maximum length that you decide ahead of time. Your code can dynamically
     decide when enough is enough.
+  id: totrans-23
   prefs: []
   type: TYPE_NORMAL
 - en: Figure 8.1 Recycling tokens creates endless options
+  id: totrans-24
   prefs:
   - PREF_H5
   type: TYPE_NORMAL
 - en: '![rnn unrolled many to many drawio](images/rnn-unrolled-many-to-many_drawio.png)'
+  id: totrans-25
   prefs: []
   type: TYPE_IMG
 - en: You can use RNNs to achieve state-of-the-art performance on many of the tasks
     you’re already familiar with, even when your text is shorter than infinity `;)`.
+  id: totrans-26
   prefs: []
   type: TYPE_NORMAL
 - en: translation
+  id: totrans-27
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: summarization
+  id: totrans-28
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: classification
+  id: totrans-29
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: question answering
+  id: totrans-30
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: 'And RNNs are one of the most efficient and accurate ways to accomplish some
     new NLP tasks that you will learn about in this chapter:'
+  id: totrans-31
   prefs: []
   type: TYPE_NORMAL
 - en: generating new text such as paraphrases, summaries or even answers to questions
+  id: totrans-32
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: tagging individual tokens
+  id: totrans-33
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: diagramming the grammar of sentences, as you did in English class
+  id: totrans-34
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: creating language models that predict the next token
+  id: totrans-35
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: If you read through the RNNs that are at the top of the leader board on Papers
     with Code ^([[3](#_footnotedef_3 "View footnote.")]) you can see that RNNs are
     the most efficient approach for many applications.
+  id: totrans-36
   prefs: []
   type: TYPE_NORMAL
 - en: 'RNNs aren’t just for researchers and academics. Let’s get real. In the real
     world, people are using RNNs to:'
+  id: totrans-37
   prefs: []
   type: TYPE_NORMAL
 - en: spell checking and correction
+  id: totrans-38
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: autocompletion of natural language or programming language expressions
+  id: totrans-39
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: classify sentences for grammar checking or FAQ chatbots
+  id: totrans-40
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: classify questions or generate answers to those questions
+  id: totrans-41
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: generate entertaining conversational text for chatbots
+  id: totrans-42
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: named entity recognition (NER) and extraction
+  id: totrans-43
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: classify, predict, or generate names for people, babies, and businesses
+  id: totrans-44
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: classify or predict subdomain names (for security vulnerability scanning
+  id: totrans-45
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -238,39 +316,48 @@
     toolbox.^([[4](#_footnotedef_4 "View footnote.")]) Once you know a subdomain,
     a hacker or pentester can scan the domain to find vulnerabilities in the server
     security.
+  id: totrans-46
   prefs: []
   type: TYPE_NORMAL
 - en: And once you will soon be comfortable using RNNs to generate completely new
     words, phrases, sentences, paragraphs and even entire pages of text. It can be
     so much fun playing around with RNNs that you could find yourself accidentally
     creating applications that open up opportunities for completely new businesses.
+  id: totrans-47
   prefs: []
   type: TYPE_NORMAL
 - en: suggest company, product or domain names ^([[5](#_footnotedef_5 "View footnote.")])
+  id: totrans-48
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: suggest baby names
+  id: totrans-49
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: sentence labeling and tagging
+  id: totrans-50
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: autocomplete for text fields
+  id: totrans-51
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: paraphrasing and rewording sentences
+  id: totrans-52
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: inventing slang words and phrases
+  id: totrans-53
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: 8.1.1 RNNs can handle any sequence
+  id: totrans-54
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
@@ -280,6 +367,7 @@
     can also see how a city government might represent daily or hourly electric scooter
     rentals, freeway traffic, or weather conditions as vectors. And often they will
     want to predict all of this simultaneously in one vector.
+  id: totrans-55
   prefs: []
   type: TYPE_NORMAL
 - en: 'Because RNNs can output something for each and every element in a sequence,
@@ -287,34 +375,42 @@
     element after the one you currently know. You can then use that prediction to
     predict the one after that, recursively. This means that once you master backpropagation
     through time, you will be able to use RNNs to predict things such as:'
+  id: totrans-56
   prefs: []
   type: TYPE_NORMAL
 - en: The next day’s weather
+  id: totrans-57
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: The next minute’s web traffic volume
+  id: totrans-58
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: The next second’s Distributed Denial of Services (DDOS) web requests
+  id: totrans-59
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: The action an automobile driver will take over the next 100 milliseconds
+  id: totrans-60
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: The next image in a sequence of frames in a video clip
+  id: totrans-61
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: As soon as you have a prediction of the target variable you can measure the
     error - the difference between the model’s output and the desired output. This
     usually happens at the last time step in whatever sequence of events you are processing.
+  id: totrans-62
   prefs: []
   type: TYPE_NORMAL
 - en: 8.1.2 RNNs remember everything you tell them
+  id: totrans-63
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
@@ -326,19 +422,23 @@
     processing text with CNNs. Well now, instead of sliding a word stencil across
     the words in a sentence you are going to roll a paint roller across them…​ while
     they’re still wet!
+  id: totrans-64
   prefs: []
   type: TYPE_NORMAL
 - en: Imagine painting the letters of a sentence with slow-drying paint and laying
     it on thick. And let’s create a diverse rainbow of colors in your text. Maybe
     you’re even supporting LBGTQ pride week by painting the crosswalks and bike lanes
     in North Park.
+  id: totrans-65
   prefs: []
   type: TYPE_NORMAL
 - en: Figure 8.2 A rainbow of meaning
+  id: totrans-66
   prefs:
   - PREF_H5
   type: TYPE_NORMAL
 - en: '![wet paint rainbow lettering drawio](images/wet-paint-rainbow-lettering_drawio.png)'
+  id: totrans-67
   prefs: []
   type: TYPE_IMG
 - en: Now, pick up a clean paint roller and roll it across the letters of the sentence
@@ -348,15 +448,21 @@
     would be rolled on top of the letters to the right. All the letters after the
     first one would be smeared together to create a smudgy stripe that only vaguely
     resembles the original sentence.
+  id: totrans-68
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，拿起一个干净的油漆滚筒，将其从句子的开头滚到结尾的字母上。你的滚筒会从一个字母上取下油漆，并将其重新放在先前字母的顶部。根据你的滚筒大小，少量的字母（或字母部分）会被滚到右边的字母上。第一个字母后的所有字母都会被涂抹在一起，形成一个模糊的条纹，只能模糊地反映出原始句子。
 - en: Figure 8.3 Pot of gold at the end of the rainbow
+  id: totrans-69
   prefs:
   - PREF_H5
   type: TYPE_NORMAL
+  zh: 图8.3 彩虹尽头的一锅金币
 - en: '![wet paint rainbow lettering smudged drawio](images/wet-paint-rainbow-lettering-smudged_drawio.png)'
+  id: totrans-70
   prefs: []
   type: TYPE_IMG
+  zh: '![湿油漆彩虹字母被涂抹的drawio](images/wet-paint-rainbow-lettering-smudged_drawio.png)'
 - en: The smudge gathers up all the paint from the previous letters into a single
     compact representation of the original text. But is it a useful, meaningful representation?
     For a human reader, all you’ve done is create a multicolored mess. It wouldn’t
@@ -365,8 +471,10 @@
     think about the smudge of characters you might be able to imagine how a machine
     might interpret it. And for a machine, it is certainly much more dense and compact
     than the original sequence of characters.
+  id: totrans-71
   prefs: []
   type: TYPE_NORMAL
+  zh: 涂抹将先前字母的所有油漆汇集成原始文本的一个紧凑表示。但这是一个有用的、有意义的表示吗？对于人类读者来说，你所做的只是创建了一个多彩的混乱。它对于阅读它的人类来说并不传达多少意义。这就是为什么人类不会为自己使用这种*文本含义*的表示方式。然而，如果你考虑一下字符的涂抹，也许你能想象出机器是如何解释它的。对于机器来说，它肯定比原始字符序列要密集和紧凑得多。
 - en: In NLP we want to create compact, dense vector representations of text. Fortunately,
     that representation we’re looking for is hidden on your paint roller! As your
     fresh clean roller got smeared with the letters of your text it gathered up a
@@ -374,8 +482,10 @@
     embeddings you created in Chapter 6\. But this embedding approach would work on
     much longer pieces of text. You could keep rolling the roller forever across more
     and more text, if you like, squeezing more and more text into the compact representation.
+  id: totrans-72
   prefs: []
   type: TYPE_NORMAL
+  zh: 在自然语言处理中，我们希望创建文本的紧凑、密集的向量表示。幸运的是，我们正在寻找的那种表示隐藏在你的油漆滚筒上！当你的干净的新滚筒被文本的字母涂抹时，它收集了你滚过的所有字母的*记忆*。这类似于你在第6章创建的词嵌入。但这种嵌入方法可以用于更长的文本片段。如果你愿意，你可以不停地滚动滚筒，不断地将更多的文本压缩成紧凑的表示。
 - en: In previous chapters, your tokens were mostly words or word n-grams. You need
     to expand your idea of a token to include individual characters. The simplest
     RNNs use characters rather than words as tokens. This is called a character-based
@@ -383,8 +493,11 @@
     of characters having meaning too. Now does it make more sense how this smudge
     at the end of the "Wet Paint!" lettering represents an embedding of all the letters
     of the text?
+  id: totrans-73
   prefs: []
   type: TYPE_NORMAL
+  zh: 在以前的章节中，你的标记主要是单词或单词 n-gram。你需要扩展你对标记的理解，将个别字符包括在内。最简单的RNN使用字符而不是单词作为标记。这被称为基于字符的RNN。就像你在之前的章节中有单词和标记嵌入一样，你也可以认为字符也有意义。现在，你能理解这个在"Wet
+    Paint!"字母末尾的涂抹如何表示文本所有字母的嵌入吗？
 - en: One last imaginary step might help you bring out the hidden meaning in this
     thought experiment. In your mind, check out that embedding on your paint roller.
     In your mind roll it out on a fresh clean piece of paper. Keep in mind the paper
@@ -395,9 +508,11 @@
     RNN until you decide to output them or combine them with something else to reuse
     them. In fact, this vector representation of your text is stored in a variable
     called `hidden` in many implementations of RNNs.
+  id: totrans-74
   prefs: []
   type: TYPE_NORMAL
 - en: Important
+  id: totrans-75
   prefs:
   - PREF_H5
   type: TYPE_NORMAL
@@ -413,6 +528,7 @@
     or The Meuller Report.^([[6](#_footnotedef_6 "View footnote.")]) This new vocabulary
     made it a lot easier for his team to develop a shared mental model of the NLP
     pipeline.
+  id: totrans-76
   prefs: []
   type: TYPE_NORMAL
 - en: Keep your eye out for the hidden layer later in this chapter. The activation
@@ -422,13 +538,16 @@
     up the meaning of the tokens it has read so far. In figure [8.4](#ch8_best_figure)
     you can see how this blending of meaning in an embedding vector is much more compact
     and blurry than the original text.
+  id: totrans-77
   prefs: []
   type: TYPE_NORMAL
 - en: Figure 8.4 Gather up meaning into one spot
+  id: totrans-78
   prefs:
   - PREF_H5
   type: TYPE_NORMAL
 - en: '![wet paint rainbow lettering smudged encoding drawio](images/wet-paint-rainbow-lettering-smudged-encoding_drawio.png)'
+  id: totrans-79
   prefs: []
   type: TYPE_IMG
 - en: You could read into the paint smudge something of the meaning of the original
@@ -442,8 +561,11 @@
     smudge with a different *meaning* for your neural network. Soon you’ll see how
     each of these steps is analogous to the actual mathematical operations going on
     in an RNN layer of neurons.
+  id: totrans-80
   prefs: []
   type: TYPE_NORMAL
+  zh: 你可以从油漆印迹中读出一些原始文本的含义，就像罗夏克墨点测试一样。罗夏克墨点是指用在纸牌上的墨水或油漆印迹，用于激发人们的记忆并测试他们的思维或心理健康^([[7](#_footnotedef_7
+    "查看脚注")])。你油漆辊上的油漆印迹是原始文本的模糊、印象派式的呈现。这是你要达成的目标，而不仅是制造一团糟。你可以清洁你的辊子，冲洗并重复这个过程，得到不同的油漆印迹，这些印迹代表了你的神经网络的不同*含义*。很快你就会看到，这些步骤与RNN神经元层中的实际数学操作是相似的。
 - en: Your paint roller has smeared many of the letters at the end of the sentence
     so that the last exclamation point at the end is almost completely unintelligible.
     But that unintelligible bit at the end is exactly what your machine needs to understand
@@ -451,8 +573,10 @@
     smudged all the letters of the sentence together onto the surface of your roller.
     And if you want to see the message embedded in your paint roller, you just roll
     it out onto a clean piece of paper.
+  id: totrans-81
   prefs: []
   type: TYPE_NORMAL
+  zh: 你的油漆辊沾污了句子末尾的许多字母，以至于末尾的感叹号几乎完全无法辨认。但正是这不可理解的部分，使你的机器能够在油漆辊的有限表面积内理解整个句子。你已经把句子的所有字母都涂到油漆辊的表面上了。如果你想看到油漆辊嵌入的信息，只需把它滚到一张干净的纸上即可。
 - en: In your RNN you can accomplish this by outputting the hidden layer activations
     after you’ve rolled your RNN over the tokens of some text. The encoded message
     probably won’t say much to you as a human, but it gives your paint roller, the
@@ -460,8 +584,10 @@
     impression of the entire sentence. We even use the word "gather" to express understanding
     of something someone says, as in "I gather from what you just said, that rolling
     paint rollers over wet paint are analogous to RNNs."
+  id: totrans-82
   prefs: []
   type: TYPE_NORMAL
+  zh: 在你的RNN中，你可以在将RNN滚动文本标记后输出隐藏层激活。对于人类来讲，编码信息可能不会有很多意义，但它给了你的油漆辊，即机器，整个句子的暗示。你的油漆辊收集了整个句子的印象。我们甚至使用“收集”这个词来表达对某人说的话的理解，就像“我从你刚刚说的话中收集到，将湿漆辊辊在湿漆上与RNN是相似的。”
 - en: Your paint roller has compressed, or encoded, the entire sentence of letters
     into a short smudgy impressionistic stripe of paint. In an RNN this smudge is
     a vector or tensor of numbers. Each position or dimension in the encoding vector
@@ -470,12 +596,16 @@
     the paint made on your roller (the hidden layer activations) were continuously
     recycled till you got to the end of the text. And then you reused all those smudges
     on your roller to create a new impression of the entire sentence.
+  id: totrans-83
   prefs: []
   type: TYPE_NORMAL
+  zh: 你的油漆辊已将整个字母句子压缩或编码成一个短小的、模糊印象派风格的油漆条纹。在RNN中，这个印迹是一个由数字组成的向量或张量。编码向量中的每个位置或维度就像你的油漆印迹中的一个颜色。每个编码维度都保留着一个意义方面，你的RNN被设计成跟踪这些方面的含义。油漆在辊子上留下的印象（隐藏层激活）被持续回收，直到文本的末尾。接着，将所有这些印迹再次应用在油漆辊的新位置上，创建一个整个句子的新印象。
 - en: 8.1.3 RNNs hide their understanding
+  id: totrans-84
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 8.1.3 RNNs隐藏他们的理解
 - en: The key change for an RNN is that it maintains a hidden embedding by recycling
     the meaning of each token as it reads them one at a time. This hidden vector of
     weights contains everything the RNN has understood up to the point in the text
@@ -484,8 +614,11 @@
     maps one input to one output. But, as you’ll soon see, an RNN learns a *program*
     that keeps running on your text until it’s done. An RNN needs to read your text
     one token at a time.
+  id: totrans-85
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于 RNN 来说，一个关键的改变是通过逐个读取令牌来重复使用每个令牌的含义而维护一个隐藏嵌入。这个包含了 RNN 所理解的一切的权重隐藏向量包含在它所读取的文本点中。这意味着你不能一次性运行整个你正在处理的文本的网络。在先前的章节中，你的模型学习了将一个输入映射到一个输出的函数。但是，接下来你将看到，RNN
+    会学习一个程序，在你的文本上不断运行，直到完成。RNN 需要逐个读取你的文本的令牌。
 - en: An ordinary feedforward neuron just multiplies the input vector by a bunch of
     weights to create an output. No matter how long your text is, a CNN or feedforward
     neural network will have to do the exact same number of multiplications to compute
@@ -495,15 +628,22 @@
     it by a matrix of weights (`W`), applies an activation function, and then outputs
     a transformed vector (`y`). Feedforward network layers transform can only transform
     one vector into another.
+  id: totrans-86
   prefs: []
   type: TYPE_NORMAL
+  zh: 一个普通的前馈神经元只是将输入向量乘以一堆权重来创建输出。无论你的文本有多长，CNN 或者前馈神经网络都必须执行相同数量的乘法来计算输出预测。线性神经网络的神经元一起工作，组合出一个新的向量来表示你的文本。
+    在图[8.5](#ordinary-feedforward-neuron)中可以看到，一个普通的前馈神经网络接受一个向量输入(`x`)，将其乘以一组权重矩阵(`W`)，应用激活函数，然后输出一个转换过的向量(`y`)。前馈网络层只能将一个向量转换为另一个向量。
 - en: Figure 8.5 Ordinary feedforward neuron
+  id: totrans-87
   prefs:
   - PREF_H5
   type: TYPE_NORMAL
+  zh: 图8.5 普通的前馈神经元
 - en: '![neuron feedforward drawio](images/neuron-feedforward_drawio.png)'
+  id: totrans-88
   prefs: []
   type: TYPE_IMG
+  zh: '![neuron feedforward drawio](images/neuron-feedforward_drawio.png)'
 - en: With RNNs, your neuron never gets to see the vector for the entire text. Instead,
     an RNN must process your text one token at a time. To keep track of the tokens
     it has already read it records a hidden vector (`h`) that can be passed along
@@ -513,41 +653,57 @@
     so excited about the effectiveness of RNNs. RNNs enable machines to finally learn
     Turing complete programs rather than just isolated functions.^([[8](#_footnotedef_8
     "View footnote.")])
+  id: totrans-89
   prefs: []
   type: TYPE_NORMAL
+  zh: 在使用 RNNs 时，你的神经元不会看到整个文本的向量。相反，RNN 必须逐个令牌处理你的文本。为了跟踪已经读取的令牌，它记录一个隐藏向量(`h`)，可以传递给未来自己——产生隐藏向量的完全相同的神经元。在计算机科学术语中，这个隐藏向量被称为
+    *状态*。这就是为什么 Andrej Karpathy 和其他深度学习研究人员对 RNNs 的效果如此兴奋的原因。RNNs 使得机器终于能够学习 Turing
+    完备程序而不只是孤立的函数.^[[8](#_footnotedef_8 "View footnote.")]
 - en: Figure 8.6 A neuron with recurrence
+  id: totrans-90
   prefs:
   - PREF_H5
   type: TYPE_NORMAL
+  zh: 图8.6 循环神经元
 - en: '![neuron with recurrence drawio](images/neuron-with-recurrence_drawio.png)'
+  id: totrans-91
   prefs: []
   type: TYPE_IMG
+  zh: '![neuron with recurrence drawio](images/neuron-with-recurrence_drawio.png)'
 - en: If you unroll your RNN it begins to look a lot like a chain…​ a Markov Chain,
     in fact. But this time your window is only one token wide and you’re reusing the
     output from the previous token, combined with the current token before rolling
     forward to the next token in your text. Fortunately, you started doing something
     similar to this when you slid the CNN window or kernel across the text in Chapter
     7.
+  id: totrans-92
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果你展开你的 RNN，它开始看起来像一个链……实际上是一个马尔可夫链。但这一次，你的窗口只有一个标记的宽度，并且您重用了先前标记的输出，结合当前标记，然后向前滚动到文本的下一个标记。庆幸的是，当你在第7章中滑动
+    CNN 窗口或卷积核时，已经开始做类似的事情。
 - en: How can you implement neural network recurrence in Python? Luckily, you don’t
     have to try to wrap around a recursive function call like you may have encountered
     in coding interviews. Instead, all you have to do is create a variable to store
     the hidden state separate from the inputs and outputs. And you need to have a
     separate matrix of weights to use for computing that hidden tensor. Listing [8.1](#listing-recurrence-pytorch)
     implements a minimal RNN from scratch, without using PyTorch’s `RNNBase` class.
+  id: totrans-93
   prefs: []
   type: TYPE_NORMAL
 - en: Listing 8.1 Recurrence in PyTorch
+  id: totrans-94
   prefs:
   - PREF_H5
   type: TYPE_NORMAL
 - en: '[PRE0]'
+  id: totrans-95
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE0]'
 - en: You can see how this new RNN neuron now outputs more than one thing. Not only
     do you need to return the output or prediction, but you also need to output the
     hidden state tensor to be reused by the "future self" neuron.
+  id: totrans-96
   prefs: []
   type: TYPE_NORMAL
 - en: Of course, the PyTorch implementation has many more features. PyTorch RNNs can
@@ -566,9 +722,11 @@
     This is simply because their embeddings of a bidirectional language model are
     more balanced, forgetting as much about the beginning of the text as they forget
     about the end of the text.
+  id: totrans-97
   prefs: []
   type: TYPE_NORMAL
 - en: 8.1.4 RNNs remember everything you tell them
+  id: totrans-98
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
@@ -577,13 +735,16 @@
     "future selves" in the `for` loop that is iterating through your tokens. This
     is like unrolling a `for` loop, when you just copy and paste the lines of code
     within the loop the appropriate number of times.
+  id: totrans-99
   prefs: []
   type: TYPE_NORMAL
 - en: Figure 8.7 Unroll an RNN to reveal its hidden secrets
+  id: totrans-100
   prefs:
   - PREF_H5
   type: TYPE_NORMAL
 - en: '![rnn unrolled drawio](images/rnn-unrolled_drawio.png)'
+  id: totrans-101
   prefs: []
   type: TYPE_IMG
 - en: Figure 8.7 shows an RNN passes the hidden state along to the next "future self"
@@ -591,22 +752,27 @@
     imprinted with more and more memories as it is recycled over and over again within
     your RNN. You can see how the tensors for the input tokens are modified many,
     many times before the RNN finally sees the last token in the text.
+  id: totrans-102
   prefs: []
   type: TYPE_NORMAL
 - en: Another nice feature of RNNs is that you can tap into an output tensor anywhere
     along the way. This means you can tackle challenges like machine translation,
     named entity recognition, anonymization and deanonymization of text, and even
     unredaction of government documents.^([[10](#_footnotedef_10 "View footnote.")])
+  id: totrans-103
   prefs: []
   type: TYPE_NORMAL
 - en: These two features are what make RNNs unique.
+  id: totrans-104
   prefs: []
   type: TYPE_NORMAL
 - en: You can process as many tokens as you like in one text document.
+  id: totrans-105
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: You can output anything you need after each token is processed.
+  id: totrans-106
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
@@ -614,6 +780,7 @@
     to process long text, you just need to make room for them in your max input tensor
     size. In fact, the most advanced NLP models to date, *transformers*, create a
     max length limit and pad the text just like CNNs.
+  id: totrans-107
   prefs: []
   type: TYPE_NORMAL
 - en: However, that second feature of RNNs is a really big deal. Imagine all the things
@@ -622,21 +789,27 @@
     have revolutionized the way linguistics research is done. Just look at some of
     the linguistic features that SpaCy can identify for each word in some example
     "hello world" text in listing [8.2](#figure-spacy-tags-tokens).
+  id: totrans-108
   prefs: []
   type: TYPE_NORMAL
 - en: Listing 8.2 SpaCy tags tokens with RNNs
+  id: totrans-109
   prefs:
   - PREF_H5
   type: TYPE_NORMAL
 - en: '[PRE1]'
+  id: totrans-110
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE1]'
 - en: It’s all well and good to have all that information - all that output whenever
     you want it. And you’re probably excited to try out RNNs on really long text to
     see how much it can actually remember.
+  id: totrans-111
   prefs: []
   type: TYPE_NORMAL
 - en: 8.2 Predict someone’s nationality from only their last name
+  id: totrans-112
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
@@ -646,6 +819,7 @@
     using only the letters in the names to guide the predictions. This kind of model
     may not sound all that useful to you. You might even be worried that it could
     be used to harm individuals from particular cultures.
+  id: totrans-113
   prefs: []
   type: TYPE_NORMAL
 - en: Like you, the authors' LinkedIn followers were suspicious when we mentioned
@@ -657,6 +831,7 @@
     contributors can then train NLP models from these anonymized conversation datasets
     to identify healthcare or education content that can be helpful for users, while
     simultaneously protecting user privacy.
+  id: totrans-114
   prefs: []
   type: TYPE_NORMAL
 - en: This multilingual dataset will give you a chance to learn how to deal with diacritics
@@ -671,34 +846,42 @@
     clue your model into the nationality of the name, if you don’t *asciify* it. You
     will also need to remove the cedilla embellishment that is often added to the
     letter "C" in Turkish, Kurdish, Romance and other alphabets.
+  id: totrans-115
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE2]'
+  id: totrans-116
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE2]'
 - en: Now that you have a pipeline that "normalizes" the alphabet for a broad range
     of languages, your model will generalize better. Your model will be useful for
     almost any Latin script text, even text transliterated into Latin script from
     other alphabets. You can use this exact same model to classify any string in almost
     any language. You just need to label a few dozen examples in each language you
     are interested in "solving" for.
+  id: totrans-117
   prefs: []
   type: TYPE_NORMAL
 - en: 'Now let’s see if you’ve created a *solvable problem*. A solvable machine learning
     problem is one where:'
+  id: totrans-118
   prefs: []
   type: TYPE_NORMAL
 - en: You can imagine a human answering those same questions
+  id: totrans-119
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: There exists a correct answer for the vast majority of "questions" you want
     to ask your model
+  id: totrans-120
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: You don’t expect a machine to achieve accuracy much better than a well-trained
     human expert
+  id: totrans-121
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
@@ -706,6 +889,7 @@
     a surname. Remember we’ve removed a lot of the clues about the language, like
     the characters and embellishments that are unique to non-English languages. Is
     it solvable?
+  id: totrans-122
   prefs: []
   type: TYPE_NORMAL
 - en: Start with the first question above. Can you imagine a human could identify
@@ -718,6 +902,7 @@
     or I. It may even be more accurate than a well-trained linguistics expert, which
     is pretty amazing when you think about it. This is where the concept of AI comes
     from, if a machine or algorithm can do intelligent things, we call it AI.
+  id: totrans-123
   prefs: []
   type: TYPE_NORMAL
 - en: Think about what makes this problem hard. There is no one-to-one mapping between
@@ -732,19 +917,24 @@
     give your nationality prediction model the same flexibility. And if you want to
     change your name, this model can help you craft it so that it invokes the nationality
     that you want people (and machines) to perceive of you.
+  id: totrans-124
   prefs: []
   type: TYPE_NORMAL
 - en: Take a look at some random names from this dataset to see if you can find any
     character patterns that are reused in multiple countries.
+  id: totrans-125
   prefs: []
   type: TYPE_NORMAL
 - en: Listing 8.3 Load the
+  id: totrans-126
   prefs:
   - PREF_H5
   type: TYPE_NORMAL
 - en: '[PRE3]'
+  id: totrans-127
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE3]'
 - en: Take a quick look at the data before diving in. It seems the Dutch like their
     family names (surnames) to be at the beginning of the roll call. Several Dutch
     surnames begin with "Aa." In the US there are a lot of business names that start
@@ -752,19 +942,24 @@
     languages and cultures tend to encourage the use of the trigram "Aar" at the beginning
     of words. So you can expect some confusion among these nationalities. Don’t expect
     to achieve 90% accuracy on a classifier.
+  id: totrans-128
   prefs: []
   type: TYPE_NORMAL
 - en: You also want to count up the unique categories in your dataset so you know
     how many options your model will have to choose from.
+  id: totrans-129
   prefs: []
   type: TYPE_NORMAL
 - en: Listing 8.4 Unique nationalities in the dataset
+  id: totrans-130
   prefs:
   - PREF_H5
   type: TYPE_NORMAL
 - en: '[PRE4]'
+  id: totrans-131
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE4]'
 - en: In listing [8.4](#listing-unique-nationalities-in-the-dataset) you can see the
     thirty-seven unique nationalities and language categories that were collected
     from multiple sources. This is what makes this problem difficult. It’s like a
@@ -774,6 +969,7 @@
     There are several names that are shared across these nationality boundaries. So
     the model can’t get the correct answer for all of the names. It can only try to
     return the right answer as often as possible.
+  id: totrans-132
   prefs: []
   type: TYPE_NORMAL
 - en: The diversity of nationalities and data sources helped us do name substitution
@@ -786,6 +982,7 @@
     augmented the PyTorch RNN tutorial dataset with names scraped from public APIs
     that contained data for underrepresented countries in Africa, South and Central
     America, and Oceania.
+  id: totrans-133
   prefs: []
   type: TYPE_NORMAL
 - en: When we were building this dataset during our weekly mob programming on Manning’s
@@ -795,6 +992,7 @@
     "View footnote.")]) some of which create labels based on broad language labels
     such as "Arabic" and others are labeled with their specific nationality or dialect,
     such as Moroccan, Algerian, Palestinian, or Malaysian.
+  id: totrans-134
   prefs: []
   type: TYPE_NORMAL
 - en: Dataset bias is one of the most difficult biases to compensate for unless you
@@ -804,6 +1002,7 @@
     it is a representative sample of the kinds of users that interact with our chatbots.
     You can use this dataset for your own projects where you need a truly global slice
     of names from a variety of cultures.
+  id: totrans-135
   prefs: []
   type: TYPE_NORMAL
 - en: Diversity has its challenges. As you might imagine some spellings of these transliterated
@@ -814,9 +1013,11 @@
     Nepalese word "नमस्कार" into the word "namaskāra" which uses only the Latin character
     set. Most multilingual deep learning pipelines utilize the Latin character set
     (Romance script alphabet) to represent words in all languages.
+  id: totrans-136
   prefs: []
   type: TYPE_NORMAL
 - en: Note
+  id: totrans-137
   prefs:
   - PREF_H5
   type: TYPE_NORMAL
@@ -826,15 +1027,19 @@
     Americas. A simple example is the removal or adding of the acute accent from the
     French character "é", as in "resumé" (resume) and "école" (school). Transliteration
     is a lot harder for non-Latin alphabets such as Nepalese.
+  id: totrans-138
   prefs: []
   type: TYPE_NORMAL
 - en: Here’s how you can calculate just how much overlap there is within each of your
     categories (nationalities).
+  id: totrans-139
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE5]'
+  id: totrans-140
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE5]'
 - en: In addition to the overlap *across* nationalities, the PyTorch tutorial dataset
     contained many duplicated names within nationalities. More than 94% of the Arabic
     names were duplicates, some of which are shown in listing [8.5](#listing-surname-oversampling).
@@ -846,25 +1051,31 @@
     heavily populated countries more accurately. This technique is sometimes referred
     to as "oversampling the minority class" because it boosts the frequency and accuracy
     of underrepresented classes in your dataset.
+  id: totrans-141
   prefs: []
   type: TYPE_NORMAL
 - en: If you’re curious about the original surname data check out the PyTorch "RNN
     Classification Tutorial".^([[13](#_footnotedef_13 "View footnote.")]) There were
     only 108 unique Arabic surnames among the 2000 Arabic examples in Arabic.txt.^([[14](#_footnotedef_14
     "View footnote.")])
+  id: totrans-142
   prefs: []
   type: TYPE_NORMAL
 - en: Listing 8.5 Surname oversampling
+  id: totrans-143
   prefs:
   - PREF_H5
   type: TYPE_NORMAL
 - en: '[PRE6]'
+  id: totrans-144
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE6]'
 - en: This means that even a relatively simple model (like the one shown in the PyTorch
     tutorial) should be able to correctly label popular names like Abadi and Zogby
     as Arabic. And you can anticipate your model’s confusion matrix statistics by
     counting up the number of nationalities associated with each name in the dataset.
+  id: totrans-145
   prefs: []
   type: TYPE_NORMAL
 - en: You are going to use a deduplicated dataset that you loaded in listing [8.5](#listing-surname-oversampling).
@@ -880,15 +1091,19 @@
     statistics for names in the `nlpia2` repository on GitLab.^([[15](#_footnotedef_15
     "View footnote.")]) You’ll need to keep this in mind if you intend to use this
     model in the real world on a more random sample of names.
+  id: totrans-146
   prefs: []
   type: TYPE_NORMAL
 - en: Listing 8.6 Name nationality overlap
+  id: totrans-147
   prefs:
   - PREF_H5
   type: TYPE_NORMAL
 - en: '[PRE7]'
+  id: totrans-148
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE7]'
 - en: To help diversify this dataset and make it a little more representative of real-world
     statistics, we added some names from India and Africa. And we compressed the dataset
     by counting the duplicates. The resulting dataset of surnames combines data from
@@ -896,9 +1111,11 @@
     "View footnote.")]) In fact, we use this name classification and generation model
     to anonymize names in our chatbot logs. This allows us to *default to open* with
     both NLP datasets as well as software.^([[17](#_footnotedef_17 "View footnote.")])
+  id: totrans-149
   prefs: []
   type: TYPE_NORMAL
 - en: Important
+  id: totrans-150
   prefs:
   - PREF_H5
   type: TYPE_NORMAL
@@ -909,6 +1126,7 @@
     probably be able to solve your problem almost as well as you could. And in some
     cases, you might find machines are much better than you because they can balance
     many patterns in their head more accurately than you can.
+  id: totrans-151
   prefs: []
   type: TYPE_NORMAL
 - en: By computing the most popular nationality for each name in the dataset, it is
@@ -922,13 +1140,16 @@
     as Scottish. Scottish names are more often labeled as English and Irish names.
     This is because there are thousands of English and Irish names, but only 100 Scottish
     names in the original PyTorch tutorial dataset.
+  id: totrans-152
   prefs: []
   type: TYPE_NORMAL
 - en: Figure 8.8 The dataset is confused even before training
+  id: totrans-153
   prefs:
   - PREF_H5
   type: TYPE_NORMAL
 - en: '![confusion pytorch tutorial](images/confusion-pytorch-tutorial.png)'
+  id: totrans-154
   prefs: []
   type: TYPE_IMG
 - en: We’ve added 26 more nationalities to the original PyTorch dataset. This creates
@@ -936,9 +1157,11 @@
     different regions of the world. An RNN can deal with this ambiguity quite well,
     using the statistics of patterns in the character sequences to guide its classification
     decisions.
+  id: totrans-155
   prefs: []
   type: TYPE_NORMAL
 - en: 8.2.1 Build an RNN from scratch
+  id: totrans-156
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
@@ -948,6 +1171,7 @@
     For an RNN you can use the `*init*()` method to set the hyperparameters that control
     the number of neurons in the hidden vector as well as the size of the input and
     output vectors.
+  id: totrans-157
   prefs: []
   type: TYPE_NORMAL
 - en: For an NLP application that relies on tokenizers, it’s a good idea to include
@@ -956,6 +1180,7 @@
     different models saved on your disk. And each model may use a different vocabulary
     or dictionary to tokenize and vectorize your data. Keeping all those models and
     tokenizers connected is a challenge if they aren’t stored together in one object.
+  id: totrans-158
   prefs: []
   type: TYPE_NORMAL
 - en: The same goes for the vectorizers in your NLP pipeline. Your pipeline must be
@@ -967,24 +1192,30 @@
     mapped to human-readable names for those categories. If you store your vectorizers
     in your model class (see listing [8.7](#listing-heart-rnn)), it will know exactly
     which category labels it wants to apply to your data.
+  id: totrans-159
   prefs: []
   type: TYPE_NORMAL
 - en: Listing 8.7 Heart of an RNN
+  id: totrans-160
   prefs:
   - PREF_H5
   type: TYPE_NORMAL
 - en: '[PRE8]'
+  id: totrans-161
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE8]'
 - en: Technically, your model doesn’t need the full `char2i` vocabulary. It just needs
     the size of the one-hot token vectors you plan to input into it during training
     and inference. Likewise for the category labels. Your model only really needs
     to know the number of categories. The names of those categories are meaningless
     to the machine. But by including the category labels within your model you can
     print them to the console whenever you want to debug the internals of your model.
+  id: totrans-162
   prefs: []
   type: TYPE_NORMAL
 - en: 8.2.2 Training an RNN, one token at a time
+  id: totrans-163
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
@@ -994,28 +1225,37 @@
     or more RAM, the training will take about 30 minutes. And if you limit yourself
     to only 10 countries, 10000 surnames, and get lucky (or smart) with your choice
     of learning rate, you can train a good model in two minutes.
+  id: totrans-164
   prefs: []
   type: TYPE_NORMAL
 - en: Rather than using the built-in `torch.nn.RNN` layer you can build your first
     RNN from scratch using plain old `Linear` layers. This will generalize your understanding
     so you can design your own RNNs for almost any application.
+  id: totrans-165
   prefs: []
   type: TYPE_NORMAL
 - en: Listing 8.8 Training on a single sample must loop through the characters
+  id: totrans-166
   prefs:
   - PREF_H5
   type: TYPE_NORMAL
 - en: '[PRE9]'
+  id: totrans-167
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE9]'
 - en: The `nlpia2` package contains a script to orchestrate the training process and
     allow you to experiment with different hyperparameters.
+  id: totrans-168
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE10]'
+  id: totrans-169
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE10]'
 - en: Tip
+  id: totrans-170
   prefs:
   - PREF_H5
   type: TYPE_NORMAL
@@ -1025,6 +1265,7 @@
     variables and functions after your script finishes running. And if you cancel
     the run or if there is an error that halts the script, you will still be able
     to examine the global variables without having to start over from scratch.
+  id: totrans-171
   prefs: []
   type: TYPE_NORMAL
 - en: Once you launch the `classify_name_nationality.py` script it will prompt you
@@ -1033,21 +1274,26 @@
     a relatively small dataset and small problem that can be successfully trained
     in a reasonable amount of time. This allows you to try many different hyperparameter
     combinations and fine tune your intuitions about NLP while fine tuning your model.
+  id: totrans-172
   prefs: []
   type: TYPE_NORMAL
 - en: Listing [8.9](#listing-interactive-prompts-hyperparameters) shows some hyperparameter
     choices that will give you pretty good results. But we’ve left you room to explore
     the "hyperspace" of options on your own. Can you find a set of hyperparameters
     that can identify a broader set of nationalities with better accuracy?
+  id: totrans-173
   prefs: []
   type: TYPE_NORMAL
 - en: Listing 8.9 Interactive prompts so you can play with hyperparameters
+  id: totrans-174
   prefs:
   - PREF_H5
   type: TYPE_NORMAL
 - en: '[PRE11]'
+  id: totrans-175
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE11]'
 - en: Even this simplified RNN model with only 128 neurons and 1500 epochs takes several
     minutes to converge to a decent accuracy. This example was trained on a laptop
     with a 4-core (8-thread) i7 Intel processor and 64 GB of RAM. If your computing
@@ -1057,15 +1303,19 @@
     language labels like "Arabic" that apply to many many countries. So you don’t
     expect to get very high accuracy, especially when you give the model many nationalities
     (categories) to choose from.
+  id: totrans-176
   prefs: []
   type: TYPE_NORMAL
 - en: Listing 8.10 Training output log
+  id: totrans-177
   prefs:
   - PREF_H5
   type: TYPE_NORMAL
 - en: '[PRE12]'
+  id: totrans-178
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE12]'
 - en: Looks like the RNN achieved 57% accuracy on the training set and 29% accuracy
     on the validation set. This is an unfair measure of the model’s usefulness. Because
     the dataset was deduplicated before splitting into training and validation sets,
@@ -1074,6 +1324,7 @@
     will likely be associated with a *different* nationality in the validation set.
     This is why the PyTorch tutorial doesn’t create test or validation datasets in
     the official docs. They don’t want to confuse you.
+  id: totrans-179
   prefs: []
   type: TYPE_NORMAL
 - en: Now that you understand the ambiguity in the dataset you can see how hard the
@@ -1082,27 +1333,34 @@
     better than random chance. Random guesses would have achieved 4% accuracy on 25
     categories (`1/25 == .04`) even if there was no ambiguity in the nationality associated
     with each name.
+  id: totrans-180
   prefs: []
   type: TYPE_NORMAL
 - en: Let’s try it on some common surnames that are used in many countries. An engineer
     named Rochdi Khalid helped create one of the diagrams in this chapter. He lives
     and works in Casablanca, Morrocco. Even though Morocco isn’t the top prediction
     for "Khalid", Morocco is in second place!
+  id: totrans-181
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE13]'
+  id: totrans-182
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE13]'
 - en: The top 3 predictions are all for Arabic-speaking countries. I don’t think there
     are expert linguists that could do this prediction as fast or as accurately as
     this RNN model did.
+  id: totrans-183
   prefs: []
   type: TYPE_NORMAL
 - en: Now it’s time to dig deeper and examine some more predictions to see if you
     can figure out how only 128 neurons can predict someone’s nationality so well.
+  id: totrans-184
   prefs: []
   type: TYPE_NORMAL
 - en: 8.2.3 Understanding the results
+  id: totrans-185
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
@@ -1117,6 +1375,7 @@
     you’ll be able to use that knowledge to trick algorithms into doing what’s right,
     elevating rather than discriminating against historically disadvantaged groups
     and cultures.
+  id: totrans-186
   prefs: []
   type: TYPE_NORMAL
 - en: Perhaps the most important piece of an AI algorithm is the metric you used to
@@ -1126,14 +1385,18 @@
     to guess what the mathematical function and Python code is to invert the `log()`
     function before checking out the code snippet below. As with most ML algorithms,
     `log` means natural log, sometimes written as *ln* or *log to the base e*.
+  id: totrans-187
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE14]'
+  id: totrans-188
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE14]'
 - en: This means that the model is only 31% confident that Rochdi is Algerian. These
     probabilities (likelihoods) can be used to explain how confident your model is
     to your boss or teammates or even your users.
+  id: totrans-189
   prefs: []
   type: TYPE_NORMAL
 - en: If you’re a fan of "debug by print" you can modify your model to print out anything
@@ -1142,6 +1405,7 @@
     of the internal goings on. If you do decide to use this approach, you only need
     to `.detach()` the tensors from the GPU or CPU where they are located to bring
     them back into your working RAM for recording in your model class.
+  id: totrans-190
   prefs: []
   type: TYPE_NORMAL
 - en: A nice feature of RNNs is that the predictions are built up step by step as
@@ -1149,6 +1413,7 @@
     even need to add print statements or other instrumentation to your model class.
     Instead, you can just make predictions of the hidden and output tensors for parts
     of the input text.
+  id: totrans-191
   prefs: []
   type: TYPE_NORMAL
 - en: You may want to add some `predict_*` convenience functions for your model class
@@ -1159,35 +1424,46 @@
     to examine for clues as to how the network is making predictions. So you can create
     a `predict_hidden` method to output the 128-D hidden tensor and a `predict_proba`
     to show you the predicted probabilities for each of the target categories (nationalities).
+  id: totrans-192
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE15]'
+  id: totrans-193
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE15]'
 - en: This `predict_hidden` convenience method converts the text (surname) into a
     tensor before iterating through the one-hot tensors to run the forward method
     (or just the model’s `self`).
+  id: totrans-194
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE16]'
+  id: totrans-195
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE16]'
 - en: This `predict_hidden` method gives you access to the most interesting part of
     the model where the "logic" of the predictions is taking place. The hidden layer
     evolves as it learns more and more about the nationality of a name with each character.
+  id: totrans-196
   prefs: []
   type: TYPE_NORMAL
 - en: Finally, you can use a `predict_category` convenience method to run the model’s
     forward pass predictions to predict the nationality of a name.
+  id: totrans-197
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE17]'
+  id: totrans-198
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE17]'
 - en: The key thing to recognize is that for all of these methods, you don’t necessarily
     have to input the entire string for the surname. It is perfectly fine to reevaluate
     the first part of the surname text over and over again, as long as you reset the
     hidden layer each time.
+  id: totrans-199
   prefs: []
   type: TYPE_NORMAL
 - en: If you input an expanding window of text you can see how the predictions and
@@ -1196,46 +1472,59 @@
     out with predictions of "Chinese" as the nationality for a name until after the
     3rd or 4th character. This is perhaps because so many Chinese surnames contain
     4 (or fewer) characters.^([[21](#_footnotedef_21 "View footnote.")])
+  id: totrans-200
   prefs: []
   type: TYPE_NORMAL
 - en: Now that you have helper functions you can use them to record the hidden and
     category predictions as the RNN is run on each letter in a name.
+  id: totrans-201
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE18]'
+  id: totrans-202
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE18]'
 - en: And you can create a 128 x 6 matrix of all the hidden layer values in a 6-letter
     name. The list of PyTorch tensors can be converted to a list of lists and then
     a DataFrame to make it easier to manipulate and explore.
+  id: totrans-203
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE19]'
+  id: totrans-204
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE19]'
 - en: This wall of numbers contains everything your RNN "thinks" about the name as
     it is reading through it.
+  id: totrans-205
   prefs: []
   type: TYPE_NORMAL
 - en: Tip
+  id: totrans-206
   prefs:
   - PREF_H5
   type: TYPE_NORMAL
 - en: There are some Pandas display options that will help you get a feel for the
     numbers in a large DataFrame without TMI ("too much information"). Here are some
     of the settings that helped improve the printouts of tables in this book
+  id: totrans-207
   prefs: []
   type: TYPE_NORMAL
 - en: 'To display only 2 decimal places of precision for floating point values try:
     `pd.options.display.float_format = ''{:.2f}''`.'
+  id: totrans-208
   prefs: []
   type: TYPE_NORMAL
 - en: 'To display a maximum of 12 columns and 7 rows of data from your DataFrame:
     `pd.options.display.max_columns = 12` and `pd.options.display.max_rows = 7`'
+  id: totrans-209
   prefs: []
   type: TYPE_NORMAL
 - en: These only affect the displayed representation of your data, not the internal
     values used when you do addition or multiplication.
+  id: totrans-210
   prefs: []
   type: TYPE_NORMAL
 - en: As you’ve probably done with other large tables of numbers, it’s often helpful
@@ -1243,11 +1532,14 @@
     you. For example, you may want to find out if any of the hidden weights are keeping
     track of the RNN’s position within the text - how many characters it is from the
     beginning or end of the text.
+  id: totrans-211
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE20]'
+  id: totrans-212
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE20]'
 - en: Interestingly our hidden layer has room in its hidden memory to record the position
     in many different places. And the strongest correlation seems to be negative.
     These are likely helping the model to estimate the likelihood of the current character
@@ -1257,9 +1549,11 @@
     glean insight from the weights of your RNN model in his blog post "The unreasonable
     effectiveness of RNNs" in the early days of discovering RNNs. ^([[22](#_footnotedef_22
     "View footnote.")])]
+  id: totrans-213
   prefs: []
   type: TYPE_NORMAL
 - en: 8.2.4 Multiclass classifiers vs multi-label taggers
+  id: totrans-214
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
@@ -1270,6 +1564,7 @@
     probably want to use the term "multi-label tagging" or just "tagging" instead
     of "multi-label classification." And if you’re looking for the `sklearn` models
     suited to this kind of problem you want to search for "multi-output classification."
+  id: totrans-215
   prefs: []
   type: TYPE_NORMAL
 - en: Multi-label taggers are made for ambiguity. In NLP intent classification and
@@ -1277,6 +1572,7 @@
     talking about a graffiti war between Banksy and Bario Logan street artists when
     we say "taggers". We’re talking about a kind of machine learning model that can
     assign multiple discrete labels to an object in your dataset.
+  id: totrans-216
   prefs: []
   type: TYPE_NORMAL
 - en: A multiclass classifier has multiple different categorical labels that are matched
@@ -1286,6 +1582,7 @@
     names), then that would require a multiclass classifier. But if you want to label
     a name with all the relevant nationalities and genders that are appropriate, then
     you would need a tagging model.
+  id: totrans-217
   prefs: []
   type: TYPE_NORMAL
 - en: This may seem like splitting hairs to you, but it’s much more than just semantics.
@@ -1295,9 +1592,11 @@
     when he started learning about NLP to build a Python package classifier. Ultimately
     he ended up building a tagger, which gave RTD advertisers more effective placements
     for their ads and gave developers reading documentation more relevant advertisements.
+  id: totrans-218
   prefs: []
   type: TYPE_NORMAL
 - en: Tip
+  id: totrans-219
   prefs:
   - PREF_H5
   type: TYPE_NORMAL
@@ -1308,9 +1607,11 @@
     between zero and one, such that each dimension in your multi-label tagging output
     represents the independent binary probability of that particular label applying
     to that instance.
+  id: totrans-220
   prefs: []
   type: TYPE_NORMAL
 - en: 8.3 Backpropagation through time
+  id: totrans-221
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
@@ -1326,6 +1627,7 @@
     did not affect the calculation for the neighboring tokens in the same text. RNNs
     do forward and backward propagation in time, from one token in the sequence to
     the next.
+  id: totrans-222
   prefs: []
   type: TYPE_NORMAL
 - en: But you can see in the unrolled RNN in Figure 8.7 that your training must propagate
@@ -1334,6 +1636,7 @@
     must work on each and every token in each of your texts. So your training loop
     will need to loop through all the tokens backward to ensure that the error at
     each step of the way is used to adjust the weights.
+  id: totrans-223
   prefs: []
   type: TYPE_NORMAL
 - en: The initial error value is the distance between the final output vector and
@@ -1345,6 +1648,7 @@
     PyTorch calculates the gradients it needs during forward propagation and then
     multiplies those gradients by the error for each token to decide how much to adjust
     the weights and improve the predictions.
+  id: totrans-224
   prefs: []
   type: TYPE_NORMAL
 - en: And once you’ve adjusted the weights for all the tokens in one layer you do
@@ -1353,6 +1657,7 @@
     have to "touch" or adjust all of the weights many times for each text example.
     Unlike backpropagation through a linear layer or CNN layer, the backpropagation
     on an RNN must happen serially, one token at a time.
+  id: totrans-225
   prefs: []
   type: TYPE_NORMAL
 - en: An RNN is just a normal feedforward neural network "rolled up" so that the Linear
@@ -1363,9 +1668,11 @@
     reuses "all" of the weights for each text document. The weights of an RNN are
     one long, giant kernel. At each time step, it is the *same* neural network, just
     processing a different input and output at that location in the text.
+  id: totrans-226
   prefs: []
   type: TYPE_NORMAL
 - en: Tip
+  id: totrans-227
   prefs:
   - PREF_H5
   type: TYPE_NORMAL
@@ -1375,6 +1682,7 @@
     or you can do it in batches. And it turns out that batching has benefits other
     than speed. But for now, think of these processes in terms of just single data
     samples, single sentences, or documents.
+  id: totrans-228
   prefs: []
   type: TYPE_NORMAL
 - en: In chapter 7 you learned how to process a string all at once with a CNN. CNNs
@@ -1384,13 +1692,16 @@
     creating embedding vectors to represent the meaning of text in a vector. CNNs
     accomplish this with overlapping windows of weights that can detect almost any
     pattern of meaning in text.
+  id: totrans-229
   prefs: []
   type: TYPE_NORMAL
 - en: Figure 8\. 9\. 1D convolution with embeddings
+  id: totrans-230
   prefs:
   - PREF_H5
   type: TYPE_NORMAL
 - en: '![cnn stride text words are sacred transparent drawio](images/cnn-stride-text-words-are-sacred_transparent_drawio.png)'
+  id: totrans-231
   prefs: []
   type: TYPE_IMG
 - en: In Chapter 7 you imagined striding the kernel window over your text, one step
@@ -1402,6 +1713,7 @@
     commutative (order doesn’t matter). And none of the convolution dot products depend
     on any of the others. In fact, on a GPU these matrix multiplications (dot products)
     are all happening *in parallel* at approximately the *same* time.
+  id: totrans-232
   prefs: []
   type: TYPE_NORMAL
 - en: But an RNN is different. With an RNN you’re recycling the output of one token
@@ -1411,6 +1723,7 @@
     so that And you need two matrix multiplications for an RNN compared to one multiplication
     for a CNN. You need one matrix of weights for the hidden vector and another for
     the output vector.
+  id: totrans-233
   prefs: []
   type: TYPE_NORMAL
 - en: If you’ve done any signal processing or financial modeling you may have used
@@ -1418,12 +1731,14 @@
     in the world of signal processing and quantitative financial analysis. An *auto-regressive
     moving average* (ARMA) model is an RNN in disguise.^([[23](#_footnotedef_23 "View
     footnote.")])
+  id: totrans-234
   prefs: []
   type: TYPE_NORMAL
 - en: In this chapter, you are learning about a new way to structure the input data.
     Just as in a CNN, each token is associated with a time (`t`) or position within
     the text. The variable `t` is just another name for the index variable in your
     sequence of tokens.
+  id: totrans-235
   prefs: []
   type: TYPE_NORMAL
 - en: You will even see places where you use the integer value of `t` to retrieve
@@ -1432,44 +1747,54 @@
     to the preceding time step or token. And `t+1` and `tokens[t+1]` refers to the
     next time step or token. In past chapters, you may have seen that we sometimes
     used `i` for this index value.
+  id: totrans-236
   prefs: []
   type: TYPE_NORMAL
 - en: 'Now you will use multiple different indexes to keep track of what has been
     passed into the network and is being output by the network:'
+  id: totrans-237
   prefs: []
   type: TYPE_NORMAL
 - en: '`t` or `token_num`: time step or token position for the current tensor being
     input to the network'
+  id: totrans-238
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '`k` or `sample_num`: sample number within a batch for the text example being
     trained on'
+  id: totrans-239
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '`b` or `batch_num`: batch number of the set of samples being trained'
+  id: totrans-240
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '`epoch_num`: number of epochs that have passed since the start of training'
+  id: totrans-241
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Figure 8.10 Data fed into a recurrent network
+  id: totrans-242
   prefs:
   - PREF_H5
   type: TYPE_NORMAL
 - en: '![rnn input](images/rnn_input.png)'
+  id: totrans-243
   prefs: []
   type: TYPE_IMG
 - en: This 2-D tensor representation of a document is similar to the "player piano"
     representation of text in chapter 2\. Only this time you are creating a dense
     representation of each token using word embeddings.
+  id: totrans-244
   prefs: []
   type: TYPE_NORMAL
 - en: For an RNN you no longer need to process each text sample all at once. Instead,
     you process text one token at a time.
+  id: totrans-245
   prefs: []
   type: TYPE_NORMAL
 - en: In your recurrent neural net, you pass in the word vector for the first token
@@ -1477,9 +1802,11 @@
     pass in the output from the first token! And then pass in the third token along
     with the output from the second token. And so on. The network has a concept of
     before and after, cause and effect - some vague notion of time (see Figure 8.8).
+  id: totrans-246
   prefs: []
   type: TYPE_NORMAL
 - en: 8.3.1 Initializing the hidden layer in an RNN
+  id: totrans-247
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
@@ -1490,6 +1817,7 @@
     (recurrence) loop. Your model’s `forward()` method needs a vector to concatenate
     with the input vector so that it will be the right size for multiplying by `W_c2h`
     and `W_c2o`.
+  id: totrans-248
   prefs: []
   type: TYPE_NORMAL
 - en: The most obvious approach is to set the initial hidden state to all zeroes and
@@ -1502,6 +1830,7 @@
     ones for your hidden state vector. Better yet you can use some gradient or pattern
     of values between zero and 1 which is your particular "secret sauce", based on
     your experience with similar problems.
+  id: totrans-249
   prefs: []
   type: TYPE_NORMAL
 - en: Getting creative and being consistent with your initialization of deep learning
@@ -1510,6 +1839,7 @@
     time you will know where to look within all the layers. For example, you will
     know which positions in the hidden state vector are keeping track of position
     (time) within the text.
+  id: totrans-250
   prefs: []
   type: TYPE_NORMAL
 - en: To get the full benefit of this consistency in your initialization values you
@@ -1522,15 +1852,18 @@
     good at the "A" names but do poorly on "Z" names. So don’t pursue this advanced
     seeding approach until you’ve fully mastered the random sampling and shuffling
     that has proven so effective.
+  id: totrans-251
   prefs: []
   type: TYPE_NORMAL
 - en: As long as you are consistent throughout the training process, your network
     will learn the biases and weights that your network needs to layer on top of these
     initial values. And that can create a recognizable structure in your neural network
     weights.
+  id: totrans-252
   prefs: []
   type: TYPE_NORMAL
 - en: Tip
+  id: totrans-253
   prefs:
   - PREF_H5
   type: TYPE_NORMAL
@@ -1541,11 +1874,13 @@
     Ticket Hypothesis" paper, ^([[24](#_footnotedef_24 "View footnote.")]) Their approach
     is to initialize all weights and biases using a random seed that can be reused
     in subsequent training.
+  id: totrans-254
   prefs: []
   type: TYPE_NORMAL
 - en: Now your network is remembering something! Well, sort of. A few things remain
     for you to figure out. For one, how does backpropagation even work in a structure
     like this?
+  id: totrans-255
   prefs: []
   type: TYPE_NORMAL
 - en: Another approach that is popular in the Keras community is to retain the hidden
@@ -1557,6 +1892,7 @@
     with each epoch. You do this when you want your model to work equally well at
     making predictions "cold" without any priming by reading similar documents or
     nearby passages of text.
+  id: totrans-256
   prefs: []
   type: TYPE_NORMAL
 - en: So unless you are trying to squeeze out every last bit of accuracy you can for
@@ -1567,9 +1903,11 @@
     on your test set). And make sure you prepare your documents in a consistent order
     and can reproduce this document ordering for a new set of documents that you need
     to make prediction on with your model.
+  id: totrans-257
   prefs: []
   type: TYPE_NORMAL
 - en: 8.4 Remembering with recurrent networks
+  id: totrans-258
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
@@ -1578,13 +1916,16 @@
     amount of text. This can help it understand patterns that span the entire text
     and recognize the difference between two texts that have dramatically different
     meanings depending on where words occur.
+  id: totrans-259
   prefs: []
   type: TYPE_NORMAL
 - en: '*I apologize for the lengthy letter. I didn’t have time to write a shorter
     one.*'
+  id: totrans-260
   prefs: []
   type: TYPE_NORMAL
 - en: '*I apologize for the short letter. I didn’t have time to write a lengthy one.*'
+  id: totrans-261
   prefs: []
   type: TYPE_NORMAL
 - en: Swapping the words "short" and "lengthy", flips the meaning of this Mark Twain
@@ -1592,6 +1933,7 @@
     tell which quote is his? It’s the one where he apologizes for the lengthy letter.
     He’s making light of the fact that editing and writing concisely is hard work.
     It’s something that smart humans can still do better than even the smartest AI.
+  id: totrans-262
   prefs: []
   type: TYPE_NORMAL
 - en: The CNNs you learned about in Chapter 7 would have a hard time making the connection
@@ -1604,6 +1946,7 @@
     them until you tell them you are done with that document. This makes them better
     at summarizing lengthy Mark Twain letters and makes them better at understanding
     his long sophisticated jokes.
+  id: totrans-263
   prefs: []
   type: TYPE_NORMAL
 - en: Mark Twain was right. Communicating things concisely requires skill, intelligence
@@ -1613,6 +1956,7 @@
     In chapter 9 you’ll see this attention mechanism at work, as well as the other
     tricks that make the transformer approach to RNNs the most successful and versatile
     deep learning architecture so far.
+  id: totrans-264
   prefs: []
   type: TYPE_NORMAL
 - en: Summarization of lengthy text is still an unsolved problem in NLP. Even the
@@ -1622,6 +1966,7 @@
     "View footnote.")]) The Hutter Prize focuses on the compression of the symbols
     within Wikipedia. You’re going to learn how to compress the meaning of text. That’s
     even harder to do well. And it’s hard to measure how well you’ve done it.
+  id: totrans-265
   prefs: []
   type: TYPE_NORMAL
 - en: You will have to develop generally intelligent machines that understand common
@@ -1633,9 +1978,11 @@
     a separate way to maintain both short-term memories and long-term memories? This
     would give it a working memory that it could then store in long-term memory whenever
     it ran across a concept that was important to remember.
+  id: totrans-266
   prefs: []
   type: TYPE_NORMAL
 - en: 8.4.1 Word-level Language Models
+  id: totrans-267
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
@@ -1645,58 +1992,78 @@
     word IDs rather than character (letter) IDs. And you’re going to have to deal
     with much longer documents than just surnames, so you will want to `batchify`
     your dataset to speed it up.
+  id: totrans-268
   prefs: []
   type: TYPE_NORMAL
 - en: Take a look at the Wikitext-2 dataset and think about how you will preprocess
     it to create a sequence of token IDs (integers).
+  id: totrans-269
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE21]'
+  id: totrans-270
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE21]'
 - en: Oh wow, this is going to be an interesting dataset. Even the English language
     version of Wikipedia contains a lot of other natural languages in it, such as
     Japanese in this first article. If you use your tokenization and vocabulary-building
     skills from previous chapters you should be able to create a Corpus class like
     the one used in the RNN examples coming up.^([[27](#_footnotedef_27 "View footnote.")])
+  id: totrans-271
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE22]'
+  id: totrans-272
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE22]'
 - en: 'And you always want to make sure that your vocabulary has all the info you
     need to generate the correct words from the sequence of word IDs:'
+  id: totrans-273
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE23]'
+  id: totrans-274
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE23]'
 - en: Now, during training your RNN will have to read each token one at a time. That
     can be pretty slow. What if you could train it on multiple passages of text simultaneously?
     You can do this by splitting your text into batches or *batchifying* your data.
     These batches can each become columns or rows in a matrix that PyTorch can more
     efficiently perform math on within a *GPU* (Graphics Processing Unit).
+  id: totrans-275
   prefs: []
   type: TYPE_NORMAL
 - en: In the `nlpia2.ch08.data` module you’ll find some functions for batchifying
     long texts.
+  id: totrans-276
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE24]'
+  id: totrans-277
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE24]'
 - en: '[PRE25]'
+  id: totrans-278
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE25]'
 - en: One last step and your data is ready for training. You need to `stack` the tensors
     within this list so that you have one large tensor to iterate through during your
     training.
+  id: totrans-279
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE26]'
+  id: totrans-280
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE26]'
 - en: 8.4.2 Gated Recurrent Units (GRUs)
+  id: totrans-281
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
@@ -1707,6 +2074,7 @@
     influence of the first token in a string fades over time as your machine reads
     more and more of the text. That’s the problem that GRU (Gated Recurrent Unit)
     and LSTM (Long and Short Term Memory) neural networks aim to fix.
+  id: totrans-282
   prefs: []
   type: TYPE_NORMAL
 - en: How do you think you could counteract fading memory of early tokens in a text
@@ -1714,6 +2082,7 @@
     the beginning of a long text string? What about adding an `if` statement to record
     or emphasize particular words in the text. That’s what GRUs do. GRUs add `if`
     statements, called *logic gates* (or just "gates"), to RNN neurons.
+  id: totrans-283
   prefs: []
   type: TYPE_NORMAL
 - en: The magic of machine learning and backpropagation will take care of the if statement
@@ -1723,6 +2092,7 @@
     between). And the magic of back-propagation in time will train the LSTM gates
     to let important signals (aspects of token meaning) pass through and get recorded
     in the hidden vector and cell state vector.
+  id: totrans-284
   prefs: []
   type: TYPE_NORMAL
 - en: But wait, you probably thought we already had if statements in our network.
@@ -1734,38 +2104,47 @@
     layer of neurons. And that structure was intentionally designed with a purpose,
     reflecting what researchers thing would help RNN neurons deal with this long-term
     memory problem.
+  id: totrans-285
   prefs: []
   type: TYPE_NORMAL
 - en: In addition to the original RNN output gate, GRUs add two new logic gates or
     activation functions within your recurrent unit.
+  id: totrans-286
   prefs: []
   type: TYPE_NORMAL
 - en: 'Reset gate: What parts of the hidden layer should be blocked because they are
     no longer relevant to the current output.'
+  id: totrans-287
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: 'Update gate: What parts of the hidden layer should matter to the current output
     (now, at time `t`).'
+  id: totrans-288
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: You already had an activation function on the output of your RNN layer. This
     output logic gate is called the "new" logic gate in a GRU.
+  id: totrans-289
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE27]'
+  id: totrans-290
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE27]'
 - en: So when you are thinking about how many units to add to your neural network
     to solve a particular problem, each LSTM or GRU unit gives your network a capacity
     similar to 2 "normal" RNN neurons or hidden vector dimensions. A unit is just
     a more complicated, higher-capacity neuron, and you can see this if you count
     up the number of "learned parameters" in your LSTM model and compare it to those
     of an equivalent RNN.
+  id: totrans-291
   prefs: []
   type: TYPE_NORMAL
 - en: Note
+  id: totrans-292
   prefs:
   - PREF_H5
   type: TYPE_NORMAL
@@ -1776,6 +2155,7 @@
     GRU contains internal gates and logic. This gives your GRU or LSTM units more
     capacity for learning and understanding text, so you will probably need fewer
     of them to achieve the same performance as an ordinary RNN.
+  id: totrans-293
   prefs: []
   type: TYPE_NORMAL
 - en: The *reset*, *update*, and *new* logic gates are implemented with the fully-connected
@@ -1784,29 +2164,36 @@
     and they are implemented on the hidden and input vectors in parallel. Figure 8.12
     shows how the input vector and hidden vector for a single token flow through the
     logic gates and output the prediction and hidden state tensors.
+  id: totrans-294
   prefs: []
   type: TYPE_NORMAL
 - en: Figure 8.11 GRUs add capacity with logic gates
+  id: totrans-295
   prefs:
   - PREF_H5
   type: TYPE_NORMAL
 - en: '![gru drawio](images/gru_drawio.png)'
+  id: totrans-296
   prefs: []
   type: TYPE_IMG
 - en: 'If you have gotten good at reading data flow diagrams like Figure 8.12 you
     may be able to see that the GRU *update* and *relevance* logic gates are implementing
     the following two functions: ^([[28](#_footnotedef_28 "View footnote.")])'
+  id: totrans-297
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE28]'
+  id: totrans-298
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE28]'
 - en: Looking at these two lines of code you can see that inputs to the formula are
     exactly the same. Both the hidden and input tensors are multiplied by weight matrices
     in both formulas. And if you remember your linear algebra and matrix multiplication
     operations, you might be able to simplify the And you may notice in the block
     diagram (figure 8.12) that the input and hidden tensors are concatenated together
     before the matrix multiplication by W_reset, the reset weight matrix.
+  id: totrans-299
   prefs: []
   type: TYPE_NORMAL
 - en: Once you add GRUs to your mix of RNN model architectures, you’ll find that they
@@ -1818,11 +2205,14 @@
     values that your model must adjust to optimize the predictions. The requires_grad
     attribute is an easy way to check whether a particular layer contains learnable
     parameters or not.^([[29](#_footnotedef_29 "View footnote.")])
+  id: totrans-300
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE29]'
+  id: totrans-301
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE29]'
 - en: The more weights or learned parameters there are, the greater the capacity of
     your model to learn more things about the data. But the whole point of all the
     clever ideas, like convolution and recurrence, is to create neural networks that
@@ -1830,26 +2220,34 @@
     of layers, you can reduce the number of weights or parameters your model must
     learn while simultaneously creating smarter models with greater capacity to make
     good predictions.
+  id: totrans-302
   prefs: []
   type: TYPE_NORMAL
 - en: If you experiment with a variety of GRU hyperparameters using the `nlpia2/ch08/rnn_word/hypertune.py`
     script you can aggregate all the results with your RNN results to compare them
     all together.
+  id: totrans-303
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE30]'
+  id: totrans-304
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE30]'
 - en: '[PRE31]'
+  id: totrans-305
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE31]'
 - en: You can see from these experiments that GRUs are your best bet for creating
     language models that understand text well enough to predict the next word. Surprisingly
     GRUs do not need as many layers as other RNN architectures to achieve the same
     accuracy. And they take less time to train than RNNs to achieve comparable accuracy.
+  id: totrans-306
   prefs: []
   type: TYPE_NORMAL
 - en: 8.4.3 Long and Short-Term Memory (LSTM)
+  id: totrans-307
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
@@ -1858,25 +2256,30 @@
     and relevance gates but adds new gates for forgetting and the output gate. four
     internal gates, each with a different purpose. The first one is just the normal
     activation function that you are familiar with.
+  id: totrans-308
   prefs: []
   type: TYPE_NORMAL
 - en: 'Forgetting gate (`f`): Whether to completely ignore some element of the hidden
     layer to make room in memory for future more important tokens.'
+  id: totrans-309
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: 'Input or update gate (`i`): What parts of the hidden layer should matter to
     the current output (now, at time `t`).'
+  id: totrans-310
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: 'Relevance or cell gate (`i`): What parts of the hidden layer should be blocked
     because they are not longer relevant to the current output.'
+  id: totrans-311
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: 'Output gate (`o`): What parts of the hidden layer should be output, both to
     the neurons output as well as to the hidden layer for the next token in the text.'
+  id: totrans-312
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
@@ -1886,6 +2289,7 @@
     about the most recently processed tokens; it’s the short-term memory of the LSTM.
     The cell state vector holds a representation of the meaning of the text over the
     long term, since the beginning of a document.
+  id: totrans-313
   prefs: []
   type: TYPE_NORMAL
 - en: In Figure 8.13 you can see how these four logic gates fit together. The various
@@ -1897,13 +2301,16 @@
     only need the hidden state to compute the output at each time step. But the new
     cell state tensor is where the long and short-term memories of past patterns are
     encoded and stored to be reused on the next token.
+  id: totrans-314
   prefs: []
   type: TYPE_NORMAL
 - en: Figure 8.12 LSTMs add a forgetting gate and a cell output
+  id: totrans-315
   prefs:
   - PREF_H5
   type: TYPE_NORMAL
 - en: '![lstm drawio](images/lstm_drawio.png)'
+  id: totrans-316
   prefs: []
   type: TYPE_IMG
 - en: One thing in this diagram that you’ll probably only see in the smartest blog
@@ -1911,6 +2318,7 @@
     "View footnote.")]) Even the PyTorch documentation glosses over this tidbit. You’ll
     need to add this fully connected linear layer yourself at whichever layer you
     are planning to compute predictions based on your hidden state tensor.
+  id: totrans-317
   prefs: []
   type: TYPE_NORMAL
 - en: You’re probably saying to yourself "Wait, I thought all hidden states (encodings)
@@ -1921,6 +2329,7 @@
     bit different from the hidden state logic. It’s designed to be selective in the
     things it retrains to keep room for things it learns about the text long before
     it reaches the end of the string.
+  id: totrans-318
   prefs: []
   type: TYPE_NORMAL
 - en: The formulas for computing the LSTM logic gates and outputs are very similar
@@ -1931,12 +2340,16 @@
     between hidden and cell states that creates more "capacity" or memory and computation
     in one cell. Because an LSTM cell contains more nonlinear activation functions
     and weights it has more information processing capacity.
+  id: totrans-319
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE32]'
+  id: totrans-320
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE32]'
 - en: 8.4.4 Give your RNN a tuneup
+  id: totrans-321
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
@@ -1948,14 +2361,19 @@
     such as the number of layers and number of hidden units in each layer. You can
     explore all the hyperparameters that you are curious about using the code in `nlpia2/ch08`.^([[31](#_footnotedef_31
     "View footnote.")])
+  id: totrans-322
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE33]'
+  id: totrans-323
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE33]'
 - en: '[PRE34]'
+  id: totrans-324
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE34]'
 - en: It’s a really exciting thing to explore the hyperspace of options like this
     and discover surprising tricks for building accurate models. Surprisingly, for
     this RNN language model trained on a small subset of Wikipedia, you can get great
@@ -1963,9 +2381,11 @@
     better accuracy with a 3-layer RNN than with a 5-layer RNN. You just need to start
     with an aggressive learning rate and keep the dropout to a minimum. And the fewer
     layers you have the faster the model will train.
+  id: totrans-325
   prefs: []
   type: TYPE_NORMAL
 - en: Tip
+  id: totrans-326
   prefs:
   - PREF_H5
   type: TYPE_NORMAL
@@ -1974,6 +2394,7 @@
     intuition that speeds up your model building and learning. Your lifelong goal
     is to train your mental model to predict which hyperparameter values will produce
     the best results in any given situation.
+  id: totrans-327
   prefs: []
   type: TYPE_NORMAL
 - en: If you feel the model is overfitting the training data but you can’t find a
@@ -1983,6 +2404,7 @@
     much above 50%, the model starts to have a difficult time learning. Your learning
     will slow and the validation error may bounce around a lot. But 20% to 50% is
     a pretty safe range for a lot of RNNs and most NLP problems.
+  id: totrans-328
   prefs: []
   type: TYPE_NORMAL
 - en: If you’re like Cole and me when we were getting started in NLP, you’re probably
@@ -1995,9 +2417,11 @@
     A unit is just a more complicated, higher-capacity neuron, and you can see this
     if you count up the number of "learned parameters" in your LSTM model and compare
     it to those of an equivalent RNN.
+  id: totrans-329
   prefs: []
   type: TYPE_NORMAL
 - en: 8.5 Predicting
+  id: totrans-330
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
@@ -2007,6 +2431,7 @@
     model accuracy. And the Wikipedia article text has already been tokenized for
     you. Also, the uninteresting sections such as the References at the end of the
     articles have been removed.
+  id: totrans-331
   prefs: []
   type: TYPE_NORMAL
 - en: Unfortunately, the PyTorch version of the WikiText-2 includes "<unk>" tokens
@@ -2017,21 +2442,28 @@
     get a quick boost in accuracy.^([[33](#_footnotedef_33 "View footnote.")]) And
     you can compare the accuracy of your LSTM and GRU models to those of the experts
     that use this benchmark data.^([[34](#_footnotedef_34 "View footnote.")])
+  id: totrans-332
   prefs: []
   type: TYPE_NORMAL
 - en: Here is an example paragraph at the end of the masked training dataset `train.txt`.
+  id: totrans-333
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE35]'
+  id: totrans-334
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE35]'
 - en: '[PRE36]'
+  id: totrans-335
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE36]'
 - en: It seems that the last Wikipedia article in the WikiText-2 benchmark corpus
     is about the common starling (a small bird in Europe). And from the article, it
     seems that the starling appears to be good at mimicking human speech, just as
     your RNN can.
+  id: totrans-336
   prefs: []
   type: TYPE_NORMAL
 - en: What about those "<unk>" tokens? These are designed to test machine learning
@@ -2039,15 +2471,18 @@
     were replaced with the "<unk>" (unknown) tokens. Because you have a pretty good
     English language model in your brain you can probably predict the tokens that
     have been masked out with all those "<unk>" tokens.
+  id: totrans-337
   prefs: []
   type: TYPE_NORMAL
 - en: But if the machine learning model you are training thinks these are normal English
     words, you may confuse it. The RNN you are training in this chapter is trying
     to discern the *meaning* of the meaningless "<unk>" token, and this will reduce
     its understanding of all other words in the corpus.
+  id: totrans-338
   prefs: []
   type: TYPE_NORMAL
 - en: Tip
+  id: totrans-339
   prefs:
   - PREF_H5
   type: TYPE_NORMAL
@@ -2056,30 +2491,40 @@
     There is a one-to-one correspondence between the tokens of the official wikitext-2
     corpus and the unofficial raw version in the nlpia2 repository. ^([[35](#_footnotedef_35
     "View footnote.")])
+  id: totrans-340
   prefs: []
   type: TYPE_NORMAL
 - en: So how many "<eos>" and "<unk>" tokens are there in this training set?
+  id: totrans-341
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE37]'
+  id: totrans-342
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE37]'
 - en: So 2.6% of the tokens have been replaced with the meaningless "<unk>" token.
     And the "<eos>" token marks the newlines in the original text, which is typically
     the end of a paragraph in a Wikipedia article.
+  id: totrans-343
   prefs: []
   type: TYPE_NORMAL
 - en: So let’s see how well it does at writing new sentences similar to those in the
     WikiText-2 dataset, including the "<unk>" tokens. We’ll prompt the model to start
     writing with the word "The" to find out what’s on the top of its "mind".
+  id: totrans-344
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE38]'
+  id: totrans-345
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE38]'
 - en: '[PRE39]'
+  id: totrans-346
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE39]'
 - en: The first line in the training set is "= Valkyria Chronicles III =" and the
     last article in the training corpus is titled "= Common Starling =". So this GRU
     remembers how to generate text similar to text at the beginning and end of the
@@ -2088,9 +2533,11 @@
     model on a very small dataset. But this GRI doesn’t yet seem to have the capacity
     to store all of the English language patterns that it found in the two-million-token-long
     sequence. And it certainly isn’t going to do any sense-making any time soon.
+  id: totrans-347
   prefs: []
   type: TYPE_NORMAL
 - en: Note
+  id: totrans-348
   prefs:
   - PREF_H5
   type: TYPE_NORMAL
@@ -2102,233 +2549,290 @@
     sense-making." Startups like DAOStack are experimenting with chatbots that bubble
     up the best ideas of a community and use them for building knowledge bases and
     making decisions. ^([[36](#_footnotedef_36 "View footnote.")])
+  id: totrans-349
   prefs: []
   type: TYPE_NORMAL
 - en: You now know how to train a versatile NLP language model that you can use on
     word-level or character-level tokens. You can use these models to classify text
     or even generate modestly interesting new text. And you didn’t have to go crazy
     on expensive GPUs and servers.
+  id: totrans-350
   prefs: []
   type: TYPE_NORMAL
 - en: 8.6 Test yourself
+  id: totrans-351
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
 - en: What are some tricks to improve "retention" for reading long documents with
     an RNN?
+  id: totrans-352
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: What are some "unreasonably effective" applications for RNNs in the real world?
+  id: totrans-353
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: How could you use a name classifier for good? What are some unethical uses of
     a name classifier?
+  id: totrans-354
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: What are some ethical and prosocial AI uses for a dataset with millions of username-password
     pairs such as Mark Burnett’s password dataset? ^([[37](#_footnotedef_37 "View
     footnote.")])
+  id: totrans-355
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Train an rnn_word model on the raw text, unmasked text for the Wikitext-2 dataset
     the proportion of tokens that are "<unk>". Did this improve the accuracy of your
     word-level RNN language model?
+  id: totrans-356
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Modify the dataset to label each name with a multi-hot tensor indicating all
     the nationalities for each name.^([[38](#_footnotedef_38 "View footnote.")]) ^([[39](#_footnotedef_39
     "View footnote.")]) How should you measure accuracy? Does your accuracy improve?
+  id: totrans-357
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: 8.7 Summary
+  id: totrans-358
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
 - en: In natural language token sequences, an RNN can remember everything it has read
     up to that point, not just a limited window.
+  id: totrans-359
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Splitting a natural language statement along the dimension of time (tokens)
     can help your machine deepen its understanding of natural language.
+  id: totrans-360
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: You can backpropagate errors back in time (token) as well as in the layers of
     a deep learning network.
+  id: totrans-361
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Because RNNs are particularly deep neural nets, RNN gradients are particularly
     temperamental, and they may disappear or explode.
+  id: totrans-362
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Efficiently modeling natural language character sequences wasn’t possible until
     recurrent neural nets were applied to the task.
+  id: totrans-363
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Weights in an RNN are adjusted in aggregate across time for a given sample.
+  id: totrans-364
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: You can use different methods to examine the output of recurrent neural nets.
+  id: totrans-365
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: You can model the natural language sequence in a document by passing the sequence
     of tokens through an RNN backward and forward in time simultaneously.
+  id: totrans-366
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '[[1]](#_footnoteref_1) Mathematics forum StackExchange question about recurrence
     and recursion ( [https://math.stackexchange.com/questions/931035/recurrence-vs-recursive](931035.html))'
+  id: totrans-367
   prefs: []
   type: TYPE_NORMAL
 - en: '[[2]](#_footnoteref_2) MIT Open Courseware lectures for CS 6.005 "Software
     Construction" ( [https://ocw.mit.edu/ans7870/6/6.005/s16/classes/10-recursion/](10-recursion.html))'
+  id: totrans-368
   prefs: []
   type: TYPE_NORMAL
 - en: '[[3]](#_footnoteref_3) Papers with Code query for RNN applications ( [https://proai.org/pwc-rnn](proai.org.html))'
+  id: totrans-369
   prefs: []
   type: TYPE_NORMAL
 - en: '[[4]](#_footnoteref_4) Daniel Miessler’s Unsupervised Learning podcast #340
     ( [https://mailchi.mp/danielmiessler/unsupervised-learning-no-2676196](danielmiessler.html))
     and the RNN source code ( [https://github.com/JetP1ane/Affinis](JetP1ane.html))'
+  id: totrans-370
   prefs: []
   type: TYPE_NORMAL
 - en: '[[5]](#_footnoteref_5) Ryan Stout’s ( [https://github.com/ryanstout](github.com.html))
     BustAName app ( [https://bustaname.com/blog_posts](bustaname.com.html))'
+  id: totrans-371
   prefs: []
   type: TYPE_NORMAL
 - en: '[[6]](#_footnoteref_6) Garrett Lander, Al Kari, and Chris Thompson contributed
     to our project to unredact the Meuller report ( [https://proai.org/unredact](proai.org.html))'
+  id: totrans-372
   prefs: []
   type: TYPE_NORMAL
 - en: '[[7]](#_footnoteref_7) Rorsharch test Wikipedia article ( [https://en.wikipedia.org/wiki/Rorschach_test](wiki.html))'
+  id: totrans-373
   prefs: []
   type: TYPE_NORMAL
 - en: '[[8]](#_footnoteref_8) "The unreasonable effectiveness of RNNs" ( [https://karpathy.github.io/2015/05/21/rnn-effectiveness](21.html))'
+  id: totrans-374
   prefs: []
   type: TYPE_NORMAL
 - en: '[[9]](#_footnoteref_9) PyTorch `RNNBase` class source code ( [https://github.com/pytorch/pytorch/blob/75451d3c81c88eebc878fb03aa5fcb89328989d9/torch/nn/modules/rnn.py#L44](modules.html))'
+  id: totrans-375
   prefs: []
   type: TYPE_NORMAL
 - en: '[[10]](#_footnoteref_10) Portland Python User Group presentation on unredacting
     the Meuller Report ( [https://proai.org/unredact](proai.org.html))'
+  id: totrans-376
   prefs: []
   type: TYPE_NORMAL
 - en: '[[11]](#_footnoteref_11) Lex Fridman interview with ex-spy Andrew Bustamante
     ( [https://lexfridman.com/andrew-bustamante](lexfridman.com.html))'
+  id: totrans-377
   prefs: []
   type: TYPE_NORMAL
 - en: '[[12]](#_footnoteref_12) There’s more info and data scraping code in the nlpia2
     package ( [https://proai.org/nlpia-ch08-surnames](proai.org.html))'
+  id: totrans-378
   prefs: []
   type: TYPE_NORMAL
 - en: '[[13]](#_footnoteref_13) PyTorch RNN Tutorial by Sean Robertson ( [https://pytorch.org/tutorials/intermediate/char_rnn_classification_tutorial.html](intermediate.html))'
+  id: totrans-379
   prefs: []
   type: TYPE_NORMAL
 - en: '[[14]](#_footnoteref_14) The original PyTorch RNN Tutorial surname dataset
     with duplicates ( [https://download.pytorch.org/tutorial/data.zip](tutorial.html))'
+  id: totrans-380
   prefs: []
   type: TYPE_NORMAL
 - en: '[[15]](#_footnoteref_15) iPython `history` log in the `nlpia2` repository on
     GitLab with examples for scraping surname data ( [https://proai.org/nlpia-ch08-surnames](proai.org.html))'
+  id: totrans-381
   prefs: []
   type: TYPE_NORMAL
 - en: '[[16]](#_footnoteref_16) PyTorch character-based RNN tutorial ( [https://pytorch.org/tutorials/intermediate/char_rnn_classification_tutorial.html](intermediate.html))'
+  id: totrans-382
   prefs: []
   type: TYPE_NORMAL
 - en: '[[17]](#_footnoteref_17) Qary ( [https://docs.qary.ai](.html)) combines technology
     and data from all our multilingual chatbots ( [https://tangibleai.com/our-work](tangibleai.com.html))'
+  id: totrans-383
   prefs: []
   type: TYPE_NORMAL
 - en: '[[18]](#_footnoteref_18) AI algorithm registry launched in Amsterdam in 2020
     ( [https://algoritmeregister.amsterdam.nl/en/ai-register/](ai-register.html))'
+  id: totrans-384
   prefs: []
   type: TYPE_NORMAL
 - en: '[[19]](#_footnoteref_19) EU Artificial Intelligence Act website ( [https://artificialintelligenceact.eu/](artificialintelligenceact.eu.html))'
+  id: totrans-385
   prefs: []
   type: TYPE_NORMAL
 - en: '[[20]](#_footnoteref_20) The accepted ''OECD AI Council'' recommendations (
     [https://legalinstruments.oecd.org/en/instruments/OECD-LEGAL-0449](instruments.html)
     )'
+  id: totrans-386
   prefs: []
   type: TYPE_NORMAL
 - en: '[[21]](#_footnoteref_21) Thank you Tiffany Kho for pointing this out.'
+  id: totrans-387
   prefs: []
   type: TYPE_NORMAL
 - en: '[[22]](#_footnoteref_22) footnote:["The unreasonable effectiveness of RNNs"
     by Andrej Karpathy ( [https://karpathy.github.io/2015/05/21/rnn-effectiveness](21.html))'
+  id: totrans-388
   prefs: []
   type: TYPE_NORMAL
 - en: '[[23]](#_footnoteref_23) ARMA model explanation ( [https://en.wikipedia.org/wiki/Autoregressive_model](wiki.html))'
+  id: totrans-389
   prefs: []
   type: TYPE_NORMAL
 - en: '[[24]](#_footnoteref_24) [https://arxiv.org/pdf/1803.03635.pdf](pdf.html)'
+  id: totrans-390
   prefs: []
   type: TYPE_NORMAL
 - en: '[[25]](#_footnoteref_25) "Attention Is All You Need" by Ashish Vaswani et al
     ( [https://arxiv.org/abs/1706.03762](abs.html))'
+  id: totrans-391
   prefs: []
   type: TYPE_NORMAL
 - en: '[[26]](#_footnoteref_26) [https://en.wikipedia.org/wiki/Hutter_Prize](wiki.html)'
+  id: totrans-392
   prefs: []
   type: TYPE_NORMAL
 - en: '[[27]](#_footnoteref_27) The full source code is in the nlpia2 package ( [https://gitlab.com/tangibleai/nlpia2/-/blob/main/src/nlpia2/ch08/rnn_word/data.py](rnn_word.html))'
+  id: totrans-393
   prefs: []
   type: TYPE_NORMAL
 - en: '[[28]](#_footnoteref_28) PyTorch docs for GRU layers ( [https://pytorch.org/docs/stable/generated/torch.nn.GRU.html#torch.nn.GRU](generated.html))'
+  id: totrans-394
   prefs: []
   type: TYPE_NORMAL
 - en: '[[29]](#_footnoteref_29) PyTorch docs discussion about counting up learned
     parameters ( [https://discuss.pytorch.org/t/how-do-i-check-the-number-of-parameters-of-a-model/4325/9](4325.html)
     )'
+  id: totrans-395
   prefs: []
   type: TYPE_NORMAL
 - en: '[[30]](#_footnoteref_30) Thank you Rian Dolphin for "LSTM Networks | A Detailed
     Explanation" ( [http://archive.today/8YD7k](archive.today.html)).'
+  id: totrans-396
   prefs: []
   type: TYPE_NORMAL
 - en: '[[31]](#_footnoteref_31) The `hypertune.py` script in the `ch08/rnn_word` module
     within the `nlpia2` Python package [https://gitlab.com/tangibleai/nlpia2/-/blob/main/src/nlpia2/ch08/rnn_word/hypertune.py](rnn_word.html)'
+  id: totrans-397
   prefs: []
   type: TYPE_NORMAL
 - en: '[[32]](#_footnoteref_32) PyTorch `torchtext` dataset ( [https://pytorch.org/text/0.8.1/datasets.html#wikitext-2](0.8.1.html))'
+  id: totrans-398
   prefs: []
   type: TYPE_NORMAL
 - en: '[[33]](#_footnoteref_33) Raw, unmasked text with "answers" for all the "unk"
     tokens ( [https://s3.amazonaws.com/research.metamind.io/wikitext/wikitext-2-raw-v1.zip](wikitext.html))'
+  id: totrans-399
   prefs: []
   type: TYPE_NORMAL
 - en: '[[34]](#_footnoteref_34) AI researchers( [https://www.salesforce.com/products/einstein/ai-research/the-wikitext-dependency-language-modeling-dataset/](the-wikitext-dependency-language-modeling-dataset.html))'
+  id: totrans-400
   prefs: []
   type: TYPE_NORMAL
 - en: '[[35]](#_footnoteref_35) `nlpia2` package with code and data for the rnn_word
     model code and datasets used in this chapter ( [https://gitlab.com/tangibleai/nlpia2/-/tree/main/src/nlpia2/ch08/rnn_word/data/wikitext-2](data.html))'
+  id: totrans-401
   prefs: []
   type: TYPE_NORMAL
 - en: '[[36]](#_footnoteref_36) DAOStack platform for decentralized governance ( [https://daostack.io/deck/DAOstack-Deck-ru.pdf](deck.html))'
+  id: totrans-402
   prefs: []
   type: TYPE_NORMAL
 - en: '[[37]](#_footnoteref_37) Alexander Fishkov’s analysis ( [https://www.city-data.com/blog/1424-passwords-on-the-internet-publicly-available-dataset/](1424-passwords-on-the-internet-publicly-available-dataset.html))
     of Mark Burnett’s ten million passwords ( [https://archive.is/cDki7](archive.is.html))
     - torrent magnet link at the bottom of the article.'
+  id: totrans-403
   prefs: []
   type: TYPE_NORMAL
 - en: '[[38]](#_footnoteref_38) PyTorch community multi-label (tagging) data format
     example ( [https://discuss.pytorch.org/t/multi-label-classification-in-pytorch/905/45](905.html))'
+  id: totrans-404
   prefs: []
   type: TYPE_NORMAL
 - en: '[[39]](#_footnoteref_39) Example `torchtext`` Dataset class multi-label text
     classification ( [https://discuss.pytorch.org/t/how-to-do-multi-label-classification-with-torchtext/11571/3](11571.html))'
+  id: totrans-405
   prefs: []
   type: TYPE_NORMAL
