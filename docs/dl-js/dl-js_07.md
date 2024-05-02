@@ -1,4 +1,4 @@
-## 第一章。深度学习和 JavaScript
+## 第一章：深度学习和 JavaScript
 
 *本章内容*
 

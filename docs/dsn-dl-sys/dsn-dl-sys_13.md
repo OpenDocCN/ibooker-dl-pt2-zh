@@ -1,4 +1,4 @@
-# 附录 C. 创建使用 Kubeflow Katib 的 HPO 服务
+# 附录 C：创建使用 Kubeflow Katib 的 HPO 服务
 
 我们将向您介绍一个开源的超参数优化（HPO）服务——Kubeflow Katib，它满足了我们在第五章讨论的几乎所有 HPO 要求。我们强烈建议您在构建自己的 HPO 服务之前考虑采用 Katib。除了向您展示如何使用 Katib 外，我们还将介绍其系统设计和代码库，以使您对这个开源服务感到舒适。
 

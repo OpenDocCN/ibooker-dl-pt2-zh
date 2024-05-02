@@ -1,4 +1,4 @@
-## 第十二章。测试、优化和部署模型
+## 第十二章：测试、优化和部署模型
 
 > *—有贡献者：Yannick Assogba，Ping Yu 和 Nick Kreeger*
 
