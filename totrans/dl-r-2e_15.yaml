@@ -3515,147 +3515,185 @@
   id: totrans-585
   prefs: []
   type: TYPE_NORMAL
+  zh: 后端函数不再积极开发，但它们受到 TensorFlow 稳定性承诺的保护，正在维护，并且不会很快消失。您可以放心使用函数如 k_expand_dims()、k_squeeze()
+    和 k_stack() 来执行常见的张量操作，特别是当使用一致的基于 1 的计数约定更容易推理时。但是，当您发现后端函数的功能有限时，请毫不犹豫地切换到直接使用
+    tf 模块函数。您可以在 [https://keras.rstudio.com/articles/backend.html](https://www.keras.rstudio.com/articles/backend.html)
+    找到有关后端函数的其他文档。
 - en: Let’s set up the VGG19 network. Like in the DeepDream example, we’ll use the
     pre-trained convnet to create a feature exactor model that returns the activations
     of intermediate layers—all layers in the model this time.
   id: totrans-586
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们设置 VGG19 网络。就像在 DeepDream 示例中一样，我们将使用预训练的卷积网络来创建一个特征提取器模型，该模型返回中间层的激活——这次是模型中的所有层。
 - en: Listing 12.18 Using a pretrained VGG19 model to create a feature extractor
   id: totrans-587
   prefs: []
   type: TYPE_NORMAL
+  zh: 清单 12.18 使用预训练的 VGG19 模型创建特征提取器
 - en: model <— application_vgg19(weights = "imagenet",
   id: totrans-588
   prefs: []
   type: TYPE_NORMAL
+  zh: model <— application_vgg19(weights = "imagenet",
 - en: include_top = FALSE)➊
   id: totrans-589
   prefs: []
   type: TYPE_NORMAL
+  zh: include_top = FALSE)➊
 - en: outputs <— list()
   id: totrans-590
   prefs: []
   type: TYPE_NORMAL
+  zh: 输出 <— 列表()
 - en: for (layer in model$layers)
   id: totrans-591
   prefs: []
   type: TYPE_NORMAL
+  zh: for (layer in model$layers)
 - en: outputs[[layer$name]] <— layer$output
   id: totrans-592
   prefs: []
   type: TYPE_NORMAL
+  zh: outputs[[layer$name]] <— layer$output
 - en: feature_extractor <— keras_model(inputs = model$inputs,➋
   id: totrans-593
   prefs: []
   type: TYPE_NORMAL
+  zh: feature_extractor <— keras_model(inputs = model$inputs,➋
 - en: outputs = outputs)
   id: totrans-594
   prefs: []
   type: TYPE_NORMAL
+  zh: outputs = outputs)
 - en: ➊ **Build a VGG19 model loaded with pretrained ImageNet weights.**
   id: totrans-595
   prefs: []
   type: TYPE_NORMAL
+  zh: ➊ **建立一个使用预训练的 ImageNet 权重的 VGG19 模型。**
 - en: ➋ **A model that returns the activation values for every target layer (as a
     named list)**
   id: totrans-596
   prefs: []
   type: TYPE_NORMAL
+  zh: ➋ **返回每个目标层的激活值的模型（作为命名列表）**
 - en: Let’s define the content loss, which will make sure the top layer of the VGG19
     convnet has a similar view of the style image and the combination image.
   id: totrans-597
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们定义内容损失，它将确保 VGG19 卷积网络的顶层对风格图像和组合图像有相似的视图。
 - en: Listing 12.19 Content loss
   id: totrans-598
   prefs: []
   type: TYPE_NORMAL
+  zh: 清单 12.19 内容损失
 - en: content_loss <— function(base_img, combination_img)
   id: totrans-599
   prefs: []
   type: TYPE_NORMAL
+  zh: content_loss <— 函数(base_img, combination_img)
 - en: sum((combination_img - base_img) ^ 2)
   id: totrans-600
   prefs: []
   type: TYPE_NORMAL
+  zh: sum((combination_img - base_img) ^ 2)
 - en: 'Next is the style loss. It uses an auxiliary function to compute the Gram matrix
     of an input matrix: a map of the correlations found in the original feature matrix.'
   id: totrans-601
   prefs: []
   type: TYPE_NORMAL
+  zh: 接下来是风格损失。它使用一个辅助函数来计算输入矩阵的 Gram 矩阵：原始特征矩阵中找到的相关性的映射。
 - en: Listing 12.20 Style loss
   id: totrans-602
   prefs: []
   type: TYPE_NORMAL
+  zh: 清单 12.20 风格损失
 - en: gram_matrix <— function(x) {➊
   id: totrans-603
   prefs: []
   type: TYPE_NORMAL
+  zh: gram_matrix <— 函数(x) {➊
 - en: n_features <— tf$shape(x)[3]
   id: totrans-604
   prefs: []
   type: TYPE_NORMAL
+  zh: n_features <— tf$shape(x)[3]
 - en: x %>%
   id: totrans-605
   prefs: []
   type: TYPE_NORMAL
+  zh: x %>%
 - en: tf$reshape(c(-1L, n_features)) %>%➋
   id: totrans-606
   prefs: []
   type: TYPE_NORMAL
+  zh: tf$reshape(c(-1L, n_features)) %>%➋
 - en: tf$matmul(t(.), .)➌
   id: totrans-607
   prefs: []
   type: TYPE_NORMAL
+  zh: tf$matmul(t(.), .)➌
 - en: '}'
   id: totrans-608
   prefs: []
   type: TYPE_NORMAL
+  zh: '}'
 - en: style_loss <— function(style_img, combination_img) {
   id: totrans-609
   prefs: []
   type: TYPE_NORMAL
+  zh: style_loss <— 函数(style_img, combination_img) {
 - en: S <— gram_matrix(style_img)
   id: totrans-610
   prefs: []
   type: TYPE_NORMAL
+  zh: S <— gram_matrix(style_img)
 - en: C <— gram_matrix(combination_img)
   id: totrans-611
   prefs: []
   type: TYPE_NORMAL
+  zh: C <— gram_matrix(combination_img)
 - en: channels <— 3
   id: totrans-612
   prefs: []
   type: TYPE_NORMAL
+  zh: channels <— 3
 - en: size <— img_height * img_width
   id: totrans-613
   prefs: []
   type: TYPE_NORMAL
+  zh: size <— img_height * img_width
 - en: sum((S - C) ^ 2) /
   id: totrans-614
   prefs: []
   type: TYPE_NORMAL
+  zh: sum((S - C) ^ 2) /
 - en: (4 * (channels ^ 2) * (size ^ 2))
   id: totrans-615
   prefs: []
   type: TYPE_NORMAL
+  zh: (4 * (channels ^ 2) * (size ^ 2))
 - en: '}'
   id: totrans-616
   prefs: []
   type: TYPE_NORMAL
+  zh: '}'
 - en: ➊ **x has the shape (height, width, features).**
   id: totrans-617
   prefs: []
   type: TYPE_NORMAL
+  zh: ➊ **x 的形状为 (高度, 宽度, 特征)。**
 - en: ➋ **Flatten the first two spatial axes, and preserve the features axis.**
   id: totrans-618
   prefs: []
   type: TYPE_NORMAL
+  zh: ➋ **将前两个空间轴展平，并保留特征轴。**
 - en: ➌ **The output will have the shape (n_features, n_features).**
   id: totrans-619
   prefs: []
   type: TYPE_NORMAL
+  zh: ➌ **输出将具有形状 (n_features, n_features)。**
 - en: 'To these two loss components, you add a third: the *total variation loss*,
     which operates on the pixels of the generated combination image. It encourages
     spatial continuity in the generated image, thus avoiding overly pixelated results.
@@ -3663,38 +3701,47 @@
   id: totrans-620
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于这两个损失组件，您还添加了第三个：*总变差损失*，它作用于生成的组合图像的像素上。它鼓励生成图像中的空间连续性，从而避免过度像素化的结果。您可以将其解释为正则化损失。
 - en: '**Listing 12.21 Total variation loss**'
   id: totrans-621
   prefs: []
   type: TYPE_NORMAL
+  zh: '**清单 12.21 总变差损失**'
 - en: total_variation_loss <— function(x) {
   id: totrans-622
   prefs: []
   type: TYPE_NORMAL
+  zh: total_variation_loss <— 函数(x) {
 - en: a <— k_square(x[, NA:(img_height-1), NA:(img_width-1), ]—
   id: totrans-623
   prefs: []
   type: TYPE_NORMAL
+  zh: a <— k_square(x[, NA:(img_height-1), NA:(img_width-1), ]—
 - en: x[, 2:NA             , NA:(img_width-1), ])
   id: totrans-624
   prefs: []
   type: TYPE_NORMAL
+  zh: x[, 2:NA             , NA:(img_width-1), ])
 - en: b <— k_square(x[, NA:(img_height-1), NA:(img_width-1), ]—
   id: totrans-625
   prefs: []
   type: TYPE_NORMAL
+  zh: b <— k_square(x[, NA:(img_height-1), NA:(img_width-1), ]—
 - en: x[, NA:(img_height-1), 2:NA            , ])
   id: totrans-626
   prefs: []
   type: TYPE_NORMAL
+  zh: x[, NA:(img_height-1), 2:NA            , ])
 - en: sum((a + b) ^ 1.25)
   id: totrans-627
   prefs: []
   type: TYPE_NORMAL
+  zh: sum((a + b) ^ 1.25)
 - en: '}'
   id: totrans-628
   prefs: []
   type: TYPE_NORMAL
+  zh: '}'
 - en: The loss that you minimize is a weighted average of these three losses. To compute
     the content loss, you use only one upper layer—the block5_conv2 layer—whereas
     for the style loss, you use a list of layers that spans both low-level and high-level
@@ -4533,18 +4580,22 @@
   id: totrans-769
   prefs: []
   type: TYPE_NORMAL
+  zh: ➊ **将输入编码为均值和方差参数。**
 - en: ➋ **Draw a latent point using a small random epsilon.**
   id: totrans-770
   prefs: []
   type: TYPE_NORMAL
+  zh: ➋ **使用一个小的随机 epsilon 画一个潜在点。**
 - en: ➌ **Decode z back to an image.**
   id: totrans-771
   prefs: []
   type: TYPE_NORMAL
+  zh: ➌ **将 z 解码回图像。**
 - en: ➍ **Instantiate the autoencoder model, which maps an input image to its reconstruction.**
   id: totrans-772
   prefs: []
   type: TYPE_NORMAL
+  zh: ➍ **实例化自动编码器模型，将输入图像映射到其重构。**
 - en: You can then train the model using the reconstruction loss and the regularization
     loss. For the regularization loss, we typically use an expression (the Kullback–Leibler
     divergence) meant to nudge the distribution of the encoder output toward a well—rounded
@@ -4553,37 +4604,45 @@
   id: totrans-773
   prefs: []
   type: TYPE_NORMAL
+  zh: 然后，您可以使用重构损失和正则化损失来训练模型。对于正则化损失，我们通常使用一个表达式（Kullback-Leibler 散度），旨在将编码器输出的分布推向以
+    0 为中心的一个良好的正常分布。这为编码器提供了对所建模的潜在空间结构的合理假设。
 - en: Now let’s see what implementing a VAE looks like in practice!
   id: totrans-774
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在让我们看看在实践中实现 VAE 是什么样子的！
 - en: 12.4.4 Implementing a VAE with Keras
   id: totrans-775
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 12.4.4 使用 Keras 实现 VAE
 - en: 'We’re going to be implementing a VAE that can generate MNIST digits. It’s going
     to have three parts:'
   id: totrans-776
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们将要实现一个可以生成 MNIST 数字的 VAE。它将有三个部分：
 - en: An encoder network that turns a real image into a mean and a variance in the
     latent space
   id: totrans-777
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 将实际图像转换为潜在空间中的均值和方差的编码器网络
 - en: A sampling layer that takes such a mean and variance and uses them to sample
     a random point from the latent space
   id: totrans-778
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 一个采样层，它接受这样的均值和方差，并使用它们从潜在空间中随机采样一个点
 - en: A decoder network that turns points from the latent space back into image
   id: totrans-779
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 将点从潜在空间转换回图像的解码器网络
 - en: The following listing shows the encoder network we’ll use, mapping images to
     the parameters of a probability distribution over the latent space. It’s a simple
     convnet that maps the input image x to two vectors, z_mean and z_log_var. One
@@ -4596,212 +4655,264 @@
   id: totrans-780
   prefs: []
   type: TYPE_NORMAL
+  zh: 下面的清单显示了我们将使用的编码器网络，将图像映射到潜在空间上的概率分布的参数。它是一个简单的 convnet，将输入图像 x 映射到两个向量，z_mean
+    和 z_log_var。一个重要的细节是，我们使用步幅来对特征图进行下采样，而不是使用最大池化。上次我们这样做是在第 9 章的图像分割示例中。回想一下，一般来说，对于任何关心信息位置的模型来说，步幅优于最大池化——也就是说，在图像中的位置，这个模型是关心的，因为它将不得不产生一个可以用来重构有效图像的图像编码。
 - en: '**Listing 12.24 VAE encoder network**'
   id: totrans-781
   prefs: []
   type: TYPE_NORMAL
+  zh: '**清单 12.24 VAE 编码器网络**'
 - en: latent_dim <— 2➊
   id: totrans-782
   prefs: []
   type: TYPE_NORMAL
+  zh: latent_dim <— 2➊
 - en: encoder_inputs <—  layer_input(shape = c(28, 28, 1))
   id: totrans-783
   prefs: []
   type: TYPE_NORMAL
+  zh: encoder_inputs <—  layer_input(shape = c(28, 28, 1))
 - en: x <— encoder_inputs %>%
   id: totrans-784
   prefs: []
   type: TYPE_NORMAL
+  zh: x <— encoder_inputs %>%
 - en: layer_conv_2d(32, 3, activation = "relu", strides = 2, padding = "same") %>%
   id: totrans-785
   prefs: []
   type: TYPE_NORMAL
+  zh: layer_conv_2d(32, 3, activation = "relu", strides = 2, padding = "same") %>%
 - en: layer_conv_2d(64, 3, activation = "relu", strides = 2, padding = "same") %>%
   id: totrans-786
   prefs: []
   type: TYPE_NORMAL
+  zh: layer_conv_2d(64, 3, activation = "relu", strides = 2, padding = "same") %>%
 - en: layer_flatten() %>%
   id: totrans-787
   prefs: []
   type: TYPE_NORMAL
+  zh: layer_flatten() %>%
 - en: layer_dense(16, activation = "relu")
   id: totrans-788
   prefs: []
   type: TYPE_NORMAL
+  zh: layer_dense(16, activation = "relu")
 - en: z_mean <— x %>% layer_dense(latent_dim, name = "z_mean")➋
   id: totrans-789
   prefs: []
   type: TYPE_NORMAL
+  zh: z_mean <— x %>% layer_dense(latent_dim, name = "z_mean")➋
 - en: z_log_var <— x %>% layer_dense(latent_dim, name = "z_log_var")➋
   id: totrans-790
   prefs: []
   type: TYPE_NORMAL
+  zh: z_log_var <— x %>% layer_dense(latent_dim, name = "z_log_var")➋
 - en: encoder <— keras_model(encoder_inputs, list(z_mean, z_log_var),
   id: totrans-791
   prefs: []
   type: TYPE_NORMAL
+  zh: encoder <— keras_model(encoder_inputs, list(z_mean, z_log_var),
 - en: name = "encoder")
   id: totrans-792
   prefs: []
   type: TYPE_NORMAL
+  zh: name = "encoder")
 - en: '➊ **Dimensionality of the latent space: a 2D plane**'
   id: totrans-793
   prefs: []
   type: TYPE_NORMAL
+  zh: ➊ **潜在空间的维数：一个二维平面**
 - en: ➋ **The input image ends up being encoded into these two parameters.**
   id: totrans-794
   prefs: []
   type: TYPE_NORMAL
+  zh: ➋ **输入图像最终被编码为这两个参数。**
 - en: 'Its summary looks like this:'
   id: totrans-795
   prefs: []
   type: TYPE_NORMAL
+  zh: 其摘要如下所示：
 - en: '![Image](../images/f0437-01.jpg)'
   id: totrans-796
   prefs: []
   type: TYPE_IMG
+  zh: '![Image](../images/f0437-01.jpg)'
 - en: Next is the code for using z_mean and z_log_var, the parameters of the statistical
     distribution assumed to have produced input_img, to generate a latent space point
     z.
   id: totrans-797
   prefs: []
   type: TYPE_NORMAL
+  zh: 接下来是使用 z_mean 和 z_log_var 的代码，假定这些参数是产生 input_img 的统计分布的参数，以生成潜在空间点 z。
 - en: '**Listing 12.25 Latent—space—sampling layer**'
   id: totrans-798
   prefs: []
   type: TYPE_NORMAL
+  zh: '**清单 12.25 潜在空间采样层**'
 - en: layer_sampler <— new_layer_class(
   id: totrans-799
   prefs: []
   type: TYPE_NORMAL
+  zh: layer_sampler <— new_layer_class(
 - en: classname = "Sampler",
   id: totrans-800
   prefs: []
   type: TYPE_NORMAL
+  zh: classname = "Sampler",
 - en: call = function(z_mean, z_log_var) {➊
   id: totrans-801
   prefs: []
   type: TYPE_NORMAL
+  zh: call = function(z_mean, z_log_var) {➊
 - en: epsilon <— tf$random$normal(shape = tf$shape(z_mean))➋
   id: totrans-802
   prefs: []
   type: TYPE_NORMAL
+  zh: epsilon <— tf$random$normal(shape = tf$shape(z_mean))➋
 - en: z_mean + exp(0.5 * z_log_var) * epsilon➌
   id: totrans-803
   prefs: []
   type: TYPE_NORMAL
+  zh: z_mean + exp(0.5 * z_log_var) * epsilon➌
 - en: '}'
   id: totrans-804
   prefs: []
   type: TYPE_NORMAL
+  zh: '}'
 - en: '}'
   id: totrans-805
   prefs: []
   type: TYPE_NORMAL
+  zh: '}'
 - en: ➊ **z_mean and z_log_var here both will have shape (batch_size, latent_dim),
     for example, (128, 2).**
   id: totrans-806
   prefs: []
   type: TYPE_NORMAL
+  zh: ➊ **这里的 z_mean 和 z_log_var 都将具有形状 (batch_size, latent_dim)，例如 (128, 2)。**
 - en: ➋ **Draw a batch of random normal vectors.**
   id: totrans-807
   prefs: []
   type: TYPE_NORMAL
+  zh: ➋ **生成与编码器 Flatten 层级别相同数量的随机正态向量。**
 - en: ➌ **Apply the VAE sampling formula.**
   id: totrans-808
   prefs: []
   type: TYPE_NORMAL
+  zh: ➌ **应用 VAE 采样公式。**
 - en: The following listing shows the decoder implementation. We reshape the vector
     z to the dimensions of an image and then use a few convolution layers to obtain
     a final image output that has the same dimensions as the original input_img.
   id: totrans-809
   prefs: []
   type: TYPE_NORMAL
+  zh: 下面的清单显示了解码器的实现。我们将向量 z 重塑为图像的维度，然后使用几个卷积层获得最终图像输出，其尺寸与原始输入图像相同。
 - en: Listing 12.26 VAE decoder network, mapping latent space points to images
   id: totrans-810
   prefs: []
   type: TYPE_NORMAL
+  zh: 清单 12.26 VAE 解码器网络，将潜空间点映射到图像
 - en: latent_inputs <— layer_input(shape = c(latent_dim))➊
   id: totrans-811
   prefs: []
   type: TYPE_NORMAL
+  zh: latent_inputs <— layer_input(shape = c(latent_dim))➊
 - en: decoder_outputs <— latent_inputs %>%
   id: totrans-812
   prefs: []
   type: TYPE_NORMAL
+  zh: decoder_outputs <— latent_inputs %>%
 - en: layer_dense(7 * 7 * 64, activation = "relu") %>% ➋
   id: totrans-813
   prefs: []
   type: TYPE_NORMAL
+  zh: layer_dense(7 * 7 * 64, activation = "relu") %>% ➋
 - en: layer_reshape(c(7, 7, 64)) %>%➌
   id: totrans-814
   prefs: []
   type: TYPE_NORMAL
+  zh: layer_reshape(c(7, 7, 64)) %>%➌
 - en: layer_conv_2d_transpose(64, 3, activation = "relu",
   id: totrans-815
   prefs: []
   type: TYPE_NORMAL
+  zh: layer_conv_2d_transpose(64, 3, activation = "relu",
 - en: strides = 2, padding = "same") %>% ➍
   id: totrans-816
   prefs: []
   type: TYPE_NORMAL
+  zh: strides = 2, padding = "same") %>% ➍
 - en: layer_conv_2d_transpose(32, 3, activation = "relu",
   id: totrans-817
   prefs: []
   type: TYPE_NORMAL
+  zh: layer_conv_2d_transpose(32, 3, activation = "relu",
 - en: strides = 2, padding = "same") %>%
   id: totrans-818
   prefs: []
   type: TYPE_NORMAL
+  zh: strides = 2, padding = "same") %>%
 - en: layer_conv_2d(1, 3, activation = "sigmoid",
   id: totrans-819
   prefs: []
   type: TYPE_NORMAL
+  zh: layer_conv_2d(1, 3, activation = "sigmoid",
 - en: padding = "same") ➎
   id: totrans-820
   prefs: []
   type: TYPE_NORMAL
+  zh: padding = "same") ➎
 - en: decoder <— keras_model(latent_inputs, decoder_outputs,
   id: totrans-821
   prefs: []
   type: TYPE_NORMAL
+  zh: decoder <— keras_model(latent_inputs, decoder_outputs,
 - en: name = "decoder")
   id: totrans-822
   prefs: []
   type: TYPE_NORMAL
+  zh: name = "decoder")
 - en: ➊ **Input where we'll feed z**
   id: totrans-823
   prefs: []
   type: TYPE_NORMAL
+  zh: ➊ **输入我们将 feed z 的地方**
 - en: ➋ **Produce the same number of coefficients that we had at the level of the
     Flatten layer in the encoder.**
   id: totrans-824
   prefs: []
   type: TYPE_NORMAL
+  zh: ➋ **在这里产生的系数的数量与编码器的 Flatten 层级别上相同。**
 - en: ➌ **Revert the layer_flatten() of the encoder.**
   id: totrans-825
   prefs: []
   type: TYPE_NORMAL
+  zh: ➌ **还原 encoder 的 layer_flatten()。**
 - en: ➍ **Revert the layer_conv_2d() of the encoder.**
   id: totrans-826
   prefs: []
   type: TYPE_NORMAL
+  zh: ➍ **还原 encoder 的 layer_conv_2d()。**
 - en: ➎ **The output ends up with shape (28, 28, 1).**
   id: totrans-827
   prefs: []
   type: TYPE_NORMAL
+  zh: ➎ **输出的形状为 (28, 28, 1)。**
 - en: 'Its summary looks like this:'
   id: totrans-828
   prefs: []
   type: TYPE_NORMAL
+  zh: 它的摘要如下：
 - en: decoder
   id: totrans-829
   prefs: []
   type: TYPE_NORMAL
+  zh: decoder
 - en: '![Image](../images/f0438-01.jpg)'
   id: totrans-830
   prefs: []
   type: TYPE_IMG
+  zh: '![图片](../images/f0438-01.jpg)'
 - en: Now let’s create the VAE model itself. This is your first example of a model
     that isn’t doing supervised learning (an autoencoder is an example of *self-supervised*
     learning, because it uses its inputs as targets). Whenever you depart from classic
@@ -4811,213 +4922,266 @@
   id: totrans-831
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在让我们创建 VAE 模型本身。这是你第一个不执行监督学习的模型示例（自动编码器是 *自监督* 学习的示例，因为它使用其输入作为目标）。当你脱离经典的监督学习时，通常会创建一个
+    new_model_class() 并实现一个自定义的 train_step() 来指定新的训练逻辑，这是你在第 7 章学到的工作流程。这就是我们在这里要做的。
 - en: '**Listing 12.27 VAE model with custom train_step()**'
   id: totrans-832
   prefs: []
   type: TYPE_NORMAL
+  zh: '**清单 12.27 自定义 train_step() 的 VAE 模型**'
 - en: model_vae <— new_model_class(
   id: totrans-833
   prefs: []
   type: TYPE_NORMAL
+  zh: model_vae <— new_model_class(
 - en: classname = "VAE",
   id: totrans-834
   prefs: []
   type: TYPE_NORMAL
+  zh: classname = "VAE",
 - en: initialize = function(encoder, decoder, …) {
   id: totrans-835
   prefs: []
   type: TYPE_NORMAL
+  zh: initialize = function(encoder, decoder, …) {
 - en: super$initialize(…)
   id: totrans-836
   prefs: []
   type: TYPE_NORMAL
+  zh: super$initialize(…)
 - en: self$encoder <— encoder➊
   id: totrans-837
   prefs: []
   type: TYPE_NORMAL
+  zh: self$encoder <— encoder➊
 - en: self$decoder <— decoder
   id: totrans-838
   prefs: []
   type: TYPE_NORMAL
+  zh: self$decoder <— decoder
 - en: self$sampler <— layer_sampler()
   id: totrans-839
   prefs: []
   type: TYPE_NORMAL
+  zh: self$sampler <— layer_sampler()
 - en: self$total_loss_tracker <
   id: totrans-840
   prefs: []
   type: TYPE_NORMAL
+  zh: self$total_loss_tracker <
 - en: metric_mean(name = "total_loss")➋
   id: totrans-841
   prefs: []
   type: TYPE_NORMAL
+  zh: metric_mean(name = "total_loss")➋
 - en: self$reconstruction_loss_tracker <➋
   id: totrans-842
   prefs: []
   type: TYPE_NORMAL
+  zh: self$reconstruction_loss_tracker <➋
 - en: metric_mean(name = "reconstruction_loss")➋
   id: totrans-843
   prefs: []
   type: TYPE_NORMAL
+  zh: metric_mean(name = "reconstruction_loss")➋
 - en: self$kl_loss_tracker <➋
   id: totrans-844
   prefs: []
   type: TYPE_NORMAL
+  zh: self$kl_loss_tracker <➋
 - en: metric_mean(name = "kl_loss")➋
   id: totrans-845
   prefs: []
   type: TYPE_NORMAL
+  zh: metric_mean(name = "kl_loss")➋
 - en: '},'
   id: totrans-846
   prefs: []
   type: TYPE_NORMAL
+  zh: '},'
 - en: metrics = mark_active(function() {➌
   id: totrans-847
   prefs: []
   type: TYPE_NORMAL
+  zh: metrics = mark_active(function() {➌
 - en: list(
   id: totrans-848
   prefs: []
   type: TYPE_NORMAL
+  zh: list(
 - en: self$total_loss_tracker,
   id: totrans-849
   prefs: []
   type: TYPE_NORMAL
+  zh: self$total_loss_tracker,
 - en: self$reconstruction_loss_tracker,
   id: totrans-850
   prefs: []
   type: TYPE_NORMAL
+  zh: self$reconstruction_loss_tracker,
 - en: self$kl_loss_tracker
   id: totrans-851
   prefs: []
   type: TYPE_NORMAL
+  zh: self$kl_loss_tracker
 - en: )
   id: totrans-852
   prefs: []
   type: TYPE_NORMAL
+  zh: )
 - en: '}),'
   id: totrans-853
   prefs: []
   type: TYPE_NORMAL
+  zh: '}),'
 - en: train_step = function(data) {
   id: totrans-854
   prefs: []
   type: TYPE_NORMAL
+  zh: train_step = function(data) {
 - en: with(tf$GradientTape() %as% tape, {
   id: totrans-855
   prefs: []
   type: TYPE_NORMAL
+  zh: with(tf$GradientTape() %as% tape, {
 - en: c(z_mean, z_log_var) %<—% self$encoder(data)
   id: totrans-856
   prefs: []
   type: TYPE_NORMAL
+  zh: c(z_mean, z_log_var) %<—% self$encoder(data)
 - en: z <— self$sampler(z_mean, z_log_var)
   id: totrans-857
   prefs: []
   type: TYPE_NORMAL
+  zh: z <— self$sampler(z_mean, z_log_var)
 - en: reconstruction <— decoder(z)
   id: totrans-858
   prefs: []
   type: TYPE_NORMAL
+  zh: reconstruction <— decoder(z)
 - en: reconstruction_loss <➍
   id: totrans-859
   prefs: []
   type: TYPE_NORMAL
+  zh: reconstruction_loss <➍
 - en: loss_binary_crossentropy(data, reconstruction) %>%
   id: totrans-860
   prefs: []
   type: TYPE_NORMAL
+  zh: loss_binary_crossentropy(data, reconstruction) %>%
 - en: sum(axis = c(2, 3)) %>% ➎
   id: totrans-861
   prefs: []
   type: TYPE_NORMAL
+  zh: sum(axis = c(2, 3)) %>% ➎
 - en: mean()➏
   id: totrans-862
   prefs: []
   type: TYPE_NORMAL
+  zh: mean()➏
 - en: kl_loss <— -0.5 * (1 + z_log_var - z_mean^2 - exp(z_log_var))
   id: totrans-863
   prefs: []
   type: TYPE_NORMAL
+  zh: kl_loss <— -0.5 * (1 + z_log_var - z_mean^2 - exp(z_log_var))
 - en: total_loss <— reconstruction_loss + mean(kl_loss)➐
   id: totrans-864
   prefs: []
   type: TYPE_NORMAL
+  zh: total_loss <— reconstruction_loss + mean(kl_loss)➐
 - en: '})'
   id: totrans-865
   prefs: []
   type: TYPE_NORMAL
+  zh: '})'
 - en: grads <— tape$gradient(total_loss, self$trainable_weights)
   id: totrans-866
   prefs: []
   type: TYPE_NORMAL
+  zh: grads <— tape$gradient(total_loss, self$trainable_weights)
 - en: self$optimizer$apply_gradients(zip_lists(grads, self$trainable_weights))
   id: totrans-867
   prefs: []
   type: TYPE_NORMAL
+  zh: self$optimizer$apply_gradients(zip_lists(grads, self$trainable_weights))
 - en: self$total_loss_tracker$update_state(total_loss)
   id: totrans-868
   prefs: []
   type: TYPE_NORMAL
+  zh: self$total_loss_tracker$update_state(total_loss)
 - en: self$reconstruction_loss_tracker$update_state(reconstruction_loss)
   id: totrans-869
   prefs: []
   type: TYPE_NORMAL
+  zh: self$reconstruction_loss_tracker$update_state(reconstruction_loss)
 - en: self$kl_loss_tracker$update_state(kl_loss)
   id: totrans-870
   prefs: []
   type: TYPE_NORMAL
+  zh: self$kl_loss_tracker$update_state(kl_loss)
 - en: list(total_loss = self$total_loss_tracker$result(),
   id: totrans-871
   prefs: []
   type: TYPE_NORMAL
+  zh: list(total_loss = self$total_loss_tracker$result(),
 - en: reconstruction_loss = self$reconstruction_loss_tracker$result(),
   id: totrans-872
   prefs: []
   type: TYPE_NORMAL
+  zh: reconstruction_loss = self$reconstruction_loss_tracker$result(),
 - en: kl_loss = self$kl_loss_tracker$result())
   id: totrans-873
   prefs: []
   type: TYPE_NORMAL
+  zh: kl_loss = self$kl_loss_tracker$result())
 - en: '}'
   id: totrans-874
   prefs: []
   type: TYPE_NORMAL
+  zh: '}'
 - en: '}'
   id: totrans-875
   prefs: []
   type: TYPE_NORMAL
+  zh: '}'
 - en: ➊ **We assign to self instead of private because we want the layer weights automatically
     tracked by the Keras Model base class.**
   id: totrans-876
   prefs: []
   type: TYPE_NORMAL
+  zh: ➊ **我们将赋值给self而不是private，因为我们希望层权重由Keras Model基类自动跟踪。**
 - en: ➋ **We use these metrics to keep track of the loss averages over each epoch.**
   id: totrans-877
   prefs: []
   type: TYPE_NORMAL
+  zh: ➋ **我们使用这些指标来跟踪每个周期内的损失平均值。**
 - en: ➌ **We list the metrics in an active property to enable the framework to reset
     them after each epoch (or between multiple calls to fit()/evaluate()).**
   id: totrans-878
   prefs: []
   type: TYPE_NORMAL
+  zh: ➌ **我们将指标列在active属性中，以便在每个周期（或在多次调用fit()/evaluate()之间）重置它们。**
 - en: ➍ **We sum the reconstruction loss over the spatial dimensions (second and third
     axes) and take its mean over the batch dimension.**
   id: totrans-879
   prefs: []
   type: TYPE_NORMAL
+  zh: ➍ **我们对空间维度（第二和第三轴）上的重建损失求和，并在批次维度上取其平均值。**
 - en: ➎ **Total loss for each case in the batch; preserve batch axis.**
   id: totrans-880
   prefs: []
   type: TYPE_NORMAL
+  zh: ➎ **批次中每个案例的总损失；保留批次轴。**
 - en: ➏ **Take the mean of loss totals in the batch.**
   id: totrans-881
   prefs: []
   type: TYPE_NORMAL
+  zh: ➏ **取批次中损失总和的平均值。**
 - en: ➐ **Add the regularization term (Kullback–Leibler divergence).**
   id: totrans-882
   prefs: []
   type: TYPE_NORMAL
+  zh: ➐ **添加正则化项（Kullback–Leibler散度）。**
 - en: Finally, we’re ready to instantiate and train the model on MNIST digits. Because
     the loss is taken care of in the custom layer, we don’t specify an external loss
     at compile time (loss = NULL), which in turn means we won’t pass target data during
@@ -5025,215 +5189,267 @@
   id: totrans-883
   prefs: []
   type: TYPE_NORMAL
+  zh: 最后，我们准备在MNIST数字上实例化并训练模型。因为损失在自定义层中已经处理，所以我们在编译时不指定外部损失（loss = NULL），这意味着在训练期间我们不会传递目标数据（正如您所见，我们在fit()中仅向模型传递x_train）。
 - en: Listing 12.28 Training the VAE
   id: totrans-884
   prefs: []
   type: TYPE_NORMAL
+  zh: 图12.28 训练VAE
 - en: library(listarrays)➊
   id: totrans-885
   prefs: []
   type: TYPE_NORMAL
+  zh: library(listarrays)➊
 - en: c(c(x_train, .), c(x_test, .)) %<—% dataset_mnist()
   id: totrans-886
   prefs: []
   type: TYPE_NORMAL
+  zh: c(c(x_train, .), c(x_test, .)) %<—% dataset_mnist()
 - en: mnist_digits <
   id: totrans-887
   prefs: []
   type: TYPE_NORMAL
+  zh: mnist_digits <
 - en: bind_on_rows(x_train, x_test) %>%➋
   id: totrans-888
   prefs: []
   type: TYPE_NORMAL
+  zh: bind_on_rows(x_train, x_test) %>%➋
 - en: expand_dims(-1) %>%
   id: totrans-889
   prefs: []
   type: TYPE_NORMAL
+  zh: expand_dims(-1) %>%
 - en: '{ . / 255 }'
   id: totrans-890
   prefs: []
   type: TYPE_NORMAL
+  zh: '{ . / 255 }'
 - en: str(mnist_digits)
   id: totrans-891
   prefs: []
   type: TYPE_NORMAL
+  zh: str(mnist_digits)
 - en: num [1:70000, 1:28, 1:28, 1] 0 0 0 0 0 0 0 0 0 0 …
   id: totrans-892
   prefs: []
   type: TYPE_NORMAL
+  zh: num [1:70000, 1:28, 1:28, 1] 0 0 0 0 0 0 0 0 0 0 …
 - en: vae <— model_vae(encoder, decoder)
   id: totrans-893
   prefs: []
   type: TYPE_NORMAL
+  zh: vae <— model_vae(encoder, decoder)
 - en: vae %>% compile(optimizer = optimizer_adam())➌
   id: totrans-894
   prefs: []
   type: TYPE_NORMAL
+  zh: vae %>% compile(optimizer = optimizer_adam())➌
 - en: vae %>% fit(mnist_digits, epochs = 30, batch_size = 128)➍
   id: totrans-895
   prefs: []
   type: TYPE_NORMAL
+  zh: vae %>% fit(mnist_digits, epochs = 30, batch_size = 128)➍
 - en: ➊ **Provide bind_on_rows() and other functions for manipulating R arrays.**
   id: totrans-896
   prefs: []
   type: TYPE_NORMAL
+  zh: ➊ **提供bind_on_rows()和其他用于操作R数组的函数。**
 - en: ➋ **We train on all MNIST digits, so we combine the training and test samples
     along the batch dim.**
   id: totrans-897
   prefs: []
   type: TYPE_NORMAL
+  zh: ➋ **我们对所有MNIST数字进行训练，因此我们沿批次维度合并训练和测试样本。**
 - en: ➌ **Note that we don't pass a loss argument in compile(), because the loss is
     already part of the train_step().**
   id: totrans-898
   prefs: []
   type: TYPE_NORMAL
+  zh: ➌ **请注意，我们在compile()中不传递损失参数，因为损失已经是train_step()的一部分。**
 - en: ➍ **Note that we don't pass targets in fit(), because train_step() doesn't expect
     any.**
   id: totrans-899
   prefs: []
   type: TYPE_NORMAL
+  zh: ➍ **请注意，我们在fit()中不传递目标，因为train_step()不需要任何目标。**
 - en: Once the model is trained, we can use the decoder network to turn arbitrary
     latent space vectors into images.
   id: totrans-900
   prefs: []
   type: TYPE_NORMAL
+  zh: 一旦模型训练完成，我们就可以使用解码器网络将任意潜空间向量转换为图像。
 - en: '**Listing 12.29 Sampling a grid of images from the 2D latent space**'
   id: totrans-901
   prefs: []
   type: TYPE_NORMAL
+  zh: '**图12.29 从二维潜空间中采样图像的示例**'
 - en: n <— 30
   id: totrans-902
   prefs: []
   type: TYPE_NORMAL
+  zh: n <— 30
 - en: digit_size <— 28
   id: totrans-903
   prefs: []
   type: TYPE_NORMAL
+  zh: digit_size <— 28
 - en: z_grid <➊
   id: totrans-904
   prefs: []
   type: TYPE_NORMAL
+  zh: z_grid <➊
 - en: seq(-1, 1, length.out = n) %>%
   id: totrans-905
   prefs: []
   type: TYPE_NORMAL
+  zh: seq(-1, 1, length.out = n) %>%
 - en: expand.grid(., .) %>%
   id: totrans-906
   prefs: []
   type: TYPE_NORMAL
+  zh: expand.grid(., .) %>%
 - en: as.matrix()
   id: totrans-907
   prefs: []
   type: TYPE_NORMAL
+  zh: as.matrix()
 - en: decoded <— predict(vae$decoder, z_grid)➋
   id: totrans-908
   prefs: []
   type: TYPE_NORMAL
+  zh: decoded <— predict(vae$decoder, z_grid)➋
 - en: z_grid_i <— seq(n) %>% expand.grid(x = ., y = .)➌
   id: totrans-909
   prefs: []
   type: TYPE_NORMAL
+  zh: z_grid_i <— seq(n) %>% expand.grid(x = ., y = .)➌
 - en: figure <— array(0, c(digit_size * n, digit_size * n))➍
   id: totrans-910
   prefs: []
   type: TYPE_NORMAL
+  zh: figure <— array(0, c(digit_size * n, digit_size * n))➍
 - en: for (i in 1:nrow(z_grid_i)) {
   id: totrans-911
   prefs: []
   type: TYPE_NORMAL
+  zh: for (i in 1:nrow(z_grid_i)) {
 - en: c(xi, yi) %<—% z_grid_i[i, ]
   id: totrans-912
   prefs: []
   type: TYPE_NORMAL
+  zh: c(xi, yi) %<—% z_grid_i[i, ]
 - en: digit <— decoded[i, , , ]
   id: totrans-913
   prefs: []
   type: TYPE_NORMAL
+  zh: 数字 <— 解码[i, , , ]
 - en: figure[seq(to = (n + 1 - xi) * digit_size, length.out = digit_size),
   id: totrans-914
   prefs: []
   type: TYPE_NORMAL
+  zh: figure[seq(to = (n + 1 - xi) * digit_size, length.out = digit_size),
 - en: seq(to = yi * digit_size, length.out = digit_size)] <—
   id: totrans-915
   prefs: []
   type: TYPE_NORMAL
+  zh: seq(to = yi * digit_size, length.out = digit_size)] <—
 - en: digit
   id: totrans-916
   prefs: []
   type: TYPE_NORMAL
+  zh: 数字
 - en: '}'
   id: totrans-917
   prefs: []
   type: TYPE_NORMAL
+  zh: '}'
 - en: par(pty = "s")➎
   id: totrans-918
   prefs: []
   type: TYPE_NORMAL
+  zh: par(pty = "s")➎
 - en: lim <— extendrange(r = c(-1, 1),
   id: totrans-919
   prefs: []
   type: TYPE_NORMAL
+  zh: lim <— extendrange(r = c(-1, 1),
 - en: f = 1 - (n / (n+.5)))➐
   id: totrans-920
   prefs: []
   type: TYPE_NORMAL
+  zh: f = 1 - (n / (n+.5)))➐
 - en: plot(NULL, frame.plot = FALSE,
   id: totrans-921
   prefs: []
   type: TYPE_NORMAL
+  zh: plot(NULL, frame.plot = FALSE,
 - en: ylim = lim, xlim = lim,
   id: totrans-922
   prefs: []
   type: TYPE_NORMAL
+  zh: ylim = lim, xlim = lim,
 - en: xlab = ~z[1], ylab = ~z[2]) ➑
   id: totrans-923
   prefs: []
   type: TYPE_NORMAL
+  zh: xlab = ~z[1], ylab = ~z[2]) ➑
 - en: rasterImage(as.raster(1 - figure, max = 1),➑
   id: totrans-924
   prefs: []
   type: TYPE_NORMAL
+  zh: rasterImage(as.raster(1 - figure, max = 1),➑
 - en: lim[1], lim[1], lim[2], lim[2],
   id: totrans-925
   prefs: []
   type: TYPE_NORMAL
+  zh: lim[1], lim[1], lim[2], lim[2],
 - en: interpolate = FALSE)
   id: totrans-926
   prefs: []
   type: TYPE_NORMAL
+  zh: interpolate = FALSE)
 - en: ➊ **Create a 2D grid of linearly spaced samples.**
   id: totrans-927
   prefs: []
   type: TYPE_NORMAL
+  zh: ➊ **创建一个线性间隔样本的二维网格。**
 - en: ➋ **Get the decoded digits.**
   id: totrans-928
   prefs: []
   type: TYPE_NORMAL
+  zh: ➋ **获取解码后的数字。**
 - en: ➌ **Transform the decoded digits with shape (900, 28, 28, 1) to an R array with
     shape (28*30, 28*30) for plotting.**
   id: totrans-929
   prefs: []
   type: TYPE_NORMAL
+  zh: ➌ **将形状为（900，28，28，1）的解码数字转换为形状为（28*30，28*30）的R数组以进行绘图。**
 - en: ➍ **We'll display a grid of 30 × 30 digits (900 digits total).**
   id: totrans-930
   prefs: []
   type: TYPE_NORMAL
+  zh: ➍ **我们将显示一个30×30的数字网格（共900个数字）。**
 - en: ➎ **Square plot type**
   id: totrans-931
   prefs: []
   type: TYPE_NORMAL
+  zh: ➎ **方形图类型**
 - en: ➏ **Expand lim so (–1, 1) are at the center of a digit.**
   id: totrans-932
   prefs: []
   type: TYPE_NORMAL
+  zh: ➏ **将限制值扩展到（-1，1），位于数字的中心。**
 - en: ➐ **Pass a formula object to xlab for a proper subscript.**
   id: totrans-933
   prefs: []
   type: TYPE_NORMAL
+  zh: ➐ **将一个公式对象传递给xlab以获得适当的下标。**
 - en: ➑ **Subtract from 1 to invert the colors.**
   id: totrans-934
   prefs: []
   type: TYPE_NORMAL
+  zh: ➑ **从1中减去以反转颜色。**
 - en: 'The grid of sampled digits (see [figure 12.18](#fig12-18)) shows a completely
     continuous distribution of the different digit classes, with one digit morphing
     into another as you follow a path through latent space. Specific directions in
@@ -5242,24 +5458,29 @@
   id: totrans-935
   prefs: []
   type: TYPE_NORMAL
+  zh: 从潜在空间抽样的数字网格（参见[图12.18](#fig12-18)）显示了不同数字类别的完全连续分布，随着您沿着潜在空间的路径前进，一个数字会变形成另一个数字。这个空间中的特定方向具有意义：例如，“五”的方向，“一”的方向等等。
 - en: '![Image](../images/f0441-01.jpg)'
   id: totrans-936
   prefs: []
   type: TYPE_IMG
+  zh: '![图片](../images/f0441-01.jpg)'
 - en: '**Figure 12.18 Grid of digits decoded from the latent space**'
   id: totrans-937
   prefs: []
   type: TYPE_NORMAL
+  zh: '**图12.18 从潜在空间解码的数字网格**'
 - en: 'In the next section, we’ll cover in detail the other major tool for generating
     artificial images: generative adversarial networks (GANs).'
   id: totrans-938
   prefs: []
   type: TYPE_NORMAL
+  zh: 在下一节中，我们将详细介绍生成人工图像的另一个主要工具：生成对抗网络（GANs）。
 - en: 12.4.5 Wrapping up
   id: totrans-939
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 12.4.5 总结
 - en: 'Image generation with deep learning is done by learning latent spaces that
     capture statistical information about a dataset of images. By sampling and decoding
     points from the latent space, you can generate never-before-seen images. There
@@ -5268,6 +5489,7 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用深度学习进行图像生成是通过学习捕获关于图像数据集的统计信息的潜在空间来完成的。通过从潜在空间中抽样和解码点，您可以生成以前未曾见过的图像。有两种主要工具可以实现这一点：VAEs和GANs。
 - en: 'VAEs result in highly structured, continuous latent representations. For this
     reason, they work well for doing all sorts of image editing in latent space: face
     swapping, turning a frowning face into a smiling face, and so on. They also work
@@ -5278,23 +5500,27 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: VAEs会产生高度结构化、连续的潜在表示。因此，它们非常适合在潜在空间中进行各种图像编辑：人脸交换，将皱眉的脸变成微笑的脸等等。它们还非常适合进行基于潜在空间的动画，比如沿着潜在空间的横截面进行步行动画，或者以连续的方式显示起始图像逐渐变形为不同的图像。
 - en: GANs enable the generation of realistic single-frame images but may not induce
     latent spaces with solid structure and high continuity.
   id: totrans-942
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: GANs可以生成逼真的单帧图像，但可能不会产生具有稳固结构和高连续性的潜在空间。
 - en: Most successful practical applications I have seen with images rely on VAEs,
     but GANs have enjoyed enduring popularity in the world of academic research. You’ll
     find out how they work and how to implement one in the next section.
   id: totrans-943
   prefs: []
   type: TYPE_NORMAL
+  zh: 我见过的大多数成功应用案例都依赖于VAEs，但是GANs在学术研究领域一直很受欢迎。在下一节中，您将了解它们的工作原理以及如何实现其中之一。
 - en: 12.5 Introduction to generative adversarial networks
   id: totrans-944
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 12.5 生成对抗网络简介
 - en: Generative adversarial networks (GANs), introduced in 2014 by Goodfellow et
     al.,^([7](#Rendnote7)) are an alternative to VAEs for learning latent spaces of
     images. They enable the generation of fairly realistic synthetic images by forcing
@@ -5302,6 +5528,7 @@
   id: totrans-945
   prefs: []
   type: TYPE_NORMAL
+  zh: 生成对抗网络（GANs）由Goodfellow等人于2014年提出，^([7](#Rendnote7)) 是学习图像潜在空间的替代方法，与VAEs相比。它们通过强制生成的图像在统计上几乎无法与真实图像区分开来，从而使得生成的合成图像相当逼真。
 - en: An intuitive way to understand GANs is to imagine a forger trying to create
     a fake Picasso painting. At first, the forger is pretty bad at the task. He mixes
     some of his fakes with authentic Picassos and shows them all to an art dealer.
@@ -5391,6 +5618,8 @@
   id: totrans-955
   prefs: []
   type: TYPE_NORMAL
+  zh: 在本节中，我们将解释如何以最简形式在 Keras 中实现 GAN。GAN 是先进的，因此深入探讨生成 [figure 12.20](#fig12-20)
+    中的图像的 StyleGAN2 架构等技术细节超出了本书的范围。我们将在此演示中使用的具体实现是 *深度卷积 GAN*（DCGAN）：一个非常基本的 GAN，其中生成器和判别器都是深度卷积网络。
 - en: 'We’ll train our GAN on images from the large-scale CelebFaces Attributes dataset
     (known as CelebA), a dataset of 200,000 faces of celebrities ([http://mmlab.ie.cuhk.edu.hk/projects/CelebA.html](http://mmlab.ie.cuhk.edu.hk/projects/CelebA.html)).
     To speed up training, we’ll resize the images to 64 × 64, so we’ll be learning
@@ -5398,28 +5627,35 @@
   id: totrans-956
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们将在大规模 CelebFaces 属性数据集（称为 CelebA）的图像上训练我们的 GAN，这是一个包含 20 万个名人面孔的数据集（[http://mmlab.ie.cuhk.edu.hk/projects/CelebA.html](http://mmlab.ie.cuhk.edu.hk/projects/CelebA.html)）。为了加快训练速度，我们将图像调整为
+    64 × 64，因此我们将学习生成 64 × 64 的人脸图像。在图解上，GAN 如下所示：
 - en: '![Image](../images/f0444-01.jpg)'
   id: totrans-957
   prefs: []
   type: TYPE_IMG
+  zh: '![图片](../images/f0444-01.jpg)'
 - en: '**[Figure 12.20](#fig12-20) Latent space dwellers. Images generated by [https://thispersondoesnotexist.com](https://thispersondoesnotexist.com)
     using a StyleGAN2 model. (Image credit: Phillip Wang is the website author. The
     model used is the StyleGAN2 model from Karras et al., [https://arxiv.org/abs/1912.04958](https://arxiv.org/abs/1912.04958).)**'
   id: totrans-958
   prefs: []
   type: TYPE_NORMAL
+  zh: '**[图 12.20](#fig12-20) 潜空间居民。由 [https://thispersondoesnotexist.com](https://thispersondoesnotexist.com)
+    使用 StyleGAN2 模型生成的图像。（图片来源：Phillip Wang 是网站作者。使用的模型是 Karras 等人的 StyleGAN2 模型，[https://arxiv.org/abs/1912.04958](https://arxiv.org/abs/1912.04958)）**'
 - en: A generator network maps vectors of shape (latent_dim) to images of shap (64,
     64, 3).
   id: totrans-959
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 生成器网络将形状为（latent_dim）的向量映射到形状为（64，64，3）的图像。
 - en: A discriminator network maps images of shape (64, 64, 3) to a binary score estimating
     the probability that the image is real.
   id: totrans-960
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 判别器网络将形状为（64，64，3）的图像映射到一个二进制分数，估计图像为真实的概率。
 - en: 'A gan network chains the generator and the discriminator together: gan(x) =
     discriminator(generator(x)). Thus, this gan network maps latent space vectors
     to the discriminator’s assessment of the realism of these latent vectors as decoded
@@ -5428,12 +5664,14 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: GAN 网络将生成器和判别器链接在一起：gan(x) = discriminator(generator(x))。因此，这个 GAN 网络将潜空间向量映射到判别器对这些潜空间向量解码后的真实性的评估。
 - en: We train the discriminator using examples of real and fake images along wit
     “real”/”fake” labels, just as we train any regular image-classification model.
   id: totrans-962
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 我们使用真实和假图像的示例以及“真实”/“假”的标签来训练判别器，就像我们训练任何常规图像分类模型一样。
 - en: To train the generator, we use the gradients of the generator’s weights with
     regard to the loss of the gan model. This means that at every step, we move the
     weights of the generator in a direction that makes the discriminator more likely
@@ -5443,11 +5681,13 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 为了训练生成器，我们使用生成器权重相对于 gan 模型损失的梯度。这意味着在每一步，我们将生成器的权重移动到一个方向，使判别器更有可能将生成器解码的图像分类为“真实”。换句话说，我们训练生成器来欺骗判别器。
 - en: 12.5.2 A bag of tricks
   id: totrans-964
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 12.5.2 一袋技巧
 - en: 'The process of training GANs and tuning GAN implementations is notoriously
     difficult. You should keep in mind a number of known tricks. Like most things
     in deep learning, it’s more alchemy than science: these tricks are heuristics,
@@ -5455,30 +5695,35 @@
   id: totrans-965
   prefs: []
   type: TYPE_NORMAL
+  zh: 训练 GAN 和调整 GAN 实现的过程非常困难。您应该记住一些已知的技巧。像深度学习中的大多数事情一样，这更像是炼金术而不是科学：这些技巧是启发式的，而不是理论支持的指南。
 - en: They’re supported by a level of intuitive understanding of the phenomenon at
     hand, and they’re known to work well empirically, although not necessarily in
     every context.
   id: totrans-966
   prefs: []
   type: TYPE_NORMAL
+  zh: 它们受到对手头现象的直觉理解的支持，并且已知在经验上工作良好，尽管不一定在每种情况下都是如此。
 - en: 'Here are a few of the tricks used in the implementation of the GAN generator
     and discriminator in this section. It isn’t an exhaustive list of GAN—related
     tips; you’ll find many more across the GAN literature:'
   id: totrans-967
   prefs: []
   type: TYPE_NORMAL
+  zh: 以下是本节中 GAN 生成器和判别器实现中使用的一些技巧。这不是一个详尽的 GAN 相关提示列表；您将在 GAN 文献中找到更多：
 - en: We use strides instead of pooling for downsampling feature maps in the discriminator,
     just like we did in our VAE encoder.
   id: totrans-968
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 在判别器中，我们使用步幅而不是池化来对特征图进行下采样，就像我们在 VAE 编码器中所做的那样。
 - en: We sample points from the latent space using a *normal distribution* (Gaussian
     distribution), not a uniform distribution.
   id: totrans-969
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 我们使用 *正态分布*（高斯分布）而不是均匀分布从潜在空间中采样点。
 - en: Stochasticity is good for inducing robustness. Because GAN training results
     in a dynamic equilibrium, GANs are likely to get stuck in all sorts of ways. Introducing
     randomness during training helps prevent this. We introduce randomness by adding
@@ -5487,6 +5732,7 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 随机性对于诱导鲁棒性是有益的。因为 GAN 训练导致动态平衡，GAN 很可能以各种方式陷入困境。在训练过程中引入随机性有助于防止这种情况发生。我们通过向判别器的标签添加随机噪声来引入随机性。
 - en: 'Sparse gradients can hinder GAN training. In deep learning, sparsity is often
     a desirable property, but not in GANs. Two things can induce gradient sparsity:
     maxp—oling operations and relu activations. Instead of max pooling, we recommend
@@ -5497,6 +5743,9 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 稀疏梯度会阻碍 GAN 训练。在深度学习中，稀疏性通常是一种可取的特性，但在 GAN 中却不是。有两件事会导致梯度稀疏性：max pooling 操作和
+    relu 激活。我们建议使用步幅卷积进行下采样，而不是使用 max pooling，并且建议使用 `layer_activation_leaky_relu()`
+    而不是 relu 激活。它类似于 relu，但通过允许小的负激活值来放宽稀疏性约束。
 - en: In generated images, it’s common to see checkerboard artifacts caused by unequal
     coverage of the pixel space in the generator (see [figure 12.21](#fig12-21)).
     To fix this, we use a kernel size that’s divisible by the stride size whenever
@@ -5506,162 +5755,203 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 在生成的图像中，常见的是看到由于发生器中像素空间覆盖不均匀而引起的棋盘格伪影（参见[图 12.21](#fig12-21)）。为了解决这个问题，我们在发生器和判别器中使用
+    `layer_conv_2d_transpose()` 或 `layer_conv_2d()` 时，使用可被步幅大小整除的核大小。
 - en: '![Image](../images/f0445-00.jpg)'
   id: totrans-973
   prefs: []
   type: TYPE_IMG
+  zh: '![Image](../images/f0445-00.jpg)'
 - en: '**Figure 12.21 Checkerboard artifacts caused by mismatching strides and kernel
     sizes, resulting in unequal pixel-space coverage: one of the many gotchas of GANs**'
   id: totrans-974
   prefs: []
   type: TYPE_NORMAL
+  zh: '**图 12.21 由于步幅和核大小不匹配导致的棋盘格伪影，导致像素空间覆盖不均匀：GAN 的众多注意事项之一**'
 - en: 12.5.3 Getting our hands on the CelebA dataset
   id: totrans-975
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 12.5.3 获取 CelebA 数据集
 - en: 'You can download the dataset manually from the website: [http://mmlab.ie.cuhk.edu.hk/projects/CelebA.html](http://mmlab.ie.cuhk.edu.hk/projects/CelebA.html).
     Because the dataset is hosted on Google Drive, you can also download it using
     gdown:'
   id: totrans-976
   prefs: []
   type: TYPE_NORMAL
+  zh: 你可以从网站手动下载数据集：[http://mmlab.ie.cuhk.edu.hk/projects/CelebA.html](http://mmlab.ie.cuhk.edu.hk/projects/CelebA.html)。因为数据集托管在
+    Google Drive 上，所以你也可以使用 gdown 下载：
 - en: reticulate::py_install("gdown", pip = TRUE)➊
   id: totrans-977
   prefs: []
   type: TYPE_NORMAL
+  zh: '`reticulate::py_install("gdown", pip = TRUE)`➊'
 - en: system("gdown 1O7m1010EJjLE5QxLZiM9Fpjs7Oj6e684")➋
   id: totrans-978
   prefs: []
   type: TYPE_NORMAL
+  zh: '`system("gdown 1O7m1010EJjLE5QxLZiM9Fpjs7Oj6e684")`➋'
 - en: Downloading…
   id: totrans-979
   prefs: []
   type: TYPE_NORMAL
+  zh: 下载中…
 - en: 'From: https://drive.google.com/uc?id=1O7m1010EJjLE5QxLZiM9Fpjs7Oj6e684'
   id: totrans-980
   prefs: []
   type: TYPE_NORMAL
+  zh: 来自：https://drive.google.com/uc?id=1O7m1010EJjLE5QxLZiM9Fpjs7Oj6e684
 - en: 'To: img_align_celeba.zip'
   id: totrans-981
   prefs: []
   type: TYPE_NORMAL
+  zh: 到：img_align_celeba.zip
 - en: 32%|                      | 467M/1.44G [00:13<00:23, 41.3MB/s]
   id: totrans-982
   prefs: []
   type: TYPE_NORMAL
+  zh: 32%|                      | 467M/1.44G [00:13<00:23, 41.3MB/s]
 - en: ➊ **Install gdown.**
   id: totrans-983
   prefs: []
   type: TYPE_NORMAL
+  zh: ➊ **安装 gdown。**
 - en: ➋ **Download the compressed data using gdown.**
   id: totrans-984
   prefs: []
   type: TYPE_NORMAL
+  zh: ➋ **使用 gdown 下载压缩数据。**
 - en: Once you’ve downloaded the data, unzip it to a celeba_gan folder
   id: totrans-985
   prefs: []
   type: TYPE_NORMAL
+  zh: 一旦你下载了数据，将其解压缩到一个名为 celeba_gan 的文件夹中
 - en: Listing 12.30 Getting the CelebA data
   id: totrans-986
   prefs: []
   type: TYPE_NORMAL
+  zh: 清单 12.30 获取 CelebA 数据
 - en: zip::unzip("img_align_celeba.zip", exdir = "celeba_gan")➊
   id: totrans-987
   prefs: []
   type: TYPE_NORMAL
+  zh: '`zip::unzip("img_align_celeba.zip", exdir = "celeba_gan")`➊'
 - en: ➊ **Uncompress the data.**
   id: totrans-988
   prefs: []
   type: TYPE_NORMAL
+  zh: ➊ **解压数据。**
 - en: Once you’ve got the uncompressed images in a directory, you can use image_ dataset_from_directory()
     to turn it into a TF Dataset. Because we just need the images—there are no labels—we’ll
     specify label_mode = NULL.
   id: totrans-989
   prefs: []
   type: TYPE_NORMAL
+  zh: 一旦你把未压缩的图像放在一个目录中，你就可以使用 `image_dataset_from_directory()` 将其转换为 TF Dataset。因为我们只需要图像——没有标签——所以我们会指定
+    `label_mode = NULL`。
 - en: '**Listing 12.31 Creating a TF Dataset from a directory of images**'
   id: totrans-990
   prefs: []
   type: TYPE_NORMAL
+  zh: '**清单 12.31 从图像目录创建 TF Dataset**'
 - en: dataset <— image_dataset_from_directory(
   id: totrans-991
   prefs: []
   type: TYPE_NORMAL
+  zh: '`dataset <- image_dataset_from_directory(`'
 - en: '"celeba_gan",'
   id: totrans-992
   prefs: []
   type: TYPE_NORMAL
+  zh: '"celeba_gan",'
 - en: label_mode = NULL,➊
   id: totrans-993
   prefs: []
   type: TYPE_NORMAL
+  zh: '`label_mode = NULL,`➊'
 - en: image_size = c(64, 64),➋
   id: totrans-994
   prefs: []
   type: TYPE_NORMAL
+  zh: '`image_size = c(64, 64),`➋'
 - en: batch_size = 32,➋
   id: totrans-995
   prefs: []
   type: TYPE_NORMAL
+  zh: '`batch_size = 32,`➋'
 - en: crop_to_aspect_ratio = TRUE➋
   id: totrans-996
   prefs: []
   type: TYPE_NORMAL
+  zh: '`crop_to_aspect_ratio = TRUE`➋'
 - en: '}'
   id: totrans-997
   prefs: []
   type: TYPE_NORMAL
+  zh: '}'
 - en: ➊ **Only the images will be returned—no labels.**
   id: totrans-998
   prefs: []
   type: TYPE_NORMAL
+  zh: ➊ **只返回图像，不返回标签。**
 - en: ➋ **We will resize the images to 64 × 64 by using a smart combination of cropping
     and resizing to preserve aspect ratio. We don't want face proportions to get distorted!**
   id: totrans-999
   prefs: []
   type: TYPE_NORMAL
+  zh: ➋ **我们将通过智能组合裁剪和调整大小将图像调整为 64 × 64，以保持长宽比。我们不希望面部比例被扭曲！**
 - en: Finally, let’s rescale the images to the [0-1] range.
   id: totrans-1000
   prefs: []
   type: TYPE_NORMAL
+  zh: 最后，让我们将图像重新调整到 [0-1] 范围内。
 - en: '**Listing 12.32 Rescaling the images**'
   id: totrans-1001
   prefs: []
   type: TYPE_NORMAL
+  zh: '**清单 12.32 重新调整图像大小**'
 - en: library(tfdatasets)
   id: totrans-1002
   prefs: []
   type: TYPE_NORMAL
+  zh: library(tfdatasets)
 - en: dataset %<>% dataset_map(~ .x / 255)
   id: totrans-1003
   prefs: []
   type: TYPE_NORMAL
+  zh: dataset %<>% dataset_map(~ .x / 255)
 - en: You can use the following code to display a sample image.
   id: totrans-1004
   prefs: []
   type: TYPE_NORMAL
+  zh: 您可以使用以下代码显示示例图像。
 - en: '**Listing 12.33 Displaying the first image**'
   id: totrans-1005
   prefs: []
   type: TYPE_NORMAL
+  zh: '**清单 12.33 显示第一张图片**'
 - en: x <— dataset %>% as_iterator() %>% iter_next()
   id: totrans-1006
   prefs: []
   type: TYPE_NORMAL
+  zh: x <— 数据集 %>% as_iterator() %>% iter_next()
 - en: display_image_tensor(x[1, , , ], max = 1)
   id: totrans-1007
   prefs: []
   type: TYPE_NORMAL
+  zh: display_image_tensor(x[1, , , ], max = 1)
 - en: '![Image](../images/f0446-01.jpg)'
   id: totrans-1008
   prefs: []
   type: TYPE_IMG
+  zh: '![图片](../images/f0446-01.jpg)'
 - en: 12.5.4 The discriminator
   id: totrans-1009
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 12.5.4 鉴别器
 - en: 'First, we’ll develop a discriminator model that takes as input a candidate
     image (real or synthetic) and classifies it into one of two classes: “generated
     image” or “real image that comes from the training set.” One of the many issues
@@ -5671,194 +5961,242 @@
   id: totrans-1010
   prefs: []
   type: TYPE_NORMAL
+  zh: 首先，我们将开发一个鉴别器模型，该模型将候选图像（真实或合成的）作为输入，并将其分类为两类之一：“生成的图像”或“来自训练集的真实图像”。与 GAN 常见的许多问题之一是生成器陷入生成看起来像噪声的图像的困境。一个可能的解决方案是在鉴别器中使用
+    dropout，这就是我们将在这里做的。
 - en: '**Listing 12.34 The GAN discriminator network**'
   id: totrans-1011
   prefs: []
   type: TYPE_NORMAL
+  zh: '**清单 12.34 GAN 鉴别器网络**'
 - en: discriminator <-
   id: totrans-1012
   prefs: []
   type: TYPE_NORMAL
+  zh: 鉴别器 <-
 - en: keras_model_sequential(name = "discriminator",
   id: totrans-1013
   prefs: []
   type: TYPE_NORMAL
+  zh: keras_model_sequential(name = "鉴别器",
 - en: input_shape = c(64, 64, 3)) %>%
   id: totrans-1014
   prefs: []
   type: TYPE_NORMAL
+  zh: input_shape = c(64, 64, 3)) %>%
 - en: layer_conv_2d(64, kernel_size = 4, strides = 2, padding = "same") %>%
   id: totrans-1015
   prefs: []
   type: TYPE_NORMAL
+  zh: layer_conv_2d(64, kernel_size = 4, strides = 2, padding = "same") %>%
 - en: layer_activation_leaky_relu(alpha = 0.2) %>%
   id: totrans-1016
   prefs: []
   type: TYPE_NORMAL
+  zh: layer_activation_leaky_relu(alpha = 0.2) %>%
 - en: layer_conv_2d(128, kernel_size = 4, strides = 2, padding = "same") %>%
   id: totrans-1017
   prefs: []
   type: TYPE_NORMAL
+  zh: layer_conv_2d(128, kernel_size = 4, strides = 2, padding = "same") %>%
 - en: layer_activation_leaky_relu(alpha = 0.2) %>%
   id: totrans-1018
   prefs: []
   type: TYPE_NORMAL
+  zh: layer_activation_leaky_relu(alpha = 0.2) %>%
 - en: layer_conv_2d(128, kernel_size = 4, strides = 2, padding = "same") %>%
   id: totrans-1019
   prefs: []
   type: TYPE_NORMAL
+  zh: layer_conv_2d(128, kernel_size = 4, strides = 2, padding = "same") %>%
 - en: layer_activation_leaky_relu(alpha = 0.2) %>%
   id: totrans-1020
   prefs: []
   type: TYPE_NORMAL
+  zh: layer_activation_leaky_relu(alpha = 0.2) %>%
 - en: layer_flatten() %>%
   id: totrans-1021
   prefs: []
   type: TYPE_NORMAL
+  zh: layer_flatten() %>%
 - en: layer_dropout(0.2) %>% ➊
   id: totrans-1022
   prefs: []
   type: TYPE_NORMAL
+  zh: layer_dropout(0.2) %>% ➊
 - en: layer_dense(1, activation = "sigmoid")
   id: totrans-1023
   prefs: []
   type: TYPE_NORMAL
+  zh: layer_dense(1, activation = "sigmoid")
 - en: '➊ **One dropout layer: an important trick!**'
   id: totrans-1024
   prefs: []
   type: TYPE_NORMAL
+  zh: ➊ **一个 dropout 层：一个重要的技巧！**
 - en: 'Here’s the discriminator model summary:'
   id: totrans-1025
   prefs: []
   type: TYPE_NORMAL
+  zh: 这是鉴别器模型摘要：
 - en: discriminator
   id: totrans-1026
   prefs: []
   type: TYPE_NORMAL
+  zh: 鉴别器
 - en: '![Image](../images/f0447-01.jpg)'
   id: totrans-1027
   prefs: []
   type: TYPE_IMG
+  zh: '![图片](../images/f0447-01.jpg)'
 - en: 12.5.5 The generator
   id: totrans-1028
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 12.5.5 生成器
 - en: Next, let’s develop a generator model that turns a vector (from the latent space—
     during training it will be sampled at random) into a candidate image.
   id: totrans-1029
   prefs: []
   type: TYPE_NORMAL
+  zh: 接下来，让我们开发一个生成器模型，它将一个向量（来自潜在空间 - 在训练期间将随机抽样）转换为候选图像。
 - en: Listing 12.35 GAN generator network
   id: totrans-1030
   prefs: []
   type: TYPE_NORMAL
+  zh: 清单 12.35 GAN 生成器网络
 - en: latent_dim <— 128➊
   id: totrans-1031
   prefs: []
   type: TYPE_NORMAL
+  zh: latent_dim <— 128➊
 - en: generator <
   id: totrans-1032
   prefs: []
   type: TYPE_NORMAL
+  zh: 生成器 <
 - en: keras_model_sequential(name = "generator",
   id: totrans-1033
   prefs: []
   type: TYPE_NORMAL
+  zh: keras_model_sequential(name = "生成器",
 - en: input_shape = c(latent_dim)) %>%
   id: totrans-1034
   prefs: []
   type: TYPE_NORMAL
+  zh: input_shape = c(latent_dim)) %>%
 - en: layer_dense(8 * 8 * 128) %>% ➋
   id: totrans-1035
   prefs: []
   type: TYPE_NORMAL
+  zh: layer_dense(8 * 8 * 128) %>% ➋
 - en: layer_reshape(c(8, 8, 128)) %>%➌
   id: totrans-1036
   prefs: []
   type: TYPE_NORMAL
+  zh: layer_reshape(c(8, 8, 128)) %>%➌
 - en: layer_conv_2d_transpose(128, kernel_size = 4,
   id: totrans-1037
   prefs: []
   type: TYPE_NORMAL
+  zh: layer_conv_2d_transpose(128, kernel_size = 4,
 - en: strides = 2, padding = "same") %>% ➍
   id: totrans-1038
   prefs: []
   type: TYPE_NORMAL
+  zh: strides = 2, padding = "same") %>% ➍
 - en: layer_activation_leaky_relu(alpha = 0.2) %>%
   id: totrans-1039
   prefs: []
   type: TYPE_NORMAL
+  zh: layer_activation_leaky_relu(alpha = 0.2) %>%
 - en: layer_conv_2d_transpose(256, kernel_size = 4,
   id: totrans-1040
   prefs: []
   type: TYPE_NORMAL
+  zh: layer_conv_2d_transpose(256, kernel_size = 4,
 - en: strides = 2, padding = "same") %>%
   id: totrans-1041
   prefs: []
   type: TYPE_NORMAL
+  zh: strides = 2, padding = "same") %>%
 - en: layer_activation_leaky_relu(alpha = 0.2) %>%➎
   id: totrans-1042
   prefs: []
   type: TYPE_NORMAL
+  zh: layer_activation_leaky_relu(alpha = 0.2) %>%➎
 - en: layer_conv_2d_transpose(512, kernel_size = 4,
   id: totrans-1043
   prefs: []
   type: TYPE_NORMAL
+  zh: layer_conv_2d_transpose(512, kernel_size = 4,
 - en: strides = 2, padding = "same") %>%
   id: totrans-1044
   prefs: []
   type: TYPE_NORMAL
+  zh: strides = 2, padding = "same") %>%
 - en: layer_activation_leaky_relu(alpha = 0.2) %>%
   id: totrans-1045
   prefs: []
   type: TYPE_NORMAL
+  zh: layer_activation_leaky_relu(alpha = 0.2) %>%
 - en: layer_conv_2d(3, kernel_size = 5, padding = "same",
   id: totrans-1046
   prefs: []
   type: TYPE_NORMAL
+  zh: layer_conv_2d(3, kernel_size = 5, padding = "same",
 - en: activation = "sigmoid")
   id: totrans-1047
   prefs: []
   type: TYPE_NORMAL
+  zh: activation = "sigmoid")
 - en: ➊ **The latent space will be made of 128-dimensional vectors.**
   id: totrans-1048
   prefs: []
   type: TYPE_NORMAL
+  zh: ➊ **潜在空间将由 128 维向量组成。**
 - en: ➋ **Produce the same number of coefficients we had at the level of the Flatten
     layer in the encoder.**
   id: totrans-1049
   prefs: []
   type: TYPE_NORMAL
+  zh: ➋ **产生与编码器中的 Flatten 层相同数量的系数。**
 - en: ➌ **Revert the layer_flatten() of the encoder.**
   id: totrans-1050
   prefs: []
   type: TYPE_NORMAL
+  zh: ➌ **恢复编码器中的 layer_flatten()。**
 - en: ➍ **Revert the layer_conv_2d() of the encoder.**
   id: totrans-1051
   prefs: []
   type: TYPE_NORMAL
+  zh: ➍ **恢复编码器中的 layer_conv_2d()。**
 - en: ➎ **Use Leaky Relu as our activation**
   id: totrans-1052
   prefs: []
   type: TYPE_NORMAL
+  zh: ➎ **使用 Leaky Relu 作为激活函数。**
 - en: 'This is the generator model summary:'
   id: totrans-1053
   prefs: []
   type: TYPE_NORMAL
+  zh: 这是生成器模型摘要：
 - en: generator
   id: totrans-1054
   prefs: []
   type: TYPE_NORMAL
+  zh: 生成器
 - en: '![Image](../images/f0448-01.jpg)'
   id: totrans-1055
   prefs: []
   type: TYPE_IMG
+  zh: '![图片](../images/f0448-01.jpg)'
 - en: 12.5.6 The adversarial network
   id: totrans-1056
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 12.5.6 对抗网络
 - en: Finally, we’ll set up the GAN, which chains the generator and the discriminator.
     When trained, this model will move the generator in a direction that improves
     its ability to fool the discriminator. This model turns latent-space points into
@@ -5869,37 +6207,45 @@
   id: totrans-1057
   prefs: []
   type: TYPE_NORMAL
+  zh: 最后，我们将设置 GAN，它将生成器和鉴别器连接在一起。当训练完成后，该模型将使生成器朝着改善其欺骗鉴别器能力的方向移动。该模型将潜在空间点转换为分类决策——“假”或“真”，并且它的目的是使用始终为“这些是真实图像”的标签进行训练。因此，训练
+    gan 将更新生成器的权重，使鉴别器在查看伪图像时更有可能预测“真实”。
 - en: 'To recapitulate, this is what the training loop looks like schematically. For
     each epoch, you do the following:'
   id: totrans-1058
   prefs: []
   type: TYPE_NORMAL
+  zh: 回顾一下，训练循环的基本结构如下所示。对于每个时期，您执行以下操作：
 - en: '**1** Draw random points in the latent space (random noise).'
   id: totrans-1059
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: '**1** 在潜在空间中绘制随机点（随机噪声）。'
 - en: '**2** Generate images with generator using this random noise.'
   id: totrans-1060
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: '**2** 使用此随机噪声通过生成器生成图像。'
 - en: '**3** Mix the generated images with real ones.'
   id: totrans-1061
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: '**3** 将生成的图像与真实图像混合。'
 - en: '**4** Train discriminator using these mixed images, with corresponding targets:
     either “real” (for the real images) or “fake” (for the generated images).'
   id: totrans-1062
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: '**4** 使用这些混合图像训练鉴别器，并提供相应的目标：要么是“真实”（对于真实图像），要么是“假的”（对于生成的图像）。'
 - en: '**5** Draw new random points in the latent space.'
   id: totrans-1063
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: '**5** 在潜在空间中绘制新的随机点。'
 - en: '**6** Train generator using these random vectors, with targets that all say
     “these are real images.” This updates the weights of the generator to move them
     toward getting the discriminator to predict “these are real images” for generated
@@ -5908,6 +6254,7 @@
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: '**6** 使用这些随机向量训练生成器，并将目标全部设置为“这些是真实图像”。这将更新生成器的权重，使它们朝着让鉴别器预测生成图像为“这些是真实图像”的方向移动：这样训练生成器就可以欺骗鉴别器。'
 - en: Let’s implement it. Like in our VAE example, we’ll use a new_model_class() with
     a custom train_step(). Note that we’ll use two optimizers (one for the generator
     and one for the discriminator), so we will also override compile() to allow for
@@ -5915,468 +6262,585 @@
   id: totrans-1065
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们来实现它。与我们的 VAE 示例一样，我们将使用一个新的 new_model_class() 来自定义 train_step()。请注意，我们将使用两个优化器（一个用于生成器，一个用于鉴别器），因此我们还将重写
+    compile() 以允许传递两个优化器。
 - en: '**Listing 12.36 The GAN Model**'
   id: totrans-1066
   prefs: []
   type: TYPE_NORMAL
+  zh: '**Listing 12.36 GAN 模型**'
 - en: GAN <— new_model_class(
   id: totrans-1067
   prefs: []
   type: TYPE_NORMAL
+  zh: GAN <— new_model_class(
 - en: classname = "GAN",
   id: totrans-1068
   prefs: []
   type: TYPE_NORMAL
+  zh: classname = "GAN",
 - en: initialize = function(discriminator, generator, latent_dim) {
   id: totrans-1069
   prefs: []
   type: TYPE_NORMAL
+  zh: initialize = function(discriminator, generator, latent_dim) {
 - en: super$initialize()
   id: totrans-1070
   prefs: []
   type: TYPE_NORMAL
+  zh: super$initialize()
 - en: self$discriminator  <— discriminator
   id: totrans-1071
   prefs: []
   type: TYPE_NORMAL
+  zh: self$discriminator  <— discriminator
 - en: self$generator      <— generator
   id: totrans-1072
   prefs: []
   type: TYPE_NORMAL
+  zh: self$generator      <— generator
 - en: self$latent_dim     <— as.integer(latent_dim)
   id: totrans-1073
   prefs: []
   type: TYPE_NORMAL
+  zh: self$latent_dim     <— as.integer(latent_dim)
 - en: self$d_loss_metric  <— metric_mean(name = "d_loss")➊
   id: totrans-1074
   prefs: []
   type: TYPE_NORMAL
+  zh: self$d_loss_metric  <— metric_mean(name = "d_loss")➊
 - en: self$g_loss_metric  <— metric_mean(name = "g_loss")➊
   id: totrans-1075
   prefs: []
   type: TYPE_NORMAL
+  zh: self$g_loss_metric  <— metric_mean(name = "g_loss")➊
 - en: '},'
   id: totrans-1076
   prefs: []
   type: TYPE_NORMAL
+  zh: '},'
 - en: compile = function(d_optimizer, g_optimizer, loss_fn) {
   id: totrans-1077
   prefs: []
   type: TYPE_NORMAL
+  zh: compile = function(d_optimizer, g_optimizer, loss_fn) {
 - en: super$compile()
   id: totrans-1078
   prefs: []
   type: TYPE_NORMAL
+  zh: super$compile()
 - en: self$d_optimizer <— d_optimizer
   id: totrans-1079
   prefs: []
   type: TYPE_NORMAL
+  zh: self$d_optimizer <— d_optimizer
 - en: self$g_optimizer <— g_optimizer
   id: totrans-1080
   prefs: []
   type: TYPE_NORMAL
+  zh: self$g_optimizer <— g_optimizer
 - en: self$loss_fn <— loss_fn
   id: totrans-1081
   prefs: []
   type: TYPE_NORMAL
+  zh: self$loss_fn <— loss_fn
 - en: '},'
   id: totrans-1082
   prefs: []
   type: TYPE_NORMAL
+  zh: '},'
 - en: metrics = mark_active(function() {
   id: totrans-1083
   prefs: []
   type: TYPE_NORMAL
+  zh: metrics = mark_active(function() {
 - en: list(self$d_loss_metric,
   id: totrans-1084
   prefs: []
   type: TYPE_NORMAL
+  zh: list(self$d_loss_metric,
 - en: self$g_loss_metric)
   id: totrans-1085
   prefs: []
   type: TYPE_NORMAL
+  zh: self$g_loss_metric)
 - en: '}),'
   id: totrans-1086
   prefs: []
   type: TYPE_NORMAL
+  zh: '}),'
 - en: train_step = function(real_images) {➋
   id: totrans-1087
   prefs: []
   type: TYPE_NORMAL
+  zh: train_step = function(real_images) {➋
 - en: batch_size <— tf$shape(real_images)[1]
   id: totrans-1088
   prefs: []
   type: TYPE_NORMAL
+  zh: batch_size <— tf$shape(real_images)[1]
 - en: random_latent_vectors <➌
   id: totrans-1089
   prefs: []
   type: TYPE_NORMAL
+  zh: random_latent_vectors <➌
 - en: tf$random$normal(shape = c(batch_size, self$latent_dim))
   id: totrans-1090
   prefs: []
   type: TYPE_NORMAL
+  zh: tf$random$normal(shape = c(batch_size, self$latent_dim))
 - en: generated_images <
   id: totrans-1091
   prefs: []
   type: TYPE_NORMAL
+  zh: generated_images <
 - en: self$generator(random_latent_vectors)➍
   id: totrans-1092
   prefs: []
   type: TYPE_NORMAL
+  zh: self$generator(random_latent_vectors)➍
 - en: combined_images <
   id: totrans-1093
   prefs: []
   type: TYPE_NORMAL
+  zh: combined_images <
 - en: tf$concat(list(generated_images,
   id: totrans-1094
   prefs: []
   type: TYPE_NORMAL
+  zh: tf$concat(list(generated_images,
 - en: real_images),➎
   id: totrans-1095
   prefs: []
   type: TYPE_NORMAL
+  zh: real_images),➎
 - en: axis = 0L)
   id: totrans-1096
   prefs: []
   type: TYPE_NORMAL
+  zh: axis = 0L)
 - en: labels <
   id: totrans-1097
   prefs: []
   type: TYPE_NORMAL
+  zh: labels <
 - en: tf$concat(list(tf$ones(tuple(batch_size, 1L)),➏
   id: totrans-1098
   prefs: []
   type: TYPE_NORMAL
+  zh: tf$concat(list(tf$ones(tuple(batch_size, 1L)),➏
 - en: tf$zeros(tuple(batch_size, 1L))),
   id: totrans-1099
   prefs: []
   type: TYPE_NORMAL
+  zh: tf$zeros(tuple(batch_size, 1L))),
 - en: axis = 0L)
   id: totrans-1100
   prefs: []
   type: TYPE_NORMAL
+  zh: axis = 0L)
 - en: labels %<>% `+`(
   id: totrans-1101
   prefs: []
   type: TYPE_NORMAL
+  zh: labels %<>% `+`(
 - en: tf$random$uniform(tf$shape(.), maxval = 0.05))➐
   id: totrans-1102
   prefs: []
   type: TYPE_NORMAL
+  zh: tf$random$uniform(tf$shape(.), maxval = 0.05))➐
 - en: with(tf$GradientTape() %as% tape, {
   id: totrans-1103
   prefs: []
   type: TYPE_NORMAL
+  zh: with(tf$GradientTape() %as% tape, {
 - en: predictions <— self$discriminator(combined_images)
   id: totrans-1104
   prefs: []
   type: TYPE_NORMAL
+  zh: predictions <— self$discriminator(combined_images)
 - en: d_loss <— self$loss_fn(labels, predictions)
   id: totrans-1105
   prefs: []
   type: TYPE_NORMAL
+  zh: d_loss <— self$loss_fn(labels, predictions)
 - en: '})'
   id: totrans-1106
   prefs: []
   type: TYPE_NORMAL
+  zh: '})'
 - en: grads <— tape$gradient(d_loss, self$discriminator$trainable_weights)
   id: totrans-1107
   prefs: []
   type: TYPE_NORMAL
+  zh: grads <— tape$gradient(d_loss, self$discriminator$trainable_weights)
 - en: self$d_optimizer$apply_gradients(➑
   id: totrans-1108
   prefs: []
   type: TYPE_NORMAL
+  zh: self$d_optimizer$apply_gradients(➑
 - en: zip_lists(grads, self$discriminator$trainable_weights))
   id: totrans-1109
   prefs: []
   type: TYPE_NORMAL
+  zh: zip_lists(grads, self$discriminator$trainable_weights))
 - en: random_latent_vectors <➒
   id: totrans-1110
   prefs: []
   type: TYPE_NORMAL
+  zh: random_latent_vectors <➒
 - en: tf$random$normal(shape = c(batch_size, self$latent_dim))
   id: totrans-1111
   prefs: []
   type: TYPE_NORMAL
+  zh: tf$random$normal(shape = c(batch_size, self$latent_dim))
 - en: misleading_labels <— tf$zeros(tuple(batch_size, 1L))➓
   id: totrans-1112
   prefs: []
   type: TYPE_NORMAL
+  zh: misleading_labels <— tf$zeros(tuple(batch_size, 1L))➓
 - en: with(tf$GradientTape() %as% tape, {
   id: totrans-1113
   prefs: []
   type: TYPE_NORMAL
+  zh: with(tf$GradientTape() %as% tape, {
 - en: predictions <— random_latent_vectors %>%
   id: totrans-1114
   prefs: []
   type: TYPE_NORMAL
+  zh: predictions <— random_latent_vectors %>%
 - en: self$generator() %>%
   id: totrans-1115
   prefs: []
   type: TYPE_NORMAL
+  zh: self$generator() %>%
 - en: self$discriminator()
   id: totrans-1116
   prefs: []
   type: TYPE_NORMAL
+  zh: self$discriminator()
 - en: g_loss <— self$loss_fn(misleading_labels, predictions)
   id: totrans-1117
   prefs: []
   type: TYPE_NORMAL
+  zh: g_loss <— self$loss_fn(misleading_labels, predictions)
 - en: '})'
   id: totrans-1118
   prefs: []
   type: TYPE_NORMAL
+  zh: '})'
 - en: grads <— tape$gradient(g_loss, self$generator$trainable_weights)
   id: totrans-1119
   prefs: []
   type: TYPE_NORMAL
+  zh: grads <— tape$gradient(g_loss, self$generator$trainable_weights)
 - en: self$g_optimizer$apply_gradients(⓫
   id: totrans-1120
   prefs: []
   type: TYPE_NORMAL
+  zh: self$g_optimizer$apply_gradients(⓫
 - en: zip_lists(grads, self$generator$trainable_weights))
   id: totrans-1121
   prefs: []
   type: TYPE_NORMAL
+  zh: zip_lists(grads, self$generator$trainable_weights))
 - en: self$d_loss_metric$update_state(d_loss)
   id: totrans-1122
   prefs: []
   type: TYPE_NORMAL
+  zh: self$d_loss_metric$update_state(d_loss)
 - en: self$g_loss_metric$update_state(g_loss)
   id: totrans-1123
   prefs: []
   type: TYPE_NORMAL
+  zh: self$g_loss_metric$update_state(g_loss)
 - en: list(d_loss = self$d_loss_metric$result(),
   id: totrans-1124
   prefs: []
   type: TYPE_NORMAL
+  zh: list(d_loss = self$d_loss_metric$result(),
 - en: g_loss = self$g_loss_metric$result())
   id: totrans-1125
   prefs: []
   type: TYPE_NORMAL
+  zh: g_loss = self$g_loss_metric$result())
 - en: '})'
   id: totrans-1126
   prefs: []
   type: TYPE_NORMAL
+  zh: '})'
 - en: ➊ **Set up metrics to track the two losses over each training epoch.**
   id: totrans-1127
   prefs: []
   type: TYPE_NORMAL
+  zh: ➊ **设置指标以跟踪每个训练周期中的两个损失。**
 - en: ➋ **train_step is called with a batch of real images.**
   id: totrans-1128
   prefs: []
   type: TYPE_NORMAL
+  zh: ➋ **train_step 被调用以一批真实图像。**
 - en: ➌ **Sample random points in the latent space.**
   id: totrans-1129
   prefs: []
   type: TYPE_NORMAL
+  zh: ➌ **在潜在空间中随机采样。**
 - en: ➍ **Decode them to fake images.**
   id: totrans-1130
   prefs: []
   type: TYPE_NORMAL
+  zh: ➍ **将其解码为虚假图像。**
 - en: ➎ **Combine them with real images.**
   id: totrans-1131
   prefs: []
   type: TYPE_NORMAL
+  zh: ➎ **将其与真实图像组合。**
 - en: ➏ **Assemble labels, discriminating real from fake images.**
   id: totrans-1132
   prefs: []
   type: TYPE_NORMAL
+  zh: ➏ **组装标签，区分真实图像和虚假图像。**
 - en: ➐ **Add random noise to the labels—an important trick!**
   id: totrans-1133
   prefs: []
   type: TYPE_NORMAL
+  zh: ➐ **向标签添加随机噪声——一个重要的技巧！**
 - en: ➑ **Train the discriminator.**
   id: totrans-1134
   prefs: []
   type: TYPE_NORMAL
+  zh: ➑ **训练鉴别器。**
 - en: ➒ **Sample random points in the latent space.**
   id: totrans-1135
   prefs: []
   type: TYPE_NORMAL
+  zh: ➒ **在潜在空间中随机采样。**
 - en: ➓ **Assemble labels that say "these are all real images" (it's a lie!).**
   id: totrans-1136
   prefs: []
   type: TYPE_NORMAL
+  zh: ➓ **组装标签，声明“这些都是真实图像”（这是谎言！）。**
 - en: ⓫ **Train the generator.**
   id: totrans-1137
   prefs: []
   type: TYPE_NORMAL
+  zh: ⓫ **训练生成器。**
 - en: 'Before we start training, let’s also set up a callback to monitor our results:
     it will use the generator to create and save a number of fake images at the end
     of each epoch.'
   id: totrans-1138
   prefs: []
   type: TYPE_NORMAL
+  zh: 在我们开始训练之前，让我们还设置一个回调来监视我们的结果：它将在每个时期结束时使用生成器创建并保存一些虚假图像。
 - en: Listing 12.37 A callback that samples generated images during training
   id: totrans-1139
   prefs: []
   type: TYPE_NORMAL
+  zh: 清单 12.37 在训练期间对生成的图像进行采样的回调
 - en: callback_gan_monitor <— new_callback_class(
   id: totrans-1140
   prefs: []
   type: TYPE_NORMAL
+  zh: callback_gan_monitor <— new_callback_class(
 - en: classname = "GANMonitor",
   id: totrans-1141
   prefs: []
   type: TYPE_NORMAL
+  zh: classname = "GANMonitor",
 - en: initialize = function(num_img = 3, latent_dim = 128,
   id: totrans-1142
   prefs: []
   type: TYPE_NORMAL
+  zh: initialize = function(num_img = 3, latent_dim = 128,
 - en: dirpath = "gan_generated_images") {
   id: totrans-1143
   prefs: []
   type: TYPE_NORMAL
+  zh: dirpath = "gan_generated_images") {
 - en: private$num_img <— as.integer(num_img)
   id: totrans-1144
   prefs: []
   type: TYPE_NORMAL
+  zh: private$num_img <— as.integer(num_img)
 - en: private$latent_dim <— as.integer(latent_dim)
   id: totrans-1145
   prefs: []
   type: TYPE_NORMAL
+  zh: private$latent_dim <— as.integer(latent_dim)
 - en: private$dirpath <— fs::path(dirpath)
   id: totrans-1146
   prefs: []
   type: TYPE_NORMAL
+  zh: private$dirpath <— fs::path(dirpath)
 - en: fs::dir_create(dirpath)
   id: totrans-1147
   prefs: []
   type: TYPE_NORMAL
+  zh: fs::dir_create(dirpath)
 - en: '},'
   id: totrans-1148
   prefs: []
   type: TYPE_NORMAL
+  zh: '},'
 - en: on_epoch_end = function(epoch, logs = NULL) {
   id: totrans-1149
   prefs: []
   type: TYPE_NORMAL
+  zh: on_epoch_end = function(epoch, logs = NULL) {
 - en: random_latent_vectors <
   id: totrans-1150
   prefs: []
   type: TYPE_NORMAL
+  zh: random_latent_vectors <
 - en: tf$random$normal(shape = c(private$num_img, private$latent_dim))
   id: totrans-1151
   prefs: []
   type: TYPE_NORMAL
+  zh: tf$random$normal(shape = c(private$num_img, private$latent_dim))
 - en: generated_images <— random_latent_vectors %>%
   id: totrans-1152
   prefs: []
   type: TYPE_NORMAL
+  zh: generated_images <— random_latent_vectors %>%
 - en: self$model$generator() %>%
   id: totrans-1153
   prefs: []
   type: TYPE_NORMAL
+  zh: self$model$generator() %>%
 - en: '{ tf$saturate_cast(. * 255, "uint8") }➊'
   id: totrans-1154
   prefs: []
   type: TYPE_NORMAL
+  zh: '{ tf$saturate_cast(. * 255, "uint8") }➊'
 - en: for (i in seq(private$num_img))
   id: totrans-1155
   prefs: []
   type: TYPE_NORMAL
+  zh: for (i in seq(private$num_img))
 - en: tf$io$write_file(
   id: totrans-1156
   prefs: []
   type: TYPE_NORMAL
+  zh: tf$io$write_file(
 - en: filename = private$dirpath / sprintf("img_%03i_%02i.png", epoch, i),
   id: totrans-1157
   prefs: []
   type: TYPE_NORMAL
+  zh: filename = private$dirpath / sprintf("img_%03i_%02i.png", epoch, i),
 - en: contents = tf$io$encode_png(generated_images[i, , , ])
   id: totrans-1158
   prefs: []
   type: TYPE_NORMAL
+  zh: contents = tf$io$encode_png(generated_images[i, , , ])
 - en: )
   id: totrans-1159
   prefs: []
   type: TYPE_NORMAL
+  zh: )
 - en: '}'
   id: totrans-1160
   prefs: []
   type: TYPE_NORMAL
+  zh: '}'
 - en: '}'
   id: totrans-1161
   prefs: []
   type: TYPE_NORMAL
+  zh: '}'
 - en: ➊ **Scale and clip to uint8 range of [0, 255], and cast to uint8.**
   id: totrans-1162
   prefs: []
   type: TYPE_NORMAL
+  zh: ➊ **将其缩放并剪辑到 [0, 255] 的 uint8 范围内，并转换为 uint8。**
 - en: Finally, we can start training.
   id: totrans-1163
   prefs: []
   type: TYPE_NORMAL
+  zh: 最后，我们可以开始训练了。
 - en: '**Listing 12.38 Compiling and training the GAN**'
   id: totrans-1164
   prefs: []
   type: TYPE_NORMAL
+  zh: '**清单 12.38 编译和训练 GAN**'
 - en: epochs <— 100➊
   id: totrans-1165
   prefs: []
   type: TYPE_NORMAL
+  zh: epochs <— 100➊
 - en: gan <— GAN(discriminator = discriminator,➋
   id: totrans-1166
   prefs: []
   type: TYPE_NORMAL
+  zh: gan <— GAN(discriminator = discriminator,➋
 - en: generator = generator,
   id: totrans-1167
   prefs: []
   type: TYPE_NORMAL
+  zh: generator = generator,
 - en: latent_dim = latent_dim)
   id: totrans-1168
   prefs: []
   type: TYPE_NORMAL
+  zh: latent_dim = latent_dim)
 - en: gan %>% compile(
   id: totrans-1169
   prefs: []
   type: TYPE_NORMAL
+  zh: gan %>% compile(
 - en: d_optimizer = optimizer_adam(learning_rate = 0.0001),
   id: totrans-1170
   prefs: []
   type: TYPE_NORMAL
+  zh: d_optimizer = optimizer_adam(learning_rate = 0.0001),
 - en: g_optimizer = optimizer_adam(learning_rate = 0.0001),
   id: totrans-1171
   prefs: []
   type: TYPE_NORMAL
+  zh: g_optimizer = optimizer_adam(learning_rate = 0.0001),
 - en: loss_fn = loss_binary_crossentropy()
   id: totrans-1172
   prefs: []
   type: TYPE_NORMAL
+  zh: loss_fn = loss_binary_crossentropy()
 - en: '}'
   id: totrans-1173
   prefs: []
   type: TYPE_NORMAL
+  zh: '}'
 - en: gan %>% fit(
   id: totrans-1174
   prefs: []
   type: TYPE_NORMAL
+  zh: gan %>% fit(
 - en: dataset,
   id: totrans-1175
   prefs: []
   type: TYPE_NORMAL
+  zh: 数据集，
 - en: epochs = epochs,
   id: totrans-1176
   prefs: []
   type: TYPE_NORMAL
+  zh: epochs = epochs,
 - en: callbacks = callback_gan_monitor(num_img = 10, latent_dim = latent_dim)
   id: totrans-1177
   prefs: []
   type: TYPE_NORMAL
+  zh: callbacks = callback_gan_monitor(num_img = 10, latent_dim = latent_dim)
 - en: '}'
   id: totrans-1178
   prefs: []
   type: TYPE_NORMAL
+  zh: '}'
 - en: ➊ **You'll start getting interesting results after epoch 20.**
   id: totrans-1179
   prefs: []
   type: TYPE_NORMAL
+  zh: ➊ **在第 20 个时期后，您将开始获得有趣的结果。**
 - en: ➋ **Instantiate the GAN model.**
   id: totrans-1180
   prefs: []
   type: TYPE_NORMAL
+  zh: ➋ **实例化 GAN 模型。**
 - en: When training, you may see the adversarial loss begin to increase considerably,
     whereas the discriminative loss tends to zero—the discriminator may end up dominating
     the generator. If that’s the case, try reducing the discriminator learning rate
@@ -6385,19 +6849,24 @@
   id: totrans-1181
   prefs: []
   type: TYPE_NORMAL
+  zh: 在训练过程中，您可能会看到对抗损失开始显着增加，而判别损失趋向于零——鉴别器可能最终主导生成器。如果是这种情况，请尝试降低鉴别器学习率并增加鉴别器的丢弃率。[图12.22](#fig12-22)
+    展示了我们的 GAN 在经过30个周期的训练后能够生成的内容。
 - en: '![Image](../images/f0452-01.jpg)'
   id: totrans-1182
   prefs: []
   type: TYPE_IMG
+  zh: '![图像](../images/f0452-01.jpg)'
 - en: '**Figure 12.22 Some generated images around epoch 30**'
   id: totrans-1183
   prefs: []
   type: TYPE_NORMAL
+  zh: '**图12.22 大约在第30个周期生成的一些图像**'
 - en: 12.5.7 Wrapping up
   id: totrans-1184
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 12.5.7 总结
 - en: A GAN consists of a generator network coupled with a discriminator network The
     discriminator is trained to differentiate between the output of the generator
     and real images from a training dataset, and the generator is trained to fool
@@ -6407,6 +6876,7 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: GAN 由一个生成器网络和一个鉴别器网络组成。鉴别器被训练来区分生成器的输出和来自训练数据集的真实图像，而生成器被训练来欺骗鉴别器。值得注意的是，生成器从未直接看到来自训练集的图像；它对数据的了解来自于鉴别器。
 - en: GANs are difficult to train, because training a GAN is a dynamic process rather
     than a simple gradient-descent process with a fixed loss landscape. Getting a
     GAN to train correctly requires using a number of heuristic tricks, as well as
@@ -6415,6 +6885,7 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: GAN 是难以训练的，因为训练 GAN 是一个动态过程，而不是具有固定损失景观的简单梯度下降过程。要正确训练 GAN，需要使用许多启发式技巧以及广泛的调整。
 - en: GANs can potentially produce highly realistic images. But unlike VAEs, the latent
     space they learn doesn’t have a neat continuous structure and thus may not be
     suited for certain practical applications, such as image editing via latent-space
@@ -6423,17 +6894,20 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: GAN 可能会生成高度逼真的图像。但与 VAE 不同，它们学习的潜在空间没有一个整洁的连续结构，因此可能不适用于某些实际应用，例如通过潜在空间概念向量进行图像编辑。
 - en: These few techniques cover only the basics of this fast-expanding field. There’s
     a lot more to discover out there—generative deep learning is deserving of an entire
     book of its own.
   id: totrans-1188
   prefs: []
   type: TYPE_NORMAL
+  zh: 这些技术仅涵盖了这个快速发展领域的基础知识。还有很多东西等待我们去发现——生成式深度学习值得一整本书来探索。
 - en: Summary
   id: totrans-1189
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 摘要
 - en: You can use a sequence-to-sequence model to generate sequence data, one step
     at a time. This is applicable to text generation but also to note-by-note music
     generation or any other type of time-series data.
@@ -6441,12 +6915,14 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 您可以使用序列到序列模型逐步生成序列数据。这适用于文本生成，也适用于逐音符音乐生成或任何其他类型的时间序列数据。
 - en: DeepDream works by maximizing the convnet layer activations through gradient
     ascent in input space.
   id: totrans-1191
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: DeepDream 的工作原理是通过在输入空间中通过梯度上升来最大化卷积网络层的激活。
 - en: In the style-transfer algorithm, a content image and a style image are combined
     via gradient descent to produce an image with the high-level features of the content
     image and the local characteristics of the style image.
@@ -6454,6 +6930,7 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 在风格转移算法中，通过梯度下降将内容图像和风格图像结合在一起，生成具有内容图像的高级特征和风格图像的局部特征的图像。
 - en: VAEs and GANs are models that learn a latent space of images and can then dream
     up entirely new images by sampling from the latent space. Concept vectors in the
     latent space can even be used for image editing.
@@ -6461,18 +6938,23 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: VAE 和 GAN 是学习图像潜在空间的模型，然后可以通过从潜在空间中抽样来构想全新的图像。潜在空间中的概念向量甚至可以用于图像编辑。
 - en: '^([1](#endnote1)) Iannis Xenakis, “Musiques formelles: nouveaux principes formels
     de composition musicale,” special issue of *La Revue musicale*, nos. 253–254 (1963).'
   id: totrans-1194
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: '^([1](#endnote1)) Iannis Xenakis, “Musiques formelles: nouveaux principes formels
+    de composition musicale,” *La Revue musicale* 特刊, 第253–254号 (1963).'
 - en: ^([2](#endnote2)) Alex Graves, “Generating Sequences with Recurrent Neural Networks,”
     arXiv (2013), [https://arxiv.org/abs/1308.0850](https://arxiv.org/abs/1308.0850).
   id: totrans-1195
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: ^([2](#endnote2)) Alex Graves, “Generating Sequences with Recurrent Neural Networks,”
+    arXiv (2013), [https://arxiv.org/abs/1308.0850](https://arxiv.org/abs/1308.0850).
 - en: '^([3](#endnote3)) Alexander Mordvintsev, Christopher Olah, and Mike Tyka, “DeepDream:
     A Code Example for Visualizing Neural Networks,” Google Research Blog, July 1,
     2015, [http://mng.bz/xXlM](http://mng.bz/xXlM).'
@@ -6480,18 +6962,25 @@
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: '^([3](#endnote3)) Alexander Mordvintsev, Christopher Olah, 和 Mike Tyka, “DeepDream:
+    A Code Example for Visualizing Neural Networks,” Google Research Blog, 2015年7月1日,
+    [http://mng.bz/xXlM](http://mng.bz/xXlM).'
 - en: ^([4](#endnote4)) Leon A. Gatys, Alexander S. Ecker, and Matthias Bethge, “A
     Neural Algorithm of Artistic Style,” arXiv (2015), [https://arxiv.org/abs/1508.06576](https://arxiv.org/abs/1508.06576).
   id: totrans-1197
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: ^([4](#endnote4)) Leon A. Gatys, Alexander S. Ecker, and Matthias Bethge, “艺术风格的神经算法,”
+    arXiv (2015), [https://arxiv.org/abs/1508.06576](https://arxiv.org/abs/1508.06576).
 - en: ^([5](#endnote5)) Diederik P. Kingma and Max Welling, “Auto-Encoding Variational
     Bayes,” arXiv (2013), [https://arxiv.org/abs/1312.6114](https://arxiv.org/abs/1312.6114).
   id: totrans-1198
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: ^([5](#endnote5)) Diederik P. Kingma和Max Welling，“自动编码变分贝叶斯,” arXiv (2013),
+    [https://arxiv.org/abs/1312.6114](https://arxiv.org/abs/1312.6114).
 - en: ^([6](#endnote6)) Danilo Jimenez Rezende, Shakir Mohamed, and Daan Wierstra,
     “Stochastic Backpropagation and Approximate Inference in Deep Generative Models,”
     arXiv (2014), [https://arxiv.org/abs/1401.4082](https://arxiv.org/abs/1401.4082).
@@ -6499,9 +6988,12 @@
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: ^([6](#endnote6)) Danilo Jimenez Rezende, Shakir Mohamed, and Daan Wierstra,
+    “深度生成模型中的随机反向传播和近似推断,” arXiv (2014), [https://arxiv.org/abs/1401.4082](https://arxiv.org/abs/1401.4082).
 - en: ^([7](#endnote7)) Ian Goodfellow et al., “Generative Adversarial Networks,”
     arXiv (2014), [https://arxiv.org/abs/1406.2661](https://arxiv.org/abs/1406.2661).
   id: totrans-1200
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: ^([7](#endnote7)) Ian Goodfellow等人，“生成对抗网络,” arXiv (2014), [https://arxiv.org/abs/1406.2661](https://arxiv.org/abs/1406.2661).
