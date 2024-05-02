@@ -93,28 +93,33 @@
   id: totrans-10
   prefs: []
   type: TYPE_NORMAL
+  zh: 在本章中，您将了解分布式梯度下降的替代方法以及 DDP 梯度下降实现如何帮助您有效地跨任意数量的节点扩展训练，同时使用具有有限计算、内存、存储和带宽资源的实用节点。
 - en: 8.1 What if the training data set does not fit in memory?
   id: totrans-11
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 8.1 如果训练数据集不适合内存怎么办？
 - en: This section and its subsections provide a step-by-step introduction to gradient
     accumulation and the role that gradient accumulation plays in gradient descent
     to enable support for out-of-memory training data sets.
   id: totrans-12
   prefs: []
   type: TYPE_NORMAL
+  zh: 本节及其子节提供了逐步介绍梯度累积以及梯度累积在梯度下降中的作用，以支持超出内存训练数据集的功能。
 - en: 8.1.1 Illustrating gradient accumulation
   id: totrans-13
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 8.1.1 说明梯度累积
 - en: This section demonstrates gradient accumulation using the autograd library of
     PyTorch. While the example in this section is based on using autograd with a trivial
     function, later sections apply gradient accumulation to more realistic examples.
   id: totrans-14
   prefs: []
   type: TYPE_NORMAL
+  zh: 本节演示了使用 PyTorch 的 autograd 库进行梯度累积。虽然本节中的示例是基于使用 autograd 与一个简单函数的情况，但后面的部分将梯度累积应用于更现实的示例。
 - en: When using gradient descent with reverse mode accumulating autodiff it is necessary
     to clear out the values of the tensor’s gradients after performing an optimization
     step of gradient descent.[¹](#pgfId-1011924) In PyTorch, this is done by setting
@@ -126,10 +131,14 @@
   id: totrans-15
   prefs: []
   type: TYPE_NORMAL
+  zh: 当使用梯度下降与反向模式累积自动微分时，在执行梯度下降的优化步骤后，有必要清除张量的梯度值。在 PyTorch 中，可以通过将张量的梯度设置为 None
+    或使用 torch.optim.Optimizer 的辅助方法 zero_grad 来实现此操作。除非将梯度清零（清除），否则由损失函数产生的张量的 backward
+    方法的调用可能会导致模型的张量中梯度值的累积。以下列表显示了这种行为。
 - en: Listing 8.1 Illustration of gradient accumulation for repeated calls to backward
   id: totrans-16
   prefs: []
   type: TYPE_NORMAL
+  zh: 列表 8.1 说明梯度累积对于反向调用的重复调用的插图
 - en: '[PRE0]'
   id: totrans-17
   prefs: []
@@ -139,14 +148,17 @@
   id: totrans-18
   prefs: []
   type: TYPE_NORMAL
+  zh: ❶ 使用 requires_grad=True 来启用对 y 相对于 x 的微分。
 - en: ❷ Set retain_graph=True to prevent PyTorch from de-allocating memory.
   id: totrans-19
   prefs: []
   type: TYPE_NORMAL
+  zh: ❷ 设置 retain_graph=True 来防止 PyTorch 释放内存。
 - en: This outputs
   id: totrans-20
   prefs: []
   type: TYPE_NORMAL
+  zh: 这会输出
 - en: '[PRE1]'
   id: totrans-21
   prefs: []
@@ -161,11 +173,14 @@
   id: totrans-22
   prefs: []
   type: TYPE_NORMAL
+  zh: 根据对 ![008-01_EQ01](Images/008-01_EQ01.png) 的 *y* = *x*² 的五次重复调用，输出为 3 时为 6。由于累积的结果，x.grad
+    的输出在 for 循环的 5 次迭代中跳过 6。尽管梯度累积可能看起来像是自动微分的一个不方便的副作用，但在将梯度下降扩展到超出内存数据集和分布式集群时，它可以发挥有用的作用。
 - en: 8.1.2 Preparing a sample model and data set
   id: totrans-23
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 8.1.2 准备一个示例模型和数据集
 - en: This section describes how to prepare a sample model and a training data set
     to illustrate the role that gradient accumulation plays in scaling to out-of-memory
     data sets. In the next section, you will learn how the model and the data set
@@ -173,6 +188,7 @@
   id: totrans-24
   prefs: []
   type: TYPE_NORMAL
+  zh: 本节描述了如何准备一个示例模型和一个训练数据集，以说明梯度累积在扩展到超出内存数据集时的作用。在下一节中，您将学习如何在梯度下降中使用模型和数据集。
 - en: Suppose you are working with a training data set of 1,000 structured records
     and the compute node executing your gradient descent algorithm has just enough
     memory to hold 250 examples at a time. Of course, modern compute environments
@@ -183,6 +199,7 @@
   id: totrans-25
   prefs: []
   type: TYPE_NORMAL
+  zh: 假设您正在处理一个包含 1,000 个结构化记录的训练数据集，并且执行您的梯度下降算法的计算节点只能一次容纳 250 个示例。当然，现代计算环境可以扩展到更大的数据集；然而，选择这些数字将证明对实例有用。让我们首先看一个适合内存的虚构数据集的梯度累积，然后再直接进入现实世界的超出内存数据集的复杂性。
 - en: Listing 8.2 Preparing a sample multivariate linear regression data set
   id: totrans-26
   prefs: []
@@ -455,10 +472,12 @@
   id: totrans-69
   prefs: []
   type: TYPE_NORMAL
+  zh: ❼ 清除模型张量的梯度。
 - en: Once the code is executed, the print statement
   id: totrans-70
   prefs: []
   type: TYPE_NORMAL
+  zh: 代码执行后，打印语句
 - en: '[PRE9]'
   id: totrans-71
   prefs: []
@@ -468,6 +487,7 @@
   id: totrans-72
   prefs: []
   type: TYPE_NORMAL
+  zh: 应该输出
 - en: '[PRE10]'
   id: totrans-73
   prefs: []
@@ -479,6 +499,7 @@
   id: totrans-74
   prefs: []
   type: TYPE_NORMAL
+  zh: 证实梯度下降正确地恢复了列表8.2中使用的系数[1.0000，2.0000，3.0000，4.0000]，以创建由y_train和X_train组成的训练数据集。
 - en: The fraction (IN_MEMORY_SHARD_SIZE / TRAINING_DATASET_SIZE) used in the calculation
     of the loss in listing 8.4 is subtle but important. Recall that the listing is
     intended to compute the gradient for the entire epoch of training examples, or,
@@ -490,6 +511,7 @@
   id: totrans-75
   prefs: []
   type: TYPE_NORMAL
+  zh: 在列表8.4中计算损失时使用的分数(IN_MEMORY_SHARD_SIZE / TRAINING_DATASET_SIZE)微妙但重要。回想一下，该列表旨在计算整个训练示例或更准确地说是TRAINING_DATASET_SIZE示例的梯度。mse方法的默认实现，计算模型估计值y_est的均方误差，假定在计算期间有IN_MEMORY_SHARD_SIZE个示例。换句话说，在列表中内部for循环的每次迭代中，通过计算mse来计算![08-01_EQ02](Images/08-01_EQ02.png)，或者在PyTorch中等效地使用
 - en: '[PRE11]'
   id: totrans-76
   prefs: []
@@ -501,16 +523,19 @@
   id: totrans-77
   prefs: []
   type: TYPE_NORMAL
+  zh: 返回每个IN_MEMORY_DATASET_SIZE示例的均方误差。列表8.4中在计算损失时使用的(IN_MEMORY_SHARD_SIZE / TRAINING_DATASET_SIZE)分数将均方误差重新缩放为TRAINING_DATASET_SIZE示例。
 - en: With this multiplication, expressed in terms of an equation, notice that rescaling
     amounts to IN_MEMORY_DATASET_SIZE, which cancels out in the numerator and denominator
     of
   id: totrans-78
   prefs: []
   type: TYPE_NORMAL
+  zh: 通过这个以方程表示的乘法，注意到重新缩放相当于IN_MEMORY_DATASET_SIZE，这在![08-01_EQ02](Images/08-01_EQ02.png)的分子和分母中取消了。
 - en: '![08-01_EQ03](Images/08-01_EQ03.png)'
   id: totrans-79
   prefs: []
   type: TYPE_IMG
+  zh: '![08-01_EQ03](Images/08-01_EQ03.png)'
 - en: When the inner for-loop finishes, the w.grad contains the sum of the training
     example gradients, so the code w.data -= LEARNING_RATE * w.grad computes the optimization
     step for the entire epoch of shards. In other words, in the gradient descent implementation
@@ -520,6 +545,7 @@
   id: totrans-80
   prefs: []
   type: TYPE_NORMAL
+  zh: 当内部for循环完成时，w.grad包含训练示例梯度的总和，因此代码w.data -= LEARNING_RATE * w.grad计算了整个epoch的片段的优化步骤。换句话说，在列表8.4中的梯度下降实现中，梯度优化步骤是针对每个训练示例的epoch执行一次。这证实了列表8.4中的实现不是小批量梯度下降。
 - en: 'Although the approach illustrated in figure 8.1 enables scaling to out-of-memory
     data sets while using arbitrary shard sizes, it suffers from a significant algorithm
     complexity problem: the inner for-loop is sequential, which changes the big-zero
@@ -528,17 +554,21 @@
   id: totrans-81
   prefs: []
   type: TYPE_NORMAL
+  zh: 虽然图8.1中的方法使得可以在使用任意片段大小的内存外数据集上进行扩展，但它遭受着一个显著的算法复杂性问题：内部for循环是顺序的，这会将梯度下降实现的大零性能从*O*(EPOCHS)变为*O*(EPOCHS
+    * SHARDS)。
 - en: Distributing the inner for-loop from listing 8.4 across a cluster of parallel
     worker nodes can return the implementation to the original *O*(EPOCHS) worst-case
     performance. But how can this be implemented efficiently?
   id: totrans-82
   prefs: []
   type: TYPE_NORMAL
+  zh: 将列表8.4中的内部for循环分布到一组并行工作节点上，可以将实现恢复到原始*O*(EPOCHS)最坏情况的性能。但是如何高效地实现呢？
 - en: 8.2 Parameter server approach to gradient accumulation
   id: totrans-83
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 8.2 参数服务器方法的梯度累积
 - en: This section introduces parameter server-based implementation of distributed
     gradient descent and explains the role that gradient accumulation plays in the
     implementation. This section clarifies the limitations of the parameter server-based
@@ -546,6 +576,7 @@
   id: totrans-84
   prefs: []
   type: TYPE_NORMAL
+  zh: 本节介绍了基于参数服务器的分布式梯度下降的实现，并解释了梯度累积在实现中的作用。本节澄清了参数服务器方法的局限性，并激发了更高效的基于环的实现。
 - en: Legacy machine learning frameworks like TensorFlow 1.x popularized the parameter
     server-based approach to distributing gradient descent across multiple nodes in
     a cluster. The parameter server approach illustrated in figure 8.2 is straightforward
@@ -878,11 +909,14 @@
   id: totrans-124
   prefs: []
   type: TYPE_NORMAL
+  zh: 虽然图8.4和列表8.5中示例的三次迭代实现了梯度的累积（reduce步骤）到单个节点，但要使分布式数据并行梯度下降工作，环中的每个节点必须访问整个累积梯度：*g*[0](*n*[0])
+    + *g*[1](*n*[1]) + *g*[2](*n*[2]) + *g*[3](*n*[3])。除非每个节点都可以访问累积梯度，否则节点无法执行使用累积梯度更改模型参数值的梯度下降步骤。即将介绍的各节将基于列表8.5中的reduce步骤来解释整个分布式梯度下降算法的reduce-all阶段。
 - en: 8.4 Understanding ring-based distributed gradient descent
   id: totrans-125
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 8.4 理解基于环形的分布式梯度下降
 - en: While the naive ring-based reduce operation described in section 8.3 can eliminate
     the need for parameter servers and ensure that the values of the gradients are
     reduced (accumulated) on the individual compute nodes in the ring-based multi-node
@@ -897,6 +931,7 @@
   id: totrans-126
   prefs: []
   type: TYPE_NORMAL
+  zh: 虽然第8.3节描述的天真的基于环的reduce操作可以消除对参数服务器的需求，并确保梯度值在环形多节点集群中的各个计算节点上被减少（累积），但它存在一些缺点。随着训练数据集的增长（这是可以预料的），集群中的节点数量必须增长以跟上。这也意味着集群需要的总带宽必须随着节点数量的增加而增长，因为每个节点在每次迭代期间都必须将整个梯度发送给环中的下一个节点。在本节中，您将了解基于环形分布式数据并行算法（例如，著名的Horovod算法）如何在规模化情况下帮助有效利用带宽，其中训练节点的数量和训练示例的数量都增加。
 - en: 'The Horovod algorithm can support the growth in the training data set (and
     the number of the nodes in the cluster) while keeping the bandwidth demands constant
     or even lowering the bandwidth requirements. To support this, Horovod relies on
@@ -911,6 +946,9 @@
   id: totrans-127
   prefs: []
   type: TYPE_NORMAL
+  zh: Horovod算法可以支持训练数据集的增长（以及集群中节点的数量），同时保持带宽需求恒定或甚至降低带宽要求。为了支持这一点，Horovod依赖于两个分离且独立的环形通信阶段：（1）reduce-scatter
+    和（2）all-gather。在两个阶段中，Horovod不是在节点之间发送/接收整个梯度数据，而是只通信梯度的一个单一段落，其中默认情况下段落的大小是梯度大小乘以
+    ![08-04_EQ04](Images/08-04_EQ04.png)，其中*NODES*是环集群中的工作节点数。因此，增加工作节点的数量以与训练数据集大小成比例地减少节点间通信的带宽需求。
 - en: So what is a *segment* of the gradient? You can consider each segment a logical
     partition of the gradient, as illustrated in figure 8.5\. In the figure, the gradient
     *g*[0] computed by node *n*[0], based on the training data set shard [0:250][0]
@@ -925,14 +963,20 @@
   id: totrans-128
   prefs: []
   type: TYPE_NORMAL
+  zh: 那么梯度的 *段* 是什么？你可以把每个段视为梯度的逻辑分区，如图 8.5 所示。在图中，节点 *n*[0] 计算的梯度 *g*[0]，基于训练数据集分片
+    [0:250][0]（其中 [0:250] 是 Python 切片表示法），依次被分成 NODES 段，以便默认情况下，每个段都存在大致相等数量的梯度值。继续之前的例子，梯度占据了
+    400 MB 的数据量（例如模型参数的 32 位浮点梯度值的每 100,000,000 个字节为 4 字节），每个段是 100 MB 的互斥逻辑分区的相同模型张量。请注意，在这种情况下，由于分片是由节点
+    *n*[0] 计算的，因此每个四个段中的 *i* 都使用 *s[i]*(*n*[0]) 进行注释。
 - en: '![08-05](Images/08-05.png)'
   id: totrans-129
   prefs: []
   type: TYPE_IMG
+  zh: '![08-05](Images/08-05.png)'
 - en: Figure 8.5 Gradient segments used by Horovod for node-to-node communication
   id: totrans-130
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 8.5 Horovod 用于节点间通信的梯度段
 - en: Also notice that while the segments cannot be accumulated (added) along the
     horizontal axis of the frame in figure 8.5, it is possible to accumulate the segments
     along the vertical axis. Further, the segments *s[i]* shown below the segment
@@ -945,6 +989,9 @@
   id: totrans-131
   prefs: []
   type: TYPE_NORMAL
+  zh: 还要注意，虽然在图 8.5 的框架的水平轴上不能累积（相加）段，但是可以沿垂直轴累积段。此外，图 8.5 段框架下方显示的段 *s[i]* 对应于每个节点计算的相应段的累积。例如，*s[0]*
+    等于 *s[0]*(*n*[0]) + *s[1]*(*n*[1]) + *s[2]*(*n*[2]) + *s[3]*(*n*[3])。因此，图 8.5
+    框架下方显示的 *s*[0]*s*[1]*s*[2]*s*[3] 段等同于将累积梯度 *g*[0] + *g*[1] + *g*[2] + *g*[3] 逻辑分割为段所需以执行梯度下降的优化步骤。
 - en: As with an introduction to the ring-based reduce steps in listing 8.5, the rest
     of this chapter uses Python pseudocode to explain the Horovod algorithm. Recall
     that for a distributed data parallel algorithm (such as Horovod) to work correctly,
@@ -955,10 +1002,14 @@
   id: totrans-132
   prefs: []
   type: TYPE_NORMAL
+  zh: 就像在列表 8.5 中介绍的基于环形减少步骤一样，本章的其余部分使用 Python 伪代码来解释 Horovod 算法。请回忆，对于一个分布式数据并行算法（如
+    Horovod）要正确工作，环形集群中的每个节点必须初始化具有模型参数的相同副本。在列表 8.6 中，Python 张量列表 W 被用来表示相同的模型。请注意，W
+    中的每个张量都是使用来自 w_src 的值初始化的，w_src 是从标准正态分布中抽样的伪随机值张量。
 - en: Listing 8.6 W storing the identical copies of the model tensor
   id: totrans-133
   prefs: []
   type: TYPE_NORMAL
+  zh: 列表 8.6 W 存储模型张量的相同副本
 - en: '[PRE15]'
   id: totrans-134
   prefs: []
@@ -973,10 +1024,14 @@
   id: totrans-135
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了重复使用列表 8.4 中的训练数据集张量 X_train 和 y_train，Horovod 算法的以下解释创建了一个 PyTorch DataLoader，它将训练数据集分成每个
+    IN_MEMORY_SHARD_SIZE 记录的分片。不要被列表 8.7 中 DataLoader 的 batch_size 参数所迷惑；虽然该参数用于分割源
+    TensorDataset，但是单个分片不会作为批量用于更新模型的参数。
 - en: Listing 8.7 A step of gradient descent using PyTorch DataLoader for sharding
   id: totrans-136
   prefs: []
   type: TYPE_NORMAL
+  zh: 列表 8.7 使用 PyTorch DataLoader 进行分片的梯度下降步骤
 - en: '[PRE16]'
   id: totrans-137
   prefs: []
@@ -986,6 +1041,7 @@
   id: totrans-138
   prefs: []
   type: TYPE_NORMAL
+  zh: 代码执行完毕后，
 - en: '[PRE17]'
   id: totrans-139
   prefs: []
@@ -995,6 +1051,7 @@
   id: totrans-140
   prefs: []
   type: TYPE_NORMAL
+  zh: 应该输出
 - en: '[PRE18]'
   id: totrans-141
   prefs: []
@@ -1004,6 +1061,7 @@
   id: totrans-142
   prefs: []
   type: TYPE_NORMAL
+  zh: 代表环形集群中每个节点的模型梯度的张量。
 - en: Note that after the forward and backward steps of gradient descent are performed
     on each node using the code in the for-loop in listing 8.7, the Horovod algorithm
     must perform two phases of ring-based networks in order to communicate the accumulated
@@ -1013,11 +1071,14 @@
   id: totrans-143
   prefs: []
   type: TYPE_NORMAL
+  zh: 请注意，在使用列表8.7中 for 循环中的代码对每个节点执行梯度下降的前向和后向步骤之后，Horovod 算法必须执行两个基于环形网络的阶段，以便将累积梯度通信到环中的每个节点。第一个阶段称为
+    *reduce-scatter*，在第8.5节中进行了解释，第二个阶段称为 *all-gather*，在第8.6节中进行了解释。
 - en: '8.5 Phase 1: Reduce-scatter'
   id: totrans-144
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 8.5 阶段 1：Reduce-scatter
 - en: This section explains the reduce-scatter phase of Horovod, under the assumption
     that every node in the ring-based cluster is initialized with an identical copy
     of the model parameters. The section continues with the example from listing 8.7,
@@ -1030,6 +1091,9 @@
   id: totrans-145
   prefs: []
   type: TYPE_NORMAL
+  zh: 本节介绍了 Horovod 的 reduce-scatter 阶段，假设环形集群中的每个节点都使用模型参数的相同副本进行初始化。本节继续使用列表8.7中的示例，其中模型参数的相同副本存储在
+    W[node] 中，并且每个节点完成了梯度下降的前向和后向步骤，导致的梯度值保存在 W[node].grad 中。通过本节的结束，您将了解 Horovod
+    的 reduce-scatter 阶段如何确保环中的每个节点最终获得累积梯度 *g*[0] + *g*[1] + *g*[2] + *g*[3] 的不同段。
 - en: The first phase of Horovod, known as reduce-scatter, starts after each of the
     nodes is done computing a gradient based on the node-specific shard of the data
     set. As explained in the previous section, each node logically partitions the
@@ -1040,15 +1104,20 @@
   id: totrans-146
   prefs: []
   type: TYPE_NORMAL
+  zh: 'Horovod 的第一个阶段称为 reduce-scatter，在每个节点都完成基于数据集的节点特定分片的梯度计算后开始。如前一节所述，每个节点逻辑上将计算的梯度分成
+    NODES 个段。此阶段的第一次迭代（共三次迭代）显示在图8.6中，其中图的顶部显示，在阶段开始时，每个节点 *n*[i] 存储着特定于分片的段，*s*[0](*n*[i])
+    到 *s[NODES-1]*(*n*[i])。 '
 - en: '![08-06](Images/08-06.png)'
   id: totrans-147
   prefs: []
   type: TYPE_IMG
+  zh: '![08-06](Images/08-06.png)'
 - en: Figure 8.6 The first iteration of the reduce-scatter phase initiates gradient
     segment transfer across nodes.
   id: totrans-148
   prefs: []
   type: TYPE_NORMAL
+  zh: 图8.6 第一次 reduce-scatter 阶段的迭代启动了跨节点的梯度段传输。
 - en: Since reduce-scatter sends just a segment’s worth of data to the successor node
     at every iteration, during the first iteration (shown using arrows on the bottom
     side of figure 8.6), a node *n[i]* forwards a segment *s*[(i - 1)] % NODES(*n*[i])
@@ -1059,6 +1128,10 @@
   id: totrans-149
   prefs: []
   type: TYPE_NORMAL
+  zh: 由于每次迭代 reduce-scatter 仅将一个段的数据发送到后续节点，因此在第一次迭代（如图8.6底部箭头所示）中，节点 *n[i]* 将段 *s*[(i
+    - 1)] % NODES(*n*[i]) 转发给后续节点。在第一次迭代结束时（图8.6底部），每个节点 *n[i]* 累积了一个段 *s*[(i - t
+    - 1) % NODES](*n*[(i - 1) % NODES]) + *s*[(i - t - 1) % NODES](*n*[i])，其中 t=1
+    代表第一次迭代。
 - en: 'In subsequent iterations, each node sends the segment that was accumulated
     in the previous iteration to the successor node. For example, in the second iteration
     (shown in figure 8.7), node *n*[1] sends the segment *s*[3](*n*[0] + *n*[1]),
@@ -1071,14 +1144,20 @@
   id: totrans-150
   prefs: []
   type: TYPE_NORMAL
+  zh: 在后续的迭代中，每个节点将上一次迭代中累积的段发送给后继节点。例如，在第二次迭代（如图8.7所示）中，节点*n*[1]发送段*s*[3]（*n*[0]
+    + *n*[1]），节点*n*[2]发送段*s*[0]（*n*[1] + *n*[2]），一般来说，对于第t次迭代，节点*n*[i]发送累积的段*s*[(i
+    - t)] % NODES(*n*[i])。由于在具有四个节点的示例中，只需要三次迭代来减少散布段，因此图8.7的底部显示，到第二次迭代结束时，每个节点上只缺少每个段的一部分：由*s*[(i
+    + 1) % NODES](*n*[i])指定的段。
 - en: '![08-07](Images/08-07.png)'
   id: totrans-151
   prefs: []
   type: TYPE_IMG
+  zh: '![08-07](Images/08-07.png)'
 - en: Figure 8.7 The second reduce-scatter iteration propagates accumulated gradients.
   id: totrans-152
   prefs: []
   type: TYPE_NORMAL
+  zh: 图8.7 第二次减少散布迭代传播累积梯度。
 - en: This missing part is filled in the third and final iteration of the example,
     whereby at the conclusion of the iteration (bottom side of figure 8.8), every
     node *n[i]* accumulates the entire segment *s[i]*. For example, notice that in
@@ -1087,19 +1166,23 @@
   id: totrans-153
   prefs: []
   type: TYPE_NORMAL
+  zh: 这个缺失的部分在示例的第三个和最后一个迭代中填补，即在迭代结束时（图8.8的底部），每个节点*n[i]*都累积了整个段*s[i]*。例如，注意在图8.8中，*n*[0]以*s*[0]结束了本阶段的最后一次迭代，节点*n*[1]以*s*[1]结束，依此类推。
 - en: '![08-08](Images/08-08.png)'
   id: totrans-154
   prefs: []
   type: TYPE_IMG
+  zh: '![08-08](Images/08-08.png)'
 - en: Figure 8.8 The third reduce-scatter iteration finishes gradient accumulation
     for a four-node ring.
   id: totrans-155
   prefs: []
   type: TYPE_NORMAL
+  zh: 图8.8 第三次减少散布迭代完成四节点环的梯度累积。
 - en: Listing 8.8 Python pseudocode for the reduce-scatter phase
   id: totrans-156
   prefs: []
   type: TYPE_NORMAL
+  zh: 列表8.8 减少散布阶段的Python伪代码
 - en: '[PRE19]'
   id: totrans-157
   prefs: []
@@ -1109,19 +1192,23 @@
   id: totrans-158
   prefs: []
   type: TYPE_NORMAL
+  zh: ❶ 第一个段被累积到第一个节点。
 - en: ❷ Retrieve the gradient values corresponding to node and segment seg.
   id: totrans-159
   prefs: []
   type: TYPE_NORMAL
+  zh: ❷ 检索与节点和段seg对应的梯度值。
 - en: ❸ Accumulate gradient segment value on the next_node in the ring.
   id: totrans-160
   prefs: []
   type: TYPE_NORMAL
+  zh: ❸ 在环中的下一个节点上累积梯度段的值。
 - en: After the code from listing 8.8 finishes executing, you can output the resulting
     gradients using
   id: totrans-161
   prefs: []
   type: TYPE_NORMAL
+  zh: 在列表8.8中的代码执行完毕后，可以使用以下方式输出结果梯度
 - en: '[PRE20]'
   id: totrans-162
   prefs: []
@@ -1131,6 +1218,7 @@
   id: totrans-163
   prefs: []
   type: TYPE_NORMAL
+  zh: 应该打印出
 - en: '[PRE21]'
   id: totrans-164
   prefs: []
@@ -1143,6 +1231,7 @@
   id: totrans-165
   prefs: []
   type: TYPE_NORMAL
+  zh: 请注意，如预期的那样，梯度值分散在节点之间，以便*n*[0]存储累积梯度的段*s*[0]，*n*[1]存储段*s*[1]，依此类推。一般来说，减少散布后的梯度累积段可以使用以下方式打印出来
 - en: '[PRE22]'
   id: totrans-166
   prefs: []
@@ -1152,6 +1241,7 @@
   id: totrans-167
   prefs: []
   type: TYPE_NORMAL
+  zh: 它在每个节点上输出累积段的值：
 - en: '[PRE23]'
   id: totrans-168
   prefs: []
@@ -1162,27 +1252,33 @@
   id: totrans-169
   prefs: []
   type: TYPE_NORMAL
+  zh: 图8.9的插图总结了当减少散布环由四个节点组成时，列表8.8中的代码的情况。
 - en: '![08-09a](Images/08-09a.png)'
   id: totrans-170
   prefs: []
   type: TYPE_IMG
+  zh: '![08-09a](Images/08-09a.png)'
 - en: Figure 8.9a Iterations of reduce-scatter
   id: totrans-171
   prefs: []
   type: TYPE_NORMAL
+  zh: 图8.9a 减少散布的迭代
 - en: '![08-09b](Images/08-09b.png)'
   id: totrans-172
   prefs: []
   type: TYPE_IMG
+  zh: '![08-09b](Images/08-09b.png)'
 - en: Figure 8.9b Iterations of reduce-scatter
   id: totrans-173
   prefs: []
   type: TYPE_NORMAL
+  zh: 图8.9b 减少散布的迭代
 - en: '8.6 Phase 2: All-gather'
   id: totrans-174
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 8.6 阶段2：全聚合
 - en: 'This section explains the second and the final phase of the Horovod algorithm:
     all-gather. In this section, you can observe how the scattered segments of the
     accumulated gradient from the reduce-scatter phase are gathered, or sent around
@@ -1194,6 +1290,8 @@
   id: totrans-175
   prefs: []
   type: TYPE_NORMAL
+  zh: 本节介绍Horovod算法的第二个和最后一个阶段：全聚合。在本节中，您可以观察到来自减少散布阶段的累积梯度的散布段如何被收集或发送到环中，以便在阶段结束时，每个节点都存储整个累积梯度*g*[0]
+    + *g*[1] + *g*[2] + *g*[3]。这意味着在本阶段结束时，逻辑环中的每个节点都可以执行梯度下降的优化步骤，并计算出模型参数的下一个迭代，以进行进一步的训练。
 - en: Given that the reduce-scatter phase performs the nuanced steps of selectively
     accumulating (reducing) the gradient segment values, the implementation of all-gather,
     the second and the last phase, is easier to follow. Using an approach introduced
@@ -1204,6 +1302,8 @@
   id: totrans-176
   prefs: []
   type: TYPE_NORMAL
+  zh: 鉴于减少-分散阶段执行了有选择性地累积（减少）梯度段值的细微步骤，全收集的实现，即第二个和最后一个阶段，更容易理解。使用与减少-全部算法介绍的方法，此阶段仅涉及从一个节点发送累积的段到下一个节点。与
+    Horovod 算法的减少-分散阶段一样，全收集阶段在集群的逻辑环网络中进行节点到节点通信，共需要 NODES - 1 次迭代。
 - en: The three iterations for the four nodes in figure 8.10 are shown as the upper-left,
     upper-right, and lower-right quadrants of the figure. The lower-left corner of
     the figure shows the final state of the nodes in the cluster after the nodes have
@@ -1214,22 +1314,28 @@
   id: totrans-177
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 8.10 中四个节点的三次迭代分别表示为图的左上、右上和右下象限。图的左下角显示了节点在完成 Horovod 算法的所有步骤后集群中的最终状态。请注意，每个节点上的梯度段（表示为
+    *s*[0] 到 *s*[3]）存储了从训练数据集的相应分片计算出的整个累积梯度（表示为 *g*[0] + *g*[1] + *g*[2] + *g*[3]）。
 - en: '![08-10a](Images/08-10a.png)'
   id: totrans-178
   prefs: []
   type: TYPE_IMG
+  zh: '![08-10a](Images/08-10a.png)'
 - en: Figure 8.10a Iterations of all-gather
   id: totrans-179
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 8.10a 全收集的迭代
 - en: '![08-10b](Images/08-10b.png)'
   id: totrans-180
   prefs: []
   type: TYPE_IMG
+  zh: '![08-10b](Images/08-10b.png)'
 - en: Figure 8.10b Iterations of all-gather
   id: totrans-181
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 8.10b 全收集的迭代
 - en: The upper-left quadrant of the figure indicates that at the beginning of the
     first iteration the state of the four nodes in the example is such that *n*[0]
     stores segment *s*[0] of the accumulated gradient, and so forth. During the first
@@ -1239,10 +1345,12 @@
   id: totrans-182
   prefs: []
   type: TYPE_NORMAL
+  zh: 图的左上象限指出，在第一个迭代的开始，示例中四个节点的状态是 *n*[0] 存储了累积梯度的段 *s*[0]，等等。在该阶段的第一次迭代（左上象限）中，每个节点仅向环中的后继节点发送它存储的累积段，覆盖并替换后继节点中存储的任何先前的段值。
 - en: Listing 8.9 Python pseudocode for the all-gather phase
   id: totrans-183
   prefs: []
   type: TYPE_NORMAL
+  zh: 列表 8.9 全收集阶段的 Python 伪代码
 - en: '[PRE24]'
   id: totrans-184
   prefs: []
@@ -1252,10 +1360,12 @@
   id: totrans-185
   prefs: []
   type: TYPE_NORMAL
+  zh: ❶ 从第一次迭代的第一个节点开始。
 - en: ❷ Store the gradient values of the segment on the next node in the ring.
   id: totrans-186
   prefs: []
   type: TYPE_NORMAL
+  zh: ❷ 在环中的下一个节点上存储段的梯度值。
 - en: At the beginning of the second iteration (upper-right quadrant in figure 8.10),
     every node stores exactly two complete segments of the accumulated gradient. During
     this and the remaining iterations, every node sends the segment received during
@@ -1267,10 +1377,14 @@
   id: totrans-187
   prefs: []
   type: TYPE_NORMAL
+  zh: 在第二次迭代开始时（图 8.10 的右上象限），每个节点恰好存储两个完整的累积梯度段。在这次迭代和剩余的迭代中，每个节点将在上一次迭代中接收的段（例如，在第二次迭代中，*n*[0]
+    接收了 *s*[3]）发送到环中的后继节点。最后一次迭代（右下象限）完成了将梯度的剩余段传输到集群中的节点。在此阶段结束时（左下象限），环集群中的每个节点上都可以获得累积梯度
+    *g*[0] + *g*[1] + *g*[2] + *g*[3]。
 - en: At this point, printing the gradients of the model on each node,
   id: totrans-188
   prefs: []
   type: TYPE_NORMAL
+  zh: 此时，在每个节点上打印模型的梯度，
 - en: '[PRE25]'
   id: totrans-189
   prefs: []
@@ -1280,6 +1394,7 @@
   id: totrans-190
   prefs: []
   type: TYPE_NORMAL
+  zh: 为环中的每个节点输出了四个相同的梯度值：
 - en: '[PRE26]'
   id: totrans-191
   prefs: []
@@ -1289,6 +1404,7 @@
   id: totrans-192
   prefs: []
   type: TYPE_NORMAL
+  zh: 列表 8.10 Horovod 基于环的分布式梯度下降算法
 - en: '[PRE27]'
   id: totrans-193
   prefs: []
@@ -1298,6 +1414,7 @@
   id: totrans-194
   prefs: []
   type: TYPE_NORMAL
+  zh: 这应该输出恢复的多变量线性回归系数：
 - en: '[PRE28]'
   id: totrans-195
   prefs: []
@@ -1308,6 +1425,7 @@
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 概要
 - en: Distributed data parallel training is an approach to distributed gradient descent
     where each node in a scale-out cluster uses an identical copy of the trained model
     but a dedicated shard of the training data set.
@@ -1315,6 +1433,7 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 分布式数据并行训练是一种分布式梯度下降的方法，其中规模扩展的集群中的每个节点都使用训练模型的相同副本，但是使用训练数据集的专用分片。
 - en: The gradient accumulation feature of the reverse-mode accumulating autodiff
     enables gradient descent to scale down to limited memory nodes or scale up to
     out-of-memory data sets.
@@ -1322,6 +1441,7 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 反向模式累积自动微分的梯度累积特性使得梯度下降可以缩小到有限内存节点，或者扩展到超出内存的数据集。
 - en: Legacy parameter server-based approaches to distributed data parallel gradient
     descent require expensive, broadcast-style networking operations and do not scale
     well under bandwidth constraints.
@@ -1329,6 +1449,7 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 基于遗留参数服务器的分布式数据并行梯度下降方法需要昂贵的广播式网络操作，并且在带宽限制下不易扩展。
 - en: 'Horovod is a scalable and bandwidth-efficient algorithm for distributed data
     parallel gradient descent based on two phases of ring-based networking operations:
     reduce-scatter and all-gather.'
@@ -1336,12 +1457,15 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: Horovod 是一个可伸缩且带宽高效的算法，用于基于两个阶段的基于环形网络操作的分布式数据并行梯度下降：reduce-scatter 和 all-gather。
 - en: ^(1.)This feature of autodiff is covered in detail in chapter 5.
   id: totrans-201
   prefs: []
   type: TYPE_NORMAL
+  zh: ^(1.)自动微分的这个特性在第 5 章中有详细介绍。
 - en: '^(2.)For example, many deep learning models are initialized using Kaiming initialization:
     [http://mng.bz/5K47](http://mng.bz/5K47).'
   id: totrans-202
   prefs: []
   type: TYPE_NORMAL
+  zh: ^(2.)例如，许多深度学习模型都是使用 Kaiming 初始化进行初始化的：[http://mng.bz/5K47](http://mng.bz/5K47)。
