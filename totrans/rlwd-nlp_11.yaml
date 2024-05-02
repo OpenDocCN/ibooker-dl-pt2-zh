@@ -1,26 +1,32 @@
 - en: 8 Attention and Transformer
+  id: totrans-0
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
 - en: This chapter covers
+  id: totrans-1
   prefs: []
   type: TYPE_NORMAL
 - en: Using attention to produce summaries of the input and improve the quality of
     Seq2Seq models
+  id: totrans-2
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Replacing RNN-style loops with self-attention, a mechanism for the input to
     summarize itself
+  id: totrans-3
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Improving machine translation systems with the Transformer model
+  id: totrans-4
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Building a high-quality spell-checker using the Transformer model and publicly
     available datasets
+  id: totrans-5
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -35,6 +41,7 @@
     that powers numerous modern NLP pretrained models, including GPT-2 (section 8.4.3)
     and BERT (section 9.2). The developments in modern NLP since 2017 can be best
     summarized as “the era of the Transformer.”
+  id: totrans-6
   prefs: []
   type: TYPE_NORMAL
 - en: In this chapter, we start with attention, a mechanism that made a breakthrough
@@ -45,9 +52,11 @@
     later, the Transformer models can improve the quality of NLP systems over RNNs
     by a large margin and achieve almost human-level performance in some tasks, such
     as translation and generation.
+  id: totrans-7
   prefs: []
   type: TYPE_NORMAL
 - en: 8.1 What is attention?
+  id: totrans-8
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
@@ -56,9 +65,11 @@
     paradigm with many applications, although the “vanilla” Seq2Seq models are not
     without limitation. In this section, we discuss the Seq2Seq models’ bottleneck
     and motivate the use of an attention mechanism.
+  id: totrans-9
   prefs: []
   type: TYPE_NORMAL
 - en: 8.1.1 Limitation of vanilla Seq2Seq models
+  id: totrans-10
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
@@ -69,12 +80,15 @@
     is another RNN, takes this vector and produces a sequence in the target language,
     token by token. Figure 8.1 illustrates how Spanish sentences are translated into
     English with a vanilla Seq2Seq model.
+  id: totrans-11
   prefs: []
   type: TYPE_NORMAL
 - en: '![CH08_F01_Hagiwara](../Images/CH08_F01_Hagiwara.png)'
+  id: totrans-12
   prefs: []
   type: TYPE_IMG
 - en: Figure 8.1 A bottleneck in a vanilla Seq2Seq model
+  id: totrans-13
   prefs: []
   type: TYPE_NORMAL
 - en: This Seq2Seq architecture is quite simple and powerful, but it is known that
@@ -91,25 +105,34 @@
     Professional translators do not just read the source sentence and write down its
     translation in one breath. They refer to the source sentences as many times as
     necessary to translate the relevant parts in the target sentence.
+  id: totrans-14
   prefs: []
   type: TYPE_NORMAL
+  zh: 这个 Seq2Seq 架构非常简单而强大，但众所周知，它的基本版本（如图 8.1 所示）在翻译句子方面不如其他传统的机器翻译算法（如基于短语的统计机器翻译模型）。如果你仔细观察它的结构，可能就能猜出其中的原因——它的编码器试图将源句子中的所有信息“压缩”到句子表示中，这是一个固定长度的向量（例如，256个浮点数），而解码器则试图仅从该向量中恢复整个目标句子。无论源句子有多长（或多短），向量的大小都是固定的。中间向量是一个巨大的瓶颈。如果你考虑一下人类实际上如何在语言之间进行翻译，这听起来相当困难且有些不寻常。专业的翻译人员不会一口气读完源句子然后把它的翻译写下来。他们会根据需要多次参考源句子，以翻译目标句子中的相关部分。
 - en: Compressing all the information into one vector may (and does) work for short
     sentences, as we’ll see later in section 8.2.2, but it becomes increasingly difficult
     as the sentences get longer and longer. Studies have shown that the translation
     quality of a vanilla Seq2Seq model gets worse as the sentence gets longer.[²](#pgfId-1106861)
+  id: totrans-15
   prefs: []
   type: TYPE_NORMAL
+  zh: 将所有信息压缩成一个向量可能（并且确实）对短句子有效，正如我们稍后在8.2.2节中将看到的那样，但随着句子变得越来越长，这种方法变得越来越困难。研究表明，基本
+    Seq2Seq 模型的翻译质量随着句子变得越来越长而变差。[²](#pgfId-1106861)
 - en: 8.1.2 Attention mechanism
+  id: totrans-16
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 8.1.2 注意力机制
 - en: Instead of relying on a single, fixed-length vector to represent all the information
     in a sentence, the decoder would have a much easier time if there was a mechanism
     where it can refer to some specific part of the encoder as it generates the target
     tokens. This is similar to how human translators (the decoder) reference the source
     sentence (the encoder) as needed.
+  id: totrans-17
   prefs: []
   type: TYPE_NORMAL
+  zh: 解码器如果能够在生成目标标记时参考编码器的某个特定部分，将会容易得多。这类似于人类翻译员（解码器）根据需要参考源句子（编码器）。
 - en: This can be achieved by using *attention*, which is a mechanism in neural networks
     that focuses on a specific part of the input and computes its context-dependent
     summary. It is like having some sort of key-value store that contains all of the
@@ -117,42 +140,57 @@
     The stored values are not just a single vector but usually a list of vectors,
     one for each token, associated with corresponding keys. This effectively increases
     the size of the “memory” the decoder can refer to when it’s making a prediction.
+  id: totrans-18
   prefs: []
   type: TYPE_NORMAL
+  zh: 这可以通过使用 *注意力* 来实现，注意力是神经网络中的一种机制，它专注于输入的特定部分并计算其上下文相关的摘要。这就像拥有某种包含输入所有信息的键值存储，然后用查询（当前上下文）查找它一样。存储的值不仅仅是单个向量，而通常是一个向量列表，每个标记关联一个相应的键。这有效地增加了解码器在进行预测时可以参考的“内存”大小。
 - en: 'Before we discuss how the attention mechanism works for Seq2Seq models, let’s
     see it in action in a general form. Figure 8.2 illustrates a generic attention
     mechanism with the following features:'
+  id: totrans-19
   prefs: []
   type: TYPE_NORMAL
+  zh: 在讨论注意力机制如何在 Seq2Seq 模型中工作之前，让我们先看一下它以一般形式的运行情况。图 8.2 描绘了一个具有以下特征的通用注意力机制：
 - en: The inputs to an attention mechanism are the values and their associated keys.
     The input values can take many different forms, but in NLP, they are almost always
     lists of vectors. For Seq2Seq models, the keys and values here are the hidden
     states of the encoder, which represent token-by-token encoding of the input sentence.
+  id: totrans-20
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 注意力机制的输入是值及其相关的键。输入值可以采用许多不同的形式，但在自然语言处理中，它们几乎总是向量列表。对于 Seq2Seq 模型，这里的键和值是编码器的隐藏状态，它们代表了输入句子的标记编码。
 - en: Each key associated with a value is compared against the query using an attention
     function f. By applying f to the query and each one of the keys, you get a set
     of scores, one per key-value pair, which are then normalized to obtain a set of
     attention weights. The specific function f depends on the architecture (more on
     this later). For Seq2Seq models, this gives you a distribution over the input
     tokens. The more relevant an input token is, the larger the weight it gets.
+  id: totrans-21
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 每个与值关联的键都使用注意力函数 f 与查询进行比较。通过将 f 应用于查询和每个键之一，您会得到一组分数，每个键值对一个，然后将其归一化以获得一组注意力权重。特定的函数
+    f 取决于体系结构（稍后会详细介绍）。对于 Seq2Seq 模型，这会给出一个输入令牌的分布。输入令牌越相关，其权重越大。
 - en: The input values are weighted by their corresponding weights obtained in step
     2 and summed up to compute the final summary vector. For Seq2Seq models, this
     summary vector is appended to the decoder hidden states to aid the translation
     process.
+  id: totrans-22
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 输入值由第 2 步中获得的相应权重加权，并相加以计算最终摘要向量。对于 Seq2Seq 模型，此摘要向量附加到解码器隐藏状态以辅助翻译过程。
 - en: '![CH08_F02_Hagiwara](../Images/CH08_F02_Hagiwara.png)'
+  id: totrans-23
   prefs: []
   type: TYPE_IMG
+  zh: '![CH08_F02_Hagiwara](../Images/CH08_F02_Hagiwara.png)'
 - en: Figure 8.2 Using an attention mechanism to summarize the input
+  id: totrans-24
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 8.2 使用注意力机制对输入进行总结
 - en: Because of step 3, the output of an attention mechanism is always a weighted
     sum of the input vectors, but how they are weighted is determined by the attention
     weights, which are in turn are calculated from the keys and the query. In other
@@ -160,42 +198,62 @@
     of the input*. Downstream components of a neural network (e.g., the decoder of
     an RNN-based Seq2Seq model, or the upper layers of a Transformer model) use this
     summary to further process the input.
+  id: totrans-25
   prefs: []
   type: TYPE_NORMAL
+  zh: 由于第 3 步，注意力机制的输出始终是输入向量的加权和，但它们如何加权是由注意力权重确定的，而注意力权重又是从键和查询计算得出的。换句话说，注意力机制计算的是
+    *上下文（查询）相关的输入摘要*。神经网络的下游组件（例如基于 RNN 的 Seq2Seq 模型的解码器，或者 Transformer 模型的上层）使用此摘要进一步处理输入。
 - en: In the following sections, we will learn the two most commonly used types of
     attention mechanisms in NLP—encoder-decoder attention (also called *cross-attention*;
     used in both RNN-based Seq2Seq models and the Transformer) and self-attention
     (used in the Transformer).
+  id: totrans-26
   prefs: []
   type: TYPE_NORMAL
+  zh: 在接下来的几节中，我们将学习 NLP 中两种最常用的注意力机制类型 —— 编码器-解码器注意力（也称为 *交叉注意力*；在基于 RNN 的 Seq2Seq
+    模型和 Transformer 中都使用）和自注意力（在 Transformer 中使用）。
 - en: 8.2 Sequence-to-sequence with attention
+  id: totrans-27
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 8.2 带有注意力的序列到序列
 - en: In this section, we’ll learn how the attention mechanism is applied to an RNN-based
     Seq2Seq model for which the attention mechanism was first invented. We’ll study
     how it works with specific examples, and then we’ll experiment with Seq2Seq models
     with and without the attention mechanism using fairseq to observe how it affects
     the translation quality.
+  id: totrans-28
   prefs: []
   type: TYPE_NORMAL
+  zh: 在本节中，我们将学习如何将注意力机制应用于 RNN 基础的 Seq2Seq 模型，注意力机制是首次发明的。我们将研究它如何与具体示例一起工作，然后我们将使用
+    fairseq 实验带有和不带有注意力机制的 Seq2Seq 模型，以观察它对翻译质量的影响。
 - en: 8.2.1 Encoder-decoder attention
+  id: totrans-29
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 8.2.1 编码器-解码器注意力
 - en: As we saw earlier, attention is a mechanism for creating a summary of the input
     under a specific context. We used a key-value store and a query as an analogy
     for how it works. Let’s see how an attention mechanism is used with RNN-based
     Seq2Seq models using the concrete examples that follow.
+  id: totrans-30
   prefs: []
   type: TYPE_NORMAL
+  zh: 正如我们之前所看到的，注意力是在特定上下文下创建输入摘要的机制。我们使用了一个键值存储和一个查询作为它如何工作的类比。让我们看看注意力机制如何在基于 RNN
+    的 Seq2Seq 模型中使用，使用随后的具体示例。
 - en: '![CH08_F03_Hagiwara](../Images/CH08_F03_Hagiwara.png)'
+  id: totrans-31
   prefs: []
   type: TYPE_IMG
+  zh: '![CH08_F03_Hagiwara](../Images/CH08_F03_Hagiwara.png)'
 - en: Figure 8.3 Adding an attention mechanism to an RNN-based Seq2Seq model (the
     lightly shaded box)
+  id: totrans-32
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 8.3 在基于 RNN 的 Seq2Seq 模型中添加注意力机制（浅色阴影框）
 - en: 'Figure 8.3 illustrates a Seq2Seq model with attention. It looks complex at
     first, but it is just an RNN-based Seq2Seq model with some extra “things” added
     on top of the encoder (the lightly shaded box in top left corner of the figure).
@@ -203,40 +261,51 @@
     a query and return some sort of summary created from the input. The way it computes
     this summary is just a variant of the generic form of attention we covered in
     section 8.1.2\. It proceeds as follows:'
+  id: totrans-33
   prefs: []
   type: TYPE_NORMAL
+  zh: 图8.3展示了一个带有注意力机制的Seq2Seq模型。一开始看起来很复杂，但实际上它只是一个基于RNN的Seq2Seq模型，在编码器顶部左上角的浅色阴影框中添加了一些额外的“东西”。如果你忽略里面的内容，将其视为黑匣子，它所做的就是简单地接受一个查询并从输入中返回某种摘要。它计算这个摘要的方式只是我们在8.1.2节中介绍的通用注意力形式的一个变体。它的执行步骤如下：
 - en: The input to the attention mechanism is the list of hidden states computed by
     the encoder. These hidden states are used as both keys and values (i.e., the keys
     and the values are identical). The encoder hidden state at a certain token (e.g.,
     at token “no”) reflects the information about that token and all the tokens leading
     up to it (if the RNN is unidirectional) or the entire sentence (if the RNN is
     bidirectional).
+  id: totrans-34
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 注意力机制的输入是编码器计算的隐藏状态列表。这些隐藏状态既用作键也用作值（即，键和值是相同的）。某个令牌（例如，“no”令牌）的编码器隐藏状态反映了关于该令牌及其之前所有令牌的信息（如果RNN是单向的），或整个句子（如果RNN是双向的）。
 - en: Let’s say you finished decoding up to “Mary did.” The hidden states of the decoder
     at that point are used as the query, which is compared against every key using
     function f. This produces a list of attention scores, one per each key-value pair.
     These scores determine which part of the input the decoder should attend to when
     it’s trying to generate a word that follows “Mary did.”
+  id: totrans-35
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 假设你已经解码到“Mary did.”。此时解码器的隐藏状态被用作查询，与每个键使用函数f进行比较。这会产生一个注意力分数列表，每个键值对应一个分数。这些分数确定了解码器在尝试生成跟在“Mary
+    did.”后面的单词时应该关注输入的哪个部分。
 - en: These scores are converted to a probability distribution (a set of positive
     values that sum to one), which is used to determine which vectors should get the
     most attention. The return value from this attention mechanism is the sum of all
     values, weighted by the attention scores after normalizing with softmax.
+  id: totrans-36
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 这些分数被转换为概率分布（一组正值，总和为1），用于确定哪些向量应该得到最多的关注。这个注意力机制的返回值是所有值的加权和，加权值为注意力分数经过softmax归一化后的值。
 - en: You may be wondering what the attention function f looks like. A couple of variants
     of f are possible, depending on how it computes the attention scores between the
     key and the query, but these details do not matter much here. One thing to note
     is that in the original paper proposing the attention mechanism,[³](#pgfId-1106909)
     the authors used a “mini” neural network to calculate attention scores from the
     key and the query.
+  id: totrans-37
   prefs: []
   type: TYPE_NORMAL
+  zh: 你可能想知道注意力函数f是什么样的。f的几个变体是可能的，这取决于它如何计算键和查询之间的注意力分数，但这些细节在这里并不重要。值得注意的一点是，在提出注意力机制的原始论文中，作者使用了一个“迷你”神经网络来计算键和查询之间的注意力分数。
 - en: This “mini” network-based attention function is not something you just plug
     in to an RNN model post hoc and expect it to work. It is optimized as part of
     the entire network—that is, as the entire network gets optimized by minimizing
@@ -248,15 +317,20 @@
     the input, which is usually where the target tokens are aligned with the source
     tokens. In other words, attention is calculating some sort of “soft” word alignment
     between the source and the target tokens.
+  id: totrans-38
   prefs: []
   type: TYPE_NORMAL
+  zh: 这个基于“迷你”网络的注意力函数不是你只需事后将其插入到RNN模型中就能让其正常工作的东西。它是作为整个网络的一部分进行优化的—也就是说，当整个网络通过最小化损失函数进行优化时，注意力机制也会变得更好，因为这样做也有助于解码器生成更好的翻译并降低损失函数。换句话说，整个网络，包括注意力机制，都是端到端训练的。这通常意味着，随着网络的优化，注意力机制开始学习只关注输入的相关部分，这通常是目标标记与源标记对齐的地方。换句话说，注意力计算了源标记和目标标记之间某种“软”单词对齐。
 - en: 8.2.2 Building a Seq2Seq machine translation with attention
+  id: totrans-39
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 8.2.2 使用注意力构建Seq2Seq机器翻译
 - en: In section 6.3, we built our first machine translation (MT) system using fairseq,
     an NMT toolkit developed by Facebook. Using the parallel dataset from Tatoeba,
     we built an LSTM-based Seq2Seq model to translate Spanish sentences into English.
+  id: totrans-40
   prefs: []
   type: TYPE_NORMAL
 - en: In this section, we are going to experiment with a Seq2Seq machine translation
@@ -268,39 +342,52 @@
     get from this MT system that took you just 30 minutes to build was actually decent.
     In fact, the model architecture we used (—arch lstm) has an attention mechanism
     built in by default. Notice when you ran the following fairseq-train command
+  id: totrans-41
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE0]'
+  id: totrans-42
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE0]'
 - en: 'you should have seen the dump of what your model looks like in your terminal
     as follows:'
+  id: totrans-43
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE1]'
+  id: totrans-44
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE1]'
 - en: This tells you that your model has an encoder and a decoder, but the decoder
     also has a component called attention (which is of type AttentionLayer), shown
     in bold in the code snippet. This is exactly the “mini-network” that we covered
     in section 8.2.1.
+  id: totrans-45
   prefs: []
   type: TYPE_NORMAL
 - en: 'Now let’s train the same model, but without attention. You can add —decoder-attention
     0 to fairseq-train to disable the attention mechanism, while keeping everything
     else the same, as shown here:'
+  id: totrans-46
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE2]'
+  id: totrans-47
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE2]'
 - en: 'When you run this, you’ll see a similar dump, shown next, that shows the architecture
     of the model but without attention:'
+  id: totrans-48
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE3]'
+  id: totrans-49
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE3]'
 - en: As we saw in section 6.3.2, the training process alternates between training
     and validation. In the training phase, the parameters of the neural network are
     optimized by the optimizer. In the validation phase, these parameters are fixed,
@@ -308,6 +395,7 @@
     set*. In addition to making sure the training loss decreases, you should be looking
     at the validation loss during training, because it better represents how well
     the model generalizes outside the training data.
+  id: totrans-50
   prefs: []
   type: TYPE_NORMAL
 - en: 'During this experiment, you should observe that the lowest validation loss
@@ -316,11 +404,14 @@
     better, so this indicates the attention is helping improve the translation. Let’s
     see if this is actually the case. As we’ve done in section 6.3.2, you can generate
     translations interactively by running the following fairseq-interactive command:'
+  id: totrans-51
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE4]'
+  id: totrans-52
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE4]'
 - en: In table 8.1, we compare the translations generated by the model with and without
     attention. The translations you get from the attention-based model are the same
     as the ones we saw in section 6.3.3\. Notice that the translations you get from
@@ -328,36 +419,46 @@
     If you look at the translations for “¿Hay habitaciones libres?” and “Maria no
     daba una bofetada a la bruja verde,” you see unfamiliar tokens “<unk>” (for “unknown”)
     in them. What’s happening here?
+  id: totrans-53
   prefs: []
   type: TYPE_NORMAL
 - en: Table 8.1 Translation generated by the model with and without attention
+  id: totrans-54
   prefs: []
   type: TYPE_NORMAL
 - en: '| **Spanish (input)** | **With attention** | **Without attention** |'
+  id: totrans-55
   prefs: []
   type: TYPE_TB
 - en: '| ¡Buenos días! | Good morning! | Good morning! |'
+  id: totrans-56
   prefs: []
   type: TYPE_TB
 - en: '| ¡Hola! | Hi! | Hi! |'
+  id: totrans-57
   prefs: []
   type: TYPE_TB
 - en: '| ¿Dónde está el baño? | Where’s the restroom? | Where’s the toilet? |'
+  id: totrans-58
   prefs: []
   type: TYPE_TB
 - en: '| ¿Hay habitaciones libres? | Is there free rooms? | Are there <unk> rooms?
     |'
+  id: totrans-59
   prefs: []
   type: TYPE_TB
 - en: '| ¿Acepta tarjeta de crédito? | Do you accept credit card? | Do you accept
     credit card? |'
+  id: totrans-60
   prefs: []
   type: TYPE_TB
 - en: '| La cuenta, por favor. | The bill, please. | Check, please. |'
+  id: totrans-61
   prefs: []
   type: TYPE_TB
 - en: '| Maria no daba una bofetada a la bruja verde. | Maria didn’t give the green
     witch. | Mary wasn’t a <unk> of the pants. |'
+  id: totrans-62
   prefs: []
   type: TYPE_TB
 - en: These are special tokens that are assigned to out-of-vocabulary (OOV) words.
@@ -372,9 +473,11 @@
     thing to do, which is to produce a generic, catch-all symbol, <unk>. On the other
     hand, you can see that attention prevents the system from producing these symbols
     and helps improve the overall quality of the produced translations.
+  id: totrans-63
   prefs: []
   type: TYPE_NORMAL
 - en: 8.3 Transformer and self-attention
+  id: totrans-64
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
@@ -382,9 +485,11 @@
     specifically, how it generates high-quality translations by using a new mechanism
     called *self-attention*. Self-attention creates a summary of the entire input,
     but it does this for each token using the token as the context.
+  id: totrans-65
   prefs: []
   type: TYPE_NORMAL
 - en: 8.3.1 Self-attention
+  id: totrans-66
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
@@ -394,14 +499,19 @@
     Transformer, self-attention, also creates a summary of the input, except for one
     key difference—the context in which the summary is created is also the input itself.
     See figure 8.4 for a simplified illustration of a self-attention mechanism.
+  id: totrans-67
   prefs: []
   type: TYPE_NORMAL
 - en: '![CH08_F04_Hagiwara](../Images/CH08_F04_Hagiwara.png)'
+  id: totrans-68
   prefs: []
   type: TYPE_IMG
+  zh: '![CH08_F04_Hagiwara](../Images/CH08_F04_Hagiwara.png)'
 - en: Figure 8.4 Self-attention transforms the input into summaries.
+  id: totrans-69
   prefs: []
   type: TYPE_NORMAL
+  zh: 图8.4 自注意力将输入转化为摘要。
 - en: 'Why is this a good thing? Why does it even work? As we discussed in chapter
     4, RNNs can also create a summary of the input by looping over the input tokens
     while updating an internal variable (hidden states). This works—we previously
@@ -409,8 +519,10 @@
     they have one critical issue: because RNNs process the input sequentially, it
     becomes progressively more difficult to deal with long-range dependencies between
     tokens as the sentence gets longer.'
+  id: totrans-70
   prefs: []
   type: TYPE_NORMAL
+  zh: 为什么这很好？为什么它有效？正如我们在第4章中讨论的那样，RNN也可以通过循环遍历输入标记并更新内部变量（隐藏状态）来创建输入的摘要。这是有效的-我们之前看到当RNN与注意力结合时可以生成良好的翻译，但是它们有一个关键问题：因为RNN按顺序处理输入，随着句子变得越来越长，处理标记之间的远程依赖关系变得越来越困难。
 - en: Let’s look at a concrete example. If the input sentence is “The Law will never
     be perfect, but its application should be just,” understanding what the pronoun
     “its” refers to (“The Law”) is important for understanding what the sentence means
@@ -420,16 +532,22 @@
     then wait until the loop encounters the target pronoun (“its”) while learning
     to ignore everything unrelated in between. This sounds like a complicated trick
     for a neural network to learn.
+  id: totrans-71
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们看一个具体的例子。如果输入句子是“The Law will never be perfect, but its application should
+    be just”，了解代词“its”指的是什么（“The Law”）对于理解句子的含义以及任何后续任务（如准确翻译句子）都很重要。然而，如果您使用RNN来编码这个句子，要学习这个代词的共指关系，RNN需要先学习在隐藏状态中记住名词“The
+    Law”，然后等待循环遇到目标代词（“its”），同时学会忽略之间的所有无关内容。对于神经网络来说，这听起来像是一种复杂的技巧。
 - en: But things shouldn’t be that complicated. Singular possessive pronouns like
     “its” usually refer to their nearest singular nouns that appear before them, regardless
     of the words in between, so simple rules like “replace it with the nearest noun
     that appeared before” will suffice. In other words, such “random access” is better
     suited in this situation than “sequential access” is. Self-attention is better
     at learning such long-range dependencies, as we’ll see later.
+  id: totrans-72
   prefs: []
   type: TYPE_NORMAL
+  zh: 但事情不应该那么复杂。像“its”这样的单数所有格代词通常指的是它们前面最近的单数名词，而与它们之间的词无关，因此简单的规则“用最近出现的名词替换它”就足够了。换句话说，在这种情况下，“随机访问”比“顺序访问”更适合。自注意力更擅长学习这种远程依赖关系，稍后我们将会看到。
 - en: Let’s walk through how self-attention works with an example. Let’s assume we
     are translating Spanish into English and would like to encode the first few words,
     “Maria no daba,” in the input sentence. Let’s also focus on one specific token,
@@ -444,39 +562,58 @@
     “mix” values we obtained from the input tokens. For words like “its,” we expect
     that the weight will be higher for related words such as “Law” in the example
     shown earlier.
+  id: totrans-73
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们通过一个例子来了解自注意力是如何工作的。假设我们要将西班牙语翻译成英语，并且想要编码输入句子中的前几个单词“Maria no daba”。我们还将关注一个特定的标记“no”，以及如何从整个输入计算其嵌入。第一步是将目标标记与输入中的所有标记进行比较。自注意力通过使用投影W[Q]将目标转换为查询，使用投影W[K]将所有标记转换为键，并使用函数f计算注意力权重来完成这一步骤。由f计算得到的注意力权重通过softmax函数进行归一化和转换为概率分布。图8.5说明了这些步骤，注意力权重如何计算。与我们在8.2.1节中涵盖的编码器-解码器注意力机制一样，注意力权重决定了我们从输入标记中获得的值如何“混合”。对于像“its”这样的词，我们希望相关词的权重会更高，比如之前的例子中的“Law”。
 - en: '![CH08_F05_Hagiwara](../Images/CH08_F05_Hagiwara.png)'
+  id: totrans-74
   prefs: []
   type: TYPE_IMG
+  zh: '![CH08_F05_Hagiwara](../Images/CH08_F05_Hagiwara.png)'
 - en: Figure 8.5 Computing attention weights from keys and queries
+  id: totrans-75
   prefs: []
   type: TYPE_NORMAL
+  zh: 图8.5 从键和查询计算注意力权重
 - en: In the next step, the vector corresponding to each input token is converted
     to a value vector by projection W[V]. Each projected value is weighted by the
     corresponding attention weight and is summed up to produce a summary vector. See
     figure 8.6 for an illustration.
+  id: totrans-76
   prefs: []
   type: TYPE_NORMAL
+  zh: 在下一步中，将每个输入令牌对应的向量通过投影 W[V] 转换为值向量。每个投影值都由相应的注意权重加权，并加总以生成摘要向量。请参见图 8.6 进行说明。
 - en: '![CH08_F06_Hagiwara](../Images/CH08_F06_Hagiwara.png)'
+  id: totrans-77
   prefs: []
   type: TYPE_IMG
+  zh: '![CH08_F06_Hagiwara](../Images/CH08_F06_Hagiwara.png)'
 - en: Figure 8.6 Calculating the sum of all values weighted by attention weights
+  id: totrans-78
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 8.6 计算所有值的加权和
 - en: This would be it if this were the “regular” encoder-decoder attention mechanism.
     You need only one summary vector per each token during decoding. However, one
     key difference between encoder-decoder attention and self-attention is the latter
     repeats this process for every single token in the input. As shown in figure 8.7,
     this produces a new set of embeddings for the input, one for each token.
+  id: totrans-79
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果这是“常规”的编码器-解码器注意机制，那就是这样了。在解码期间，每个令牌只需要一个摘要向量。然而，编码器-解码器注意力和自注意力之间的一个关键区别是后者会针对输入中的每个令牌重复此过程。如图
+    8.7 所示，这会为输入产生一组新的嵌入，每个令牌一个。
 - en: '![CH08_F07_Hagiwara](../Images/CH08_F07_Hagiwara.png)'
+  id: totrans-80
   prefs: []
   type: TYPE_IMG
+  zh: '![CH08_F07_Hagiwara](../Images/CH08_F07_Hagiwara.png)'
 - en: Figure 8.7 Producing summaries for the entire input sequence (details are omitted)
+  id: totrans-81
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 8.7 为整个输入序列生成摘要（细节被省略）
 - en: Each summary produced by self-attention takes all the tokens in the input sequence
     into consideration, but with different weights. It is, therefore, straightforward
     for words like “its” to incorporate some information from related words, such
@@ -485,8 +622,11 @@
     RNNs, which allow only sequential access over the input, and is one of the key
     reasons why the Transformer is such a powerful model for encoding and decoding
     natural language text.
+  id: totrans-82
   prefs: []
   type: TYPE_NORMAL
+  zh: 自注意力产生的每个摘要都考虑了输入序列中的所有令牌，但权重不同。因此，对于诸如“its”之类的词，它可以融入一些来自相关词语的信息，例如“法律”，无论这两个词有多远。使用类比，自注意力通过对输入进行随机访问产生摘要。这与RNN形成对比，后者只允许对输入进行顺序访问，并且这也是
+    Transformer 之所以是编码和解码自然语言文本的强大模型之一的关键原因之一。
 - en: We need to cover one final piece of detail to fully understand self-attention.
     As it is, the self-attention mechanism illustrated previously can use only one
     aspect of the input sequence to generate summaries. For example, if you want self-attention
@@ -498,15 +638,22 @@
     “mix” values that focus on different aspects of the input. The final embeddings
     are a combination of summaries generated this way. This mechanism is called *multihead
     self-attention* (figure 8.8).
+  id: totrans-83
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们需要解释自注意力的最后一个细节才能完全理解它。现在，前面介绍的自注意机制只能使用输入序列的一个方面来生成摘要。例如，如果您希望自注意力学习每个代词指代哪个单词，它可以做到这一点——但您也可能希望根据其他一些语言学方面“混合”其他单词的信息。例如，您可能希望参考代词修改的其他单词（在这种情况下是“应用”）。解决方案是为每个令牌计算多组密钥、值和查询，并计算多组注意权重以“混合”关注不同输入方面的值。最终的嵌入是以这种方式生成的摘要的组合。这种机制被称为*多头自注意力*（图
+    8.8）。
 - en: '![CH08_F08_Hagiwara](../Images/CH08_F08_Hagiwara.png)'
+  id: totrans-84
   prefs: []
   type: TYPE_IMG
+  zh: '![CH08_F08_Hagiwara](../Images/CH08_F08_Hagiwara.png)'
 - en: Figure 8.8 Multihead self-attention produces summaries with multiple keys, values,
     and queries.
+  id: totrans-85
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 8.8 多头自注意力生成具有多个密钥、值和查询的摘要。
 - en: You would need to learn some additional details if you were to fully understand
     how a Transformer layer works, but this section has covered the most important
     concepts. If you are interested in more details, check out *The Illustrated Transformer*
@@ -514,9 +661,11 @@
     a well-written guide for understanding the Transformer model with easy-to-understand
     illustrations. Also, if you are interested in implementing the Transformer model
     from scratch in Python, check out “The Annotated Transformer” ([http://nlp.seas.harvard.edu/2018/04/03/attention.html](http://nlp.seas.harvard.edu/2018/04/03/attention.html)).
+  id: totrans-86
   prefs: []
   type: TYPE_NORMAL
 - en: 8.3.2 Transformer
+  id: totrans-87
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
@@ -525,6 +674,7 @@
     to gradually transform them. As with multilayer RNNs, the Transformer also groups
     a series of transformation operations into a layer and applies it repeatedly.
     Figure 8.9 shows one layer of the Transformer encoder.
+  id: totrans-88
   prefs: []
   type: TYPE_NORMAL
 - en: A lot is going on within each layer, and it’s not our goal to explain every
@@ -537,13 +687,16 @@
     more abstract (the “meaning” of the sentence). In the original Transformer paper,
     Vaswani et al. used six layers for machine translation, although it is not uncommon
     for larger models to use 10-20 layers these days.
+  id: totrans-89
   prefs: []
   type: TYPE_NORMAL
 - en: '![CH08_F09_Hagiwara](../Images/CH08_F09_Hagiwara.png)'
+  id: totrans-90
   prefs: []
   type: TYPE_IMG
 - en: Figure 8.9 A Transformer encoder layer with self-attention and a feed-forward
     layer
+  id: totrans-91
   prefs: []
   type: TYPE_NORMAL
 - en: At this point, you may have noticed that the self-attention operation is completely
@@ -554,6 +707,7 @@
     This is obviously very limiting—what a natural language sentence means depends
     a lot on how its words are ordered. How does the Transformer encode word order,
     then?
+  id: totrans-92
   prefs: []
   type: TYPE_NORMAL
 - en: The Transformer model solves this problem by generating some artificial embeddings
@@ -563,12 +717,15 @@
     as sine curves) or learned during training per position. This way, the Transformer
     can distinguish between “Maria” at the first position and “Maria” at the third
     position, because they have different positional encoding.
+  id: totrans-93
   prefs: []
   type: TYPE_NORMAL
 - en: '![CH08_F10_Hagiwara](../Images/CH08_F10_Hagiwara.png)'
+  id: totrans-94
   prefs: []
   type: TYPE_IMG
 - en: Figure 8.10 Adding positional encoding to the input to represent word order
+  id: totrans-95
   prefs: []
   type: TYPE_NORMAL
 - en: Figure 8.11 shows the Transformer decoder. Although a lot is going on, make
@@ -578,12 +735,15 @@
     we covered in section 8.2\. This works exactly the same as self-attention, except
     that the values for the attention come from the encoder, not the decoder, summarizing
     the information extracted from the encoder.
+  id: totrans-96
   prefs: []
   type: TYPE_NORMAL
 - en: '![CH08_F11_Hagiwara](../Images/CH08_F11_Hagiwara.png)'
+  id: totrans-97
   prefs: []
   type: TYPE_IMG
 - en: Figure 8.11 A Transformer decoder layer with self- and cross-attention
+  id: totrans-98
   prefs: []
   type: TYPE_NORMAL
 - en: Finally, the Transformer model generates the target sentence in exactly the
@@ -597,9 +757,11 @@
     target sequence is exactly the same as RNNs, and you can use the same set of decoding
     algorithms. In other words, the decoding algorithms covered in section 6.4 are
     generic ones that are agnostic of the underlying decoder architecture.
+  id: totrans-99
   prefs: []
   type: TYPE_NORMAL
 - en: 8.3.3 Experiments
+  id: totrans-100
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
@@ -610,14 +772,18 @@
     that you have already preprocessed the dataset we used to build the Spanish-to-English
     machine translation, you need to tweak only the parameters you give to fairseq-train,
     as shown next:'
+  id: totrans-101
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE5]'
+  id: totrans-102
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE5]'
 - en: Note that this might not even run on your laptop. You really need GPUs to train
     the Transformer models. Also note that training can take hours even with GPUs.
     See section 11.5 for more information on using GPUs.
+  id: totrans-103
   prefs: []
   type: TYPE_NORMAL
 - en: A number of cryptic parameters appear here, but you don’t need to worry about
@@ -625,45 +791,59 @@
     dump is quite long, so we are omitting some intermediate layers in listing 8.1\.
     If you look carefully, you’ll see that the structure of the layers corresponds
     to the figures we showed earlier.
+  id: totrans-104
   prefs: []
   type: TYPE_NORMAL
 - en: Listing 8.1 Transformer model dump from Fairseq
+  id: totrans-105
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE6]'
+  id: totrans-106
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE6]'
 - en: ❶ Self-attention of the encoder
+  id: totrans-107
   prefs: []
   type: TYPE_NORMAL
 - en: ❷ Feed-forward network of the encoder
+  id: totrans-108
   prefs: []
   type: TYPE_NORMAL
 - en: ❸ Self-attention of the decoder
+  id: totrans-109
   prefs: []
   type: TYPE_NORMAL
 - en: ❹ Encoder-decoder of the decoder
+  id: totrans-110
   prefs: []
   type: TYPE_NORMAL
 - en: ❺ Feed-forward network of the decoder
+  id: totrans-111
   prefs: []
   type: TYPE_NORMAL
 - en: 'When I ran this, the validation loss converges after around epoch 30, at which
     point you can stop the training. The result I got by translating the same set
     of Spanish sentences into English follows:'
+  id: totrans-112
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE7]'
+  id: totrans-113
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE7]'
 - en: You can see most of these English translations here are almost perfect. It is
     quite surprising that the model translated the most difficult sentence (“Maria
     no daba . . .”) almost perfectly. This is probably enough to convince us that
     the Transformer is a powerful translation model. After its advent, this model
     became the de facto standard in research and commercial machine translation.
+  id: totrans-114
   prefs: []
   type: TYPE_NORMAL
 - en: 8.4 Transformer-based language models
+  id: totrans-115
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
@@ -672,15 +852,18 @@
     of tokens, language models can estimate how “probable” the given text is. In section
     5.6, we demonstrated that by leveraging this property, language models can also
     be used to generate new texts out of thin air!
+  id: totrans-116
   prefs: []
   type: TYPE_NORMAL
 - en: The Transformer is a powerful model that achieves impressive results in Seq2Seq
     tasks (such as machine translation), although its architecture can also be used
     for modeling and generating language. In this section, we learn how to use the
     Transformer for modeling language and generating realistic texts.
+  id: totrans-117
   prefs: []
   type: TYPE_NORMAL
 - en: 8.4.1 Transformer as a language model
+  id: totrans-118
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
@@ -688,12 +871,15 @@
     To recap, given a prefix (a partial sentence generated so far), the model uses
     an LSTM-based RNN (a neural network with a loop) to produce a probability distribution
     over possible next tokens, as shown in figure 8.12.
+  id: totrans-119
   prefs: []
   type: TYPE_NORMAL
 - en: '![CH08_F12_Hagiwara](../Images/CH08_F12_Hagiwara.png)'
+  id: totrans-120
   prefs: []
   type: TYPE_IMG
 - en: Figure 8.12 Generating text using an RNN
+  id: totrans-121
   prefs: []
   type: TYPE_NORMAL
 - en: We noted earlier that, by regarding the Transformer decoder as a black box,
@@ -704,12 +890,15 @@
     model. Figure 8.13 shows how an architecture similar to the Transformer can be
     used for language generation. Except for a few minor differences (such as lack
     of cross-attention), the structure is almost identical to the Transformer decoder.
+  id: totrans-122
   prefs: []
   type: TYPE_NORMAL
 - en: '![CH08_F13_Hagiwara](../Images/CH08_F13_Hagiwara.png)'
+  id: totrans-123
   prefs: []
   type: TYPE_IMG
 - en: Figure 8.13 Using the Transformer for language generation
+  id: totrans-124
   prefs: []
   type: TYPE_NORMAL
 - en: 'The following snippet shows Python-like pseudocode for generating text with
@@ -719,11 +908,14 @@
     states back to the caller. The caller then passes them through a linear layer
     to convert them to logits, which in turn get converted to a probability distribution
     by softmax:'
+  id: totrans-125
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE8]'
+  id: totrans-126
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE8]'
 - en: In fact, decoding for Seq2Seq models and language generation with language models
     are very similar tasks, where the output sequence is produced token by token,
     feeding itself back to the network, as shown in the previous code snippet. The
@@ -732,12 +924,15 @@
     called *unconditional* and *conditional generation*, respectively. Figure 8.14
     illustrates these three components (network, task, and decoding) and how they
     can be combined to solve a specific problem.
+  id: totrans-127
   prefs: []
   type: TYPE_NORMAL
 - en: '![CH08_F14_Hagiwara](../Images/CH08_F14_Hagiwara.png)'
+  id: totrans-128
   prefs: []
   type: TYPE_IMG
 - en: Figure 8.14 Three components of language generation and Seq2Seq tasks
+  id: totrans-129
   prefs: []
   type: TYPE_NORMAL
 - en: In the rest of this section, we are going to experiment with some Transformer-based
@@ -749,9 +944,11 @@
     (this section) and BERT (next chapter), along with pretrained model parameters
     that you can load and use right away. It also provides a simple, consistent interface
     through which you can interact with powerful NLP models.
+  id: totrans-130
   prefs: []
   type: TYPE_NORMAL
 - en: 8.4.2 Transformer-XL
+  id: totrans-131
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
@@ -765,6 +962,7 @@
     and pretrained model parameters for these huge Transformer models are usually
     made publicly available by their creators so that anyone can integrate them into
     their NLP applications.
+  id: totrans-132
   prefs: []
   type: TYPE_NORMAL
 - en: In this section, we’ll first check out Transformer-XL, a variant of the Transformer
@@ -780,6 +978,7 @@
     segment, effectively creating a loop that passes information between different
     segments of texts. It also improves the positional encoding scheme we touched
     on earlier to make it easier for the model to deal with longer texts.
+  id: totrans-133
   prefs: []
   type: TYPE_NORMAL
 - en: You can install the transformers library just by running pip install transformers
@@ -788,18 +987,23 @@
     the model defines the architecture and implements the main logic. The model and
     the pretrained weights usually depend on a specific tokenization scheme, so you
     need to make sure you are using the tokenizer that is compatible with the model.
+  id: totrans-134
   prefs: []
   type: TYPE_NORMAL
 - en: 'The easiest way to initialize a tokenizer and a model with some specified pretrained
     weights is use the AutoTokenizer and AutoModelWithLMHead classes and call their
     from_pretrained() methods as follows:'
+  id: totrans-135
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE9]'
+  id: totrans-136
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE9]'
 - en: The parameter to from_pre-trained() is the name of the model/pretrained weights.
     This is a Transformer-XL model trained on a dataset called wt103 (WikiText103).
+  id: totrans-137
   prefs: []
   type: TYPE_NORMAL
 - en: You may be wondering what this “LMHead” part in AutoModelWithLMHead means. An
@@ -811,12 +1015,15 @@
     the Transformer as a language model. However, depending on the task, you may also
     want a Transformer model without an LM head and just want to use its hidden states.
     That’s what we’ll do in the next chapter.
+  id: totrans-138
   prefs: []
   type: TYPE_NORMAL
 - en: '![CH08_F15_Hagiwara](../Images/CH08_F15_Hagiwara.png)'
+  id: totrans-139
   prefs: []
   type: TYPE_IMG
 - en: Figure 8.15 Using a language model head with the Transformer
+  id: totrans-140
   prefs: []
   type: TYPE_NORMAL
 - en: 'The next step is to initialize the prefix for which you would like your language
@@ -824,20 +1031,26 @@
     a string into a list of token IDs, which are then converted to a tensor. We’ll
     also initialize a variable past for caching the internal states and making the
     inference faster, as shown next:'
+  id: totrans-141
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE10]'
+  id: totrans-142
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE10]'
 - en: 'Now you are ready to generate the rest of the text. Notice the next code is
     similar to the pseudocode we showed earlier. The idea is simple: get the output
     from the model, sample a token using the output, and feed it back to the model.
     Rinse and repeat.'
+  id: totrans-143
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE11]'
+  id: totrans-144
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE11]'
 - en: 'You need to do some housekeeping to make the shape of the tensors compatible
     with the model, which we can ignore for now. The sample_token() method here takes
     the output of the model, converts it to a probability distribution, and samples
@@ -846,28 +1059,37 @@
     for more details. Also, here we wrote the generation algorithm from scratch, but
     if you need more full-fledged generation (such as beam search), check out the
     official example script from the developers of the library: [http://mng.bz/wQ6q](http://mng.bz/wQ6q).'
+  id: totrans-145
   prefs: []
   type: TYPE_NORMAL
 - en: 'After finishing the generation, you can convert the token IDs back into a raw
     string by calling tokenizer.decode()as follows:'
+  id: totrans-146
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE12]'
+  id: totrans-147
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE12]'
 - en: 'The following “story” is what I got when I ran this:'
+  id: totrans-148
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE13]'
+  id: totrans-149
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE13]'
 - en: This is not a bad start. I like the way the story is trying to be consistent
     by sticking with the concept of “group.” However, because the model is trained
     on Wikipedia text only, its generation is not realistic and looks a little bit
     too formal.
+  id: totrans-150
   prefs: []
   type: TYPE_NORMAL
 - en: 8.4.3 GPT-2
+  id: totrans-151
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
@@ -880,21 +1102,28 @@
     huge amount of natural language text collected from the web. The OpenAI team publicly
     released the implementation and the pretrained weights, so we can easily try out
     the model.
+  id: totrans-152
   prefs: []
   type: TYPE_NORMAL
 - en: 'Initialize the tokenizer and the model for GPT-2 as you have done for Transformer-XL,
     as shown next:'
+  id: totrans-153
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE14]'
+  id: totrans-154
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE14]'
 - en: 'Then generate text using the next code snippet:'
+  id: totrans-155
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE15]'
+  id: totrans-156
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE15]'
 - en: You may have noticed how little this code snippet changed from the one for Transformer-XL.
     In many cases, you don’t need to make any modifications when switching between
     different models. This is why the transformers library is so powerful—you can
@@ -902,35 +1131,45 @@
     your application with a simple, consistent interface. As we’ll see in the next
     chapter, this library is also integrated into AllenNLP, which makes it easy to
     build powerful NLP applications with state-of-the-art models.
+  id: totrans-157
   prefs: []
   type: TYPE_NORMAL
 - en: 'When I tried this, the GPT-2 generated the following beautifully written passage:'
+  id: totrans-158
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE16]'
+  id: totrans-159
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE16]'
 - en: Notice how naturally it reads. Also, the GPT-2 model is good at staying consistent—you
     can see the name of the island, “A,” is consistently used throughout the passage.
     As far as I checked, there is no real island named A in the world, meaning that
     this is something the model simply made up. It is a great feat that the model
     remembered the name it just coined and successfully wrote a story around it!
+  id: totrans-160
   prefs: []
   type: TYPE_NORMAL
 - en: 'Here’s another passage that GPT-2 generated with a prompt: ''Real World Natural
     Language Processing'' is the name of the book:'
+  id: totrans-161
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE17]'
+  id: totrans-162
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE17]'
 - en: As of February 2019, when GPT-2 was released, I had barely begun writing this
     book, so I doubt GPT-2 knew anything about it. For a language model that doesn’t
     have any prior knowledge about the book, this is an amazing job, although I have
     to note that it got the price and the name of the author wrong.
+  id: totrans-163
   prefs: []
   type: TYPE_NORMAL
 - en: 8.4.4 XLM
+  id: totrans-164
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
@@ -940,15 +1179,19 @@
     and encode texts in multiple languages.[⁵](#pgfId-1107402) By learning how to
     encode multilingual texts, the model can be used for transfer learning between
     different languages. We’ll cover transfer learning in chapter 9.
+  id: totrans-165
   prefs: []
   type: TYPE_NORMAL
 - en: 'You can start by initializing the tokenizer and the model and initialize it
     with the pretrained weights as follows:'
+  id: totrans-166
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE18]'
+  id: totrans-167
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE18]'
 - en: Here, we are loading an XLM model (xlm), trained with a *causal language modeling*
     (CLM) *objective* (clm) in English and French (enfr). CLM is just a fancier way
     to describe what we’ve been doing in this chapter—predicting the next token based
@@ -959,36 +1202,48 @@
     code snippet, although you also need to specify what language you are working
     in (note the lang = 0 line). Also, here we are generating text from scratch by
     supplying just the BOS token (whose index is zero).
+  id: totrans-168
   prefs: []
   type: TYPE_NORMAL
 - en: Listing 8.2 Generating multilingual text with XLM
+  id: totrans-169
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE19]'
+  id: totrans-170
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE19]'
 - en: 'When I ran this, I got the following:'
+  id: totrans-171
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE20]'
+  id: totrans-172
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE20]'
 - en: 'Then, let’s change lang to 1 (which means French) and run the same snippet
     again, which gives you the next bit of text:'
+  id: totrans-173
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE21]'
+  id: totrans-174
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE21]'
 - en: Although the quality of generation is not as great as GPT-2, which we experimented
     with earlier, it is refreshing to see that a single model can produce texts both
     in English and French. These days, it is increasingly common to build multilingual
     Transformer-based NLP models to solve NLP problems and tasks in multiple languages
     at the same time. This also became possible thanks to the Transformer’s powerful
     capacity to model the complexity of language.
+  id: totrans-175
   prefs: []
   type: TYPE_NORMAL
 - en: '8.5 Case study: Spell-checker'
+  id: totrans-176
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
@@ -1000,9 +1255,11 @@
     Docs and Microsoft Word) even point out simple grammatical errors, too. Ever wondered
     how they work? We’ll learn how to formulate this as an NLP problem, prepare the
     dataset, train, and improve the model next.
+  id: totrans-177
   prefs: []
   type: TYPE_NORMAL
 - en: 8.5.1 Spell correction as machine translation
+  id: totrans-178
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
@@ -1010,6 +1267,7 @@
     dcment,” detect spelling and grammatical errors, if any, and fix all errors: “It’s
     important to spell-check this document.” How can you solve this task with NLP
     technologies? How can such systems be implemented?'
+  id: totrans-179
   prefs: []
   type: TYPE_NORMAL
 - en: The simplest thing you could do is tokenize the input text into words and check
@@ -1017,6 +1275,7 @@
     in the dictionary according to some measure such as the edit distance and replace
     with that word. You repeat this until there are no words to fix. This word-by-word
     fixing algorithm is widely used by many spell-checkers due to its simplicity.
+  id: totrans-180
   prefs: []
   type: TYPE_NORMAL
 - en: However, this type of spell-checker has several issues. First, just like the
@@ -1034,6 +1293,7 @@
     “this” is a more appropriate candidate, although both “this” and “thus” are one
     edit distance away from “ths,” meaning they are equally valid options according
     to the edit distance.
+  id: totrans-181
   prefs: []
   type: TYPE_NORMAL
 - en: You would be able to solve some of these issues by adding some heuristic rules.
@@ -1046,24 +1306,29 @@
     word at every possible position to see if split words resemble existing words?
     What if the input was in a language that is written without whitespace, like Chinese
     and Japanese?
+  id: totrans-182
   prefs: []
   type: TYPE_NORMAL
 - en: 'At this point, you may realize this “split and fix” approach is going nowhere.
     In general, when designing an NLP application, you should think in terms of the
     following three aspects:'
+  id: totrans-183
   prefs: []
   type: TYPE_NORMAL
 - en: '*Task*—What is the task being solved? Is it a classification, sequential-labeling,
     or sequence-to-sequence problem?'
+  id: totrans-184
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '*Model*—What model are you going to use? Is it a feed-forward network, an RNN,
     or the Transformer?'
+  id: totrans-185
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '*Dataset*—Where are you obtaining the dataset to train and validate your model?'
+  id: totrans-186
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -1075,22 +1340,27 @@
     with spelling/grammatical errors into clean, errorless outputs as shown in figure
     8.16\. You can regard these two sides as two different “languages” (or “dialects”
     of English).
+  id: totrans-187
   prefs: []
   type: TYPE_NORMAL
 - en: '![CH08_F16_Hagiwara](../Images/CH08_F16_Hagiwara.png)'
+  id: totrans-188
   prefs: []
   type: TYPE_IMG
 - en: Figure 8.16 Training a spell-checker as an MT system that translates “noisy”
     sentences into “clean” ones
+  id: totrans-189
   prefs: []
   type: TYPE_NORMAL
 - en: At this point, you may be wondering where we are obtaining the dataset. This
     is often the most important (and the most difficult) part in solving real-world
     NLP problems. Fortunately, we can use a public dataset for this task. Let’s dive
     in and start building a spell-checker.
+  id: totrans-190
   prefs: []
   type: TYPE_NORMAL
 - en: 8.5.2 Training a spell-checker
+  id: totrans-191
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
@@ -1100,6 +1370,7 @@
     of thousands of “typo” edits automatically harvested from GitHub. It is the largest
     dataset of spelling mistakes and their corrections to date, which makes it a perfect
     choice for training a spell-checker.
+  id: totrans-192
   prefs: []
   type: TYPE_NORMAL
 - en: One decision we need to make before preparing the dataset and training a model
@@ -1115,6 +1386,7 @@
     vocabulary would need to include every single misspelling of every single word
     it encountered during the training. This would make it unnecessarily expensive
     to train and maintain such an NLP model.
+  id: totrans-193
   prefs: []
   type: TYPE_NORMAL
 - en: For these reasons, we will be using *characters* as the basic unit for our spell-checker,
@@ -1126,11 +1398,13 @@
     marks (even whitespace) as one of the characters in the vocabulary. This makes
     the preprocessing step extremely easy because you don’t need any linguistic toolkits
     (such as tokenizers) for doing this.
+  id: totrans-194
   prefs: []
   type: TYPE_NORMAL
 - en: NOTE Using characters is not without disadvantages. One main issue is using
     them will increase the length of sequences, because you need to break everything
     up into characters. This makes the model large and slower to train.
+  id: totrans-195
   prefs: []
   type: TYPE_NORMAL
 - en: 'First, let’s prepare the dataset for training a spell-checker. All the necessary
@@ -1142,6 +1416,7 @@
     wanting to translate some foreign language into English. Here, we are using “fr”
     and “en” to mean just “noisy text before spelling correction” and “clean text
     after spelling correction.”'
+  id: totrans-196
   prefs: []
   type: TYPE_NORMAL
 - en: Figure 8.17 shows an excerpt from the dataset for spelling correction created
@@ -1153,51 +1428,66 @@
     errors (mxnet as not -> mxnet is not on line 681, 22th -> 22nd on line 682), and
     even lines without any corrections (line 676). This looks like a good resource
     to use for training a spell-checker.
+  id: totrans-197
   prefs: []
   type: TYPE_NORMAL
 - en: '![CH08_F17_Hagiwara](../Images/CH08_F17_Hagiwara.png)'
+  id: totrans-198
   prefs: []
   type: TYPE_IMG
 - en: Figure 8.17 Training data for spelling correction
+  id: totrans-199
   prefs: []
   type: TYPE_NORMAL
 - en: 'The first step for training a spell-checker (or any other Seq2Seq model) is
     to preprocess the datasets. Because the dataset is already split and formatted,
     all you need to do is run fairseq-preprocess to convert the datasets into a binary
     format as follows:'
+  id: totrans-200
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE22]'
+  id: totrans-201
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE22]'
 - en: Then you can start training your model right away using the following code.
+  id: totrans-202
   prefs: []
   type: TYPE_NORMAL
 - en: Listing 8.3 Training a spell-checker
+  id: totrans-203
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE23]'
+  id: totrans-204
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE23]'
 - en: 'You don’t need to worry about most of the hyperparameters here—this set of
     parameters worked fairly well for me, although some other combinations of parameters
     may work better. However, you may want to pay attention to some of the parameters
     related to the size of the model, namely:'
+  id: totrans-205
   prefs: []
   type: TYPE_NORMAL
 - en: Number of layers (—[encoder|decoder]-layers)
+  id: totrans-206
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Embedding dimension of self-attention (—[encoder|decoder]-embed-dim)
+  id: totrans-207
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Embedding dimension of feed-forward layers (—[encoder/decoder]-ffn-embed-dim)
+  id: totrans-208
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Number of attention heads (—[encoder|decoder]-attention-heads)
+  id: totrans-209
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -1207,25 +1497,32 @@
     Another important parameter is —max-tokens, which specifies the number of tokens
     loaded onto a single batch. If you are experiencing out-of-memory errors on a
     GPU, try adjusting this parameter.
+  id: totrans-210
   prefs: []
   type: TYPE_NORMAL
 - en: 'After the training is finished, you can run the following command to make predictions
     using the trained model:'
+  id: totrans-211
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE24]'
+  id: totrans-212
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE24]'
 - en: 'Because the fairseq-interactive interface can also take source text from the
     standard input, we are directly providing the text using the echo command. The
     Python script src/format_fairseq_output.py, as its name suggests, formats the
     output from fairseq-interactive and shows the predicted target text. When I ran
     this, I got the following:'
+  id: totrans-213
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE25]'
+  id: totrans-214
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE25]'
 - en: This is rather disappointing. The spell-checker learned to somehow fix “imptant”
     to “implement,” although it failed to correct any other words. I suspect a couple
     of reasons for this. The training data used, GitHub Typo Corpus, is heavily biased
@@ -1233,9 +1530,11 @@
     wrong correction (imptant -> implement). Also, the training data might have just
     been too small for the Transformer to be effective. How could we improve the model
     so that it can fix spellings more accurately?
+  id: totrans-215
   prefs: []
   type: TYPE_NORMAL
 - en: 8.5.3 Improving a spell-checker
+  id: totrans-216
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
@@ -1244,6 +1543,7 @@
     of misspellings during training. But as far as I know, no such large datasets
     of diverse misspellings are publicly available for training a general-domain spell-checker.
     How could we obtain more data for training a better spell-checker?
+  id: totrans-217
   prefs: []
   type: TYPE_NORMAL
 - en: This is where we need to be creative. One idea is to artificially generate noisy
@@ -1255,6 +1555,7 @@
     generated noisy text created this way with the original, clean text, this will
     effectively create a new, larger dataset on which you can train an even better
     spell-checker!
+  id: totrans-218
   prefs: []
   type: TYPE_NORMAL
 - en: The remaining issue we need to address is how to “corrupt” clean text to generate
@@ -1264,6 +1565,7 @@
     those made by humans and that the resulting artificial dataset will provide useful
     insights for the Transformer model. How can we model the fact that, for example,
     humans are more likely to type “too” in place of “to” than they do “two”?
+  id: totrans-219
   prefs: []
   type: TYPE_NORMAL
 - en: This is starting to sound familiar again. We can use the data to simulate the
@@ -1273,12 +1575,15 @@
     noisy text as the target and train a Seq2Seq model for that direction, you are
     effectively training a “spell-corruptor”—a Seq2Seq model that inserts realistic-looking
     spelling errors into clean text. See Figure 8.18 for an illustration.
+  id: totrans-220
   prefs: []
   type: TYPE_NORMAL
 - en: '![CH08_F18_Hagiwara](../Images/CH08_F18_Hagiwara.png)'
+  id: totrans-221
   prefs: []
   type: TYPE_IMG
 - en: Figure 8.18 Using back-translation to generate artificial noisy data
+  id: totrans-222
   prefs: []
   type: TYPE_NORMAL
 - en: This technique of using the “inverse” of the original training data to artificially
@@ -1286,26 +1591,33 @@
     target language is called *back-translation* in the machine learning literature.
     It is a popular technique to improve the quality of machine translation systems.
     As we’ll show next, it is also effective for improving the quality of spell-checkers.
+  id: totrans-223
   prefs: []
   type: TYPE_NORMAL
 - en: 'You can easily train a spell corruptor just by swapping the source and the
     target languages. You can do this by supplying “en” (clean text) as the source
     language and “fr” (noisy text) as the target language when you run fairseq-preprocess
     as follows:'
+  id: totrans-224
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE26]'
+  id: totrans-225
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE26]'
 - en: 'We are not going over the training process again—you can use almost the same
     fairseq-train command to start the training. Just don’t forget to specify a different
     directory for —save-dir. After you finish training, you can check whether the
     spelling corrupter can indeed corrupt the input text as expected:'
+  id: totrans-226
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE27]'
+  id: totrans-227
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE27]'
 - en: Note the extra options that I added earlier, which are shown in bold. It means
     that the fairseq-interactive command uses sampling (from top 10 tokens with largest
     probabilities) instead of beam search. When corrupting clean text, it is often
@@ -1316,6 +1628,7 @@
     some text, we want noisy, more diverse output when corrupting clean text. Past
     research[⁶](#pgfId-1107565) has also shown that sampling (instead of beam search)
     works better for augmenting data via back-translation.
+  id: totrans-228
   prefs: []
   type: TYPE_NORMAL
 - en: From here, the sky’s the limit. You can collect as much clean text as you want,
@@ -1326,6 +1639,7 @@
     data is always “real” data written by humans, from which the Transformer can learn
     how to generate real text. The more text data you collect, the more confident
     the model will get about what error-free, real text looks like.
+  id: totrans-229
   prefs: []
   type: TYPE_NORMAL
 - en: I won’t go over every step I took to increase the size of the data, but here’s
@@ -1341,34 +1655,44 @@
     subset alone added more than five million pairs (in comparison, the original training
     set contains only ~240k pairs). Instead of training from scratch, you can download
     the pretrained weights and try the spell-checker from the repository.
+  id: totrans-230
   prefs: []
   type: TYPE_NORMAL
 - en: The training took several days, even on multiple GPUs, but when it was done,
     the result was very encouraging. Not only can it accurately fix spelling errors,
     as shown here
+  id: totrans-231
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE28]'
+  id: totrans-232
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE28]'
 - en: 'but the spell-checker also appears to understand the grammar of English to
     some degree, as shown here:'
+  id: totrans-233
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE29]'
+  id: totrans-234
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE29]'
 - en: 'This example alone may not prove that the model really understands the grammar
     (namely, using the correct verb depending on the number of the subject). It might
     just be learning some association between consecutive words, which can be achieved
     by any statistical NLP model, such as n-gram language models. However, even after
     you make the sentences more complicated, the spell-checker shows amazing resilience,
     as shown in the next code snippet:'
+  id: totrans-235
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE30]'
+  id: totrans-236
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE30]'
 - en: From these examples, it is clear that the model learned how to ignore irrelevant
     noun phrases (such as “Tom and Jerry” and “yellow desk”) and focus on the noun
     (“book(s)”) that determines the form of the verb (“was” versus “were”). We are
@@ -1377,57 +1701,70 @@
     combined with the original training data and the corruptor. Hopefully through
     these experiments, you were able to feel how powerful the Transformer model can
     be!
+  id: totrans-237
   prefs: []
   type: TYPE_NORMAL
 - en: Summary
+  id: totrans-238
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
 - en: Attention is a mechanism in neural networks that focuses on a specific part
     of the input and computes its context-dependent summary. It works like a “soft”
     version of a key-value store.
+  id: totrans-239
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Encoder-decoder attention can be added to Seq2Seq models to improve their translation
     quality.
+  id: totrans-240
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Self-attention is an attention mechanism that produces the summary of the input
     by summarizing itself.
+  id: totrans-241
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: The Transformer model applies self-attention repeatedly to gradually transform
     the input.
+  id: totrans-242
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: High-quality spell-checkers can be built using the Transformer and a technique
     called back-translation.
+  id: totrans-243
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: ^(1.)Vaswani et al., “Attention Is All You Need,” (2017). [https://arxiv.org/abs/1706.03762](https://arxiv.org/abs/1706.03762).
+  id: totrans-244
   prefs: []
   type: TYPE_NORMAL
 - en: ^(2.)Bahdanau et al., “Neural Machine Translation by Jointly Learning to Align
     and Translate,” (2014). [https://arxiv.org/abs/1409.0473](https://arxiv.org/abs/1409.0473).
+  id: totrans-245
   prefs: []
   type: TYPE_NORMAL
 - en: ^(3.)Bahdanau et al., “Neural Machine Translation by Jointly Learning to Align
     and Translate,” (2014). [https://arxiv.org/abs/1409.0473](https://arxiv.org/abs/1409.0473).
+  id: totrans-246
   prefs: []
   type: TYPE_NORMAL
 - en: '^(4.)Dai et al., “Transformer-XL: Attentive Language Models Beyond a Fixed-Length
     Context,” (2019). [https://arxiv.org/abs/1901.02860](https://arxiv.org/abs/1901.02860).'
+  id: totrans-247
   prefs: []
   type: TYPE_NORMAL
 - en: ^(5.)Lample and Conneau, “Cross-Lingual Language Model Pretraining,” (2019).
     [https://arxiv.org/abs/1901 .07291](https://arxiv.org/abs/1901.07291).
+  id: totrans-248
   prefs: []
   type: TYPE_NORMAL
 - en: ^(6.)Edunov et al.,”Understanding Back-Translation at Scale,” (2018). [https://arxiv.org/abs/1808.09381](https://arxiv.org/abs/1808.09381).
+  id: totrans-249
   prefs: []
   type: TYPE_NORMAL
