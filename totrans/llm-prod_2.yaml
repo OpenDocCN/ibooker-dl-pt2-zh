@@ -1,0 +1,1773 @@
+- en: '2 Large Language Models: A Deep Dive Into Language Modeling'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter covers
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Linguistic background for understanding meaning and interpretation
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A comparative study on language modeling techniques
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Attention and the transformer architecture
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: How Large Language Models both fit into and build upon these histories
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: All good stories start with “Once upon a time,” but unfortunately this isn’t
+    a story, it’s a book on creating and productionizing LLMs. So instead this chapter
+    delves into linguistics as it relates to the development of Large Language Models
+    (LLMs), exploring the foundations of semiotics, linguistic features, and the progression
+    of language modeling techniques that have shaped the field of natural language
+    processing (NLP). We will begin by studying the basics of linguistics and its
+    relevance to LLMs in section 2.1, highlighting key concepts such as syntax, semantics,
+    and pragmatics, that form the basis of natural language and play a crucial role
+    in the functioning of LLMs. We will delve into semiotics, the study of signs and
+    symbols, and explore how its principles have informed the design and interpretation
+    of LLMs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We will then trace the evolution of language modeling techniques in section
+    2.2, providing an overview of early approaches, including N-grams, Naive Bayes
+    classifiers, and neural network-based methods such as Multi-Layer Perceptrons
+    (MLPs), Recurrent Neural Networks (RNNs), and Long Short-Term Memory (LSTM) networks.
+    We will also discuss the groundbreaking shift to transformer-based models in section
+    2.3, which have laid the foundation for the emergence of LLMs—which are just really
+    big transformer based models. Finally, we will introduce LLMs in 2.4 and their
+    distinguishing features, discussing how they have built upon and surpassed earlier
+    language modeling techniques to revolutionize the field of Natural Language Processing
+    (NLP).
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is a book about LLMs in production. We firmly believe that if you want
+    to turn an LLM into an actual product, understanding the technology better will
+    improve your results and save you from making costly and time-consuming mistakes.
+    Any engineer can figure out how to lug a big model into production and throw a
+    ton of resources at it to make it run, but that brain-dead strategy completely
+    misses the lessons people have already learned trying to do the same thing before,
+    which is what we are trying to solve with LLMs in the first place. Having a grasp
+    of these fundamentals will better prepare you for the tricky parts, the gotchas,
+    and the edge cases you are going to run into when working with LLMs. By understanding
+    the context in which LLMs emerged, we can appreciate their transformative impact
+    on NLP and how to enable them to create a myriad of applications.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.1 Language Modeling
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: It would be a great disservice to address LLMs in any depth without first addressing
+    language, to begin with. To that end, we will start with a brief but comprehensive
+    overview of language modelling, focusing on the lessons that can help us with
+    modern LLMs. Let’s first discuss levels of abstraction as it will help us garner
+    an appreciation for language modelling.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Language, as a concept, is an abstraction of the feelings and thoughts that
+    occur to us in our heads. Likewise, math is an abstraction of language, focusing
+    on logic and provability, but as any mathematician will tell you, it is a subset
+    of language used to describe and define in an organized and “logical” way. From
+    math comes the language of binary, a base-2 system of numerical notation consisting
+    of either on or off.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Binary is very useful abstraction of math, which is an abstraction of language
+    which is an abstraction of our feelings because it is what is used underneath
+    the hood for everything to do with software, models, and computers in general.
+    When computers were first made, we communicated with them through punched cards,
+    or binary directly. Unfortunately, this ends up taking too long for humans to
+    communicate important things in, so binary was also abstracted to assembly, a
+    more human-comprehensible language for communicating with computers. This was
+    further abstracted to the high-level assembly language, C, which has been even
+    further abstracted to object-oriented languages like Python. The flow we just
+    discussed is outlined in Figure 2.1.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 2.1 We compare cognitive layers of abstraction to programming layers
+    of abstraction down to the logical binary abstraction. Python doesn’t come from
+    C, nor does it compile into C. Python is, however, another layer of abstraction
+    distant from binary. Similarly, language follows a similar path. Each layer of
+    abstraction creates a potential point of failure. There are also several layers
+    of abstraction to creating a model, each of which are important.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](images/02__image002.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: This is obviously a reduction, however, it’s useful to understand that the feelings
+    you have in your head are the same number of abstractions away from binary, the
+    language the computer actually reads, as the languages most people use to program
+    in. Some people might argue that there are more steps between Python and binary,
+    such as compilers or using assembly to support the C language, and that’s true,
+    but there are more steps on the language side too, such as morphology, syntax,
+    logic, and agreement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This can help us understand how difficult the process of getting what we want
+    to be understood by an LLM actually is, and even help us understand language modeling
+    techniques better. The reason we focus on binary here is simply to illustrate
+    that there are a similar number of abstract layers to get from an idea you have
+    or from one of our code samples to a working model. Like the children’s telephone
+    game where participants whisper into each other's ears, each abstraction layer
+    creates a disconnect point or barrier where mistakes can be made.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 2.1 is also meant to illustrate the difficulty in not only creating reliable
+    code and language input, but to draw attention to how important the intermediary
+    abstraction steps like tokenization and embeddings are for the model itself. Even
+    if you have perfectly reliable code and perfectly expressed ideas, the meaning
+    may be fumbled by one of those processes before it ever reaches the LLM.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this chapter we will try and help you understand what you can do to reduce
+    the risks of these failure points, whether that be on the language, coding, or
+    modeling side. Unfortunately, it’s a bit tricky to strike a balance between giving
+    you too much linguistics that doesn’t immediately matter for the task at hand
+    versus giving you too much technical knowledge that, while useful, doesn’t help
+    you develop an intuition for language modeling as a practice. With this in mind,
+    you should know that linguistics can be traced thousands of years back in our
+    history and there’s lots to learn from it. We’ve included a ***brief*** overview
+    for interested readers of how language modeling has progressed over time in Appendix
+    A answer encourage you to take a look.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s start with our focus on the building blocks that constitute language itself.
+    We expect our readers to have at least attempted language modeling before and
+    to maybe have heard of libraries like PyTorch and Tensorflow, but we do not expect
+    most of our readers to have considered the language side of things before. By
+    understanding the essential features that make up language, we can better appreciate
+    the complexities involved in creating effective language models and how these
+    features interact with one another to form the intricate web of communication
+    that connects us all. In the following section, we will examine the various components
+    of language, such as phonetics, pragmatics, morphology, syntax, and semantics,
+    as well as the role they play in shaping our understanding and usage of languages
+    around the world. Let’s take a moment to explore how we currently understand language
+    along with the challenges we face that LLMs are meant to solve.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.1.1 Linguistic Features
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Our current understanding of language is that language is made up of at least
+    5 parts: Phonetics, Syntax, Semantics, Pragmatics, and Morphology. Each of these
+    portions contributes significantly to the overall experience and meaning being
+    ingested by the listener in any conversation. Not all of our communication uses
+    all of these forms, for example, the book you’re currently reading is devoid of
+    phonetics, which is one of the reasons why so many people think text messages
+    are unsuited for a more serious or complex conversation. Let’s work through what
+    each of these is to figure out how to present them to a language model for a full
+    range of communicative power.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Phonetics
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: Probably the easiest for a language model to ingest, phonetics involves the
+    actual sound of the language. This is where accent manifests and deals with the
+    production and perception of speech sounds, with phonology focusing on the way
+    sounds are organized within a particular language system. Similarly to computer
+    vision, while a sound isn’t something necessarily easy to deal with as a whole,
+    there’s no ambiguity for how to parse, vectorize, or tokenize the actual sound
+    waves. They have a numerical value attached to each part, the crest, the trough,
+    and the slope during each frequency cycle. It is vastly easier than text to be
+    tokenized and processed by a computer while being no less complex. Sound inherently
+    contains more encoded meaning than the text as well, for example, imagine someone
+    saying the words “yeah, right,” to you. Could be sarcastic, could be congratulatory,
+    depending on the tone and English isn’t even tonal! Phonetics, unfortunately,
+    doesn’t have Terabyte-sized datasets commonly associated with it, and performing
+    data acquisition and cleaning on phonetic data, especially on the scale needed
+    to train an LLM is difficult at best. In an alternate world where audio data was
+    more prevalent than text data, and took up a smaller memory footprint, phonetic-based
+    or phonetic-aware LLMs would be much more sophisticated, and creating that world
+    is a solid goal to work towards.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Anticipating this problem, a system created in 1888 called the International
+    Phonetic Alphabet (IPA) has been revised in both the 20th and 21st centuries to
+    be more concise, more consistent, and more clear, which could be a way to insert
+    phonetic awareness into text data. IPA functions as an internationally standardized
+    version of every language’s sound profile. A sound profile is the set of sounds
+    that a language uses, for example in English, we never have the /ʃ/ (she, shirt,
+    sh) next to the /v/ sound. IPA is used to write sounds, rather than writing an
+    alphabet or logograms, as most languages do. For example, you could simply describe
+    how to pronounce the word “cat” using these symbols: /k/, /æ/, and /t/. That’s
+    of course a *very* simplified version of it, but for models it doesn’t have to
+    be. You can describe tone and aspiration as well. This could be a happy medium
+    between text and speech, capturing some phonetic information. Think of the phrase
+    “what’s up?” Your pronunciation and tone can drastically change how you understand
+    that phrase, sometimes sounding like a friendly “wazuuuuup,” and other an almost
+    threatening, “‘sup,” which IPA would fully capture. IPA isn’t a perfect solution
+    though, for example, it doesn’t solve the problem of replicating tone very well.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Phonetics is listed first here because it’s the place that LLMs have been applied
+    to the least out of all the features and therefore have the largest space for
+    improvement. Even modern TTS and Voice cloning models for the most part end up
+    converting the sound to a spectrogram and analyzing that image rather than incorporating
+    any type of phonetic language modeling. This is something to look for as far as
+    research goes in the coming months and years.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Syntax
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: This is the place where current LLMs are highest-performing, both in parsing
+    syntax from the user and generating its own. Syntax is generally what we think
+    of as grammar and word order, and is the study of how words can combine to form
+    phrases, clauses, and sentences. Syntax is also the first place that language
+    learning programs start to help people acquire new languages, especially based
+    on where you’re coming from natively. For example, it is important for a native
+    English speaker learning Turkish to know that the syntax is completely different,
+    and you can often build entire sentences in Turkish that are just one long compound
+    word, whereas in English, we never put our subject and verb together into one
+    word.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Syntax is largely separate from meaning in language, as the famous sentence
+    from Noam Chomsky the so-called father of syntax demonstrates: “Colorless green
+    ideas sleep furiously.” Everything about that sentence is both grammatically correct
+    and semantically understandable. The problem isn’t that it doesn’t make sense,
+    it’s that it does, and the encoded meanings of those words conflict. This is a
+    reduction, however, you can think of all the times LLMs give nonsense answers
+    as this phenomenon manifesting. Unfortunately for us, the syntax is also where
+    ambiguity is the most commonly found. Consider the sentence, “I saw an old man
+    and woman.” Now answer the question: is the woman also old? This is syntactic
+    ambiguity, where we aren’t sure whether the modifier “old” applies to all people
+    in the following phrase or just the one it immediately precedes. This is less
+    consequential than the fact that semantic and pragmatic ambiguity also show up
+    in syntax. Consider this sentence now, “I saw a man on a hill with a telescope,”
+    and answer the question: Where is the speaker, and what are they doing? Is the
+    speaker on the hill cutting a man in half using a telescope? Likely, you didn’t
+    even consider this option when you read the sentence, because when we interpret
+    syntax, all of our interpretations are at least semantically and pragmatically
+    informed. We know from lived experience that that interpretation isn’t at all
+    likely, so we throw it out immediately, usually without even taking time to process
+    that we’re eliminating it from the pool of probable meanings. Think about this
+    later as we’re doing projects with LLMs.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: It shouldn’t take any logical leap for why LLMs need to be syntax-aware in order
+    to be high-performing. LLMs that don’t get word order correct or generate nonsense
+    aren’t usually described as “good.” LLMs being syntax-dependent is something that
+    has prompted even, Chomsky to call LLMs “stochastic parrots.” In the authors’
+    opinions, GPT2 in 2018 was when language modeling solved syntax as a completely
+    meaning-independent demonstration, and we’ve been happy to see the more recent
+    attempts to combine the syntax that GPT2 output so well with encoded and entailed
+    meaning, which we’ll get into now.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Semantics
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'Semantics are the literal encoded meaning of words in utterances. People automatically
+    optimize semantic meaning, only using words that they consider meaningful in the
+    current language epoch. If you’ve ever created or used an embedding with language
+    models (word2vec, ELMO, BERT [the E is for Embedding], MUSE, etc.]) you’ve used
+    a semantic approximation. Words often go through semantic shifts, and while we
+    won’t cover all of this topic nor go in-depth, here are some common ones you may
+    already be familiar with: narrowing, a broader meaning to a more specific one,
+    broadening, the inverse of narrowing going from a specific meaning to a broad
+    one, and reinterpretations, going through whole or partial transformations. These
+    shifts do not have some grand logical underpinning. They don’t even have to correlate
+    with reality, nor do speakers of a language hardly ever consciously think about
+    the changes as they’re happening. That doesn’t stop the change from occurring,
+    and in the context of language modeling it doesn’t stop us from having to keep
+    up with that change.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Some examples: narrowing includes “deer” which in Old and Middle English just
+    meant any wild animal, even a bear or a cougar, and now means only one kind of
+    forest animal. For broadening we have “dog” which used to refer to only one canine
+    breed from England, and now can be used to refer to any domesticated canine. One
+    fun tangent about dog-broadening is in the *FromSoft* game *Elden Ring,* where
+    because of a limited message system between players, they will use “dog” to refer
+    to anything from a turtle to a giant spider and literally everything in between.
+    For reinterpretation, we can consider “pretty” which used to mean clever or well-crafted,
+    not visually attractive. Another good example is “bikini” which went from referring
+    to a particular atoll, to referring to clothing you might have worn when visiting
+    that atoll to people acting as if the “bi-” was referring to the two-piece structure
+    of the clothing, thus inventing the tankini and monokini. Based on expert research
+    and decades of study, we can think of language as being constantly compared and
+    reevaluated by native language speakers out of which common patterns emerge. The
+    spread of those patterns is closely studied in sociolinguistics and is largely
+    out-of-scope for the current purpose, but we encourage the reader to look into
+    it if interested, as sociolinguistic phenomena such as prestige can help in designing
+    systems that work well for everyone.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the context of LLMs, so-called semantic embeddings are vectorized versions
+    of text that attempt to mimic semantic meaning. The most popular way of doing
+    this currently is by tokenizing or assigning an arbitrary number in a dictionary
+    to each subword in an utterance (think prefixes, suffixes, and morphemes generally),
+    applying a continuous language model to increase the dimensionality of each token
+    within the vector so that there’s a larger vector representing each index of the
+    tokenized vector, then applying a positional encoding to each of those vectors
+    to capture word order. Each subword ends up being compared to other words in the
+    larger dictionary based on how it’s used. We’ll show an example of this later.
+    Something to consider when thinking about word embeddings is that they struggle
+    to capture deep encoded meaning of those tokens, and simply adding more dimensions
+    to the embeddings hasn’t shown marked improvement. One evidence that embeddings
+    are working in a similar way to humans is that you can apply a distance function
+    to related words and see that they are closer together than unrelated words. This
+    is another area to expect groundbreaking research in the coming years and months
+    for how to capture and represent meaning more completely.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Pragmatics
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: Sometimes omitted from linguistics, due to its referent being all the non-linguistic
+    context affecting a listener’s interpretation and the speaker’s decision to express
+    things in a certain way. Pragmatics refers in a large part to dogmas followed
+    in cultures, regions, socio-economic classes, and shared lived experiences played
+    off of to take shortcuts in conversations using entailment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If I were to say, “A popular celebrity was just taken into the ICU,” your pragmatic
+    interpretation based on lived experience might be to assume that a well-beloved
+    person has been badly injured and is now undergoing medical treatment in a well-equipped
+    hospital. You may wonder about which celebrity it is, whether they will have to
+    pay for the medical bills, or if the injury was self-inflicted, also based on
+    your lived experience. None of these things can be inferred directly from the
+    text and its encoded meaning by itself. You would need to know that ICU stands
+    for a larger set of words, and what those words are. You would need to know what
+    a hospital is and why someone would need to be taken there instead of going there
+    themselves. If any of these feel obvious, good. You live in a society and your
+    pragmatic knowledge of that society overlaps well with the example provided. If
+    I share an example from a less-populated society, “Janka got her grand-night lashings
+    yesterday, she’s gonna get Peter tomorrow” you might be left scratching your head.
+    If you are, realize this probably looks like how a lot of text data ends up looking
+    to an LLM (anthropomorphization acknowledged). For those wondering, this sentence
+    comes from Slovak Easter traditions. There’s a lot of meaning here that will just
+    be missed and go unexplained if you are unaccustomed to these particular traditions
+    as they stand in that culture. I personally have had the pleasure of trying to
+    explain the Easter Bunny and its obsession with eggs to foreign colleagues and
+    enjoyed the satisfaction of looking crazy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the context of LLMs, we can effectively group all out-of-text context into
+    pragmatics. This means LLMs start without any knowledge of the outside world,
+    and do not gain it during training. They only gain a knowledge of how humans respond
+    to particular pragmatic stimuli. LLMs do not understand social class or race or
+    gender or presidential candidates or anything else that might spark some type
+    of emotion in you based on your life experience. Pragmatics isn’t something that
+    we expect will be able to be directly incorporated into a model at any point,
+    but we have already seen the benefits of incorporating it indirectly through data
+    engineering and curation, prompting, and supervised fine-tuning on instruction.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Pragmatic structure gets added whether you mean to add it or not as soon as
+    you acquire the data you are going to train on. You can think of this type of
+    pragmatic structure as bias, not inherently good or bad, but impossible to get
+    rid of. Later down the line you get to pick what types of bias you’d like your
+    data to keep by normalizing and curating, augmenting particular underrepresented
+    points and cutting overrepresented or noisy examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: There’s a fine line between data engineering and pragmatic context, and it’s
+    just a matter of understanding what entailments exist in your data. An entailment,
+    is a pragmatic marker within your data, as opposed to the literal text that your
+    dataset contains. For example, let’s say you have a model attempting to take an
+    input like “write me a speech about frogs eating soggy socks that doesn’t rhyme
+    and where the first letters of each line spell amphibian,” and actually follow
+    that instruction. You can immediately tell that this input is asking for a lot.
+    The balance for you as a data engineer would be to make sure that everything the
+    input is asking for is explicitly accounted for in your data. You need to have
+    examples of speeches, examples of what frogs and socks are and how they behave,
+    and examples of acrostic poems. If you don’t, the model might be able to understand
+    just from whatever entailments exist in your dataset, but it’s pretty up in the
+    air. If you go the extra mile and keep track of entailed vs explicit information
+    and tasks in your dataset, along with data distributions, you’ll have examples
+    to answer, “What is the garbage-in resulting in our garbage-out?”
+  prefs: []
+  type: TYPE_NORMAL
+- en: LLMs struggle to pick up on pragmatics, even more so than people, but they do
+    pick up on the things that your average standard deviation of people would. They
+    can even replicate responses from people outside that standard deviation, but
+    pretty inconsistently without the exact right stimulus. This is where everything
+    during and after training comes in. Instruction-based datasets attempt to manufacture
+    those stimuli during training by asking questions that entail representative responses.
+    It is impossible to account for every possible situation in training, and you
+    may inadvertently create new types of responses from your end users by trying
+    to account for everything. After training, you can coax particular information
+    from your model through prompting, which has a skill ceiling based on what your
+    data originally entailed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Morphology
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: Morphology is the study of word structures and how they are formed from smaller
+    units called morphemes. Morphemes are the smallest units of meaning, like the
+    "re-" in "redo" or "relearn." However, not all parts of words are morphemes, such
+    as "ra-" in "ration" or "na-" in "nation."
+  prefs: []
+  type: TYPE_NORMAL
+- en: Understanding how words are constructed helps create better language models
+    and parsing algorithms, which are essential for tasks like tokenization. Tokens
+    are somewhere between words and morphemes, they are statistically the most-likely
+    candidates for units of meaning, but don’t necessarily correspond to existing
+    morphemes. The effectiveness of a language model can depend on how well it can
+    understand and process these tokens. For instance, in tokenization, a model needs
+    to store a set of dictionaries to convert between words and their corresponding
+    indices. One of these tokens is usually an "<UNK>" token, which represents any
+    word that the model does not recognize. If this token is used too frequently,
+    it can hinder the model's performance, either because the model's vocabulary is
+    too small or because the tokenizer is not using the right algorithm for the task.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Consider a scenario where you want to build a code completion model, but you're
+    using a tokenizer that only recognizes words separated by whitespace, like the
+    nltk "punkt" tokenizer. When it encounters the string "def add_two_numbers_together(x,
+    y):," it will pass "[def, <UNK>, y]" to the model. This causes the model to lose
+    valuable information, not only because it doesn't recognize the punctuation, but
+    also because the important part of the function's purpose is replaced with an
+    unknown token due to the tokenizer's morphological algorithm. To improve the model's
+    performance, a better understanding of word structure and the appropriate parsing
+    algorithms is needed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.1.2 Semiotics
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: After exploring the fundamental features of language and examining their significance
+    in the context of large language models, it is important to consider the broader
+    perspective of meaning-making and interpretation in human communication. Semiotics,
+    the study of signs and symbols, offers a valuable lens through which we can better
+    understand how people interpret and process language. In the following section,
+    we will delve into the realm of semiotics, examining the relationship between
+    signs, signifiers, and abstractions, as well as how these elements are utilized
+    by LLMs to generate meaningful output. This discussion will provide a deeper understanding
+    of the intricate processes through which LLMs manage to mimic human-like understanding
+    of language, while also shedding light on the challenges and limitations they
+    face in this endeavor. It should be noted that the authors do not believe that
+    mimicking human behavior is necessarily the right answer for LLM improvement,
+    only that mimicry is how the field has evaluated itself so far.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In our introduction to semiotics let’s consider Figure 2.2 an adapted Peircean
+    semiotic triangle. These are used to organize base ideas into sequences of firstness,
+    secondness, and thirdness, with firstness being at the top left, secondness at
+    the bottom, and thirdness being at the top right. If you’ve ever seen a semiotic
+    triangle before, you may be surprised at the number of corners and orientation.
+    To explain, we’ve turned them upside down to make it slightly easier to read,
+    and because the system is recursive, we’re showing how the system can model the
+    entire process and each piece individually simultaneously. While the whole concept
+    of these ideas is very cool, it’s outside of the scope of this book to really
+    delve into the philosophy. Instead, we can focus on the cardinal parts of those
+    words (first, second, third) as showing the sequence things are processed in.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 2.2 This is a recursive Peircean semiotic triangle. It’s a system of
+    organizing the process of extracting meaning from anything, in our case from language.
+    Each point on the triangle illustrates one of the minimal parts needed to synthesize
+    meaning within whatever the system is being used to describe, so here, each of
+    these points are minimal units in meaning for language. Firstness, Secondness,
+    and Thirdness are not points on the triangle, more markers for the people versed
+    in Semiotics to be able to orient themselves in this diagram.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](images/02__image003.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: We can also look at each intersection of each of the triangles to gain an idea
+    of why things are presented in the order they are. Feelings can be attached to
+    images and encodings way before they can be attached to words and tables. Ritual
+    and common scripts give a space for interpreted action that’s just second nature
+    and doesn’t have to be thought about, similarly to how most phrases just come
+    together from words without the native speaker needing to perform metacognition
+    about each word individually. All of these eventually lead towards an interpretation
+    or a document (a collection of utterances), and in our case, that interpretation
+    should be reached by the LLM. This is why, for example, prompt engineering can
+    boost model efficacy. Foundation LLMs that have trained on millions of examples
+    of ritual scripts are able to replicate the type of script significantly better
+    when you explicitly tell the model in the prompt which script needs to be followed.
+    Try asking the model to give a step-by-step explanation, maybe prepend your generation
+    with “Let’s think about this step-by-step”, you will see the model will generate
+    step by step scripts based on previous scripts it’s seen play out.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For those interested, there are specific ways of reading these figures and a
+    whole field of semiotics to consider, however, it’s not guaranteed that you’ll
+    be able to create the best LLMs by understanding the whole thing. Instead of diving
+    really deeply into this, we’ll consider the bare minimum that can help you build
+    the best models, UX, and UI for everyone to interact with. For example, one aspect
+    of the process of creating meaning is recursiveness. When someone is talking to
+    you, and they say something that doesn’t make sense (is “meaningless” to you),
+    what do you do? Generally, people will ask one or more clarifying questions to
+    figure out what the meaning is, and the process is started over and over until
+    the meaning is put across. The most state-of-the-art models that are currently
+    on the market do not do this, but they can be made to do it through very purposeful
+    prompting, but many people wouldn’t even know to do that without having it pointed
+    out to them. In other words, this is a brief introduction to semiotics. You don’t
+    need to be able to give in-depth and accurate coordinate-specific explanations
+    to experts in the semiotic field by the end of this section. The point I’m really
+    trying to push is that this is an organizational system showcasing the minimum
+    number of things you actually need to create a full picture of meaning for another
+    person to interpret. We are not giving the same amount of the same kinds of information
+    to our models during training, but if we did, it would result in a marked improvement
+    in model behavior.
+  prefs: []
+  type: TYPE_NORMAL
+- en: These figures are meant to represent a minimal organizational model, where each
+    of these pieces is essential. Let’s consider Figure 2.3 which walks through an
+    example of using a semiotic triangle. Consider Images, Pictures, and Memories
+    and think about what it would be like to try and absorb the knowledge in this
+    book without your eyes to process images, and without orthography (a writing system)
+    to abstract the knowledge. Looking at Bullet Points, etc., how could you read
+    this book without sections, whitespace between letters, and bullet points to show
+    you the order and structure to process information with? Look at Semantics and
+    literal encoded meaning and imagine the book without diagrams and words that didn’t
+    have dictionary definitions. Looking at spreadsheets in the middle, that could
+    be a book without any tables or comparative informational organizers, including
+    these figures. What would it be like trying to read this book without a culture
+    or society that has habits and dogma to use as a lens for our interpretations?
+    All of these points form our ability to interpret information, along with the
+    lens that we end up passing our information through to recognize patterns.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 2.3 Starting at the top left corner, follow the arrows to see the general
+    order that we use to build our interpretations and extract meaning from things
+    we interact with. Here, we’ve replaced the descriptive words with some examples
+    of each point. Try to imagine interpreting this diagram without any words, without
+    examples, without the arrows, or even without the pragmatic context of knowing
+    what a figure in a book like this is supposed to be for.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](images/02__image004.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'So the important question then is: how many of these things do you see LLMs
+    having access to to return meaningful interpretations? Does an LLM have access
+    to feelings or societal rituals? Currently, they do not, but think about this
+    as we go through traditional and newer techniques for NLP inference and think
+    about what different models have access to.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.1.3 Multilingual NLP
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The last challenge that we need to touch on before we evaluate previous NLP
+    techniques and current-generation LLMs is the foundation of linguistics and the
+    reason LLMs even exist. People have wanted to understand or exploit each other
+    since the first civilizations made contact. These cases have resulted in the need
+    for translators, and this need has only exponentially increased as the global
+    economy has grown and flourished.
+  prefs: []
+  type: TYPE_NORMAL
+- en: It’s pretty simple math for business as well. Did you know that there are almost
+    as many native speakers of Bengali as there are native speakers of English? If
+    this is the first time you’ve heard of the Bengali language, this should hopefully
+    color your perception that there is a valuable market for multilingual models.
+    There are billions of people in the world, but only about a third of one billion
+    of them speak English natively. If your model is anglocentric, like most are,
+    you are missing out on 95% of the people in the world as customers and users.
+    Spanish and Mandarin Chinese are easy wins in this area, but more people don’t
+    even go that far.
+  prefs: []
+  type: TYPE_NORMAL
+- en: There are many more politically-charged examples of calling things the same
+    or different languages that are out of the scope of this book. These are most
+    often because of external factors like government involvement. Keeping these two
+    points in mind–that a monolingual system focusing on English doesn’t have the
+    coverage or profit potential as many businesses act like and that the boundaries
+    between languages and dialects are unreliable at best and systematically harmful
+    at worst–it should highlight the dangerous swamp of opinions. Many businesses
+    and research scientists don’t even pretend to want to touch this swamp with a
+    50-foot pole when designing a product or system.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Unfortunately, no easy solutions exist at this time. However, the consideration
+    of these factors can help you as a scientist or engineer (and hopefully an ethical
+    person) to design LLMs that, at the very least, don’t exacerbate and negatively
+    contribute to the problems that already exist. The first step in this process
+    is deciding on a directional goal from the beginning of the project, either towards
+    localization (L10n) or internationalization (I18n). Localization is an approach
+    exemplified by Mozilla, which has a different version of their browser available
+    through crowdsourced L10n in over 90 languages with no indications of stopping
+    that effort. Internationalization is similar, but in the opposite direction, for
+    example, Ikea tries to put as few words as possible in their instructional booklets,
+    opting instead for internationally recognized symbols and pictures to help customers
+    navigate the DIY projects. Deciding at the beginning of the project cuts down
+    the effort required to expand to either solution exponentially. Large enough to
+    switch the perception of translation and formatting from a cost to an investment.
+    In the context of LLMs and their rapid expansion across the public consciousness,
+    it becomes even more important to make that consideration early. Hitting the market
+    with a world-changing technology that automatically disallows most of the world
+    from interacting with it devalues those voices. Having to wait, jeopardizes their
+    economic prospects.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Before continuing, let’s take a moment to reflect on what we’ve discussed so
+    far. We’ve hit important points in linguistics illustrating concepts for us to
+    consider like understanding that the structure of language is separate from its
+    meaning. We have demonstrated quite a journey that each of us takes, both personally
+    and as a society, towards having the metacognition to understand and represent
+    language in a coherent way for computers to work with. This understanding will
+    only improve as we deepen our knowledge of cognitive fields, and as we solve for
+    the linguistic features that we encounter. Going along with Figure 2.1, we will
+    now demonstrate the computational path for language modeling that we have followed,
+    and explore how it has and hasn’t solved for any of those linguistic features
+    or strived to create meaning. Let’s move into evaluating the various techniques
+    for representing a language algorithmically.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.2 Language Modeling Techniques
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Having delved into the fundamental features of language, the principles of semiotics,
+    and the ways in which large language models interpret and process linguistic information,
+    we now transition into a more practical realm. In the following section, we will
+    explore the various natural language processing techniques that have been developed
+    and employed to create these powerful language models. By examining the strengths
+    and weaknesses of each approach, we will gain valuable insights into the effectiveness
+    of these techniques in capturing the essence of human language and communication.
+    This knowledge will not only help us appreciate the advancements made in the field
+    of NLP but also enable us to better understand the current limitations of these
+    models and the challenges that lie ahead for future research and development.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s take a second to just go over some data processing that will be universal
+    to all language modeling. First, we’ll need to decide how we want to break up
+    the words and symbols that we’ll be passing into our model, effectively deciding
+    what a token will be in our model. Then, we’ll need a way to convert those tokens
+    to numerical values and back again. Then, we’ll need to pick how our model will
+    actually process the tokenized inputs. Each of the following techniques will build
+    upon the previous techniques in at least one of these ways.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The first of these techniques is called a Bag of Words (BoW) model, and it consists
+    of simply counting words as they appear in text. It can be accomplished very easily
+    with a dictionary that scans through text, creating a new vocabulary entry for
+    each new word as a key and an incrementing value starting at 1\. Considering its
+    simplicity, even this model based entirely on frequency can be quite powerful
+    when trying to gain insight into a speaker’s intentions or at least their idiosyncrasies.
+    For example, you could run a simple BoW model on inaugural speeches of US presidents,
+    searching for the words freedom, economy, and enemy to gain a pretty good insight
+    about which presidents assumed office under peacetime, during wartime, and during
+    times of monetary strife, just based on how many times each word was mentioned.
+    The BoW model’s weaknesses are many, however, as the model provides no images,
+    semantics, pragmatics, phrases, or feelings. It doesn’t have any mechanisms to
+    evaluate context or phonetics, and because it divides words by default on white
+    space (you can obviously tokenize however you want, but try tokenizing on subwords
+    and see what happens with this model—spoiler it is bad), it doesn’t account for
+    morphology either. Altogether, it should be considered a weak model for representing
+    language, but a strong baseline for evaluating other models against. In order
+    to solve the problem of Bag of Words models not capturing any sequence data, N-Gram
+    models were conceived.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.2.1 N-Gram and Corpus-based techniques
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: N-Gram models represent a marked but efficient improvement to BoW, where you
+    are able to give the model a sort of context, represented by N. They are relatively
+    simple statistical models that allow you to generate words based on the N-1 context
+    space. Looking at Listing 2.1, I’m using trigrams which means N=3\. I clean the
+    text and give it minimal padding/formatting to help the model, then we train using
+    everygrams, which is meant to prioritize flexibility over efficiency so that you
+    could train a pentagram or a septagram (N=5, N=7) model if you wanted instead.
+    At the end of the listing where I’m generating, I can give the model up to 2 tokens
+    to help it figure out how to generate further. N-Gram models were not created,
+    and have never even claimed to attempt, complete modeling systems of linguistic
+    knowledge, but they are widely useful in practical applications. They ignore all
+    linguistic features, including syntax, and only attempt to draw probabilistic
+    connections between words appearing in an N-length phrase.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Looking at Figure 2.2, N-Grams really only use static signals (whitespace, orthography)
+    and words to try to extract any meaning. It tries to measure phrases manually,
+    assuming that all of the phrases will be the same length. That said, N-Grams can
+    be used to create powerful baselines for text analysis, and if the pragmatic context
+    of the utterance is already known by the analyst, they can be used to give quick
+    and accurate insight into real-world scenarios. It is possible to make an N-Gram
+    LLM by just making N=1000000000 or higher, but this doesn’t have any practical
+    application, as 99.9% of all text and 100% of all meaningful text contains fewer
+    than one billion tokens appearing more than once and that computational power
+    can be much better spent elsewhere.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 2.1 Generative N-Grams Language Model Implementation
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: The above code is all that you need to create a generative N-gram model. For
+    those of you interested in being able to evaluate that model further, we've included
+    the below code to grab probabilities and log scores, or analyze the entropy and
+    perplexity of a particular phrase. Because this is all frequency-based, even though
+    it’s mathematically significant, it still does a pretty bad job of describing
+    how perplexing or frequent real-world language actually is.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: While this code example illustrates creating a trigram language model, unfortunately,
+    not all phrases needing to be captured are only 3 tokens long. For example, from
+    Hamlet, “To be or not to be,” consists of one phrase with 2 words and one phrase
+    with 4 words. This type of phrasal modeling also fails to capture any semantic
+    encodings that individual words could have. In order to solve these problems,
+    Bayesian statistics were applied to language modeling.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.2.2 Bayesian Techniques
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Bayes’ theorem is one of the most mathematically sound and simple theories
+    present in describing the occurrence of your output within your input space. Essentially,
+    it calculates the probability of an event occurring based on prior knowledge.
+    The theorem posits that the probability of a hypothesis being true given evidence,
+    for example that a sentence has a positive sentiment, is equal to the probability
+    of the evidence occurring given the hypothesis is true multiplied by the probability
+    of the hypothesis occurring, all divided by the probability of the evidence being
+    true. Or, expressed mathematically:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: P(hypothesis | evidence) = (P(evidence | hypothesis) * P(hypothesis)) / P(evidence)
+  prefs: []
+  type: TYPE_NORMAL
+- en: Or
+  prefs: []
+  type: TYPE_NORMAL
+- en: P(A|B) * P(B) = P(B|A) * P(A)
+  prefs: []
+  type: TYPE_NORMAL
+- en: Because this is neither a math book, nor do we care to dive too much into theory,
+    we’ll trust you can get further informed about this theorem.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Unfortunately, even though the theorem represents the data in a mathematically
+    sound way, it doesn’t account for any stochasticity or multiple meanings of words.
+    One word you can always throw at a Bayesian model to confuse it is the word, “it.”
+    Any demonstrative pronoun ends up getting assigned values in the same LogPrior
+    and LogLikelihood way as all of the other words and gets a static value, which
+    is antithetical to the usage of those words. For example, if you’re trying to
+    perform sentiment analysis on an utterance, it would be better for you to assign
+    all pronouns a null value than to even let them go through the Bayesian training.
+    It should be noted also that Bayesian techniques don’t end up creating generative
+    language models the way the rest of these will. Because of the nature of Bayes’
+    theorem validating a hypothesis, these models work for classification, and can
+    bring powerful augmentation to a generative language model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In Listing 2.2 we show how to create a Naive Bayes classification language model.
+    Instead of using a package like sklearn or something that would make writing the
+    code a little easier, we opted to write out what we were doing, so it’s a bit
+    longer, but should be more informative about how it works. We are using the least-complex
+    version of a Naive Bayes model. We haven’t made it multinomial or added anything
+    fancy and this could obviously work better if you opted to upgrade it for any
+    problem you want. And we highly recommend you do.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 2.2 Categorical Naive Bayes Language Model Implementation
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: This theorem doesn’t create the same type of language model, but one with a
+    list of probabilities associated with one hypothesis. As such, Bayesian language
+    models can’t be used effectively to generate language, but it can be very powerfully
+    implemented for classification tasks. In my opinion though, Bayesian models are
+    often overhyped for even this task. One of the crowning achievements of my career
+    was replacing and removing a Bayesian model from production.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In Bayesian models one of the big issues is essentially that all sequences are
+    completely unconnected, like BoW models, moving us to the opposite end of sequence
+    modeling from N-Grams. Similarly to a pendulum, language modeling swings back
+    towards sequence modeling and language generation with Markov Chains.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.2.3 Markov Chains
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Often called Hidden Markov Models (HMMs), Markov Chains essentially add state
+    to the N-Gram models mentioned before, storing probabilities using hidden states.
+    They are often used to help parse text data for even larger models, doing things
+    like Part-of-Speech tagging (PoS Tagging, marking words with their part of speech)
+    and Named Entity Recognition (NER, marking identifying words with their referent
+    and usually type, e.g. LA - Los Angeles - City) on textual data. Markov models,
+    as opposed to previous Bayesian models, rely completely on stochasticity (predictable
+    randomness) whereas the Bayesian models pretended it didn’t exist. The idea is
+    similarly mathematically sound, however, that the probability of anything happening
+    *next* depends completely upon the state of *now*. So instead of modeling words
+    based solely on their historical occurrence and drawing a probability from that,
+    we model their future and past collocation based on what is currently occurring.
+    So the probability of “happy” occurring goes down to almost zero if “happy” was
+    just output, but goes up significantly if “am” has just occurred. Markov chains
+    are so intuitive that they were incorporated into later iterations of Bayesian
+    statistics, and are still used in production systems today.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In Listing 2.3 we train a Markov chain generative language model. This is the
+    first model where we’ve used a specific tokenizer, which in this case will just
+    tokenize based on the white space between words. This is also only the second
+    time we’ve referred to a collection of utterances meaning to be viewed together
+    as a document. As you play around with this one, pay close attention and make
+    some comparisons yourself for how well the HMM generates compared to even a large
+    N-gram model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 2.3 Generative Hidden Markov Language Model Implementation
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: This code shows a basic implementation of a Markov model for generation, and
+    we’d encourage the reader to experiment with it, give it text from songs from
+    your favorite musicians or books from your favorite authors and see whether what
+    comes out actually sounds like them. HMMs are incredible fast and often used in
+    predictive text or predictive search applications. Markov models represent the
+    first comprehensive attempt to actually model language from a descriptive linguistic
+    perspective, as opposed to a prescriptive one, which is interesting, because Markov
+    did not originally intend for linguistic modeling, only to win an argument about
+    continuous independent states. Later, Markov used Markov Chains to model vowel
+    distribution in a Pushkin novel, so he was at least aware of the possible applications.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The difference between descriptive and prescriptive linguistics is that one
+    focuses on how things *ought* to be, while the other focuses on how things *are*.
+    From a language modeling perspective, it has proven vastly more effective to describe
+    what language is doing from a corpus or Markov perspective, rather than to attempt
+    to prescribe how language ought to behave. Unfortunately, a current state by itself
+    cannot be used to give context beyond the now, so historical or societal context
+    is unable to be represented effectively in a Markov model. Semantic encoding of
+    words also becomes a problem, as is represented in the code example, Markov chains
+    will output syntactically correct chains of words that semantically are nonsense,
+    similar to “colorless green ideas sleep furiously.” To attempt to solve this problem,
+    “continuous” models were developed to allow for a “semantic embedding” representation
+    of tokens.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.2.4 Continuous Language Modeling
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: A Continuous Bag of Words (CBoW), much like its namesake, the Bag of Words,
+    is a frequency-based approach to analyzing language, meaning that it models words
+    based on how often they occur. The next word in an utterance has never been determined
+    based on probability or frequency. Due to this, the example given will be for
+    how to create word embeddings to be ingested or compared by other models using
+    a CBoW. We’ll use a neural network for this to give you a good methodology.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is the first language modeling technique we’ll see that essentially slides
+    a context window over a given utterance (the context window is an N-gram model)
+    and attempts to guess what word is in the middle based upon surrounding words
+    in the window. For example, let’s say your window has a length of 5, and your
+    sentence is, “Learning about linguistics makes me happy,” you would give the CBoW
+    [‘learning’, ‘about’, ‘makes’, ‘me’] and try to get the model to guess “linguistics,”
+    based upon how many times the model has seen that word occur in similar places
+    previously. This should show you why generation is difficult for models trained
+    like this, because if you give the model [‘makes’, ’me’, ’</s>] as input, first
+    of all it only has 3 pieces of information to try to figure out instead of 4,
+    and it also will be biased towards only guessing words it has seen at the end
+    of sentences before, as opposed to getting ready to start new clauses. It’s not
+    all bad though, one feature that makes continuous models stand out for embeddings
+    is that it doesn’t just have to look at words before the target word, they can
+    also use words that come after the target to gain some semblance of context.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In Listing 2.4 we create our first continuous model. In our case, to keep things
+    as simple as possible, we use a bag of words for the language processing and a
+    one-layer neural network with two parameters for the embedding estimation, although
+    both of those could be substituted out for any other models. For example, you
+    could substitute N-grams for the BoW and a Naive Bayes for the neural network,
+    and get a Continuous Naive N-gram model. The point is that the actual models used
+    in this technique are a bit arbitrary, it’s more the Continuous technique that’s
+    important. To illustrate this further, we don’t use any packages other than numpy
+    to do the math for the neural network, even though it’s our first one appearing
+    in this section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Pay special attention to the steps below, initializing the model weights, the
+    ReLU activation function, the final softmax layer, forward and backpropagation,
+    and then how it all fits together in the `gradient_descent` function. These are
+    pieces in the puzzle that you will see crop up again and again, regardless of
+    programming language or framework. You will need to initialize models, pick activation
+    functions, pick final layers, and define forward and backward propagation in Tensorflow,
+    Pytorch and HuggingFace, and if you ever start creating your own models as opposed
+    to using someone else’s.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 2.4 Generative Continuous Bag of Words Language Model Implementation
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: The CBoW example is our first code example to showcase a full and effective
+    training loop in machine learning. Within all of that, we asked the reader to
+    pay special attention to the steps in a training loop, especially the activation
+    function, ReLU. As we expect the reader to be at least familiar with various ML
+    paradigms, including different activations, we won’t explain the ReLU here, rather
+    why you should use it and why you shouldn’t. ReLUs, while solving the vanishing
+    gradient problem, don't solve the exploding gradient problem, and they sharply
+    destroy all negative comparisons within the model. Better situational variants
+    include the ELU, which allows negative numbers normalizing to alpha, or the GEGLU/SWIGLU,
+    which works well in increasingly perplex scenarios, like language. However, people
+    often use ReLUs, not because they are the best in a situation, but because they
+    are easy-to-understand, easy-to-code, and intuitive, even more so than the activations
+    they were created to replace like the sigmoid or tanh.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A lot of this ends up being abstracted with packages and the like, but knowing
+    what’s going on under the hood will be very helpful for you as someone putting
+    LLMs in production. You should be able to predict with some certainty how different
+    models will behave in various situations. The next section will dive into one
+    of those abstractions, in this case being the abstraction that is created by the
+    continuous modeling technique.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.2.5 Embeddings
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Hearkening back to our features of language, it should be easy to connect why
+    continuous-style language modeling was such a breakthrough. Embeddings take the
+    tokenized vectors we’ve created that don’t contain any meaning, and attempt to
+    insert that meaning based on observations that can be made about the text, such
+    as word order and subwords appearing in similar contexts. Despite the primary
+    mode of meaning being collocation (co-located, words that appear next to each
+    other), they prove useful and even show some similarities to human-encoded word
+    meaning.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The quintessential example from Word2Vec, one of the first pre-trained vector
+    embeddings, was taking the vector for “king” subtracting the vector for “man”
+    adding the vector for “woman” and finding the nearest neighbor to the sum was
+    the vector for the word “queen”. This makes sense to us as it mimics human semantics.
+    One of the major differences is one that’s already been mentioned a couple of
+    times, pragmatics. Humans use pragmatic context to inform semantic meaning, understanding
+    that just because you said, “I need food,” doesn’t mean you are actually in physical
+    danger without it. Embeddings are devoid of any influence outside of pure usage,
+    which feels like it could be how humans learn as well, and there are good arguments
+    on all sides here. The one thing holding is that if we can somehow give models
+    more sense data, that may open the door to more effective embeddings.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In Listing 2.5, we’ll dive into how to visualize embeddings using pyplot. We
+    will be going more in-depth into embeddings in later chapters. This is helpful
+    for model explainability and also for validation during your pre-training step.
+    If you see that your semantically similar embeddings are relatively close to each
+    other on the graph, then you’re likely going in the right direction.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 2.5 Embedding Visualization
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: Figure 2.4 A visualization technique for word embeddings. Visualizing embeddings
+    can be important for model explainability.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](images/02__image005.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: As we can see in figure 2.4, this is a successful, but a very sparse embedding
+    representation that we trained from our CBoW model. Getting those semantic representations
+    (embeddings) to be denser is the main place that we can see improvement in this
+    field, although many successful experiments have been run where denser semantic
+    meaning has been supplanted with greater pragmatic context through instruct and
+    different thought chaining techniques. We will address Chain of Thought (CoT)
+    and other techniques later. For now, let’s pivot to discussing why our continuous
+    embedding technique can even be successful, given frequency-based models are characteristically
+    difficult to correlate with reality. All of this starts with the Multilayer Perceptron,
+    more than half a century ago.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.2.6 Multilayer Perceptrons
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: MLPs are the embodiment of the sentiment, “Machines are really good at doing
+    one thing, so I wish we could just use a bunch of machines that are really good
+    at the one thing to make one that’s good at a lot of things.” Every weight and
+    bias in the neural network of the MLP is good at detecting one feature, so we
+    bind a whole bunch of them together to detect larger, more complex features. MLPs
+    serve as the primary building block in most neural network architectures. The
+    key distinctions between architectures, such as convolutional neural networks
+    and recurrent neural networks, mainly arise from data loading methods and the
+    handling of tokenized and embedded data as it flows through the layers of the
+    model, rather than the functionality of individual layers, particularly the fully-connected
+    layers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In Listing 2.6 we provide a more dynamic class of neural network that can have
+    as many layers and parameters as deemed necessary for your task. We give a more-defined
+    and explicit class using pytorch to give you the tools to implement the MLP for
+    use in whatever you’d like, both from scratch and in a popular framework.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 2.6 Multilayer Perceptron Pytorch Class Implementation
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: From the code we can see, as opposed to the CBoW implementation which had a
+    static two layers, this MLP is not static in size until it has been instantiated.
+    If you wanted to give this model one million layers, you would just have to put
+    num_hidden_layers=1000000 when you instantiate the class, although just because
+    you *can* give a model that many parameters it won’t make it immediately better.
+    LLMs are more than just a lot of layers. Like RNNs and CNNs, the magic of LLMs
+    is in how data goes in and moves through the model. To illustrate, let’s look
+    at the RNN and one of its variations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.2.7 RNNs and LSTMs
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Recurrent Neural Networks (RNNs) are a class of neural networks designed to
+    analyze sequences, based on the weaknesses in previous language modeling techniques.
+    The logic goes that if language is presented in a sequence, then maybe it should
+    be processed in a sequence, as opposed to one token at a time. RNNs accomplish
+    this by using logic we’ve seen before, both in MLPs and in Markov Chains, where
+    an internal state or memory is referred to when new inputs are processed, and
+    creating cycles when connections between nodes are detected as being useful.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In fully recurrent networks, like the one in Listing 2.7, all nodes start out
+    initially connected to all subsequent nodes, but those connections can be set
+    to zero to simulate them being broken if they are not useful. This solves one
+    of the biggest problems that earlier models suffered from, static input size,
+    and enables an RNN and its variants to process variable length inputs. Unfortunately,
+    longer sequences create a new problem. Because each neuron in the network has
+    connections to subsequent neurons, longer sequences create smaller changes to
+    the overall sum, making the gradients smaller and eventually vanishing, even with
+    important words.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For example, let’s consider these sentences with the task sentiment analysis,
+    “I loved the movie last night,” and, “The movie I went to see last night was the
+    very best I had ever expected to see.” These sentences can be considered semantically
+    similar, even if they aren’t exactly the same. When moving through an RNN, each
+    word in the first sentence is worth more, and the consequence is that the first
+    sentence has a higher positive rating than the second sentence, just because of
+    the first sentence being shorter. The inverse is true also, exploding gradients
+    are also a consequence of this sequence processing, which makes training deep
+    RNNs difficult.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To solve this problem, long short-term memories (LSTMs), which are a type of
+    RNN, use memory cells and gating mechanisms to keep being able to process sequences
+    of variable length, but without the problems of longer and shorter sequences being
+    comprehended differently. Anticipating multilingual scenarios and understanding
+    that people don’t think about language in only one direction, LSTMs can also process
+    sequences bidirectionally by concatenating the outputs of two RNNs, one reading
+    the sequence from left to right, and the other from right to left. This bidirectionality
+    improves results, allowing for information to be seen and remembered even after
+    thousands of tokens have passed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In Listing 2.7 we give classes for both an RNN and an LSTM. In the code in the
+    repo associated with this book, you can see the results of training both the RNN
+    and LSTM, where the takeaway is that the LSTM gets better accuracy on both training
+    and validation sets in half as many epochs (25 vs 50 with RNN). One of the innovations
+    to note is the packed embeddings that utilize padding, extending all variable-length
+    sequences to the maximum length in order to allow processing any length input,
+    as long as it is shorter than the maximum.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 2.7 Recurrent Neural Network and Long Short-Term Memory Pytorch Class
+    Implementations
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: Looking above at our classes and instantiations, you should see that the LSTM
+    is not vastly different from the RNN. The only differences in the `init` input
+    variables are `n_layers` (for convenience, you can also specify it with RNNs),
+    `bidirectional`, and `dropout`. Bidirectional allows LSTMs to look ahead in sequences
+    to help with meaning and context, but also drastically helps with multilingual
+    scenarios, as left-to-right languages like English are not the only format for
+    orthography. Dropout, another huge innovation, changes the paradigm of overfitting
+    from being only data-dependent, and helps the model not overfit by turning off
+    random nodes layer-by-layer during training to force all nodes not to correlate
+    to each other. The only differences in the out-of-model parameters is that the
+    best optimizer for an RNN is SGD, like our CBoW, and the LSTM uses Adam (could
+    use any, including AdamW). Below, we define our training loop and train the LSTM.
+    Compare this training loop to the one defined in Listing 2.4 in the `gradient_descent`
+    function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: One of the amazing things demonstrated in the code here is how much quicker
+    the LSTM can learn, compared to previous model iterations, thanks to both bidirectionality
+    and dropout. The previous models, though training faster, take hundreds of epochs
+    to get the same performance as an LSTM in just 25 epochs. The performance on the
+    validation set, as its name implies, adds validity to the architecture, performing
+    inference during training on examples it has not trained on and keeping accuracy
+    fairly close to the training set.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The problems with these models are not as pronounced, manifesting primarily
+    as being incredibly resource-heavy, especially when being applied to longer, more
+    detail-oriented problems, like healthcare and law. Despite the incredible advantages
+    of Dropout and Bidirectional processing, they both at least double the amount
+    of processing power required to train, so while inference ends up being only 2-3x
+    as expensive as an MLP of the same size, training becomes 10-12x as expensive.
+    They solved exploding gradients nicely, but exploded the compute required to train
+    instead. To combat this a shortcut was devised and implemented which allowed any
+    model, including an LSTM, to figure out which parts of a sequence were the most
+    influential and which parts could be safely ignored, known as attention.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.2.8 Attention
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Attention is a mathematical shortcut for solving larger context windows faster
+    by telling the model through an emergent mathematical formula which parts of an
+    input to consider and how much. This is all based upon an upgraded version of
+    a dictionary, where instead of just Key and Value pairs, a contextual Query is
+    added. We will go more into Attention in later chapters. For now, know that the
+    below code is the 10 steps taken from the original paper, and that it’s the big
+    differentiator between older NLP techniques and modern ones.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Attention solves the slowness of training LSTMs, but keeps the high performance
+    on a low number of epochs. There are multiple types of attention as well. The
+    dot product attention method captures the relationships between each word (or
+    embedding) in your query and every word in your key. When queries and keys are
+    part of the same sentences, this is known as bi-directional self-attention. However,
+    in certain cases, it is more suitable to only focus on words that precede the
+    current one. This type of attention, especially when queries and keys come from
+    the same sentences, is referred to as causal attention. Language modeling further
+    improves by masking parts of a sequence and forcing the model to guess what should
+    be behind the mask. Both Dot Product Attention and masked attention are demonstrated
+    with functions below.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 2.8 Multi-Head Attention Implementation
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: Above, in the full implementation of Attention you may have noticed some terminology
+    you’re familiar with, namely Key and Value, but you may not have been introduced
+    to Query before. Key and Value pairs are familiar because of dictionaries and
+    lookup tables, where we map a set of keys to an array of values. Query should
+    feel intuitive as a sort of search for retrieval. The Query is compared to the
+    Keys, from which a Value is retrieved in a normal operation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In Attention, the Query and Keys undergo dot product similarity comparison to
+    obtain an attention score, which is later multiplied by the Value in order to
+    get an ultimate score for how much Attention the model should pay to that portion
+    of the sequence. This can get more complex, depending upon your model’s architecture
+    because both encoder and decoder sequence lengths have to be accounted for, but
+    suffice it to say for now that the most efficient way to model in this space is
+    to project all input sources into a common space and compare using dot product
+    for efficiency.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This code explanation was a bit more math-heavy than the previous examples,
+    but it is needed to illustrate the concept. The math behind Attention is truly
+    innovative and has rocketed the field forward. Unfortunately, even with the advantages
+    Attention brings to the process of sequence modeling, with LSTMs and RNNs there
+    were still issues with speed and memory size. You may notice from the code and
+    the math that there is a square root taken, meaning that attention as we use it
+    is quadratic. Since then, there have been various techniques, including subquadratics
+    like Hyena and the Recurrent Memory Transformer (RMT, basically an RNN combined
+    with a transformer) to combat these problems, which we will cover in more detail
+    later. For now, let’s move on to the ultimate application of Attention: the Transformer.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.3 Attention is All You Need
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'In the seminal paper, Attention is All You Need[[1]](#_ftn1) Vaswani et al
+    take the mathematical shortcut several steps further, positing that for performance
+    absolutely no recurrence (the “R” in RNN) or any convolutions[[2]](#_ftn2) were
+    needed at all. Instead, they opted to use only Attention and simply specify where
+    Q, K, and V were taken from much more carefully. We’ll dive into this presently.
+    In our review of this diverse range of NLP techniques, we have observed their
+    evolution over time and the ways in which each approach has sought to improve
+    upon its predecessors. From rule-based methods to statistical models and neural
+    networks, the field has continually strived for more efficient and accurate ways
+    to process and understand natural language. Now, we turn our attention to a groundbreaking
+    innovation that has revolutionized the field of NLP: the Transformer architecture.
+    In the following section, we will explore the key concepts and mechanisms that
+    underpin Transformers, and how they have enabled the development of state-of-the-art
+    language models that surpass the performance of previous techniques. We will also
+    discuss the impact of Transformers on the broader NLP landscape and consider the
+    potential for further advancements in this exciting area of research.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.3.1 Encoders
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Encoders are the first half of a full transformer model, excelling in areas
+    like classification and feature engineering. One thing Vaswani et al. (2017) figured
+    out is that after the embedding layer inside the encoder, any additional transformations
+    done to the tensors could end up harming their ability to be compared “semantically,”
+    which was the point of the embedding layer. These models rely heavily upon self-attention
+    and a clever positional encoding to manipulate those vectors without significantly
+    decreasing the similarity expressed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Again, a key thing about embeddings: they are vector representations of data,
+    in our case tokens. Tokens are whatever you pick to represent language. We recommend
+    subwords as a general rule, but you will get a feel for which types of tokens
+    work well where. Consider the sentence, “The cat in the hat rapidly leapt above
+    the red fox and the brown unmotivated dog.” “Red,” and “brown,” should be semantically
+    similar, and they are similarly represented after the embedding layer, but they
+    fall on positions 10 and 14 respectively in the utterance, assuming that we’re
+    tokenizing by word, therefore the positional encoding puts distance between them.
+    However, once the sine and cosine functions[[3]](#_ftn3) are applied, it brings
+    their meaning back to only a little further apart than they were after the encoding,
+    and this encoding mechanism scales brilliantly with recurrence and more data.
+    To illustrate, let’s say there was a 99% cosine similarity between [red], and
+    [brown] after embedding. Encoding would drastically reduce that, to around 85-86%
+    similarity. Applying sine and cosine methodologies as described brings their similarity
+    back up to around 96%.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: BERT was one of the first architectures to come after the original paper and
+    are examples of encoder-only transformers. BERT is an incredibly powerful model
+    architecture for how small it is that it is still used in production systems today.
+    BERT was the first encoder-only transformer to surge in popularity, showcasing
+    that performing continuous modeling using a transformer results in much better
+    embeddings than Word2Vec. We can see that these embeddings were better because
+    they could be very quickly applied to new tasks and data with minimal training,
+    with human-preferred results over Word2Vec embeddings. This resulted in most people
+    using BERT-based models for few-shot learning tasks on smaller datasets for a
+    while. BERT puts state-of-the-art performance within arms reach for most researchers
+    and businesses with minimal effort required.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 2.5 An Encoder, visualized. Encoders are the first half of the full transformer
+    architecture, and excel in NLU tasks like classification or NER. Encoder models
+    improve upon previous designs by not requiring any priors or recurrence, and use
+    clever positional encoding and multihead attention.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](images/02__image006.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Strengths:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Classification and hierarchical tasks showcasing understanding
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Blazing fast, considering the long-range dependency modeling
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Builds off of known models, CBoW in Embedding, MLP in Feed Forward, etc.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Weaknesses:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: As suggested, requires lots of data to be effective (although less than RNNs)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Even more complex architecture
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 2.3.2 Decoders
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Decoder models, as shown below, are larger versions of encoders that have 2
+    multi-head attention blocks and 3 sum and normalize layers in their base form.
+    They are the 2nd half of a transformer behind an encoder. This results in a model
+    that is very good at masked language modeling and learning and applying syntax
+    super quickly leading to the almost immediate idea that decoder-only models are
+    needed to achieve Artificial General Intelligence. A useful reduction of encoder
+    vs decoder tasks is that encoders excel in natural language understanding (NLU)
+    tasks, while decoders excel in natural language generation (NLG) tasks. Some examples
+    of decoder-only transformer architectures are the Generative Pretrained Transformer
+    (GPT) family of models. These models follow the logic of transformational generative
+    grammar being completely syntax based, allowing for infinite generation of all
+    possible sentences in a language.[[4]](#_ftn4)
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 2.6 a decoder visualized. Decoders are the second half of a full transformer,
+    and they excel in NLG tasks like chatbots and storytelling. Decoders improve upon
+    previous architectures in the same way as encoders, but they add shifting their
+    output one space to the right for next-word generation to help utilize the advantages
+    of multihead self-attention.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](images/02__image007.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Strengths:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Generating the next token in a sequence (shifted right means taking already-generated
+    tokens into account)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Building off of both known models and also encoders
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Can be streamed during generation for great UX
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Weaknesses:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Syntax only models can often struggle to insert the expected or intended meaning
+    (see all “I force an AI to watch 1000 hours of x and generated” memes from 2018-present)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Hallucinations
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 2.3.3 Transformers
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The full transformer architecture takes advantage of both encoders and decoders,
+    passing the understanding of the encoder into the second Multi-Head Attention
+    block of the decoder before giving output. As each piece of the transformer has
+    a specialty in either understanding or generation, it should feel intuitive for
+    the full product to be best at conditional generation tasks like translation or
+    summarization, where some level of understanding is required before generation
+    occurs. Encoders are geared towards processing input at a high level, and decoders
+    focus more on generating coherent output, the full transformer architecture can
+    successfully understand, then generate based on that understanding. Transformer
+    models have an advantage in that they are built around parallelization, which
+    adds speed that can’t currently be replicated in LSTMs. If LSTMs ever get to a
+    point where they can run as quickly as transformers, they may become competitive
+    in the state-of-the-art field. The Text-To-Text Transfer Transformer (T5) family
+    of models are examples of transformers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 2.7 A full transformer visualized. A full transformer combines both the
+    encoder and the decoder and does well on all of the tasks of each, as well as
+    conditional generation tasks such as summarization and translation. Because transformers
+    are bulkier and slower than each of their halves, researchers and businesses have
+    generally opted to use those halves over the whole thing, despite the speed and
+    memory boosts being minimal.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](images/02__image008.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Strengths:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Both an encoder and decoder, so is good at everything each of those are good
+    at
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Highly parallelized for speed and efficiency
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Weaknesses:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Memory intensive, but still less than LSTMs of the same size
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Requires large amounts of data and VRAM for training
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: As you’ve probably noticed, most of the models we’ve discussed aren’t at all
+    linguistically focused, being heavily syntax-focused, if attempting to model real
+    language at all. Models, even state-of-the-art transformers only have semantic
+    approximations, no pragmatics, no phonetics, and only really utilize morphology
+    during tokenization. This doesn’t mean the models can’t learn these, nor does
+    it mean that, for example, transformers can’t take audio as an input, just that
+    the average usage doesn’t. With this in mind, it is nothing short of a miracle
+    that they work as well as they do, and they really should be appreciated as such.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Through this chapter so far we’ve attempted to highlight where the current
+    limitations are in models, and we will dive into where to go to improve upon them
+    in the rest of this book. One such route is one that’s already been and being
+    explored to great success, transfer learning and finetuning large foundational
+    models. This technique came about soon after BERT’s initial release, when researchers
+    discovered that although BERT performed generally well on a large number of tasks,
+    if they wanted it to perform better on a particular task or data domain, all they
+    needed to do was retrain the model on data representative of the task or domain,
+    but not from scratch. Take all of the pretrained weights that BERT learned while
+    creating the semantic approximation embeddings on a much larger dataset, then
+    significantly less data is required to get state-of-the-art (SotA) performance
+    on the portion that you need. We’ve seen this with BERT, and with the GPT family
+    of models as they’ve come out respectively, and now we’re seeing it again to solve
+    exactly the challenges brought up: semantic approximation coverage, domain expertise,
+    availability of data.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.4 Really Big Transformers
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Enter the Large Language Model. Since their introduction transformer based models
+    have continued to only get larger and larger, and not just by their size and number
+    of parameters, but also the size of their training datasets and training cycles
+    has gotten larger and longer as well. If you ever studied machine learning or
+    deep learning during the 2010s, you likely heard the moniker, “more layers doesn’t
+    make the model better.” LLMs prove this both wrong and right. Wrong because their
+    performance is unparalleled, oftentimes even matching smaller models that have
+    been meticulously finetuned on a particular domain and dataset, even the ones
+    trained on proprietary data. Right because of the challenges that come with both
+    training and deploying them.
+  prefs: []
+  type: TYPE_NORMAL
+- en: One of the major differences between LLMs and LMs involves transfer learning
+    and finetuning. Exactly the same as the previously-large LMs, LLMs are pretrained
+    on massive text corpora, enabling them to learn general language features and
+    representations that can be finetuned for specific tasks. Because LLMs are so
+    massive though and their training datasets so large LLMs are able to achieve better
+    performance with less labeled data, which was a significant limitation of earlier
+    language models. Often times you can finetune an LLM to do highly specialized
+    tasks with only a dozen or so examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: However, what really makes LLMs powerful and has opened the door to widespread
+    business use cases is their ability to do specialized tasks without any finetuning,
+    but just simple prompting. Just give a few examples of what you want in your query
+    and the LLM is able to produce results. This is called few-shot prompting when
+    it’s trained on smaller labeled data sizes, one-shot, when given only one example,
+    and zero-shot, when the task is totally novel. LLMs, especially those trained
+    using RLHF and prompt engineering methodologies, can perform few-shot learning
+    on a whole new level, where they can generalize and solve tasks with only a few
+    examples. This ability is a significant advancement over earlier models that required
+    extensive fine-tuning or large amounts of labeled data for each specific task.
+  prefs: []
+  type: TYPE_NORMAL
+- en: LMs previously have shown promise in the few and zero-shot learning domains,
+    and LLMs have proven that promise to be true. As models have gotten larger we
+    find they are capable of accomplishing new tasks where smaller models can’t. We
+    call this emergent behaviors[[5]](#_ftn5) and figure 2.8 demonstrates eight different
+    tasks that LMs couldn’t perform better than random, then suddenly once the models
+    got large enough they could.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 2.8 Examples of LLMs demonstrating emergent behaviors when tasked with
+    few-shot prompting tasks after the model scale reaches a certain size.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](images/02__image009.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: LLMs have demonstrably great Zero-Shot capabilities as well, which is both due
+    to their vast parameter sizes, and also the main reason for their popularity and
+    viability in the business world. LLMs also exhibit improved handling of ambiguity
+    due to their large size and capacity. They are better at disambiguating words
+    with multiple meanings and understanding the nuances of language, resulting in
+    more accurate predictions and responses. This isn’t because of an improved ability
+    or architecture as they share their architecture with smaller transformers, but
+    because they have vastly more examples of how people generally disambiguate. LLMs
+    therefore respond with the same disambiguation as is generally represented in
+    the dataset. Thanks to the diverseness of the text data LLMs are trained on, they
+    exhibit increased robustness in handling various input styles, noisy text, and
+    grammatical errors.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Another key difference between LLMs and LMs is input space. A larger input space
+    is important since it makes few-shot prompting tasks that much more viable. Many
+    LLMs have max input sizes of 8000+ tokens (GPT-4 currently sports 32k), and while
+    all the models previously discussed in the chapter could also have input spaces
+    that high, they generally aren’t considered to. We have recently seen a boom in
+    this field as well, with techniques like Recurrent Memory Transformer (RMT) allowing
+    1,000,000+ token context spaces, which rocket LLMs even more towards proving that
+    bigger models really are always better. LLMs are designed to capture long-range
+    dependencies within text, allowing them to understand context more effectively
+    than their predecessors. This improved understanding enables LLMs to generate
+    more coherent and contextually relevant responses in tasks like machine translation,
+    summarization, and conversational AI.
+  prefs: []
+  type: TYPE_NORMAL
+- en: LLMs have revolutionized NLP by offering powerful solutions to problems that
+    were challenging for earlier language models. They bring substantial improvements
+    in contextual understanding, transfer learning, and few-shot learning. As the
+    field of NLP continues to evolve, researchers are actively working to maximize
+    the benefits of LLMs while mitigating all potential risks. Because a better way
+    to approximate semantics hasn’t been found, they make bigger and more dimensional
+    approximations. Because a good way of storing pragmatic context hasn’t been found,
+    LLMs often allow inserting context either into the prompt directly, into a part
+    of the input set aside for context, or even through sharing of databases with
+    the LLM at inference. This doesn’t create pragmatics or a pragmatic system within
+    the models, same as embeddings don’t create semantics, but it allows the model
+    to correctly generate syntax that mimics how humans respond to those pragmatic
+    and semantic stimuli. Phonetics is a place where LLMs could likely make gigantic
+    strides, either as completely text-free models, or as a text-phonetic hybrid model,
+    maybe utilizing IPA in addition to or instead of text. It is exciting to consider
+    the possible developments that we are watching sweep this field right now.
+  prefs: []
+  type: TYPE_NORMAL
+- en: At this point you should have a pretty good understanding of what LLMs are and
+    some key principles of linguistics that will come in handy when putting LLMs in
+    Production. Mainly, you should be able to now start reasoning what type of products
+    will be easier or harder to build. Consider figure 2.9, tasks in the lower left
+    hand corner like Writing Assistants and ChatBots are LLMs bread and butter. Text
+    generation based on a little context from a prompt are problems that are strictly
+    syntax based, with a large enough model trained on enough data we can do this
+    pretty easily. A Shopping Assistant is pretty similar and rather easy to build
+    as well, however, we are just missing pragmatics. The assistant needs to know
+    a bit more about the world like products, stores, and prices. With a little engineering
+    we can add this information into a database and give this context to the model
+    through prompting.
+  prefs: []
+  type: TYPE_NORMAL
+- en: On the other end consider a ChessBot. LLMs *can* play chess. They aren’t any
+    good. They have been trained on chess games and understand that “E4” is a common
+    first move, but their understanding is completely syntactical. LLMs really only
+    understand that the text they should generate should contain a letter between
+    A and H and a number between 1 and 8\. Like the Shopping Assistant, they are missing
+    pragmatics and don’t have a clear model of the game of chess. In addition, they
+    are also missing semantics. Encoders might help us understand the words “King”
+    and “Queen” are similar to each other, but they don’t really help us understand
+    that “E4” is a great move one moment for one player and that same “E4” move is
+    a terrible move the very next moment for a different player. LLMs are also completely
+    lacking knowledge based on phonetics and morphology for chess as well, but these
+    are not as important for this case. Either way, we hope this exercise will better
+    inform you and your team on your next project.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 2.9 How difficult or easy certain tasks are for LLMs and what approaches
+    to solve them.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](images/02__image010.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: LLMs have amazing benefits, but with all of these capabilities come some limitations.
+    Foundational LLMs require vast computational resources for training, making them
+    less accessible for individual researchers and smaller organizations. This is
+    being remedied with techniques we’ll talk about throughout the book like Quantization,
+    Textual Embeddings, Low-Rank Adaptation, Parameter-Efficient Fine Tuning, and
+    Graph Optimization, but foundation models are still currently solidly out of the
+    average individual’s ability to train effectively. Beyond that, there are concerns
+    that the energy consumption associated with training LLMs could have significant
+    environmental impact and problems associated with sustainability. This is a complex
+    issue largely out of the scope of this book, but we would be remiss not to bring
+    it up. Last, but not least, since LLMs are trained on large-scale datasets containing
+    real-world text, they may learn and perpetuate biases present in the data, leading
+    to ethical concerns, not by the fault of the researchers or the algorithms, more
+    because real-world people aren’t censoring themselves to provide optimal unbiased
+    data. For example, if you ask a text-to-image diffusion LLM to generate 1000 images
+    of “leader,” 99% of the images feature men, and 95% of the images feature people
+    with white skin. The concern here isn’t that men or white people aren’t or shouldn’t
+    be depicted as leaders, rather that it shows that the model isn’t truly representing
+    the world accurately.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 2.10 Midjourney 5, which is currently the most popular text2img model
+    on the market, when prompted with only one token, “Leader,”(Shown Left) changed
+    a well-known popular feminist icon, Rosie the Riveter into a male depiction. ChatGPT
+    (Shown Right) writes a function to place you in your job based on your race, gender,
+    and age. These are examples of unintended outputs.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](images/02__image011.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Sometimes, more nuanced bias is brought out, for example, in the Midjourney
+    example demonstrated in Figure 2.10 a popular feminist icon “Rosie the Riveter,”
+    without being prompted at all (the only prompt given to the model was the word
+    “leader”) was changed to a man. The model didn’t think about this change at all,
+    it just determined during its sampling steps that the prompt “leader,” looks more
+    like a man. Many people will argue about what “good,” and “bad,” mean in this
+    context, and instead of entering that discussion we’ll simply talk about what
+    accurate means. LLMs are trained on a plethora of data with the purpose of returning
+    the most accurate representations possible. When they are still unable to return
+    accurate representations, especially with their heightened abilities to disambiguate,
+    we can view that as bias that is harmful to the model’s ability to fulfill its
+    purpose. Later we will discuss techniques to combat this harmful bias, not for
+    any political purpose, but to allow you as an LLM creator to get the exact outputs
+    that you intend and minimize the number of outputs that you do not intend.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Alright, we’ve been building up to this the entire chapter let’s go ahead and
+    run our first LLM! In listing 2.9 we download the Bloom model, one of the first
+    open source LLMs to be created, and generate text! Very exciting stuff.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 2.9 Running our first LLM
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: Did you try to run it?!? If you did, you probably just crashed your laptop.
+    Oopsie! Forgive me for a little harmless MLOps hazing, but getting some first-hand
+    experience on how large these models can get and how difficult they can be to
+    run is helpful experience to have. We will be talking more about the difficulties
+    of running LLMs and give you some of the tools you need to actually run this in
+    the next chapter. If you don’t want to wait and would like to get a similar but
+    much smaller LLM running change the model name to `“bigscience/bloom-3b”` and
+    run it again. It should work just fine this time on most hardware.
+  prefs: []
+  type: TYPE_NORMAL
+- en: All in all, LLMs are an amazing technology that allow our imaginations to run
+    wild with possibility, and deservedly so. The number one use case for considering
+    an LLM over a smaller LM is for when few-shot capabilities will come into play
+    for whoever the model will be helping, such as helping a CEO when raising funds
+    or a software engineer when writing code. They have this ability precisely because
+    of their size. The larger number of parameters in LLMs directly enable the ability
+    to generalize over smaller spaces in larger dimensions. In this chapter, we’ve
+    hit the lesser-known side to LLMs, the linguistic and language modeling side.
+    In the next chapter, we’ll cover the other half, the MLOps side, where we dive
+    into exactly how that large parameter size affects the model and the systems designed
+    to support that model and make it accessible to the customers or employees the
+    model is intended for.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.5 Summary
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The five components of linguistics are phonetics, syntax, semantics, pragmatics,
+    and morphology.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Phonetics can be added through a multimodal model that processes audio files
+    and is likely to improve LLMs in the future, but current datasets are too small.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Syntax is what current models are good at.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Semantics is added through the embedding layer.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Pragmatics can be added through engineering efforts.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Morphology is added in the tokenization layer.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Language does not necessarily correlate with reality. Understanding the process
+    that people use to create meaning outside of reality is useful to training meaningful
+    (to people) models.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Proper tokenization can be a major hurdle due to too many <UNK> tokens, especially
+    when it comes to specialized problems like code or math.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Multilingual processing has always outperformed monolingual processing, even
+    on monolingual tasks without models.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Each language model type has been built specifically to combat the weaknesses
+    of the previous models, as opposed to trying to solve for particular features
+    of language.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Language modeling has seen an exponential increase in efficacy, correlating
+    to how linguistics-focused the modeling has been.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Attention is a mathematical shortcut for solving larger context windows faster
+    and is the backbone of modern architectures - Encoders, Decoders, and Transformers.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Encoders improve the semantic approximations in embeddings.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Decoders are best at text generation.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Transformers combine the two.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Larger models demonstrate emergent behavior suddenly being able to accomplish
+    tasks they couldn’t before.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[[1]](#_ftnref1) Vaswani et al 2017 Attention Is All You Need [https://arxiv.org/abs/1706.03762](abs.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[2]](#_ftnref2) We didn’t go over these because they aren’t good for NLP,
+    but they are popular especially in computer vision'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[3]](#_ftnref3) Not a math or history book'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[4]](#_ftnref4) See Appendix A'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[5]](#_ftnref5) J. Wei et al., “Emergent Abilities of Large Language Models,”
+    Transactions on Machine Learning Research, Aug. 2022, Available: [https://openreview.net/forum?id=yzkSU5zdwD](openreview.net.html)'
+  prefs: []
+  type: TYPE_NORMAL
