@@ -1,0 +1,745 @@
+- en: 9 ULMFiT and knowledge distillation adaptation strategies
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter covers
+  prefs: []
+  type: TYPE_NORMAL
+- en: Implementing the strategies of *discriminative fine-tuning* and *gradual unfreezing*
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Executing *knowledge distillation* between *teacher* and *student* BERT models
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In this chapter and the following chapter, we will cover some adaptation strategies
+    for the deep NLP transfer learning modeling architectures that we have covered
+    so far. In other words, given a pretrained architecture such as ELMo, BERT, or
+    GPT, how can we carry out transfer learning more efficiently? We can employ several
+    measures of efficiency here. We choose to focus on *parameter efficiency*, where
+    the goal is to yield a model with the fewest parameters possible while suffering
+    minimal reduction in performance. The purpose of this is to make the model smaller
+    and easier to store, which would make it easier to deploy on smartphone devices,
+    for instance. Alternatively, smart adaptation strategies may be required just
+    to get to an acceptable level of performance in some difficult transfer cases.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In chapter 6, we described the method ULMFiT,[¹](#pgfId-1110444) which stands
+    for Universal Language Model Fine-Tuning. This method introduced the concepts
+    of *discriminative fine-tuning* and *gradual unfreezing*. As a brief reminder,
+    gradual unfreezing progressively increases the number of sublayers of the network
+    that are *unfrozen*, or fine-tuned. Discriminative fine-tuning, on the other hand,
+    specifies a variable learning rate for each layer in the network, also leading
+    to more effective transfer. We did not implement these methods in the code in
+    chapter 6 because, as adaptation strategies, we felt that they would best fit
+    in this chapter. In this chapter, we employ the *fast.ai* library, written by
+    the ULMFiT authors, to demonstrate the concepts on a pretrained recurrent neural
+    network (RNN)-based language model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A few model-compression methods have been employed generally on large neural
+    networks to decrease their size. Some prominent methods include weight pruning
+    and quantizing. Here, we will focus on the adaptation strategy knows as *knowledge
+    distillation*, due to its recent prominence in the NLP field. This process essentially
+    attempts to mimic the output from the larger *teacher* model using the significantly
+    smaller *student* model. In particular, we use an implementation of the method
+    DistilBERT[²](#pgfId-1110458) in the transformers library to demonstrate that
+    the size of a BERT can be more than halved by this approach.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s begin with ULMFiT in the next section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 9.1 Gradual unfreezing and discriminative fine-tuning
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In this section, we will implement in code the ULMFiT method for adapting language
+    models to new data domains and tasks. We first discussed this method conceptually
+    at the end of chapter 6 because, historically, it was first introduced in the
+    context of recurrent neural networks (RNNs). However, we delayed the actual coding
+    exercise until now, to underscore that at its core, ULMFiT is an architecture-agnostic
+    set of adaptation techniques. This means that they could also be applied to transformer-based
+    models. We carry out the exercise in the context of an RNN-based language model,
+    however, for consistency with the source material. We focus the coding exercise
+    on the fake news detection example we looked at in chapter 6.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As a reminder, discriminative fine-tuning specifies a variable learning rate
+    for each layer in the network. Additionally, the learning rates are not constant
+    during learning. Instead they are *slanted triangular*—linearly increasing in
+    the beginning up to a point and then linearly decaying. In other words, this involves
+    increasing the learning rate rapidly until it reaches the maximum rate and then
+    decreasing it at a slower pace. This concept was illustrated in figure 6.8, and
+    we duplicate it here for your convenience.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![06_08](../Images/06_08.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 6.8 (Duplicated from Chapter 6) Suggested slanted triangular ULMFiT rate
+    schedule for the case of 10,000 total iterations. The rate increases linearly
+    for 10% of the total number of iterations (i.e., 1,000) up to a maximum of 0.01
+    and then decreases linearly afterward to 0.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that the point in the figure labeled as “maximum learning rate” will be
+    something different in our case (not 0.01). The total number of iterations will
+    also be different from the 10,000 cases shown in the figure. This schedule results
+    in more effective transfer and a more generalizable model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Gradual unfreezing, on the other hand, progressively increases the number of
+    sublayers of the network that are *unfrozen*, which reduces overfitting and also
+    results in a more effective transfer and a more generalizable model. All these
+    techniques were discussed in detail in the final section of chapter 6, and it
+    may be beneficial to review that discussion briefly before tackling the rest of
+    this section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We will use the illustrative example from section 5.2—the fact-checking example—here
+    as well. Recall that this dataset contains more than 40,000 articles divided into
+    two categories: “fake” and “true.” The true articles were collected from reuters.com,
+    a reputable news website. The fake articles, on the other hand, were collected
+    from a variety of sources flagged by PolitiFact—a fact-checking organization—as
+    unreliable. In section 6.2, we trained a binary classifier on top of feature vectors
+    derived from a pretrained ELMo model. This classifier predicts whether a given
+    article is true (1) or fake (0). An accuracy of 98%+ was achieved with a dataset
+    composed of 2,000 articles, 1,000 from each category. Here, we will see if we
+    can do better with the ULMFiT method.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this section, we split the method into two subsections. The first subsection
+    addresses the first ULMFiT stage of fine-tuning a pretrained language model on
+    the target task data. The slanted triangular learning rates come into play here,
+    as well as the idea of discriminative fine-tuning. Some data preprocessing and
+    model architecture discussions are naturally woven into this first subsection
+    as well. The second subsection covers the second stage, involving fine-tuning
+    the target task classifier—which sits on top of the fine-tuned language model—on
+    the target task data. The effectiveness of the gradual unfreezing procedure is
+    thereby demonstrated.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Please note that the code presented in this section is written in version 1
+    syntax of fast.ai. The reason for this choice is that version 2 of the library
+    changed the handling of input data, providing internal functions to split it into
+    train and validation sets, rather than allowing you to specify your own. For consistency
+    with our work in the previous chapters, where we split the data ourselves, we
+    stick to version 1 here. We also provide an equivalent fast.ai version 2 syntax
+    code in a Kaggle notebook,[³](#pgfId-1110478) which you should also run and compare
+    with the version 1 code presented here. Finally, note that version 1 documentation
+    is hosted at [https://fastai1.fast.ai/](https://fastai1.fast.ai/) whereas version
+    2 documentation is hosted at [https://docs.fast.ai/](https://docs.fast.ai/).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 9.1.1 Pretrained language model fine-tuning
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Section 5.2 already described the initial data preprocessing steps that we need
+    to carry out on the fact-checking example dataset. In particular, we shuffle the
+    article text data and load it into the NumPy arrays `train_x` and `test_x`. We
+    also construct the corresponding label NumPy arrays `train_y` and `test_y`, containing
+    1 whenever the corresponding article is true and 0 otherwise. Sticking with 1,000
+    samples and a test/validation ratio of 30%, as in section 5.2, yields train arrays—`train_x`,
+    `train_y`—of length 1,400 and test arrays—`test_x`, `test_y`—of length 600.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The first thing we need to do is prepare data in the form that the fast.ai
+    library expects. One such data format is a two-column Pandas DataFrame, with the
+    first column containing labels and the second column containing the data. We can
+    construct training and testing/validation DataFrames accordingly as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'These DataFrames should have 1,400 rows and 600 rows, respectively—one for
+    each article in the corresponding data sample—and it is a good idea to check this
+    with the usual `.shape` command before continuing, as shown here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: The expected outputs are `(1400, 2)` and `(600, 2)`, respectively.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Data in fast.ai is consumed by language models using the `TextLMDataBunch`
+    class, instances of which can be constructed from the DataFrame format we just
+    prepared using the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'On the other hand, data in fast.ai is consumed by a task-specific classifier
+    using the `TextClasDataBunch` class. We construct an instance of this class, in
+    preparation for the next subsection, from our DataFrames using the following analogous
+    command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We are now ready to fine-tune our language model on the target data! To do
+    this, we need to create an instance of the `language_model_learner` fast.ai class
+    with the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Initializes a pretrained weight-dropped LSTM with a weight drop probability
+    of 30%. This is pretrained on the WikiText-103 benchmark dataset.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Here, `AWD_LSTM` stands for *ASGD weight-dropped LSTM*.[⁴](#pgfId-1110507) This
+    is just the usual LSTM architecture in which some weights have been randomly dropped,
+    like what the usual dropout layer does with neural network activations, as opposed
+    to weights. It is the most similar architecture choice to what was done in the
+    original ULMFiT paper[⁵](#pgfId-1110512) in the fast.ai library. Also, if you
+    check the execution log of the previous command, you should be able to confirm
+    that it is also loading pretrained weights from a checkpoint trained on the WikiText-103
+    benchmark.[⁶](#pgfId-1110515) This dataset, officially called the “WikiText long-term
+    dependency language modeling dataset,” is a collection of Wikipedia articles judged
+    to be “good” by humans. It is a nice, clean source of unsupervised data that has
+    been used by a large number of NLP papers for benchmarking.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now that we have loaded an instance of the model and some pretrained weights,
+    we are going to try to determine the best or optimal learning rate for fine-tuning
+    our language model. A nifty utility method in fast.ai called `lr_find` can do
+    this for us automatically. It iterates through a number of learning rates and
+    detects the point at which the loss function is dropping the fastest on the resulting
+    loss versus learning rate curve. Equivalently, this is where the loss gradient
+    is the smallest.[⁷](#pgfId-1110520) We can carry it out quickly using our language
+    model learner `learn` as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Finds best/optimal learning rate
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Plots it
+  prefs: []
+  type: TYPE_NORMAL
+- en: The resulting loss versus learning rate curve, with the optimal rate highlighted,
+    is shown in figure 9.1.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![09_01](../Images/09_01.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 9.1 The result of the optimal learning rate-finding procedure from the
+    fast.ai library for the language model fine-tuning step on the fake news detection
+    example. Several learning rates are iterated through, and the optimal one is selected
+    as the point where the loss is dropping fastest on the curve.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We can programmatically retrieve this learning rate and display it using the
+    following commands:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Retrieves the best/optimal rate
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Displays it
+  prefs: []
+  type: TYPE_NORMAL
+- en: In our execution of the code, the optimal learning rate returned was approximately
+    4.0e-2.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Having found the optimal rate, we can now fine-tune our pretrained weight-dropped
+    LSTM model with a slanted triangular learning rate using the `fit_one_cycle` fast.ai
+    command as shown next:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ This command uses the slanted triangular learning rate under the hood. It
+    takes the number of epochs and the desired maximum learning rate as inputs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Executing the command yields an accuracy of 0.334 in about 26 seconds of fine-tuning
+    on a single Kaggle GPU.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Having obtained that baseline value, we would like to find out whether discriminative
+    fine-tuning can lead to an improvement. We do this by first unfreezing all layers
+    with the `unfreeze` command and then using the `slice` method to specify the upper
+    and lower bounds for the learning rate range. This command sets the maximum learning
+    rate of the layer closest to the output to the upper bound and geometrically decreases—via
+    division by a constant factor—each subsequent layer’s maximum learning rate toward
+    the lower bound. The exact code for doing this is shown next:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Makes sure all layers are unfrozen for fine-tuning
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Varies the maximum learning rate geometrically between the optimal rate in
+    the final layer and a value that is two orders of magnitude smaller
+  prefs: []
+  type: TYPE_NORMAL
+- en: As can be seen from the code, we arbitrarily chose to vary the learning rate
+    from the maximum optimal value down to a value that is two orders of magnitude
+    smaller. The intuition behind this schedule is that the subsequent layers contain
+    information that is more general and less task-specific, and thus it should learn
+    less from this target-specific dataset than the layers closest to the output.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Executing the discriminative fine-tuning code presented yields an accuracy
+    score of 0.353, a clear improvement over the 0.334 value we obtained without it.
+    Save the fine-tuned language model for later use with the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: Having tuned our pretrained language model via slanted triangular learning rates
+    and discriminative fine-tuning, let’s see how good a target task classifier—that
+    is, a fake news detector—we can get. We fine-tune a classifier on top of the fine-tuned
+    language model in the next subsection.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 9.1.2 Target task classifier fine-tuning
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Recall that in the previous subsection, we created an object for consumption
+    of data by the target task classifier. We called this variable `data_clas`. As
+    a next step for fine-tuning our target task classifier, we need to instantiate
+    an instance of a classifier learner, with the method aptly named `text_classifier_learner`
+    in fast.ai. This is done with the following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Instantiates an instance of the target task classifier learning. Uses the
+    same settings as the language model we fine-tuned, so we can load without problems.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Loads our fine-tuned language model
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As the next step, we again employ the utility fast.ai method `lr_find` to find
+    the optimal learning rate, with the following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Finds the best rate
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Plots it
+  prefs: []
+  type: TYPE_NORMAL
+- en: Executing the code yields the loss versus learning rate curve shown in figure
+    9.2.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![09_02](../Images/09_02.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 9.2 The result of the optimal learning rate-finding procedure from the
+    fast.ai library for the target task classifier fine-tuning step on the fake news
+    detection example. Several learning rates are iterated through, and the optimal
+    one is selected as the point where the loss is dropping fastest on the curve.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We see that the optimal rate is about 7e-4\. We train the classifier learner
+    for one epoch, using slanted triangular learning rates, via the following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Extracts the optimal maximum learning rate
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Fine-tunes the target task classifier using the determined maximum learning
+    rate in the slanted triangular learning rate schedule
+  prefs: []
+  type: TYPE_NORMAL
+- en: Executing the code yields an accuracy of about 99.5%. This is already better
+    than the result of 98%+ we obtained by training a classifier on top of the ELMo
+    embedding in chapter 6 (section 6.2). Is there anything else we can do to improve
+    it even further?
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Luckily, we have one more trick up our sleeve: gradual unfreezing. As yet another
+    reminder, this is when we unfreeze just one layer, fine-tune it, unfreeze an additional
+    lower layer, fine-tune it, and repeat this process for a fixed number of steps.
+    The ULMFiT authors found that applying this method during the fine-tuning of the
+    target task classifier stage significantly improves results. As a simple illustration,
+    to execute this procedure up to a layer depth of 2, we would need the following
+    bit of code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ We execute gradual unfreezing up to two unfrozen layers only.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Unfreezes progressively more layers, first one and then two, training for
+    one epoch each time with slanted triangular learning rates
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ This command unfreezes the top i layers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Slanted triangular learning rate execution for one epoch, as already introduced
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that the command `learn.freeze_to``(-i)` unfreezes the top `i` layers and
+    is critical for the recipe. When we executed the code on our fake news detection
+    example, we found the accuracy reached 99.8% in the first step, hitting the stunning
+    score of 100% at the second step when the top two layers were unfrozen. These
+    results speak for themselves and appear to suggest that the ULMFiT method is an
+    extremely useful set of techniques to have in one’s toolbox. Note that we could
+    have continued unfreezing layers to greater depths—3, 4, and so on—if we found
+    it necessary.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Fascinating stuff! It appears that being clever about how we adapt models to
+    new scenarios can lead to significant benefits! In the next section, we will touch
+    on another method for doing this—knowledge distillation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 9.2 Knowledge distillation
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Knowledge distillation is a neural network compression method that seeks to
+    teach a smaller student model the knowledge contained within a larger teacher
+    model. This strategy, which has become popular recently in the NLP community,
+    essentially attempts to mimic the output from the teacher by the student. This
+    approach is also model-agnostic—the teacher and student could be transformer-based,
+    RNN-based, or some other architecture, and can be completely different from each
+    other.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Initial applications of this method in NLP were driven by questions about the
+    representation power of bidirectional LSTMs (bi-LSTMs) compared to transformer-based
+    architectures.[⁸](#pgfId-1110609) The authors wanted to know how much of BERT’s
+    information could be captured by a single bi-LSTM layer. Surprisingly, researchers
+    found that in some cases, pretrained transformer-based language models could be
+    reduced in parameter size by a factor of 100, with an inference time lower by
+    a factor of 15, while not sacrificing in the standard performance metrics. This
+    is a huge reduction in size and time that can make the difference between whether
+    or not these methods can be practically deployed! The process of knowledge distillation
+    is briefly summarized in figure 9.3.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![09_03](../Images/09_03.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 9.3 An illustration of the general process of knowledge distillation.
+    “Soft” labels produced by the teacher model are used to encourage the student
+    model to behave similarly via the distillation loss. At the same time, the student
+    loss is trained to behave similarly to ground truth via the student loss.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As can be seen in the figure, traditionally, labels produced by the teacher
+    are used to compute “soft” labels, which determine the distillation loss by comparison
+    with the student output. This loss encourages the student model to track the teacher
+    model output. Additionally, the student is simultaneously taught the “hard” ground
+    truth labels via the student loss. We will show you how to use this idea quickly
+    via an implementation in the *transformers* library by Hugging Face.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Several architectures have been proposed to reduce the size of pretrained NLP
+    language models, including TinyBERT [⁹](#pgfId-1110619) and DistilBERT.[^(10)](#pgfId-1110622)
+    We choose to focus on DistilBERT due to its ready availability within the transformers
+    library. DistilBERT was developed by Hugging Face, which is the same team that
+    wrote the transformers library. As before, our coverage of this topic is not meant
+    to be exhaustive but rather illustrative. Keeping up with further development
+    and literature in a fast-moving field like this one remains important. It is our
+    hope that the coverage presented here will set you up to do that.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The goal of the DistilBERT study was to generate a smaller version of the BERT
+    model specifically. The student architecture was chosen to be the same as BERT—stacked
+    transformer encoders as described in chapters 7 and 8\. The number of the layers
+    in the student was reduced by a factor of two, yielding a model of just six layers.
+    This is where most of the size savings comes from. The authors found variations
+    in internal hidden dimensions to have little impact on efficiency in this framework,
+    and as such, those are all similar between the teacher and the student. An important
+    part of the process is student initialization to an appropriate set of weights
+    from which convergence will be reasonably quick. Because the dimensions of all
+    the layers are similar between the teacher and the student, the authors could
+    simply use the pretrained teacher weights in corresponding layers to initialize
+    the student and found that to work well.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The authors did extensive experiments on benchmarks such as GLUE, which we will
+    look at later in the next chapter, and SQuAD. They found that performance on the
+    GLUE benchmark by the resulting DistilBERT model retained 97% of the performance
+    of the BERT teacher with 40% of the number of parameters. It is also 60% faster,
+    in terms of inference time on a CPU, and 71% faster on mobile devices such as
+    the iPhone. As you can see, the improvement is significant.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Scripts for performing the actual distillation are available in the official
+    transformers repository.[^(11)](#pgfId-1110628) To train your own DistilBERT model,
+    you create a file with one text sample per line and execute a sequence of commands
+    provided on that page, which prepare the data and distill the model. Because the
+    authors already made a variety of checkpoints available for direct loading—all
+    of the checkpoints are listed on that page—and our focus here is on transfer learning,
+    we do not repeat the training from scratch steps here. Instead, we work with a
+    checkpoint analogous to the mBERT checkpoint we used in chapter 8 for our cross-lingual
+    transfer learning experiment. This allows us to directly compare the performance
+    and benefits of using the distilled architecture over the original mBERT, while
+    also teaching you how to start using this architecture in your own projects. It
+    also gives you another opportunity to work on fine-tuning a pretrained transformer-based
+    model on a custom corpus—directly modifying the code with a different architecture,
+    pretrained checkpoint, and custom dataset should work for your own use cases.
+  prefs: []
+  type: TYPE_NORMAL
+- en: More specifically, we will be repeating the experiment we carried out in section
+    8.2.2, where we transferred the knowledge contained in mBERT—trained on over 100
+    languages simultaneously—to a monolingual Twi scenario by fine-tuning on a corpus
+    from the JW300 dataset. We perform the variant of the experiment that uses the
+    pretrained tokenizer included with the checkpoint, rather than training a new
+    one from scratch, for simplicity.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 9.2.1 Transfer DistilmBERT to monolingual Twi data with pretrained tokenizer
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Our goal in this subsection is to generate a DistilBERT model for the Ghanaian
+    language Twi from a model trained on more than 100 languages, not including Twi,
+    simultaneously. The multilingual equivalent of BERT is called mBERT; therefore,
+    the multilingual equivalent of DistilBERT is predictably called DistilmBERT. This
+    DistilmBERT model is directly analogous to the mBERT model we experimented with
+    in chapter 8\. We found then that starting with this checkpoint was beneficial,
+    even though Twi was not included in the original training. Here, we will essentially
+    replicate the same sequence of steps, replacing every instance of mBERT with DistilmBERT.
+    This allows us to compare the two directly and thereby get an intuition for the
+    benefits of knowledge distillation, while also learning how to use DistilBERT
+    in your own projects. As before, we fine-tune the model on the monolingual Twi
+    subset of the JW300 datatset.[^(12)](#pgfId-1110637)
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We start by initializing a DistilBERT tokenizer to the pretrained checkpoint
+    from the DistilmBERT model. We use the cased version this time, as shown by the
+    following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ This is just a faster version of DistilBertTokenizer, which you could use
+    instead.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Uses the pretrained DistilmBERT tokenizer
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Having prepared the tokenizer, load the DistilmBERT checkpoint into a DistilBERT
+    masked language model, and display the number of parameters as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Uses masked language modeling
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Initializes to an mBERT checkpoint
+  prefs: []
+  type: TYPE_NORMAL
+- en: The output indicates that the model has 135.5 million parameters versus the
+    178.6 million parameters we found BERT has in chapter 8\. Thus, our DistilBERT
+    model is just 76% the size of the equivalent BERT model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, build the dataset from the monolingual Twi text, using the convenient
+    `LineByLineTextDataset` method included with transformers, shown next:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ The English to Twi JW300 dataset we introduced in section 8.2.1
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ How many lines to read at a time
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Subsequently, define a “data collator”—a helper method that creates a special
+    object out of a batch of sample data lines (of length `block_size`)—as shown in
+    the next code snippet. This special object is consummable by PyTorch for neural
+    network training:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Uses masked language modeling, and masks words with a probability of 0.15
+  prefs: []
+  type: TYPE_NORMAL
+- en: Here, we used masked language modeling—15% of the words are randomly masked
+    in our input data, and the model is asked to predict them during training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, define standard training arguments, such as the output directory (which
+    we select to be `twidistilmbert`) and training batch size, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: Then, use training arguments with the previously defined dataset and collator
+    to define a “trainer” for one training epoch across the data, as shown here. Remember
+    the Twi data contains over 600,000 lines, so one pass across all of it is a significant
+    amount of training!
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Finally, train and time how long training takes as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As always, be sure to save the model:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: We found that the model takes about 2 hours and 15 minutes to complete the epoch,
+    versus the 3 hours it took for the equivalent teacher to complete the epoch in
+    chapter 8\. Thus, the student training time is just 75% of the teacher. Significant
+    improvement!
+  prefs: []
+  type: TYPE_NORMAL
+- en: Moreover, the loss reaches a value of about 0.81, whereas the mBERT equivalent
+    reached a loss of about 0.77 in chapter 8\. In absolute terms, the difference
+    in performance can then be roughly quantified as approximately 5%—we see DistilBERT
+    reach 95% of the performance of BERT. This is pretty close to the benchmark number
+    of 97% reported by the DistilBERT authors in their paper.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As the last step, take the following sentence from the corpus: “Eyi de *ɔ*haw
+    k*ɛ*se baa sukuu h*ɔ.”* Drop/mask one word, sukuu (which means “school” in Twi),
+    and then apply the pipelines API to predict the dropped word as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Defines the fill-in-the-blanks pipeline
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Predicts the masked token
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This yields the following output:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: These are indeed plausible completions. What is interesting to note here is
+    that the religious bias in the outcome that we saw in section 8.2.2 appears to
+    have been alleviated in the model. Completions such as “Israel” and “Eden,” which
+    were suggested by the mBERT equivalent model in section 8.2.2, are no longer present.
+    This can be explained, in retrospect, by the significant difference in the number
+    of parameters between the two. DistilBERT is less likely to overfit due to this,
+    whereas BERT is much more likely to do so.
+  prefs: []
+  type: TYPE_NORMAL
+- en: And now you know how to use DistilBERT in your own projects! We again stress
+    that the exercise you just carried out taught you how to fine-tune a pretrained
+    transformer-based model on a custom corpus—simply modify the code with a different
+    architecture, pretrained checkpoint, and custom dataset to apply it to your own
+    use cases.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the first section of the next chapter, we will get another opportunity to
+    fine-tune a transformer-based model on a custom corpus, this time in English!
+    We will discuss the adaptation ideas behind the architecture ALBERT—A Lite BERT—and
+    fine-tune it on some reviews from the Multi-Domain Sentiment Dataset.[^(13)](#pgfId-1110728)
+    Recall that we played with this dataset in chapter 4\. It is a dataset of reviews
+    of 25 product categories on Amazon, of which we will focus on book reviews, as
+    in chapter 4.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: ULMFiT strategies of slanted triangular learning rates, *discriminative fine-tuning,*
+    and *gradual unfreezing* can lead to noticeably more effective transfer.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Executing *knowledge distillation* of a larger *teacher* BERT model yields a
+    significantly *smaller student* BERT model with minimal sacrifice of performance.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 1. [http://nlp.fast.ai/ulmfit](http://nlp.fast.ai/ulmfit)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '2. V. Sanh et al., “DistilBERT, a Distilled Version of BERT: Smaller, Faster,
+    Cheaper and Lighter,” EMC^2: 5th Edition Co-located with NeurIPS (2019).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 3. [https://www.kaggle.com/azunre/tlfornlp-chapter9-ulmfit-adaptation-fast-aiv2](https://www.kaggle.com/azunre/tlfornlp-chapter9-ulmfit-adaptation-fast-aiv2)
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4. S. Merity et al., “Regularizing and Optimizing LSTM Language Models,” ICLR
+    (2018).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5. [http://nlp.fast.ai/ulmfit](http://nlp.fast.ai/ulmfit)
+  prefs: []
+  type: TYPE_NORMAL
+- en: 6. [https://www.salesforce.com/ca/products/einstein/ai-research/the-wikitext-dependency-language-modeling-dataset/](https://www.salesforce.com/ca/products/einstein/ai-research/the-wikitext-dependency-language-modeling-dataset/)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '7. L. Smith et al., “A Disciplined Approach to Neural Network Hyper-Parameters:
+    Part 1—Learning Rate, Batch Size, Momentum, and Weight Decay,” arXiv (2018).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 8. R. Tang et al., “Distilling Task-Specific Knowledge from BERT into Simple
+    Neural Networks,” arXiv (2018).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '9. X. Jiao et al., “TinyBERT: Distilling BERT for Natural Language Understanding,”
+    arXiv (2020).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '10. V. Sanh et al., “DistilBERT, a Distilled Version of BERT: Smaller, Faster,
+    Cheaper and Lighter,” EMC^2: 5th Edition Co-located with NeurIPS (2019).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 11. [https://github.com/huggingface/transformers/blob/master/examples/research_projects/distillation](https://github.com/huggingface/transformers/blob/master/examples/research_projects/distillation)
+  prefs: []
+  type: TYPE_NORMAL
+- en: 12. [http://opus.nlpl.eu/JW300.php](http://opus.nlpl.eu/JW300.php)
+  prefs: []
+  type: TYPE_NORMAL
+- en: 13. [https://www.cs.jhu.edu/~mdredze/datasets/sentiment/](https://www.cs.jhu.edu/~mdredze/datasets/sentiment/)
+  prefs: []
+  type: TYPE_NORMAL

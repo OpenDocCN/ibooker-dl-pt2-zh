@@ -1,0 +1,947 @@
+- en: '2 Getting started with baselines: Data preprocessing'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter covers
+  prefs: []
+  type: TYPE_NORMAL
+- en: Introducing a pair of natural language processing (NLP) problems
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Obtaining and preprocessing NLP data for such problems
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Establishing baselines for these problems using key *generalized linear methods*
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In this chapter, we dive directly into solving NLP problems. This will be a
+    two-part exercise, spanning this chapter and the next. Our goal will be to establish
+    a set of baselines for a pair of concrete NLP problems, which we will later be
+    able to use to measure progressive improvements gained from leveraging increasingly
+    sophisticated transfer learning approaches. In the process of doing this, we aim
+    to advance your general NLP instincts and refresh your understanding of typical
+    procedures involved in setting up problem-solving pipelines for such problems.
+    You will review techniques ranging from tokenization to data structure and model
+    selection. We first train some traditional machine learning models from scratch
+    to establish some preliminary baselines for these problems. We complete the exercise
+    in chapter 3, where we apply the simplest form of transfer learning to a pair
+    of recently popularized deep pretrained language models. This involves fine-tuning
+    only a handful of the final layers of each network on a target dataset. This activity
+    will serve as a form of an applied hands-on introduction to the main theme of
+    the book—transfer learning for NLP.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We will focus on a pair of important representative example NLP problems: spam
+    classification of email and sentiment classification of movie reviews. This exercise
+    will arm you with a number of important skills, including some tips for obtaining,
+    visualizing, and preprocessing data. We will cover three major model classes:
+    generalized linear models such as logistic regression, decision tree-based models
+    such as random forests, and neural network-based models such as ELMo. These classes
+    are additionally represented by support vector machines (SVMs) with linear kernels,
+    gradient-boosting machines (GBMs), and BERT, respectively. The different types
+    of models to be explored are shown in figure 2.1\. Note that we do not explicitly
+    address rule-based methods. A widely used example of these is a simple keyword-matching
+    approach that would label all emails containing certain preselected phrases; for
+    example, “free lottery tickets” as spam, and “amazing movie” as a positive review.
+    Such methods are often implemented as the first attempt at solving NLP problems
+    in many industrial applications but are quickly found to be brittle and difficult
+    to scale. As such, we do not discuss rule-based approaches much further. We discuss
+    data for the problems and its preprocessing, and introduce and apply generalized
+    linear methods to the data in this chapter. In the next chapter, which serves
+    as part two of the overall exercise, we apply decision-tree-based methods and
+    neural-network-based methods to the data.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![02_01](../Images/02_01.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 2.1 The different types of supervised models to be explored in the content
+    classification examples in this and the next chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We present code samples for every example and model class represented to enable
+    you to quickly pick up the essence of these technologies, while also allowing
+    you to develop coding skills that will directly transfer to your own problems.
+    All code snippets are provided as rendered Jupyter notebooks in the companion
+    GitHub repository to this book,[¹](#pgfId-1082177) as well as Kaggle notebooks/kernels
+    that you can begin running within a few minutes without dealing with any installation
+    or dependency issues. Rendered Jupyter notebooks provide representative output
+    that can be expected when they are executed correctly, and Kaggle provides a browser-based
+    Jupyter execution environment, which also offers a limited amount of free GPU
+    computing. A mostly equivalent alternative to this is Google Colab, but this is
+    not the system we elected to employ here. Jupyter can also be easily installed
+    locally with Anaconda, and you are welcome to convert the notebooks into .py scripts
+    for local execution, if that is your preference. However, the Kaggle notebooks
+    are the recommended way of executing these methods, because they will allow you
+    to get moving right away without any setup delays. Moreover, the free GPU resources
+    provided by this service at the time of writing expand the accessibility of all
+    these methods to people who may not have access to powerful GPUs locally, which
+    is consistent with the “democratization of AI” agenda that excites so many people
+    about NLP transfer learning. Appendix A provides a Kaggle quick start guide and
+    a number of the author’s personal tips on how to maximize the platform’s usefulness.
+    However, we anticipate that most readers should find it pretty self-explanatory
+    to get started. Please also note the important technical caveats in the note that
+    follows.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note Kaggle frequently updates the dependencies, that is, the versions of the
+    installed libraries on its Docker images. To ensure that you are using the same
+    dependencies as we did when we wrote the code—to guarantee the code works with
+    minimal changes out of the box—please make sure to select “Copy and Edit Kernel”
+    for each notebook of interest, links to which are listed in the companion repository
+    to the book. If you copy and paste the code into a new notebook and don’t follow
+    this recommended process, you may need to adapt the code slightly for the specific
+    library versions installed for that notebook at the time you created it. This
+    recommendation also applies if you elect to install a local environment. For local
+    installation, pay attention to the frozen dependency requirement list we have
+    shared in the companion repository, which will guide you on which versions of
+    libraries you will need. Please note that this requirements file is for the purpose
+    of documenting and exactly replicating the environment on Kaggle on which the
+    results reported in the book were achieved; on a different infrastructure, it
+    can be used only as a guide, and you shouldn’t expect it to work straight out
+    of the box due to many potential architecture-specific dependency conflicts. Moreover,
+    most of the requirements will not be necessary for local installation. Finally,
+    please note that because ELMo has not yet been ported to TensorFlow 2.x at the
+    time of this writing, we are forced to use TensorFlow 1.x to compare it fairlyto
+    BERT. In the companion repository, we do, however, provide an illustration of
+    how to use BERT with TensorFlow 2.x for the spam classification example.2 We transition
+    in later chapters from TensorFlow and Keras to the Hugging Face transformers library,
+    which uses TensorFlow 2.x. You could view the exercise in chapters 2 and 3 as
+    a historical record of and experience with early packages that were developed
+    for NLP transfer learning. This exercise simultaneously helps you juxtapose TensorFlow
+    1.x with 2.x.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.1 Preprocessing email spam classification example data
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'In this section, we introduce the first example dataset we will look at in
+    this chapter. Here, we are interested in developing an algorithm that can detect
+    whether or not any given email is spam at scale. To do this, we will build a dataset
+    from two separate sources: the popular Enron email corpus as a proxy for email
+    that is not spam, and a collection of “419” fraudulent emails as a proxy for email
+    that is spam.[²](#pgfId-1086740)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We will view this as a supervised classification task, where we will first train
+    a classifier on a collection of emails labeled as either spam or not spam. Although
+    some labeled datasets exist online for training and testing that match this problem
+    closely, we will instead take the route of creating our own dataset from some
+    other well-known email data sources. The reason for doing this is to more closely
+    represent how data collection and preprocessing often happen in practice, where
+    datasets first have to be built and curated, versus the simplified manner in which
+    these processes are often represented in the literature.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In particular, we will sample the Enron corpus—the largest public email collection,
+    related to the notorious Enron financial scandal—as a proxy for email that are
+    not spam, and sample “419” fraudulent emails, representing the best known type
+    of spam, as a proxy for email that are spam. Both of these types of email are
+    openly available on Kaggle,[³](#pgfId-1082193),[⁴](#pgfId-1082197) the popular
+    data science competition platform, which makes running the examples there particularly
+    easy without too many local resources.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The Enron corpus contains about half a million emails written by employees of
+    the Enron Corporation, as collected by the Federal Energy Commission for the purposes
+    of investigating the collapse of the company. This corpus has been used extensively
+    in the literature to study machine learning methods for email applications and
+    is often the first data source researchers working with emails look to for initial
+    experimentation with algorithm prototypes. On Kaggle, it is available as a single-column
+    .csv file with one email per row. Note that this data is still cleaner than one
+    can expect to typically find in many practical applications in the wild.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 2.2 shows the sequence of steps that will be performed on each email
+    in this example. The body of the email will first be separated from the headers
+    of the email, some statistics about the dataset will be teased out to get a sense
+    of the data, stopwords will be removed from the email, and it will then be classified
+    as either spam or not spam.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![02_02](../Images/02_02.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 2.2 Sequence of preprocessing tasks to be performed on input email data
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.1.1 Loading and visualizing the Enron corpus
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The first thing we need to do is load the data with the popular Pandas library
+    and take a peek at a slice of the data to make sure we have a good sense of what
+    it looks like. Listing 2.1 shows the code to do that once the Enron corpus dataset
+    has been obtained and placed in the location specified by the variable `filepath`
+    (in this case, it is pointing to its location in our Kaggle notebook). Ensure
+    all libraries are PIP-installed before importing via the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: Listing 2.1 Loading the Enron corpus
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Linear algebra
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Data processing, CSV file I/O (e.g., pd.read_csv)
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Reads the data into a Pandas DataFrame called emails
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Displays status and some loaded emails
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Successful execution of the code will confirm the number of columns and rows
+    loaded, and display the first five rows of the loaded Pandas *DataFrame*, through
+    an output that looks like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: Although this exercise has allowed us to get a sense of the resulting DataFrame
+    and get a good feel for its shape, it is not too clear what each individual email
+    looks like. To achieve this, we take a closer look at the very first email via
+    the next line of code
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'to produce the following output:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: We see that the messages are contained within the *message* column of the resulting
+    DataFrame, with the extra fields at the beginning of each message—including *Message
+    ID*, *To*, *From*, and so on—being referred to as the message’s *header information*
+    or simply *header*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Traditional spam classification methods derive features from the header information
+    for classifying the message as spam or not. Here, we would like to perform the
+    same task based on the content of the message only. One possible motivation for
+    this approach is the fact that email training data may often be de-identified
+    in practice due to privacy concerns and regulations, thereby making header info
+    unavailable. Thus, we need to separate the headers from the messages in our dataset.
+    We do this via the function shown in the next listing. It employs the email package
+    for processing email messages, which comes prepacked with Python (that is, it
+    does not need to be PIP-installed).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 2.2 Separating and extracting email bodies from header information
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Returns a message object structure from a string
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Gets the message body
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We now execute the email-body-extracting code as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'which confirms success by printing the following text to screen:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: We then can display some processed emails via
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'with the display confirming successful execution by resembling the following
+    output:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 2.1.2 Loading and visualizing the fraudulent email corpus
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Having loaded the Enron emails, let’s do the same for the “419” fraudulent email
+    corpus, so that we can have some example data in our training set representing
+    the spam class. Obtain the dataset from the Kaggle link that was presented earlier,
+    making sure to adjust the `filepath` variable accordingly (or just use our Kaggle
+    notebooks that already have the data attached to them), and repeat the steps as
+    shown in listing 2.3.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note Because this dataset comes as a .txt file, versus a .csv file, the preprocessing
+    steps are slightly different. First of all, we have to specify the encoding when
+    reading the file as Latin-1; otherwise the default encoding option of UTF-8 will
+    fail. It is often the case in practice that one needs to experiment with a number
+    of different encodings, with the aforementioned two being the most popular ones,
+    to get some datasets to read correctly. Additionally, note that because this .txt
+    file is one big column of emails (with headers) separated by line breaks and white
+    space, and is not separated nicely into rows with one email per row—as was the
+    case for the Enron corpus—we can’t use Pandas to neatly load it as we did before.
+    We will read all the emails into a single string and split the string on a code
+    word that appears close to the beginning of each email’s header, for example,
+    “From r.” Please see our rendered notebooks that visualize this data on either
+    GitHub or Kaggle to verify that this unique code word appears close to the beginning
+    of each fraudulent email in this dataset.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 2.3 Loading the “419” fraudulent email corpus
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Split on a code word appearing close to the beginning of each email
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following output confirms the success of the loading process:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now that the fraudulent data is loaded as a list, we can convert it into a
+    Pandas DataFrame in order to process it with the functions we have already defined,
+    as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Successful execution of this code segment will lead to output that gives us
+    a sense of the first five emails that were loaded, as shown next:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Having loaded both datasets, we are now ready to sample emails from each one
+    into a single DataFrame that will represent the overall dataset covering both
+    classes of emails. Before doing this, we must decide how many samples to draw
+    from each class. Ideally, the number of samples in each class will represent the
+    natural distribution of emails in the wild—if we expect our classifier to encounter
+    60% spam emails and 40% nonspam emails when deployed, then a ratio such as 600
+    to 400, respectively, might make sense. Note that a severe imbalance in the data,
+    such as 99% for nonspam and 1% for spam, may overfit to predict nonspam most of
+    the time, an issue than needs to be considered when building datasets. Because
+    this is an idealized experiment, and we do not have any information on the natural
+    distributions of classes, we will assume a 50/50 split. We also need to give some
+    thought to how we are going to tokenize the emails, that is, split emails into
+    subunits of text—words, sentences, and so forth. To start off, we will tokenize
+    into words, because this is the most common approach. We must also decide the
+    maximum number of tokens per email and the maximum length of each token to ensure
+    that the occasional extremely long email does not bog down the performance of
+    our classifier. We do all this by specifying the following general hyperparameters,
+    which will later be tuned experimentally to enhance performance as needed:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Number of samples to generate in each class—spam and not spam
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ The maximum number of tokens per document
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ The maximum length of each token
+  prefs: []
+  type: TYPE_NORMAL
+- en: With these hyperparameters specified, we can now create a single DataFrame for
+    the overarching training dataset. Let’s take the opportunity to also perform the
+    remaining preprocessing tasks, namely, removing stop words, punctuations, and
+    tokenizing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s proceed by defining a function to tokenize emails by splitting them into
+    words as shown in the following listing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 2.4 Tokenizing each email into words
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Split every email string on spaces to create a list of word tokens.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Taking another look at the emails on the previous two pages, we see that they
+    contain a lot of punctuation characters, and the spam emails tend to be capitalized.
+    In order to ensure that classification is done based on language content only,
+    we define a function to remove punctuation marks and other non-word characters
+    from the emails. We do this by employing *regular expressions* with the Python
+    *regex* library. We also normalize words by turning them into lower case with
+    the Python string function `.lower()`. The preprocessing function is shown in
+    the next listing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 2.5 Removing punctuation and other nonword characters from emails
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Match and remove any nonword characters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Truncate token
+  prefs: []
+  type: TYPE_NORMAL
+- en: Finally, let’s define a function to remove *stop words*—words that occur so
+    frequently in language that they offer no useful information for classification.
+    This includes words such as “the” and “are,” and the popular library NLTK provides
+    a heavily used list that we will employ. The stop word removal function is shown
+    in the next listing. Note that NLTK also has some methods for punctuation removal,
+    as an alternative to what was done in listing 2.5.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 2.6 Remove stop words
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ This is where stop words are actually removed from token list.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Removes empty strings—'', None, and so on—as well
+  prefs: []
+  type: TYPE_NORMAL
+- en: We are now going to put all these functions together to build the single dataset
+    representing both classes. The process is illustrated by the script in the next
+    listing. In that script, we convert the combined result into a NumPy array, because
+    this is the input data format expected by many of the libraries we will use.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 2.7 Putting preprocessing steps together to build email dataset
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Applies predefined processing functions
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Samples the right number of emails from each class
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Converts to NumPy array
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now let’s take a peek at the result to make sure things are proceeding as expected:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This yields the following output:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: We see that the resulting array has divided the text into word units, as we
+    intended.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s create the headers corresponding to these emails, consisting of `Nsamp`=1000
+    of spam emails followed by `Nsamp`=1000 of nonspam emails, as shown next:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: We are now ready to convert this NumPy array into numerical features that can
+    actually be fed to the algorithms for classification.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.1.3 Converting the email text into numbers
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: In this chapter, we start by employing what is often considered the simplest
+    method for *vectorizing* words, that is, converting them into numerical vectors—the
+    *bag-of-words* model. This model simply counts the frequency of word tokens contained
+    in each email and thereby represents it as a vector of such frequency counts.
+    We present the function for assembling the bag-of-words model for emails in listing
+    2.8\. Please note that in doing this, we retain only tokens that appear more than
+    once, as captured by the variable `used_tokens`. This enables us to keep the vector
+    dimensions significantly lower than they would be otherwise. Please also note
+    that one can achieve this using various built-in vectorizers in the popular library
+    scikit-learn (our Jupyter notebook shows how to do this). However, we focus on
+    the approach shown in listing 2.8, because we find it to be more illustrative
+    than a black box function achieving the same. We also note the scikit-learn vectorization
+    methods include counting occurrences of sequences of any *n* words, or *n-grams*,
+    as well as the *tf-idf* approach—important fundamental concepts you should brush
+    up on if rusty. For the problems shown here, we did not notice an improvement
+    when using these vectorization methods over the bag-of-words approach.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 2.8 Assembling a bag-of-words representation
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ If token has been seen before, appends it to the output list used_tokens
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Creates a Pandas DataFrame counting frequencies of vocabulary words—corresponding
+    to columns, in each email—corresponding to rows
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Having defined the `assemble_bag` function, let’s use it to actually carry
+    out the vectorization and visualize it as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'A slice of the output DataFrame looks as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: The column labels indicate words in the vocabulary of the bag-of-words model,
+    and the numerical entries in each row correspond to the frequency counts of each
+    such word for each of the 2,000 emails in our dataset. Notice that it is an extremely
+    sparse DataFrame—it consists mostly of values of `0`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Having fully vectorized the dataset, we must remember that it is not shuffled
+    with respect to classes; that is, it contains `Nsamp` = 1000 spam emails followed
+    by an equal number of nonspam emails. Depending on how this dataset is split—in
+    our case, by picking the first 70% for training and the remainder for testing—this
+    could lead to a training set composed of spam only, which would obviously lead
+    to failure. To create a randomized ordering of class samples in the dataset, we
+    will need to shuffle the data in unison with the header/list of labels. The function
+    for achieving this is shown in the next listing. Again, the same thing can be
+    achieved using built-in scikit-learn functions, but we find the method shown next
+    to be more illustrative.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 2.9 Shuffling data in unison with a header/list of labels
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As the very last step of preparing the email dataset for training by our baseline
+    classifiers, we split it into independent training and testing, or validation,
+    sets. This will allow us to evaluate the performance of the classifier on a set
+    of data that was not used for training—an important thing to ensure in machine
+    learning practice. We elect to use 70% of the data for training and 30% for testing/validation
+    afterward. The following code calls the unison shuffling function and then performs
+    the train/test split. The resulting NumPy array variables `train_x` and `train_y`
+    will be fed directly to the classifiers in the following sections of this chapter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Uses 70% of data for training
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Uses remaining 30% for testing
+  prefs: []
+  type: TYPE_NORMAL
+- en: Hopefully, this exercise of building and preprocessing an NLP dataset for machine
+    learning tasks, now complete, has equipped you with useful skills that will carry
+    over to your own projects. We will now proceed to address the preprocessing of
+    the second illustrative example we will use in this and the next chapter, the
+    classification of Internet Movie Database (IMDB) movie reviews. That exercise
+    will be decidedly shorter, given that the IMDB dataset is in a more prepared state
+    than the email dataset we assembled. However, it is an opportunity to highlight
+    a different type of preprocessing required, given that the data is available in
+    separate folders, organized by class.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.2 Preprocessing movie sentiment classification example data
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In this section, we preprocess and explore the second example dataset that will
+    be analyzed in this chapter. This second example is concerned with classifying
+    movie reviews from IMDB into positive or negative sentiments expressed. This is
+    a prototypical sentiment analysis example that has been used widely in the literature
+    to study many algorithms. We present the code snippets necessary to preprocess
+    the data, and you are encouraged to run the code as you read for best educational
+    value.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We will use a popular labeled dataset of 25,000 reviews for this,[⁵](#pgfId-1082561)
+    which was assembled by scraping the popular movie review website IMDB and mapping
+    the number of stars corresponding to each review to either 0 or 1, depending on
+    whether it was less than or greater than 5 out of 10 stars, respectively.[⁶](#pgfId-1082565)
+    This dataset has been used widely in prior NLP literature, and this familiarity
+    is part of the reason we chose it as an illustrative example for baselining.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The sequence of steps used to preprocess each IMDB movie review before analysis
+    is very similar to the one presented in figure 2.2 for the email spam classification
+    example. The first major difference is that no email headers are attached to these
+    reviews, so the header extraction step is not applicable. Additionally, because
+    some stop words, including “no” and “not,” may change the sentiment of the message,
+    the stop-word removal step may need to be carried out with extra care, first making
+    sure to drop such stop words from the target list. We did experiment with dropping
+    such words from the list and saw little to no effect on the result. This is likely
+    because other non-stop words in the reviews are very predictive features, rendering
+    this step irrelevant. Thus, although we do show you how to do this in our Jupyter
+    notebook, we do not discuss it any further here.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s dive right into preparing the IMDB dataset for our purposes, similarly
+    to what was done for the email dataset that we assembled in the previous section.
+    The IMDB dataset can be downloaded and extracted via the following shell commands
+    in our Jupyter notebook:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note that the exclamation sign, `!`, at the beginning of the command tells the
+    interpreter that these are shell, not Python, commands. Also note that this is
+    a Linux command. If you’re running this code locally on Windows, you may need
+    to download and extract the file manually from the provided link. This yields
+    two subfolders—aclImdb/pos/ and aclImdb/neg/—which we load, after tokenizing,
+    removing stop words and punctuations, and shuffling, into a NumPy array using
+    the function and its calling script in the following listing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 2.10 Loading IMDB data into a NumPy array
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Goes through every file in current folder
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Applies tokenization and stop-word analysis routines
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Tracks corresponding sentiment labels
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Converts to a NumPy array
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Calls the function above on the data
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Note that on Windows, you may have to specify the parameter `encoding=utf-8`
+    to the `open` function call in listing 2.10\. Check dimensions of loaded data
+    to make sure things worked as expected, as shown here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This yields the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Take `Nsamp*2` random entries of the loaded data for training, as shown next:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Before proceeding, we need to check the balance of the resulting data with
+    regard to class. In general, we don’t want one of the labels to represent most
+    of the dataset, unless that is the distribution expected in practice. Check the
+    label distribution using the following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This yields the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Having satisfied ourselves that the data is roughly balanced between the two
+    classes, with each class representing roughly half of the dataset, assemble and
+    visualize the bag-of-words representation with the next lines of code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'A slice through the resulting DataFrame produced by this snippet looks like
+    this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note that after this, you still need to split this data structure into training
+    and validation sets, similar to what we did for the spam-detection example. We
+    do not repeat that here in the interest of brevity, but this code is included
+    in the companion Kaggle notebook.
+  prefs: []
+  type: TYPE_NORMAL
+- en: With this numerical representation ready, we now proceed to building out our
+    baseline classifiers in the subsequent sections for the two presented example
+    datasets. We start with generalized linear models in the next section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.3 Generalized linear models
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Traditionally, the development of models in any area of applied mathematics
+    has started with linear models. These models are mappings that preserve addition
+    and multiplication in the input and output spaces. In other words, the net response
+    from a pair of inputs will be the sum of the responses to each individual input.
+    This property enables a significant reduction in associated statistical and mathematical
+    theory.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Here, we use a relaxed definition of linearity from statistics, that of *generalized
+    linear models*. Let Y be a vector of output variables or responses, X be a vector
+    of independent variables and β be a vector of unknown parameters to be estimated
+    by training our classifier. A generalized linear model is defined by the equation
+    in figure 2.3.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![02_03](../Images/02_03.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 2.3 Generalized linear model equation
+  prefs: []
+  type: TYPE_NORMAL
+- en: Here, *E*[] stands for the *expected value* of the enclosed quantity, the right-hand
+    side is linear in X, and g is a function that links this linear quantity to the
+    expected value of Y.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this section, we will apply a pair of the most widely used generalized linear
+    machine learning algorithms to the pair of example problems that were introduced
+    in the previous section—logistic regression and support vector machines (SVMs)
+    with linear kernel. Other popular generalized linear machine learning models that
+    will not be applied include the simple perceptron neural architecture with a linear
+    activation function, latent Dirichlet allocation (LDA), and naive Bayes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.3.1 Logistic regression
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Logistic regression models the relationship between a categorical output variable
+    and a set of input variables by estimating probabilities with the *logistic function*.
+    Assuming the existence of a single input variable x and a single output binary
+    variable y with associated probability P(y=1)=*p*, the logistic equation can be
+    expressed as the equation in figure 2.4.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![02_04](../Images/02_04.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 2.4 The logistic regression equation
+  prefs: []
+  type: TYPE_NORMAL
+- en: This can be reorganized to yield the prototypical logistic curve equation shown
+    in figure 2.5.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![02_05](../Images/02_05.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 2.5 Reorganized prototypical logistic regression equation
+  prefs: []
+  type: TYPE_NORMAL
+- en: This equation is plotted in figure 2.6\. Historically, this curve emerged from
+    the study of bacterial population growth, with initial slow growth, explosion
+    in growth toward the middle, and diminishing growth toward the end, as resources
+    to sustain the population run out.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![02_06](../Images/02_06.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 2.6 Prototypical logistic curve plot
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now let’s go ahead and build our classifier using the popular library scikit-learn
+    using the function shown in the next listing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 2.11 Building a logistic regression classifier
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Instantiates the model
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Fits the model to prepared, labeled data
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To fit this model to our data for either the email or IMDB classification example,
+    we need to execute only the following line of code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This should only take a few seconds on any modern PC. To evaluate performance,
+    we must test on the “hold out” test/validation sets that were put together for
+    each example. This can be performed using the following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'For the email classification example, this yields:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'For the IMDB semantic analysis example, this yields:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: This appears to suggest that the spam classification problem we set up is easier
+    than the IMDB movie review problem. We will address potential ways of improving
+    the performance on the IMDB classifier by the conclusion of the next chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Before proceeding, it is important to address the use of accuracy as the metric
+    for evaluating performance. Accuracy is defined as the ratio of correctly identified
+    samples—the ratio of the number of true positives and negatives to the total number
+    of samples. Other potential metrics that could be used here include precision—the
+    ratio of the number of true positives to all predicted positives—and recall—the
+    ratio of the number of true positives to all actual positives. These two measures
+    could be useful if the costs of false positives and false negatives, respectively,
+    are particularly important. Crucially, the F1-score—the harmonic mean of precision
+    and recall—strikes a balance between the two and is particularly useful for imbalanced
+    datasets. This is the most common situation in practice, making this metric very
+    important. However, remember that the datasets we have constructed so far are
+    roughly balanced. Thus, accuracy is a reasonable enough metric in our case.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.3.2 Support vector machines (SVMs)
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: SVMs, as was alluded to in chapter 1, have traditionally been the most popular
+    kind of kernel method. These methods attempt to find good decision boundaries
+    by mapping data to a high-dimensional space, using hyperplanes as decision boundaries
+    and the kernel trick to reduce computing cost. When the kernel function is a linear
+    function, SVMs are not only generalized linear models but are indeed linear models.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s proceed with building and evaluating an SVM classifier on our two running
+    illustrative example problems using the code shown in the next listing. Note that
+    because this classifier takes a bit longer to train than the logistic regression
+    one, we employ the built-in Python library time to determine the training time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 2.12 Training and testing an SVM classifier
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Creates a support vector classifier with linear kernel
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Fits the classifier using the training data
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Tests and evaluates
+  prefs: []
+  type: TYPE_NORMAL
+- en: Training the SVM classifier on the email data took 64 seconds and yielded an
+    accuracy score of 0.670\. Training the classifier on the IMDB data took 36 seconds
+    and yielded an accuracy score of 0.697\. We see that SVM significantly underperforms
+    logistic regression for the email spam classification problem, while achieving
+    lower but nearly comparable performance for the IMDB problem.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next chapter, we will apply some more increasingly sophisticated methods
+    to both classification problems to further baseline them and compare the performance
+    of the various methods. In particular, we will explore decision-tree-based methods,
+    as well as the popular neural-network-based methods ELMo and BERT.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: It is typical to try a variety of algorithms on any given problem of interest
+    to find the best combination of model complexity and performance for your particular
+    circumstances.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Baselines usually start with the simplest algorithms, such as logistic regression,
+    and become increasingly complex until the right performance/complexity trade-off
+    is attained.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A big part of machine learning practice is concerned with assembling and preprocessing
+    data for your problem, and today this is arguably the most important part of the
+    process.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Important model design choices include metrics for evaluating performance, loss
+    functions to guide the training algorithm, and best validation practices, among
+    many others, and these can vary by model and problem type.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 1. [https://github.com/azunre/transfer-learning-for-nlp](https://github.com/azunre/transfer-learning-for-nlp)
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2. [https://www.kaggle.com/azunre/tlfornlp-chapters2-3-spam-bert-tf2](https://www.kaggle.com/azunre/tlfornlp-chapters2-3-spam-bert-tf2)
+  prefs: []
+  type: TYPE_NORMAL
+- en: 3. [https://www.kaggle.com/wcukierski/enron-email-dataset](https://www.kaggle.com/wcukierski/enron-email-dataset)
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4. [https://www.kaggle.com/rtatman/fraudulent-email-corpus](https://www.kaggle.com/rtatman/fraudulent-email-corpus)
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5. [ai.stanford.edu/~amaas/data/sentiment](http://ai.stanford.edu/~amaas/data/sentiment)
+  prefs: []
+  type: TYPE_NORMAL
+- en: 6. A.L. Maas et al., “Learning Word Vectors for Sentiment Analysis,” Proc. of
+    NAACL-HLT (2018).
+  prefs: []
+  type: TYPE_NORMAL

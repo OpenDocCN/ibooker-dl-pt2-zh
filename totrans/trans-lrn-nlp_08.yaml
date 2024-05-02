@@ -1,0 +1,837 @@
+- en: 6 Deep transfer learning for NLP with recurrent neural networks
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter covers
+  prefs: []
+  type: TYPE_NORMAL
+- en: Three representative modeling architectures for transfer learning in NLP relying
+    on RNNs
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Applying these methods to the two problems introduced in the previous chapter
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Transferring knowledge obtained from training on simulated data to real labeled
+    data
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: An introduction to some more sophisticated model adaptation strategies via ULMFiT
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In the previous chapter, we introduced two example problems for the experiment
+    we will conduct in this chapter—column-type classification and fake news detection.
+    Recall that the goal of the experiment is to study the deep transfer learning
+    methods for NLP that rely on recurrent neural networks (RNNs) for key functions.
+    In particular, we will focus on three such methods—SIMOn, ELMo, and ULMFiT—which
+    were briefly introduced in the previous chapter. In this chapter, we will apply
+    them to the example problems, starting with SIMOn in the next section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 6.1 Semantic Inference for the Modeling of Ontologies (SIMOn)
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: As we discussed briefly in the previous chapter, SIMOn was designed as a component
+    of an automatic machine learning (AutoML) pipeline for the Data-Driven Discovery
+    of Models (D3M) DARPA program. It was developed as a classification tool for the
+    column type in a tabular dataset but can also be viewed as a more general text
+    classification framework. We will present the model in the context of arbitrary
+    text input first and then specialize it to the tabular case.
+  prefs: []
+  type: TYPE_NORMAL
+- en: By design, SIMOn is a character-level model, as opposed to a word-level model,
+    in order to handle misspellings and other social media features, such as emoticons
+    and niche vernacular. Because it encodes input text at the character level, the
+    input needs to be expressed with only allowable characters to be useful for classification.
+    This allows the model to easily adapt to the dynamic nature of social media language.
+    The character-level nature of the model is contrasted with word-level models in
+    figure 6.1\. On the left of the figure, we show the word-level encoder, for which
+    input has to be a valid word. Obviously, an out-of-vocabulary word due to misspelling
+    or vernacular is an invalid input. For character-level encoders, shown on the
+    right and resembling those of ELMo and SIMOn, input only has to be a valid character,
+    which helps in handling misspellings.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![06_01](../Images/06_01.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 6.1 Contrasting word-level to character-level models for text classification
+  prefs: []
+  type: TYPE_NORMAL
+- en: 6.1.1 General neural architecture overview
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The network, which can be split into two major coupled components, takes a document
+    tokenized into sentences as an input. The first component is a network that encodes
+    each individual sentence, whereas the second takes the encoded sentences and creates
+    an encoding for the entire document.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The sentence encoder first one-hot encodes the input sentence at the character
+    level using a dictionary of 71 characters. This includes all possible English
+    alphabets, as well as numbers and punctuation marks. The input sentence is also
+    standardized to a length of `max_len`. It is then passed through a sequence of
+    convolutional, max-pooling, dropout, and bidirectional LSTM layers. Please refer
+    to the first two stages of figure 5.1, duplicated here for your convenience, for
+    a summary visualization. The convolutions essentially form the concept of “words”
+    in each sentence, whereas the bidirectional LSTM “looks” in both directions around
+    a word to determine its local context. The output from this stage is an embedding
+    vector of a default dimension 512 for each sentence. Also compare the equivalent
+    pictorial representation of the bi-LSTMs in figure 5.1 and figure 6.1 to make
+    things concrete.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![06_01_05_01](../Images/06_01_05_01.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.1 (Duplicated from the previous chapter for your convenience.) Visualizing
+    SIMOn architecture in the context of the tabular column-type classification example
+  prefs: []
+  type: TYPE_NORMAL
+- en: The document encoder takes the sentence-embedding vectors as input and similarly
+    passes them through a sequence of dropout and bidirectional LSTM layers. The length
+    of each document is standardized to `max_cells` such embedding vectors. This can
+    be thought of as a process of forming higher-level “concepts” or “topics” from
+    sentences, within their context with respect to other concepts present in the
+    document. This produces an embedding vector for each document, which is then passed
+    through a classification layer that outputs probabilities for each different type
+    or class.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 6.1.2 Modeling tabular data
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Modeling tabular data is surprisingly straightforward; it just requires viewing
+    every cell of a column within a tabular dataset as a sentence. Naturally, each
+    such column is viewed as a document to be classified.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This means that to apply the SIMOn framework to unstructured text, one just
+    needs to transform the text into a table with one document per column and one
+    sentence per cell. An illustration of this process is shown in figure 6.2\. Note
+    that in this simple example, we have chosen `max_cells` to be equal to 3 for the
+    sake of illustration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![06_02](../Images/06_02.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 6.2 The process of converting unstructured text for consumption by SIMOn
+  prefs: []
+  type: TYPE_NORMAL
+- en: 6.1.3 Application of SIMOn to tabular column-type classification data
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'In its original form, SIMOn was initially trained on simulated data for a set
+    of base classes. It was then transferred to a smaller set of hand-labeled data.
+    Knowing how to generate simulated data can be useful, and so we briefly illustrate
+    the process using the following set of commands, which use the library Faker under
+    the hood:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Simulated/fake data-generation utility (using the library Faker)
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Number of columns to generate, chosen arbitrarily for the sake of simple illustration
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Number of cells/rows per column, chosen arbitrarily for the sake of simple
+    illustration
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Don't reuse data, but rather generate fresh data for more variability in the
+    dataset.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Prints results
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Executing this code yields the following output, which shows generated samples
+    of various data types and their corresponding labels:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: The top level of the SIMOn repository contains the file types.json, which specifies
+    mappings from the Faker library classes to the classes displayed previously. For
+    instance, the second column of names in the previous example is labeled “text”
+    because we did not require identifying names for our purposes. You could quickly
+    change this mapping and generate simulated data for your own projects and sets
+    of classes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We do not train on simulated data here, because that process can take a few
+    hours, and we already have access to the pretrained model capturing that knowledge.
+    We do, however, perform an illustrative transfer learning experiment that involves
+    expanding the set of classes supported beyond those available in the pretrained
+    model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Recall that we loaded the SIMOn Classifier class in section 5.1.2, along with
+    model configurations, including the encoder. We can then generate a Keras SIMOn
+    model, load our downloaded weights into it, and compile it using the following
+    sequence of commands:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Generates the model
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Loads the weights
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Compiles the model, using binary_crossentropy loss for multilabel classification
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'It is a good idea to take a look at the model architecture before proceeding,
+    which we can do using this command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This displays the following output and allows you to get a better sense for
+    what is going on under the hood:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `time_distributed_1` layer is the sentence encoder applied to every input
+    sentence. We see that is followed by forward and backward LSTMs that are concatenated,
+    some regularization via dropout, and output probabilities from the `dense_2` layer.
+    Recall that the number of classes handled by the pretrained model is exactly 9,
+    which matches the dimension of the output `dense_2` layer. Also note that, coincidentally,
+    the model has 9 layers total.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Having gained a sense for the compiled model’s architecture, let’s go ahead
+    and see what it thinks the types of the baseball dataset columns are. We do this
+    by executing the following sequence of commands:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ The probability threshold for deciding the membership of class
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Predicts the baseball dataset column classes
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Converts probabilities to class labels
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Displays the output
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The corresponding code output looks as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Looking back to section 5.1.1 for a displayed slice of this data, which we
+    are replicating here, we see that the model gets every column exactly right with
+    high confidence:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, suppose we were interested in detecting columns with percentage values
+    in them for a project. How could we use the pretrained model to achieve this quickly?
+    We can investigate this scenario using the second tabular dataset we prepared
+    in the previous chapter—the multiyear British Columbia public library statistics
+    dataset. Naturally, the first step is to predict that data using the pretrained
+    model directly. The following sequence of commands achieves this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Encodes the data using the original frame
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Predicts the classes
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Converts probabilities to class labels
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This produces the following output:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Looking back to section 5.1.1 for a displayed slice of this data, we see that
+    the integer column is correctly identified, whereas the percent column is identified
+    as text:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: That is not incorrect, but it is not exactly what we are looking for, either,
+    because it is not specific enough.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We will quickly transfer the pretrained model to a very small set of training
+    data that includes percentage samples. Let’s first inform ourselves of the size
+    of the raw library DataFrame using the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: We find the size to be (1207,2), which appears to be a sufficient number of
+    rows to build a small dataset!
+  prefs: []
+  type: TYPE_NORMAL
+- en: In listing 6.1, we show the script that can be used to split this dataset into
+    many smaller columns of 20 cells each. The number 20 was chosen arbitrarily, driven
+    by the desire to create sufficient unique columns—approximately 50—in the resulting
+    dataset. This process yields a new DataFrame, `new_raw_data`, of size 20 rows
+    by 120 columns—the first 60 corresponding to percentage values and the next 60
+    corresponding to integer values. It also produces a corresponding list of `header`
+    labels.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 6.1 Transforming long library data into many shorter sample columns
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Turns the data into two lists
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Breaks it up into individual sample columns of 20 cells each
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Original length, 1207
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ List of the indices of the new columns
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Initializes the new DataFrame to hold new data
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❻ Populates the new DataFrame
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❼ Populates the DataFrame with percentage values
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❽ Populates the DataFrame with *integer* values
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❾ Let’s create a corresponding header for our training data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Recall that the final layer of the pretrained model has an output dimension
+    of 9, matching the number of handled classes. To add another class, we need to
+    increase the output dimension to a size of 10\. We should also initialize this
+    new dimension’s weights to those of the text class because that is the most similar
+    class handled by the pretrained model. This was determined when we predicted the
+    percentage data as text with the pretrained model earlier. This is accomplished
+    by the script shown in the next listing. In the script, we add percent to the
+    list of supported categories, increase the output dimension by 1 to accommodate
+    this addition, and then initialize the corresponding dimension weights to those
+    of the closest category text values.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 6.2 Creating new weights for the final output layer, including the percent
+    class
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Grabs the last layer weights for initialization
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Finds the old weight index for the closest category—text
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Updates the encoder with the new category list
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Sorts the new list alphabetically
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Finds the index of the new category
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❻ Initializes the new weights to old weights
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❼ Inserts the text weights at the percent weight location
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❽ Inserts the text biases at the percent biases location
+  prefs: []
+  type: TYPE_NORMAL
+- en: After executing the code in listing 6.2, you should double-check the shapes
+    of the arrays `old_weights` and `new_weights`. You should find that the former
+    is (128,9), whereas the latter is (128,10), if things worked as expected.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now that we have prepared the weights with which to initialize the new model
+    before pretraining, let’s actually build and compile this new model. SIMOn API
+    includes the following function that makes it very easy to build the model:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: The transfer model returned by this function is exactly analogous to the one
+    we built before, with the exception that the final layer now has a new dimension,
+    as specified by the input `category_count+1`. Additionally, because we did not
+    give it any initialization information for the newly created output layer, this
+    layer is presently initialized to weights of all zeros.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Before we can train this new transfer model, let’s make sure that only the
+    final output layer is trainable. We do this, along with compiling the model, via
+    the following code snippet:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Makes all layers untrainable to start
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Only the last layer should be trainable.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Sets the weights of final layer to the previously determined initialization
+    values
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Compiles the model
+  prefs: []
+  type: TYPE_NORMAL
+- en: We can now train the built, initialized, and compiled transfer model on the
+    new data using the code in the following listing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 6.3 Training the initialized and compiled new transfer model
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Encodes the new data (standardization, transposition, conversion to NumPy
+    array)
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Encodes the labels
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Prepares the data in the expected format -> 60/30/10 train/validation/test
+    data split
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Trains the data
+  prefs: []
+  type: TYPE_NORMAL
+- en: We visualize the convergence information produced by this code in figure 6.3\.
+    We see that a validation accuracy of 100% is achieved at the seventh epoch, and
+    the time for training was 150 seconds. It appears that our experiment worked,
+    and we have successfully fine-tuned the pretrained model to handle a new class
+    of data! We note that for this new model to handle all 10 classes accurately,
+    we need to include a few samples of each class in the training data during the
+    transfer step. The fine-tuned model at this stage is suitable only for predicting
+    classes included in the transfer step—`integer` and `percent`. Because our goal
+    here was merely illustrative, we leave this as a caution for the reader and do
+    not concern ourselves further with it here.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![06_03](../Images/06_03.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 6.3 Visualization of the convergence of the percent class transfer tabular
+    data experiment
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As a final step of our transfer experiment, let’s dig even deeper into its
+    performance by comparing predicted labels for the test set with true labels. This
+    can be done via the following code snippet:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Predicts classes
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Converts probabilities to class labels
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Inspects
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The produced output follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: We see that the fine-tuned model has predicted every single example correctly,
+    further validating our transfer learning experiment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In closing, remember that the SIMOn framework can be applied to arbitrary input
+    text, not just tabular data, via the adaptation procedure described in section
+    6.1.2\. Several application examples have yielded promising results.[¹](#pgfId-1099840)
+    Hopefully, the exercise in this section has sufficiently prepared you to deploy
+    it in your own classification applications, as well as to adapt the resulting
+    classifiers to new situations via transfer learning.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We will now proceed to exploring the application of ELMo to the fake news classification
+    example.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 6.2 Embeddings from Language Models (ELMo)
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: As was mentioned briefly in the previous chapter, Embeddings from Language Models
+    (ELMo) is arguably one of the most popular early pretrained language models associated
+    with the ongoing NLP transfer learning revolution. It shares some similarities
+    with SIMOn, in that it is also composed of character-level CNNs and bidirectional
+    LSTMs. Please refer to figure 5.2, duplicated here, for a bird’s-eye view of these
+    modeling components.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![06_03_05_02](../Images/06_03_05_02.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.2 (Duplicated) Visualizing ELMo architecture in the context of the
+    tabular column-type classification example
+  prefs: []
+  type: TYPE_NORMAL
+- en: Also review figure 6.1, particularly the more detailed (than what is shown in
+    figure 5.2) equivalent pictorial representation of bi-LSTMs, which are composed
+    of a forward model and a backward model. If you have been following this book
+    chronologically, then you have also applied ELMo to the problems of spam detection
+    and IMDB movie review sentiment classification in section 3.2.1\. As you have
+    probably picked up by now, ELMo produces word representations that are a function
+    of the entire input sentence. In other words, the model is a word embedding that
+    is context-aware.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This section takes a deeper dive into the modeling architecture of ELMo. What
+    exactly does ELMo do to the input text to build context and disambiguate? To answer
+    this, bidirectional language modeling with ELMo is first expounded, followed by
+    applying the model to the fake news detection problem to make things concrete.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 6.2.1 ELMo bidirectional language modeling
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Recall that language modeling attempts to model the probability of a token,
+    usually a word, appearing in a given sequence. Consider a scenario where we have
+    a sequence of *N* tokens, for instance, words in a sentence or paragraph. A word-level
+    forward language model computes the joint probability of the sequence by taking
+    a product of the probabilities of every token in the sequence conditioned on its
+    left-to-right history, as visualized in figure 6.4\. Consider the short sentence,
+    “*You can be.*” According to the formula in figure 6.4, the forward language model
+    computes the probability of the sentence as the probability of the first word
+    in a sentence being “*You*,” times the probability of the second word being “*can*,”
+    given that the first word is “*You,*” times the probability of the third word
+    being “*be*,” given that the first two are “*You can*.”
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![06_04](../Images/06_04.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 6.4 Forward language model equation
+  prefs: []
+  type: TYPE_NORMAL
+- en: A word-level backward language model does the same thing, but in reverse, as
+    expressed by the equation in figure 6.5\. It models the joint probability of the
+    sequence by taking a product of the probabilities of every token conditioned on
+    the right-to-left token history.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![06_05](../Images/06_05.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 6.5 Backward language model equation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Again, consider the short sentence, “*You can be.*” According to the formula
+    in figure 6.5, the backward language model computes the probability of the sentence
+    as the probability of the last word in a sentence being “*be*,” times the probability
+    of the second word being “*can*,” given that the last word is “*be,*” times the
+    probability of the first word being “*You*,” given that the other two are “*can
+    be*.”
+  prefs: []
+  type: TYPE_NORMAL
+- en: A bidirectional language model combines the forward and backward models. The
+    ELMo model specifically looks to maximize the joint log likelihood of the two
+    directions—the quantity shown in figure 6.6\. Note that although separate parameters
+    are maintained for the forward and backward language models, the token vectors
+    and the final layer parameters are shared between the two. This is an example
+    of the soft-parameter sharing multitask learning scenario discussed in chapter
+    4.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![06_06](../Images/06_06.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 6.6 The joint bidirectional language modeling (LM) objective equation
+    that ELMo uses to build bidirectional context for any given token in a sequence
+  prefs: []
+  type: TYPE_NORMAL
+- en: The ELMo representation for each token is derived from the internal states of
+    the bidirectional LSTM language model. For any given task, it is a linear combination
+    of the internal states of all LSTM layers (in both directions) corresponding to
+    the target token.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Combining all internal states, versus using just the top layer, as, for instance,
+    in SIMOn, offers significant advantages. Although the lower layers of the LSTM
+    enable good performance on syntax-based tasks, such as part-of-speech tagging,
+    the higher layers enable context-dependent disambiguation in meaning. Learning
+    a linear combination for each task across both types of representations allows
+    the final model to select the kind of signal it needs for the task at hand.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 6.2.2 Application to fake news detection
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Now let’s proceed to build an ELMo model for the fake news classification dataset
+    we assembled in section 5.2\. For readers who have already worked through chapters
+    3 and 4, this is our second application of the ELMo modeling framework to a practical
+    example.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Because we have already built the ELMo model, we will be able to reuse some
+    of the functions that we already defined in chapter 3\. Refer to listing 3.4,
+    which employs the TensorFlow Hub platform to load the weights made available by
+    ELMo’s authors and builds a Keras-ready model using them via the class `ElmoEmbeddingLayer`.
+    Having defined this class, we can train our required ELMo model for fake news
+    detection via the following code (slightly modified from listing 3.6):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ A new layer outputting 256-dimensional feature vectors
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ The classification layer
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Loss, metric, and optimizer choices
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Shows the model architecture for inspection
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Fits the model for 10 epochs
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s look at the model structure closer, which is output by the `model.summary()`
+    statement in the previous code snippet:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: The layers `dense_1` and `dense_2` are the new fully connected layers added
+    on top of the pretrained embedding produced by listing 3.4\. The pretrained embedding
+    is the `elmo_embedding_layer_1`. Note that it has four trainable parameters, as
+    shown by the printed model summary. The four parameters are the weights in the
+    linear combination of internal bi-LSTM states described in the previous subsection.
+    If you use the TensorFlow Hub approach to using the pretrained ELMo model as we
+    have done here, the rest of the ELMo model is not trainable. It is possible, however,
+    to build a fully trainable TensorFlow-based ELMo model using another version of
+    the model repository.[²](#pgfId-1099942)
+  prefs: []
+  type: TYPE_NORMAL
+- en: The convergence result achieved when we executed the previous code on the fake
+    news dataset is shown in figure 6.7\. We see that an accuracy over 98% is achieved.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![06_07](../Images/06_07.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 6.7 Convergence results for the ELMo model trained on the fake news dataset
+  prefs: []
+  type: TYPE_NORMAL
+- en: 6.3 Universal Language Model Fine-Tuning (ULMFiT)
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Around the time techniques like ELMo were emerging, it was recognized that NLP
+    language models were different from computer vision models in various ways. Applying
+    the same techniques from computer vision to the fine-tuning of NLP language models
+    came with drawbacks. For instance, the process often suffered from catastrophic
+    forgetting of pretrained knowledge, as well as overfitting on the new data. The
+    impact of this was the loss of any existing pretrained knowledge during training,
+    as well as poor generalizability of the resulting model on any data outside the
+    training set. The method known as Universal Language Model Fine-Tuning (ULMFiT)
+    developed a set of techniques for fine-tuning NLP language models to alleviate
+    some of these drawbacks.
+  prefs: []
+  type: TYPE_NORMAL
+- en: More specifically, the method stipulates some variable learning-rate schedules
+    for the various layers of the general pretrained language model during fine-tuning.
+    It also specifies a set of techniques for fine-tuning the task-specific layers
+    of the language model for more efficient transfer. Although these techniques were
+    demonstrated by the authors in the context of classification and LSTM-based language
+    models, the techniques are meant to be more general.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We touch on the various techniques introduced by this method in this section.
+    However, we do not actually implement it in the code in this section. We delay
+    the numerical investigation of ULMFiT until chapter 9, where we explore various
+    pretrained model adaptation techniques for new scenarios. We will do that using
+    the fast.ai library,[³](#pgfId-1099961) which was written by the ULMFiT authors.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For the procedures discussed next, it is assumed that we have a language model
+    pretrained on a large, general text corpus, such as Wikipedia.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 6.3.1 Target task language model fine-tuning
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: No matter how general the initial pretrained model is, the final deployment
+    stage will likely involve data from a different distribution. This motivates us
+    to fine-tune the general pretrained model on a new, smaller dataset from the new
+    distribution to adapt to the new scenario. The authors of ULMFiT found that the
+    techniques of *discriminative fine-tuning* and *slanted learning rates* alleviate
+    the twin problems of overfitting and catastrophic forgetting experienced by researchers
+    when doing this.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Discriminative fine-tuning stipulates that because different layers of the language
+    model capture different information, they should be fine-tuned at different rates.
+    Particularly, the authors found empirically that it was beneficial to first fine-tune
+    the very last layer and note its optimal learning rate. Once they obtain that
+    base rate, they divide this optimal rate by the number 2.6, which yields the suggested
+    rate for the layer right below it. Successively dividing by the same factor yields
+    progressively lower rates for each of the lower layers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When adapting the language model, we want the model to converge quickly in the
+    beginning, followed by a slower refinement stage. The authors found that the best
+    way to achieve this is to use a slanted triangular learning rate, which linearly
+    increases the learning rate and then linearly decays it. In particular, they increase
+    the rate linearly for the initial 10% of the iterations, up to a maximum value
+    of 0.01\. Their suggested rate schedule is illustrated in figure 6.8 for the case
+    of 10,000 total iterations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![06_08](../Images/06_08.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 6.8 Suggested ULMFiT rate schedule for the case of 10,000 total iterations.
+    The rate increases linearly for 10% of the total number of iterations (i.e., 1,000),
+    up to a maximum of 0.01, and then decreases linearly afterward to 0.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 6.3.2 Target task classifier fine-tuning
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'In addition to techniques for fine-tuning the language model on a small dataset
+    representing the data distribution for the new scenario, ULMFiT provides two techniques
+    for refining the task-specific layers: *concat pooling* and *gradual unfreezing*.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: At the time ULMFiT was developed, it was standard practice to pass the hidden
+    state of the final unit of an LSTM-based language model to the task-specific layer.
+    The authors instead recommend concatenating these final hidden states with the
+    max-pooled and mean-pooled hidden states of all time steps (as many of them as
+    can fit in memory). In the bidirectional context, they do this separately for
+    forward and backward language models and average predictions. This process, which
+    they call *concat pooling*, performs a similar function to the bidirectional language
+    modeling approach described for ELMo.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In order to reduce the risks of catastrophic forgetting when fine-tuning, the
+    authors suggest unfreezing and tuning gradually. This process starts with the
+    last layer, which contains the least general knowledge and is the only one unfrozen
+    and refined at the first epoch. At the second epoch, an additional layer is unfrozen,
+    and the process is repeated. The process continues until all task-specific layers
+    are unfrozen and fine-tuned at the last iteration of this gradual unfreezing process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As a reminder, these techniques will be explored in the code in chapter 9, which
+    will cover various adaptation strategies.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Character-level models, as opposed to word-level models, can handle misspellings
+    and other social media features, such as emoticons and niche vernacular.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Bidirectional language modeling is key for building word embeddings that are
+    aware of their local context.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: SIMOn and ELMo both employ character-level CNNs and bi-LSTMs, with the latter
+    helping to achieve bidirectional context-building.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Adapting a pretrained language model to a new scenario may benefit from fine-tuning
+    the different layers of the model at different rates, which should initially increase
+    and then decrease according to a slanted triangular schedule.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Adapting a task-specific layer to a new scenario may benefit from unfreezing
+    and fine-tuning the different layers gradually, starting from the last layer and
+    unfreezing increasingly more until all layers are refined.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: ULMFiT employs discriminative fine-tuning, slanted triangular learning rates,
+    and gradual unfreezing to alleviate overfitting and catastrophic forgetting when
+    fine-tuning language models.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 1. N. Dhamani et al., “Using Deep Networks and Transfer Learning to Address
+    Disinformation,” AI for Social Good ICML Workshop (2019).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2. [https://github.com/allenai/bilm-tf](https://github.com/allenai/bilm-tf)
+  prefs: []
+  type: TYPE_NORMAL
+- en: 3. [http://nlp.fast.ai/ulmfit](http://nlp.fast.ai/ulmfit)
+  prefs: []
+  type: TYPE_NORMAL

@@ -1,0 +1,812 @@
+- en: 8 Deep transfer learning for NLP with BERT and multilingual BERT
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter covers
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using pretrained Bidirectional Encoder Representations from Transformers (BERT)
+    architecture to perform some interesting tasks
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using the BERT architecture for cross-lingual transfer learning
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'In this chapter and the previous chapter, our goal is to cover some representative
+    deep transfer learning modeling architectures for natural language processing
+    (NLP) that rely on a recently popularized neural architecture—*the transformer*[¹](#pgfId-1107268)—for
+    key functions. This is arguably the most important architecture for NLP today.
+    Specifically, our goal has to look at modeling frameworks such as the generative
+    pretrained transformer (GPT),[²](#pgfId-1107272) Bidirectional Encoder Representations
+    from Transformers (BERT),[³](#pgfId-1107276) and multilingual BERT (mBERT).[⁴](#pgfId-1107281)
+    These methods employ neural networks with even more parameters than the deep convolutional
+    and recurrent neural network models that we looked at previously. Despite their
+    larger size, they have exploded in popularity because they scale comparatively
+    more effectively on parallel computing architecture. This enables even larger
+    and more sophisticated models to be developed in practice. To make the content
+    more digestible, we split the coverage of these models into two chapters/parts:
+    we covered the transformer and GPT neural network architectures in the previous
+    chapter, and in this next chapter, we focus on BERT and mBERT.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: As a reminder, BERT is a transformer-based model that we encountered briefly
+    in chapters 3 and 7\. It was trained with the *masked modeling objective* to fill
+    in the blanks. Additionally, it was trained with the *next sentence prediction*
+    task, to determine whether a given sentence is a plausible following sentence
+    after a target sentence. mBERT, which stands for “multilingual BERT,” is effectively
+    BERT pretrained on over 100 languages simultaneously. Naturally, this model is
+    particularly well-suited for cross-lingual transfer learning. We will show how
+    the multilingual pretrained weights checkpoint can facilitate creating BERT embeddings
+    for languages that were not even originally included in the multilingual training
+    corpus. Both BERT and mBERT were created at Google.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The first section of this chapter dives deeper into BERT, and we apply it to
+    the important question-answering application as a representative example in a
+    standalone section. The chapter concludes with an experiment showing the transfer
+    of pretrained knowledge from mBERT pretrained weights to a BERT embedding for
+    a new language. This new language was not initially included in the multilingual
+    corpus used to generate the pretrained mBERT weights. We use the Ghanaian language
+    Twi as the illustrative language in this case.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s proceed to analyzing BERT further in the next section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 8.1 Bidirectional Encoder Representations from Transformers (BERT)
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In this section we present arguably the most popular and influential transformer-based
+    neural network architecture for NLP transfer learning—the Bidirectional Encoder
+    Representations from Transformers (BERT) model—which, as we previously mentioned,
+    was also named after a popular *Sesame Street* character as a nod to the trend
+    started by ELMo. Recall that ELMo does essentially what the transformer does but
+    with recurrent neural networks. We encountered both of these models first in chapter
+    1 during our overview of NLP transfer learning history. We also used them for
+    a pair of classification problems, using TensorFlow Hub and Keras, in chapter
+    3\. If you do not recall these exercises, it may be beneficial to review them
+    before you continue with this section. Coupled with the previous chapter, these
+    previews of the model have brought you to a good place to understand in more detail
+    how the model functions, which is our goal in this section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: BERT is an early pretrained language model that was developed after ELMo and
+    GPT but which outperformed both on most tasks in the General Language-Understanding
+    Evaluation (GLUE) dataset because it is *bidirectionally trained*. We discussed
+    in chapter 6 how ELMo combined left-to-right and right-to-left LSTMs to achieve
+    bidirectional context. In the previous chapter, we also discussed how the masked
+    self-attention of the GPT model, by virtue of its stacking of the transformer
+    decoders, makes it better suited for causal text generation. Unlike these models,
+    BERT achieves bidirectional context for every input token *at the same time* by
+    stacking transformer encoders rather than decoders. Recall from our discussion
+    of self-attention in every BERT layer in section 7.2 that the computation for
+    every token considers every other token in both directions. Whereas ELMo does
+    achieve bidirectionality by putting together the two directions, GPT is a causal
+    unidirectional model. Simultaneous bidirectionality in every layer of BERT appears
+    to give it a deeper sense of language context.
+  prefs: []
+  type: TYPE_NORMAL
+- en: BERT was trained with the masked language modeling (MLM) fill-in-the-blanks
+    type of prediction objective. Tokens in the training text are randomly masked,
+    and the model is tasked with predicting the masked tokens. For illustration, consider
+    again a slightly modified version of our example sentence, “He didn’t want to
+    talk about cells on the cell phone, a subject he considered very boring.” To use
+    MLM, we may transform it into “He didn’t want to talk about cells on the cell
+    phone, a [MASK] he considered very boring.” Here [MASK] is a special token indicating
+    which words have been dropped. We then ask the model to predict the dropped word
+    based on all the text it has observed during training up to that point. A trained
+    model might predict that the masked word is “conversation” 40% of the time, “subject”
+    35% percent of the time, and “topic” the remaining 25% of the time. Repeating
+    this for billions of English examples during training builds up the model’s knowledge
+    of the English language.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Additionally, a next-sentence prediction (NSP) objective was used to train
+    BERT. Here, some sentences in the training text are replaced with random sentences,
+    and the model is asked to predict whether a sentence B following a sentence A
+    is a plausible follow-up. For illustration, let’s split our example sentence into
+    two sentences: “He didn’t want to talk about cells on the cell phone. He considered
+    the subject very boring.” We then might drop the second sentence and replace it
+    with the somewhat random sentence, “Soccer is a fun sport.” A properly trained
+    model would need to be able to detect the former as a potential plausible completion
+    and the latter as implausible. We address both MLM and NSP objectives in this
+    section via concrete coding exercise examples to aid your understanding of these
+    concepts.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next subsection, we briefly describe the key aspects of the BERT architecture.
+    We follow that with an application of the pipelines API concept in the transformers
+    library to the task of question answering with a pretrained BERT model. We follow
+    that up by example executions of the fill-in-the-blanks MLM task and the NSP task.
+    For the NSP task, we use the transformers API directly to build your familiarity
+    with it. Like in the previous chapter, we do not explicitly refine the pretrained
+    BERT model on more-specific target data here. However, we do so in the last section
+    of the chapter, where we will fine-tune a multilingual BERT model on monolingual
+    Twi data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 8.1.1 Model architecture
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: You may recall from section 7.1.1, where we visualized BERT self-attention,
+    that BERT is essentially a stacked set of encoders of the original encoder-decoder
+    transformer architecture in figure 7.1\. The BERT model architecture is shown
+    in figure 8.1.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![08_01](../Images/08_01.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 8.1 A high-level representation of the BERT architecture, showing stacked
+    encoders, input embeddings, and positional encodings. The output from the top
+    is used for both next-sentence prediction and fill-in-blanks masked language modeling
+    objectives during training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As we discussed in the introduction, and as shown in the figure, during training
+    we use the next-sentence prediction (NSP) and masked language modeling (MSM) objectives.
+    BERT was originally presented in two flavors, BASE and LARGE. As shown in figure
+    8.1, BASE stacks 12 encoders whereas LARGE stacks 24 encoders. As before—in both
+    the GPT and the original transformer—the input is converted into vectors via an
+    input embedding, and a positional encoding is added to them to give a sense of
+    the position of every token in the input sequence. To account for the next-sentence-prediction
+    task, for which the input is a pair of sentences A and B, an extra segment encoding
+    step is added. The segment embeddings indicate which sentence a given token belongs
+    to and are added to the input and positional encodings to yield the output that
+    is fed to the encoder stack. This entire input transformation is visualized in
+    figure 8.2 for our example sentence pair: “He didn’t want to talk about cells
+    on the cell phone. He considered the subject very boring.”'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![08_02](../Images/08_02.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 8.2 BERT input transformation visualization
+  prefs: []
+  type: TYPE_NORMAL
+- en: A brief note about the `[CLS]` and `[SEP]` special tokens is worth bringing
+    up at this point. Recall that the `[SEP]` token separates sentences and ends them,
+    as discussed in previous sections. The `[CLS]` special token, on the other hand,
+    is added to the beginning of every *input example*. Input example is the terminology
+    used within the BERT framework to refer to the tokenized input text, as illustrated
+    in figure 8.2\. The final hidden state of the `[CLS]` token is used as the aggregate
+    sequence representation for classification tasks, such as entailment or sentiment
+    analysis. `[CLS]` stands for “classification.”
+  prefs: []
+  type: TYPE_NORMAL
+- en: Before proceeding to the concrete examples using some of these concepts in the
+    following subsections, recall that when we first encountered the BERT model in
+    chapter 3, we converted input first into input examples and then into a special
+    triplet form. These were *input IDs*, *input masks*, and *segment IDs*. We replicate
+    listing 3.8 here to help you remember, because at the time, these terms had not
+    been yet introduced.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 3.8 (Duplicated from ch. 3) Converting data to form expected by BERT,
+    training
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Function for building the model
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ We do not retrain any BERT layers but rather use the pretrained model as an
+    embedding and retrain some new layers on top of it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Vanilla TensorFlow initialization calls
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Creates a compatible tokenizer using the function in the BERT source repository
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Converts data to InputExample format using the function in the BERT source
+    repository
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❻ Converts the InputExample format into triplet final BERT input format, using
+    the function in the BERT source repository
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❼ Builds the model
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❽ Instantiates the variables
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❾ Trains the model
+  prefs: []
+  type: TYPE_NORMAL
+- en: Input IDs, as discussed in the previous chapter, are simply integer IDs of the
+    corresponding token in the vocabulary—for the WordPiece tokenization used by BERT,
+    the vocabulary size is 30,000\. Because the input to the transformer is of fixed
+    length, which is defined by the hyperparameter `max_seq_length` in listing 3.8,
+    shorter inputs need to be padded and longer inputs need to be truncated. Inputs
+    masks are simply binary vectors of the same length, with 0s corresponding to pad
+    tokens (`[PAD]`) and 1s corresponding to the actual input. Segment IDs are the
+    same as described in figure 8.2\. The positional encodings and input embeddings,
+    on the other hand, are handled internally by the TensorFlow Hub model and were
+    not exposed to the user. It may be beneficial for you to work through chapter
+    3 again to fully grasp this comparison.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Although TensorFlow and Keras remain a critical component of any NLP engineer’s
+    toolbox—with unmatched flexibility and efficiency—the *transformers* library has
+    arguably made these models a lot more approachable and easier to use for many
+    engineers and applications. In the following subsections, we apply BERT from this
+    library instead to the critical applications of question answering, filling in
+    the blanks, and next-sentence prediction.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 8.1.2 Application to question answering
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Question answering has captured the imaginations of computer scientists since
+    the inception of the NLP field. It concerns having a computer automatically provide
+    answers to questions posed by a human, given some specified context. Potential
+    applications are limited only by the imagination. Prominent examples include medical
+    diagnosis, fact checking, and chatbots for customer service. In fact, anytime
+    you search on Google for something like “Who won the Super Bowl in 2010?” or “Who
+    won the FIFA World Cup in 2006?” you are using question answering.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s define question answering a bit more carefully. More specifically, we
+    will consider *extractive question answering*, defined as follows: given a context
+    paragraph p and question q, the task of question answering is concerned with producing
+    the start and end integer indices in p where the answer is located. If no plausible
+    answer exists in p, the system needs to be able to indicate this as well. Jumping
+    directly into trying a simple example, as we do next using a pretrained BERT model
+    with the transformers pipelines API, will help you make this much more concrete.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We pick an article from the World Economic Forum[⁵](#pgfId-1107395) about the
+    effectiveness of masks and other lockdown policies on the COVID-19 pandemic in
+    the United States. We pick the article summary as the context paragraph. Note
+    that if no article summary were available, we could quickly generate one using
+    a summarization pipeline from the same library. The initialization of the question-answering
+    pipeline and context is carried out by the following code. Note that we are using
+    BERT LARGE in this case, which has been fine-tuned on the Stanford Question-Answering
+    Dataset (SQuAD),[⁶](#pgfId-1107400) the most extensive question-answering dataset
+    to date. Note also that this is the default model transformers uses for this task,
+    and we did not need to specify it explicitly. However, we do so for transparency.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ These models would have been loaded by default, but we make it explicit for
+    transparency. It is important to use a model that has been fine-tuned on SQuAD;
+    otherwise, results will be poor.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Having initialized the pipeline, let’s first see if we can automatically extract
+    the essence of the article by asking what it is about. We do that with the following
+    code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This produces the following output, which we can probably agree is a plausible
+    response:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note that the relatively low score of 0.47 is indicative that the answer is
+    missing some context. Something like “Effect of containment policies on COVID-19”
+    is probably a better response, but because we are doing extractive question answering
+    and this sentence is not in the context paragraph, this is the best the model
+    can do. The low score can help flag this response for double-checking and/or improvement
+    by a human.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Why not ask some more questions? Let us see if the model knows what country
+    is described in the article, using the following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This produces the following output, which is exactly right, as indicated by
+    the higher-than-before score of approximately 0.8:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: How about the disease being discussed?
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The output is spot-on, and the confidence is even higher than before at 0.98,
+    as shown here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: How about the time period?
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The low score of 0.22 associated with the output is indicative of the poor
+    quality of the result, because a time range of April to June is discussed in the
+    article but never in a contiguous chunk of text that can be extracted for a high-quality
+    answer, as shown next:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: However, the ability to pick out just one end point of the range is arguably
+    already a useful outcome. The low score here can alert a human to double-check
+    this result. In an automated system, the goal is for such lower-quality answers
+    to be the minority, requiring little human intervention overall.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Having introduced question answering, in the next subsection we address the
+    BERT training tasks of filling in the blanks and next-sentence prediction.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 8.1.3 Application to fill in the blanks and next-sentence prediction tasks
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'We use the article from the previous subsection for the exercises in this one.
+    Let’s immediately proceed to defining a pipeline for filling in the blanks using
+    the following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Note that we are using the BERT BASE model here. These tasks are fundamental
+    to the training of any BERT model, so this is a reasonable choice, and no special
+    fine-tuned models are needed. Having initialized the appropriate pipeline, we
+    can now apply it to the first sentence of the article in the previous subsection.
+    We drop the word “cases” by replacing it with the appropriate masking token, `[MASK]`,
+    and ask the model to predict the dropped word, using the following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: The output shows with the top one being “deaths” and being an arguably plausible
+    completion. Even the remaining suggestions could work in different contexts!
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: We encourage you to play around by dropping various words from various sentences
+    to convince yourself that this almost always works quite well. Our companion notebook
+    does this for several more sentences, but we do not print those results here in
+    the interest of brevity.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s then proceed to the next-sentence prediction (NSP) task. At the time
+    of writing, this task is not included in the pipelines API. We will thus use the
+    transformers API directly, which will also give you more experience with it. The
+    first thing we will need to do is make sure that a version of transformers greater
+    than 3.0.0 is installed, because this task was included only in the library at
+    that stage. We do this using the following code; Kaggle comes installed with an
+    earlier version by default, at the time of writing:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'With the version upgraded, we can load an NSP-specific BERT using the following
+    code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ NSP-specific BERT
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Computes the final probabilities from raw outputs
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ PyTorch models are trainable by default. For cheaper inference and execution
+    repeatability, set to “eval” mode as shown here. Set back to “train” mode via
+    model.train(). Not applicable to TensorFlow models!
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, as a sanity check, we determine whether the first and second sentences
+    are plausible completions as far as the model is concerned. We do that using the
+    following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ The output is a tuple; the first item describes the relationship between the
+    two sentences we are after.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Computes the probability from raw numbers
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Note the term `logits` in the code. This is a term for the raw input to the
+    softmax. Passing `logits` through the softmax yields probabilities. The output
+    from the code confirms that the correct relationship was found, as shown here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, let’s replace the second sentence with a somewhat random “Cats are independent.”
+    This produces the following outcome:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: It appears that things work as expected!
+  prefs: []
+  type: TYPE_NORMAL
+- en: You should now have a very good sense of which tasks BERT is solving during
+    training. Note that so far in this chapter we have not fine-tuned BERT on any
+    new domain or task-specific data. This was done on purpose to help you understand
+    the model architecture without any distractions. In the following section, we
+    demonstrate how fine-tuning can be carried out, by working on a cross-lingual
+    transfer learning experiment. Transfer learning for all the other tasks we have
+    already presented can be carried out analogously, and by completing the exercise
+    in the next section, you will be in a good position to do so on your own.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 8.2 Cross-lingual learning with multilingual BERT (mBERT)
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In this section, we carry out the second overall, and the first major, cross-lingual
+    experiment of the book. More specifically, we are working on a transfer learning
+    experiment that involves transferring knowledge from a multilingual BERT model
+    to a language it was not originally trained to include. As before, the language
+    we are using for our experiments will be Twi, a language considered “low-resource”
+    due to a relative lack of availability of quality training data for a variety
+    of tasks.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Multilingual BERT (mBERT) is essentially BERT, as described in the previous
+    section, applied to a multilingual corpus of about 100 concatenated language Wikipedias.[⁷](#pgfId-1107531)
+    The language set was initially the top 100 largest Wikipedias and has been expanded
+    to the top 104 languages. The language set does not include Twi but does include
+    a handful of African languages such as Swahili and Yoruba. Because the sizes of
+    the various language corpora differ widely, an “exponential smoothing” procedure
+    is applied to undersample high-resource languages such as English and oversample
+    low-resource languages such as Yoruba. As before, WordPiece tokenization is used.
+    For our purposes, it suffices to remind you that this tokenization procedure is
+    subword, as we saw in the previous sections. The only exceptions are Chinese,
+    Japanese kanji, and Korean hanja, which are converted into effective character-tokenization
+    by surrounding every character with whitespace. Moreover, the vocabulary is reduced
+    by eliminating accents—a trade-off choice between accuracy and a more efficient
+    model made by the mBERT authors.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We can intuitively believe that a BERT model trained on over 100 languages contains
+    knowledge that could transfer to a language that was not originally included in
+    the training set. Simply put, such a model is likely to learn common features
+    of the languages that are common across all of them. One simple example of such
+    a common feature is the concept of words and verb-noun relationships. If we frame
+    the proposed experiment as a multitask learning problem, as we discussed in chapter
+    4, we expect improved generalizability to new previously unseen scenarios. In
+    this section, we will essentially prove that this is the case. We first transfer
+    from mBERT to monolingual Twi data using the pretrained tokenizer. We then repeat
+    the experiment by training the same mBERT/BERT architecture from scratch and training
+    a suitable tokenizer as well. Comparing these two experiments will allow us to
+    qualitatively evaluate the effectiveness of the multilingual transfer. We use
+    a Twi subset of the JW300 dataset[⁸](#pgfId-1107536) for our purposes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The exercise in this section has implications reaching beyond multilingual transfer
+    for your skill set. This exercise will teach you how to train your own tokenizer
+    and transformer-based model from scratch. It will also demonstrate how to transfer
+    from one checkpoint to new domain/language data for such a model. The previous
+    sections and a bit of adventure/imagination will arm you with transformer-based
+    transfer learning superpowers, be it for domain adaptation, cross-lingual transfer,
+    or multitask learning.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next subsection, we briefly overview the JW300 dataset, followed by subsections
+    performing cross-lingual transfer and then training from scratch.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 8.2.1 Brief JW300 dataset overview
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The JW300 dataset is a wide-coverage parallel corpus for low-resource languages.
+    As previously mentioned, it is an arguably biased sample, being composed of religious
+    text translated by the Jehovah’s Witnesses. However, for a lot of low-resource
+    language research, it serves as a starting point and is often the only open source
+    of parallel data available. It is important to remember the bias, though, and
+    couple any training on this corpus with a second stage during which the model
+    from the first stage can be transferred to a less biased and more representative
+    sample of the language and/or task at hand.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Although it is inherently a parallel corpus, we need only the monolingual corpus
+    of Twi data for our experiments. The Python package opustools-pkg can be used
+    to obtain a parallel corpus for a given language pair. To make things easier for
+    you, we already did this for the English-Twi language pair and hosted it on Kaggle.[⁹](#pgfId-1107548)
+    To repeat our experiment for some other low-resource language, you will need to
+    tinker a bit with *the opustools-pkg* and obtain an equivalent corpus (please
+    share with the community if you do). We use only the Twi part of the parallel
+    corpus for our experiments and ignore the English part.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s proceed to transferring mBERT to the monolingual low-resource language
+    corpus.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 8.2.2 Transfer mBERT to monolingual Twi data with the pretrained tokenizer
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The first thing to do is to initialize a BERT tokenizer to the pretrained checkpoint
+    from one of the mBERT models. We use the cased version this time, as shown by
+    the following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ This is just a faster version of BertTokenizer, which you could use instead.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Uses the pretrained mBERT tokenizer
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Having prepared the tokenizer, let’s load the mBERT checkpoint into a BERT
+    masked language model, and display the number of parameters as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Uses masked language modeling
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Initializes to the mBERT checkpoint
+  prefs: []
+  type: TYPE_NORMAL
+- en: The output indicates that the model has 178.6 million parameters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, we build the dataset using the tokenizer from the monolingual Twi text,
+    using the convenient `LineByLineTextDataset` method included with transformers
+    as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Indicates how many lines to read at a time
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As shown in the following code, we will next need to define a “data collator”—a
+    helper method that creates a special object out of a batch of sample data lines
+    (of length `block_size`). This special object is consummable by PyTorch for neural
+    network training:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Uses masked language modeling, and masks words with a probability of 0.15
+  prefs: []
+  type: TYPE_NORMAL
+- en: Here we used masked language modeling, as described in the previous section.
+    In our input data, 15% of words are randomly masked, and the model is asked to
+    predict them during training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Define standard training arguments, such as output directory and training batch
+    size, as shown next:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: Then use training arguments with the previously defined dataset and collator
+    to define a “trainer” for one training epoch across the data as follows. Note
+    that the data contains over 600,000 lines, so one pass across all of it is a significant
+    amount of training!
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Train and time how long training takes, as shown here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: The model takes about three hours to complete the epoch at the hyperparameters
+    shown and reaches a loss of about 0.77.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Save the model as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Finally, we take the following sentence from the corpus—“Eyi de *ɔ*haw k*ɛ*se
+    baa sukuu h*ɔ*”—which translates to “This presented a big problem at school.”
+    We mask one word, sukuu (which means “school” in Twi), and then apply the pipelines
+    API to predict the dropped word as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Defines the fill-in-the-blanks pipeline
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Predicts the masked token
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This yields the following output:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: You can immediately see the religious bias in the outcome. “Israel” and “Eden”
+    are suggested as among the top five completions. That said, these are somewhat
+    plausible completions—for one thing, they are nouns. Overall, the performance
+    is arguably decent.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you do not speak the language, do not worry. In the next section, we will
+    train BERT from scratch and compare the loss value to the one we obtained here
+    to confirm the efficacy of the transfer learning experiment we just performed.
+    We hope you get to try the steps outlined here on other low-resource languages
+    you are interested in.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 8.2.3 mBERT and tokenizer trained from scratch on monolingual Twi data
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: To train BERT from scratch, we first need to train a tokenizer. We can initialize,
+    train, and save our own tokenizer to disk using the code in the next listing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 8.1 Initialize, train, and save our own Twi tokenizer from scratch
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Initializes the tokenizer
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Customizes the training, and carries it out
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Standard BERT special tokens
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Saves the tokenizer to disk
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To load the tokenizer from what we just saved, we just need to execute the
+    following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Uses the language-specific tokenizer we just trained with max_len=512, to
+    be consistent with previous subsection
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that we use a maximum sequence length of 512 to be consistent with the
+    previous subsection—this is what the pretrained mBERT uses as well. Also note
+    that saving the tokenizer creates the vocabulary file vocab.txt file in the specified
+    folder.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'From here we just need to initialize a fresh BERT model for masked language
+    modeling as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Don’t initialize to pretrained; create a fresh one.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Otherwise, the steps are the same as the previous subsection, and we do not
+    repeat the code here. Repeating the same steps yields a loss of about 2.8 in about
+    1.5 hours after one epoch, and 2.5 in about 3 hours after two epochs. This is
+    clearly not as good a loss as the previous subsection value of 0.77 after one
+    epoch, confirming the efficacy of the transfer learning in that case. Note that
+    this experiment took a shorter time per epoch because the tokenizer we built is
+    fully focused on Twi and so has a smaller vocabulary than the 104-language pretrained
+    mBERT vocabulary.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Go forth and transform!
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The transformer architecture uses self-attention to build bidirectional context
+    for understanding text. This has enabled it to become a dominant language model
+    in NLP recently.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The transformer allows tokens in a sequence to be processed independently of
+    each other. This achieves greater parallelizability than bi-LSTMs, which process
+    tokens in order.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The transformer is a good choice for translation applications.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: BERT is a transformer-based architecture that is a good choice for other tasks,
+    such as classification.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: BERT can be trained on multiple languages at once, producing the multilingual
+    model mBERT. This model captures knowledge transferable even to languages not
+    originally included in the training.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 1. A. Vaswani et al., “Attention Is All You Need,” NeurIPS (2017).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2. A. Radford et al., “Improving Language Understanding by Generative Pre-Training,”
+    arXiv (2018).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '3. M. E. Peters et al., “BERT: Pre-Training of Deep Bidirectional Transformers
+    for Language Understanding,” Proc. of NAACL-HLT (2019): 4171-86.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4. [https://github.com/google-research/bert/blob/master/multilingual.md](https://github.com/google-research/bert/blob/master/multilingual.md)
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5. [https://www.weforum.org/agenda/2020/07/mask-mandates-and-other-lockdown-policies-reduced-the-spread-of-covid-19-in-the-us](https://www.weforum.org/agenda/2020/07/mask-mandates-and-other-lockdown-policies-reduced-the-spread-of-covid-19-in-the-us).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '6. P. Rajpurkar et al., “SQuAD: 100,000+ Questions for Machine Comprehension
+    of Text,” arXiv (2016).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7. [https://github.com/google-research/bert/blob/master/multilingual.md](https://github.com/google-research/bert/blob/master/multilingual.md)
+  prefs: []
+  type: TYPE_NORMAL
+- en: 8. [http://opus.nlpl.eu/JW300.php](http://opus.nlpl.eu/JW300.php)
+  prefs: []
+  type: TYPE_NORMAL
+- en: 9. [https://www.kaggle.com/azunre/jw300entw](https://www.kaggle.com/azunre/jw300entw)
+  prefs: []
+  type: TYPE_NORMAL
