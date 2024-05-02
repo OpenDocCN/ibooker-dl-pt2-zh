@@ -1,0 +1,1498 @@
+- en: 9 Transfer learning with pretrained language models
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter covers
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using transfer learning to leverage knowledge from unlabeled textual data
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using self-supervised learning to pretrain large language models such as BERT
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Building a sentiment analyzer with BERT and the Hugging Face Transformers library
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Building a natural language inference model with BERT and AllenNLP
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The year 2018 is often called “an inflection point” in the history of NLP. A
+    prominent NLP researcher, Sebastian Ruder ([https://ruder.io/nlp-imagenet/](https://ruder.io/nlp-imagenet/)),
+    dubbed this change “NLP’s ImageNet moment,” where he used the name of a popular
+    computer vision dataset and powerful models pretrained on it, pointing out that
+    similar changes were underway in the NLP community as well. Powerful pretrained
+    language models such as ELMo, BERT, and GPT-2 achieved state-of-the-art performance
+    in many NLP tasks and completely changed how we build NLP models within months.
+  prefs: []
+  type: TYPE_NORMAL
+- en: One important concept underlying these powerful pretrained language models is
+    *transfer learning*, a technique for improving the performance of one task using
+    a model trained on another task. In this chapter, we’ll first introduce the concept,
+    then move on to introducing BERT, the most popular pretrained language model proposed
+    for NLP. We’ll cover how BERT is designed and pretrained, as well as how to use
+    the model for downstream NLP tasks including sentiment analysis and natural language
+    inference. We’ll also touch on other popular pretrained models including ELMo
+    and RoBERTa.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 9.1 Transfer learning
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: We start this chapter by introducing *transfer learning*, a powerful machine
+    learning concept fundamental to many pretrained language models (PLMs) in this
+    chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 9.1.1 Traditional machine learning
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: In traditional machine learning, before the advent of pretrained language models,
+    NLP models were trained on a per-task basis, and they were useful only for the
+    type of the task they were trained for (figure 9.1). For example, if you wanted
+    a sentiment analysis model, you needed to use a dataset annotated with the desired
+    output (e.g., negative, neutral, and positive labels), and the trained model was
+    useful only for sentiment analysis. If you needed to build another model for part-of-speech
+    (POS) tagging (an NLP task to identify the part of speech of words; see section
+    5.2 for a review), you needed to do this all over again by collecting training
+    data and training a POS tagging model from scratch. You could not “reuse” your
+    sentiment analysis model for POS tagging, no matter how good your model was, because
+    these two were trained for two fundamentally different tasks. However, these tasks
+    both operated on the same language and all this seemed wasteful. For example,
+    knowing that “wonderful,” “awesome,” and “great” are all adjectives that have
+    positive meaning would help both sentiment analysis and part-of-speech tagging.
+    Under the traditional machine learning paradigm, not only did we need to prepare
+    training data large enough to teach “common sense” like this to the model, but
+    individual NLP models also needed to learn such facts about the language from
+    scratch, solely from the given data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH09_F01_Hagiwara](../Images/CH09_F01_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 9.1 In traditional machine learning, each trained model was used for
+    just one task.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 9.1.2 Word embeddings
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: At this point, you may realize this sounds somewhat familiar. Recall our discussion
+    in section 3.1 on word embeddings and why they are important. To recap, word embeddings
+    are vector representations of words that are learned so that semantically similar
+    words share similar representations. As a result, vectors for “dog” and “cat,”
+    for example, end up being located in a close proximity in a high-dimensional space.
+    These representations are trained on an independent, large textual corpus without
+    any training signals, using algorithms such as Skip-gram and CBOW, often collectively
+    called *Word2vec* (section 3.4).
+  prefs: []
+  type: TYPE_NORMAL
+- en: After these word embeddings are trained, downstream NLP tasks can use them as
+    the input to their models (which are often neural networks, but not necessarily).
+    Because these embeddings already capture semantic relationship between words (e.g.,
+    dogs and cats are both animals), these tasks no longer need to learn how the language
+    works from scratch, which gives them the upper hand in the task they are trying
+    to solve. The model can now focus on learning higher-level concepts that cannot
+    be captured by word embeddings (e.g., phrases, syntax, and semantics) and the
+    task-specific patterns learned from the given annotated data. This is why using
+    word embeddings gives a performance boost to many NLP models.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In chapter 3, we likened this to teaching a baby (= an NLP model) how to dance.
+    By letting babies learn how to walk steadily first (= training word embeddings),
+    dance teachers (= task-specific datasets and training objectives) can focus on
+    teaching specific dance moves without worrying whether babies can even stand and
+    walk properly. This “phased training” approach makes everything easier if you
+    want to teach another skill to the baby (e.g., teaching martial arts) because
+    they already have a good grasp of the fundamental skill (walking).
+  prefs: []
+  type: TYPE_NORMAL
+- en: The beauty of all this is that word embeddings can be learned independently
+    of the downstream tasks. These word embeddings are *pretrained*, meaning their
+    training happens before the training of downstream NLP tasks. Using the dancing
+    baby analogy, dance teachers can safely assume that all the incoming dance students
+    have already learned how to stand and walk properly. Pretrained word embeddings
+    created by the developers of the algorithm are often freely available, and anyone
+    can download and integrate them into their NLP applications. This process is illustrated
+    in figure 9.2.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH09_F02_Hagiwara](../Images/CH09_F02_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 9.2 Leveraging word embeddings helps build a better NLP model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 9.1.3 What is transfer learning?
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: If you generalize what you did with word embeddings earlier, you took the outcome
+    of one task (i.e., predicting word cooccurrence with embeddings) and transferred
+    the knowledge gleaned from it to another one (i.e., sentiment analysis, or any
+    other NLP tasks). In machine learning, this process is called *transfer learning*,
+    which is a collection of related techniques to improve the performance of a machine
+    learning model in a task using data and/or models trained in a different task.
+    Transfer learning always consists of two or more steps—a machine learning model
+    is first trained for one task (called *pretraining*), which is then adjusted and
+    used in another (called *adaptation*). If the same model is used for both tasks,
+    the second step is called *fine-tuning*, because you are tuning the same model
+    slightly but for a different task. See figure 9.3 for an illustration of transfer
+    learning in NLP.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH09_F03_Hagiwara](../Images/CH09_F03_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 9.3 Leveraging transfer learning helps build a better NLP model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Transfer learning has become the dominant way for building high-quality NLP
+    models in the past few years for two main reasons. Firstly, thanks to powerful
+    neural network models such as the Transformer and self-supervised learning (see
+    section 9.2.2), it became possible to bootstrap high-quality embeddings from an
+    almost unlimited amount of natural language text. These embeddings take into account
+    the structure, context, and semantics of natural language text to a great extent.
+    Secondly, thanks to transfer learning, anyone can incorporate these powerful pretrained
+    language models into their NLP applications, even without access to a lot of textual
+    resources, such as web-scale corpora, or compute resources, such as powerful GPUs.
+    The advent of these new technologies (the Transformer, self-supervised learning,
+    pretrained language models, and transfer learning) moved the field of NLP to a
+    completely new stage and pushed the performance of many NLP tasks to a near-human
+    level. In the following subsections, we’ll see transfer learning in action by
+    actually building NLP models while leveraging PLMs such as BERT.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that the concept called *domain adaptation* is closely related to transfer
+    learning. Domain adaptation is a technique where you train a machine learning
+    model in one domain (e.g., news) and adapt it to another domain (e.g., social
+    media), but these are for the *same task* (e.g., text classification). On the
+    other hand, the transfer learning we cover in this chapter is applied to *different
+    tasks* (e.g., language modeling versus text classification). You can achieve the
+    same effect using the transfer learning paradigm covered in this chapter, and
+    we do not specifically cover domain adaptation as a separate topic. Interested
+    readers can learn more about domain adaptation from a recent review paper.[¹](#pgfId-1111602)
+  prefs: []
+  type: TYPE_NORMAL
+- en: 9.2 BERT
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In this section, we will cover BERT in detail. BERT (Bidirectional Encoder Representations
+    from Transformers)[²](#pgfId-1111610) is by far the most popular and most influential
+    pretrained language model to date that revolutionized how people train and build
+    NLP models. We will first introduce *contextualized embeddings* and why they are
+    important, then move on to explaining self-supervised learning, which is an important
+    concept in pretraining language models. We’ll cover two self-supervised tasks
+    used for pretraining BERT, namely, masked language models and next-sentence prediction,
+    and cover ways to adapt BERT for your applications.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 9.2.1 Limitations of word embeddings
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Word embeddings are a powerful concept that can give your application a boost
+    in the performance, although they are not without limitation. One obvious issue
+    is that they cannot take context into account. Words you see in natural language
+    are often polysemous, meaning they may have more than one meaning, depending on
+    their context. However, because word embeddings are trained per token type, all
+    the different meanings are compressed into a single vector. For example, training
+    a single vector for “dog” or “apple” cannot deal with the fact that “hot dog”
+    or “Big Apple” are not a type of animal or fruit, respectively. As another example,
+    consider what “play” means in these sentences: “They played games,” “I play Chopin,”
+    “We play baseball,” and “Hamlet is a play by Shakespeare” (these sentences are
+    all from Tatoeba.org). These occurrences of “play” have different meanings, and
+    assigning a single vector wouldn’t help much in downstream NLP tasks (e.g., in
+    classifying the topic into sports, music, and art).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Due to this limitation, NLP researchers started exploring ways to transform
+    the entire sentence into a series of vectors that consider the context, called
+    *contextualized embeddings* or simply *contextualization*. With these representations,
+    all the occurrences of “play” in the previous examples would have different vectors
+    assigned, helping downstream tasks disambiguate different uses of the word. Notable
+    milestones in contextualized embeddings include CoVe[³](#pgfId-1111623) and ELMo
+    (section 9.3.1), although the biggest breakthrough was achieved by BERT, a Transformer-based
+    pretrained language model, which is the focus of this section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We learned the Transformer uses a mechanism called *self-attention* to gradually
+    transform the input sequence by summarizing it. The core idea of BERT is simple:
+    it uses the Transformer (the Transformer encoder, to be precise) to transform
+    the input into contextualized embeddings. The Transformer transforms the input
+    through a series of layers by gradually summarizing the input. Similarly, BERT
+    contextualizes the input through a series of Transformer encoder layers. This
+    is illustrated in figure 9.4.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH09_F04_Hagiwara](../Images/CH09_F04_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 9.4 BERT processes input through attention layers to produce contextualized
+    embeddings.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Because BERT is based on the Transformer architecture, it inherits all the strengths
+    of the Transformer. Its self-attention mechanism enables it to “random access”
+    over the input and capture long-term dependencies among input tokens. Unlike traditional
+    language models (such as the one based on LSTM that we covered in section 5.5)
+    that can make predictions in only one direction, the Transformer can take into
+    account the context in both directions. Using the sentence “Hamlet is a play by
+    Shakespeare” as an example, the contextualized embedding for “play” can incorporate
+    the information from both “Hamlet” and “Shakespeare,” which makes it easier to
+    capture its “dramatic work for the stage” meaning of “play.”
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If this concept is as simple as “BERT is just a Transformer encoder,” why does
+    it deserve an entire section here? Because we haven’t answered two important practical
+    questions yet: how to train and adapt the model. Neural network models, no matter
+    how powerful, are useless without specific strategies for training and where to
+    get the training data. Also, transfer learning is useless without specific strategies
+    for adapting the pretrained model. We will discuss these questions in the following
+    subsections.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 9.2.2 Self-supervised learning
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The Transformer, which was originally proposed for machine translation, is trained
+    using parallel text. Its encoder and decoder are optimized to minimize the loss
+    function, which is the cross entropy defined by the difference between the decoder
+    output and the expected, correct translation. However, the purpose of pretraining
+    BERT is to derive high-quality contextualized embeddings, and BERT has only an
+    encoder. How can we “train” BERT so that it is useful for downstream NLP tasks?
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you think of BERT just as another way of deriving embeddings, you can draw
+    inspiration from how word embeddings are trained. Recall that in section 3.4,
+    to train word embeddings, we make up a “fake” task where surrounding words are
+    predicted with word embeddings. We are not interested in the prediction per se
+    but rather the “by-product” of the training, which is the word embeddings derived
+    as the parameters of the model. This type of training paradigm where the data
+    itself provides training signals is called *self-supervised learning,* or simply
+    *self-supervision,* in modern machine learning*.* Self-supervised learning is
+    still one type of supervised learning from the model’s point of view—the model
+    is trained in such a way that it minimizes the loss function defined by the training
+    signal. It is where the training signal comes from that is different. In supervised
+    learning, training signals usually come from human annotations. In self-supervised
+    learning, training signals come from the data itself with no human intervention.
+  prefs: []
+  type: TYPE_NORMAL
+- en: With increasingly larger datasets and more powerful models, self-supervised
+    learning has become a popular way to pretrain NLP models in the past several years.
+    But why does it work so well? Two factors contribute to this—one is that the type
+    of self-supervision here is trivially simple to create (just extracting surrounding
+    words for Word2vec), but it requires deep understanding of the language to solve
+    it. For example, reusing the example from the language model we discussed in chapter
+    5, to answer “My trip to the beach was ruined by bad ___,” not only does the system
+    need to understand the sentence but it also needs to be equipped with some sort
+    of “common sense” for what type of things could ruin a trip to a beach (e.g.,
+    bad weather, heavy traffic). The knowledge required to predict the surrounding
+    words ranges from simple collocation/association (e.g., The Statue of ____ in
+    New ____), syntactic and grammatical (e.g., “My birthday is ___ May”), and semantic
+    (the previous example). Second, there is virtually no limit on the amount of data
+    used for self-supervision, because all you need is clean, plain text. You can
+    download large datasets (e.g., Wikipedia dump) or crawl and filter web pages,
+    which is a popular way to train many pretrained language models.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 9.2.3 Pretraining BERT
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Now that we all understand how useful self-supervised learning can be for pretraining
+    language models, let’s see how we can use it for pretraining BERT. As mentioned
+    earlier, BERT is just a Transformer encoder that transforms the input into a series
+    of embeddings that take context into account. For pretraining word embeddings,
+    you could simply predict surrounding words based on the embeddings of the target
+    word. For pretraining unidirectional language models, you could simply predict
+    the next token based on the tokens that come before the target. But for bidirectional
+    language models such as BERT, you cannot use these strategies, because the input
+    for the prediction (contextualized embeddings) also depends on what comes before
+    and after the input. This sounds like a chicken-and-egg problem.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The inventors of BERT solved this with a brilliant idea called *masked language
+    model* (MLM), where they drop (mask) words randomly in a given sentence and let
+    the model predict what the dropped word is. Specifically, after replacing a small
+    percentage of words in a sentence with a special placeholder, BERT uses the Transformer
+    to encode the input and then uses a feed-forward layer and a softmax layers to
+    derive a probability distribution over possible words that can fill in that blank.
+    Because you already know the answer (because you dropped the words in the first
+    place), you can use the regular cross entropy to train the model, as illustrated
+    in figure 9.5.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH09_F05_Hagiwara](../Images/CH09_F05_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 9.5 Pretraining BERT with a masked language model
+  prefs: []
+  type: TYPE_NORMAL
+- en: Masking and predicting words is not a completely new idea—it’s closely related
+    to *cloze tests*, where the test-taker is asked to replace the removed words in
+    a sentence. This test form is often used to assess how well students can understand
+    the language. As we saw earlier, completing missing words in a natural language
+    text requires deep understanding of the language, ranging from simple associations
+    to semantic relationships. As a result, by telling the model to solve this fill-in-the-blank
+    type of task over a huge amount of textual data, the neural network model is trained
+    so that it can produce contextualized embeddings that incorporate deep linguistic
+    knowledge.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You may be wondering what this input [MASK] is and what you actually need to
+    do if you want to implement pretraining BERT yourself. In training neural networks,
+    people often use special tokens such as [MASK] that we mentioned here. These special
+    tokens are just like other (naturally occurring) tokens such as the words “dog”
+    and “cat,” except they don’t occur in text naturally (you can’t find any [MASK]
+    in natural language corpora, no matter how hard you look) and the designers of
+    the neural networks define what they mean. The model will learn to give representations
+    to these tokens so that it can solve the task at hand. Other special tokens include
+    BOS (beginning of sentence), EOS (end of sentence), and UNK (unknown word), which
+    we already encountered in earlier chapters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Finally, BERT is pretrained not just with the masked language model but also
+    with another type of task called *next-sentence prediction* (NSP), where two sentences
+    are given to BERT and the model is asked to predict whether the second sentence
+    is the “real” next sentence of the first. This is another type of self-supervised
+    learning (“fake” task) for which the training data can be created in an unlimited
+    manner without much human intervention, because you can extract two consecutive
+    sentences (or just stitch together two sentences at random) from any corpus and
+    make the training data for this task. The rationale behind this task is that by
+    training with this objective, the model will learn how to infer the relationship
+    of two sentences. However, the effectiveness of this task has been actively debated
+    (e.g., RoBERTa dropped this task whereas ALBERT replaced it with another task
+    called *sentence-order prediction*), and we will not go into the details of this
+    task here.
+  prefs: []
+  type: TYPE_NORMAL
+- en: All this pretraining sounds somewhat complex, but good news is that you rarely
+    need to implement this step yourself. Similar to word embeddings, developers and
+    researchers of these language models pretrain their models on a huge amount of
+    natural language text (usually 10 GB-plus or even 100 GB-plus of uncompressed
+    text) with many GPUs and make the pretrained models publicly available so that
+    anyone can use them.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 9.2.4 Adapting BERT
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'At the second (and final) stage of transfer learning, a pretrained model is
+    adapted to the target task so that the latter can leverage signals learned by
+    the former. There are two main ways to adapt BERT to individual downstream tasks:
+    *fine-tuning* and *feature extraction*. In fine-tuning, the neural network architecture
+    is slightly modified so that it can produce the type of predictions for the task
+    in question, and the entire network is continuously trained on the training data
+    for the task so that the loss function is minimized. This is exactly the way you
+    train a neural network for NLP tasks, such as sentiment analysis, with one important
+    difference—BERT “inherits” the model weights learned through pretraining, instead
+    of being initialized randomly and trained from scratch. In this way, the downstream
+    task can leverage the powerful representations learned by BERT through pretraining
+    on a large amount of data.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The exact way the BERT architecture is modified varies, depending on the final
+    task, but here I’m going to describe the simplest case where the task is to predict
+    some sort of label for a given sentence. This is also called a *sentence-prediction
+    task*, which includes sentiment analysis, which we covered in chapter 2\. For
+    downstream tasks to be able to extract representations for a sentence, BERT prepends
+    a special token [CLS] (for *classification*) to every sentence at the pretraining
+    phase. You can extract the hidden states of BERT with this token and use them
+    as the representation of the sentence. As with other classification tasks, a linear
+    layer can compress this representation into a set of “scores” that correspond
+    to how likely each label is the correct answer. You can then use softmax to derive
+    a probability distribution. For example, if you are working on a sentiment analysis
+    dataset with five labels (strongly negative to strongly positive), you’ll use
+    a linear layer to reduce the dimensionality to 5\. This type of linear layer combined
+    with softmax, which is plugged into a larger pretrained model such as BERT, is
+    often called a *head*. In other words, we are attaching a *classification head*
+    to BERT to solve a sentence-prediction task. The weights for the entire network
+    (the head and BERT) are adjusted so that the loss function is minimized. This
+    means that the BERT weights initialized with pretrained ones also are adjusted
+    (fine-tuned) through backpropagation. See figure 9.6 for an illustration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH09_F06_Hagiwara](../Images/CH09_F06_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 9.6 Pretraining and fine-tuning BERT with an attached classification
+    head
+  prefs: []
+  type: TYPE_NORMAL
+- en: Another variation in fine-tuning BERT uses all the embeddings, averaged over
+    the input tokens. In this method, called *mean over time* or *bag of embeddings*,
+    all the embeddings produced by BERT are summed up and divided by the length of
+    input, just like the bag-of-words model, to produce a single vector. This method
+    is less popular than using the CLS special token but may work better depending
+    on the task. Figure 9.7 illustrates this.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH09_F07_Hagiwara](../Images/CH09_F07_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 9.7 Pretraining and fine-tuning BERT using mean over time and a classification
+    head
+  prefs: []
+  type: TYPE_NORMAL
+- en: Another way to adapt BERT for downstream NLP tasks is *feature extraction*.
+    Here BERT is used to extract features, which are simply a sequence of contextualized
+    embeddings produced by the final layer of BERT. You can simply feed these vectors
+    to another machine learning model as features and make predictions, as shown in
+    figure 9.8.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH09_F08_Hagiwara](../Images/CH09_F08_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 9.8 Pretraining and using BERT for feature extraction
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Graphically, this approach looks similar to fine-tuning. After all, you are
+    feeding the output from BERT to another ML model. However, there are two subtle
+    but important differences: first, because you are no longer optimizing the neural
+    network, the second ML model doesn’t have to be a neural network. Some machine
+    learning tasks (e.g., unsupervised clustering) are not what neural networks are
+    good at solving, and feature extraction offers a perfect solution in these situations.
+    Also, you are free to use more “traditional” ML algorithms, such as SVMs (support
+    vector machines), decision trees, and gradient-boosted methods (such as GBDT,
+    or gradient-boosted decision trees), which may offer a better tradeoff in terms
+    of computational cost and performance. Second, because BERT is used only as a
+    feature extractor, there is no back-propagation and its internal parameters won’t
+    be updated during the adaptation phase. In many cases, you get better accuracy
+    in the downstream task if you fine-tune the BERT parameters, because by doing
+    so, you are also teaching BERT to get better at the task at hand.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Finally, note that these two are not the only ways to adapt BERT. Transfer learning
+    is an actively researched topic, not just in NLP but also in many fields of artificial
+    intelligence, and we have many other ways to use pretrained language models to
+    make the best of them. If you are interested in learning more, I recommend checking
+    out the tutorial given at NAACL 2019 (one of the top NLP conferences) titled “Transfer
+    Learning in Natural Language Processing” ([http://mng.bz/o8qp](http://mng.bz/o8qp)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '9.3 Case study 1: Sentiment analysis with BERT'
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'In this section, we will build a sentiment analyzer (again), but this time
+    with BERT. Instead of AllenNLP, we will use the Transformers library developed
+    by Hugging Face, which we used for making predictions with language models in
+    the previous chapter. All the code here is accessible on a Google Colab notebook
+    ([http://www.realworldnlpbook.com/ch9.html#sst](http://www.realworldnlpbook.com/ch9.html#sst)).
+    The code snippets you see in this section all assume that you import related modules,
+    classes, and methods as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In the Transformers library, you specify the pretrained models by their names.
+    We’ll use the cased BERT-base model (''bert-base-cased'') throughout this section,
+    so let’s define a constant first as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: The Transformers library also supports other pretrained BERT models, which you
+    can see in their documentation ([https://huggingface.co/transformers/pretrained_
+    models.html](https://huggingface.co/transformers/pretrained_models.html)). If
+    you want to use other models, you can simply replace this constant with the name
+    of the model you want to use, and the rest of the code works as-is in many cases
+    (but not always).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 9.3.1 Tokenizing input
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The first step we took for building an NLP model is to build a dataset reader.
+    Although AllenNLP (or more precisely speaking, the allennlp-modules package) is
+    shipped with a dataset reader for the Stanford Sentiment Treebank, the dataset
+    reader’s output is compatible only with AllenNLP. In this section, we are going
+    to write a simple method that reads the dataset and returns a sequence of batched
+    input instances.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Tokenization is one of the most important steps in processing natural language
+    input. As we saw in the previous chapter, tokenizers in the Transformers library
+    can be initialized with the AutoTokenizer.from_pretrained() class method as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: Because different pretrained models use different tokenizers, it is important
+    to initialize the one that matches the pretrained model you are going to use by
+    supplying the same model name.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You can use the tokenizer to convert between a string and a list of token IDs
+    back and forth, as shown next:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: Notice that BERT’s tokenizer added two special tokens—[CLS] and [SEP]—to your
+    sentence. As discussed earlier, CLS is a special token used to extract the embedding
+    for the entire input, whereas SEP is used to separate two sentences if your task
+    involves making predictions on a pair of sentences. Because we are making predictions
+    for single sentences here, there’s no need to pay much attention to this token.
+    We’ll discuss sentence-pair classification tasks later in section 9.5.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Deep neural networks rarely operate on single instances. They usually are trained
+    on and make predictions for batches of instances for stability and performance
+    reasons. The tokenizer also supports converting the given input in batches by
+    invoking the __call__ method (i.e., just use the object as a method) as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When you run this, each string in the input list is tokenized and then resulting
+    tensors are *padded* with 0s to have the same lengths. Padding here means adding
+    0s at the end of each sequence so that individual instances have the same length
+    and can be bundled as a single tensor, which is needed for more efficient computation
+    (we’ll cover padding in more detail in chapter 10). The method call contains several
+    other parameters that control the maximum length (max_length=10, meaning to pad
+    everything to the length of 10), whether to pad to the maximum length, whether
+    to truncate sequences that are too long, and the type of the returned tensors
+    (return_tensors=''pt'', meaning it returns PyTorch tensors). The result of this
+    tokenizer() call is a dictionary that contains the following three keys and three
+    different types of packed tensors:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: The input_ids tensor is a packed version of token IDs converted from the texts.
+    Notice that each row is a vectorized token ID padded with 0s so that its length
+    is always 10\. The token_type_ids tensor specifies which sentence each token comes
+    from. As with the SEP special token earlier, this is relevant only if you are
+    working with sentence pairs, which is why the tensor is simply filled with just
+    0s. The attention_mask tensor specifies which tokens the Transformer should attend
+    to. Because there are no tokens at the padded elements (0s in input_ids), the
+    corresponding elements in attention_mask are all 0s, and attention to these tokens
+    is simply ignored. Masking is a common technique often used in neural networks
+    to ignore irrelevant elements in batched tensors like the ones shown here. Chapter
+    10 covers masking in more detail.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As you see here, the Transformers library’s tokenizers do more than just tokenizing—they
+    take a list of strings and create batched tensors for you, including the auxiliary
+    tensors (token_type_ids and attention_mask). You just need to create lists of
+    strings from your dataset and pass them to tokenizer()to create batches to pass
+    on to the model. This logic for reading datasets is rather boring and a bit lengthy,
+    so I packaged it in a method named read_dataset, which is not shown here. If you
+    are interested, you can check the Google Colab notebook mentioned earlier. Using
+    this method, you can read a dataset and convert it to a list of batches as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 9.3.2 Building the model
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: In the next step, we’ll build the model to classify texts into their sentiment
+    labels. The model we build here is nothing but a thin wrapper around BERT. All
+    it does is pass the input through BERT, take out its embedding at CLS, pass it
+    through a linear layer to convert to a set of scores (logits), and compute the
+    loss.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that we are building a PyTorch Module, not an AllenNLP Model, so make sure
+    to inherit from nn.Module, although the structure of these two types of models
+    are usually very similar (because AllenNLP’s Models inherit from PyTorch Modules).
+    You need to implement __init__(), where you define and initialize submodules of
+    the model, and forward(), where the main computation (“forward pass”) happens.
+    The entire code snippet is shown next.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 9.1 Sentiment analysis model with BERT
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Initializes BERT
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Defines a linear layer
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Applies BERT
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Applies the linear layer
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Computes the loss
+  prefs: []
+  type: TYPE_NORMAL
+- en: The module first defines the BERT model (via the AutoModel.from_pretrained()
+    class method), a linear layer (nn.Linear), and the loss function (nn.CrossEntropyLoss)
+    in __init__(). Note that the module has no way of knowing the number of labels
+    it needs to classify into, so we are passing it as a parameter (num_labels).
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the forward() method, it first calls the BERT model. You can simply pass
+    the three types of tensors (input_ids, attention_mask, and token_type_ids) to
+    the model. The model returns a data structure that contains last_hidden_state
+    and pooler_output among other things, where last_hidden_state is a sequence of
+    hidden states of the last layer, whereas pooler_output is a pooled output, which
+    is basically the embedding at CLS transformed with a linear layer. Because we
+    are interested only in the pooled output that represents the entire input, we’ll
+    pass the latter to the linear layer. Finally, the method computes the loss (if
+    the label is supplied) and returns it, along with the logits, which are used for
+    making predictions and measuring the accuracy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Pay attention to the way we designed the method signature—it takes the three
+    tensors we inspected earlier with their exact names. This lets us simply destruct
+    a batch and pass it to the forward method, as shown here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: Notice that the return value of the forward pass is a tuple of the loss and
+    the logits. Now you are ready to train your model!
+  prefs: []
+  type: TYPE_NORMAL
+- en: 9.3.3 Training the model
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: In the third and the final step of this case study, we will train and validate
+    the model. Although AllenNLP took care of the training process in the previous
+    chapters, in this section we’ll write our own training loop from scratch so we
+    can better understand what it takes to train a model yourself. Note that you can
+    also choose to use the library’s own Trainer class ([https://huggingface.co/transformers/main_classes/trainer.html](https://huggingface.co/transformers/main_classes/trainer.html)),
+    which works similarly to AllenNLP’s Trainer, to run the training loop by specifying
+    its parameters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We covered the basics of training loops in section 2.5, but to recap, in modern
+    machine learning, every training loop looks somewhat similar. If you write it
+    in pseudocode, it would look like the one shown as follows.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 9.2 Pseudocode for the neural network training loop
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: This training loop is almost identical to listing 2.2, except it operates on
+    batches instead of single instances. The dataset yields a series of batches, which
+    are then passed to the forward method of the model. The method returns the loss,
+    which is then used to optimize the model. It is also common for the model to return
+    the predictions so that the caller can use the result to compute some metrics,
+    such as accuracy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Before we move on to writing our own training loop, we need to note two things—it
+    is customary to alternate between training and validation during each epoch. In
+    the training phase, the model is optimized (the “magic constants” are changed)
+    based on the loss function and the optimizer. The training data is used during
+    this phase. In the validation phase, the model’s parameters are fixed, and its
+    accuracy of prediction is measured against validation data. Although the loss
+    is not used for optimization during validation, it is common to compute it to
+    monitor how the loss changes during the course of the training, as we did in section
+    6.3.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Another thing to note is that when training Transformer-based models such as
+    BERT, we usually use *warm-up*, a process where the learning rate (how much to
+    change the magic constants) is gradually increased for the first few thousand
+    steps. A step here is just another name for one execution of backpropagation,
+    which corresponds to the inner loop of listing 9.2\. This is useful for stabilizing
+    training. We are not going into the mathematical details of warm-up and controlling
+    the learning rate here—we just note that a learning rate scheduler is usually
+    used for controlling the learning rate over the course of the training. With the
+    Transformers library, you can define an optimizer (AdamW) and a learning controller
+    as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: The controller we are using here (get_cosine_schedule_with_warmup) increases
+    the learning rate from zero to the maximum during the first 100 steps, then gradually
+    decreases it afterward (based on the cosine function, which is where it got its
+    name). If you plot how the learning rate changes over time, it’ll look like the
+    graph in figure 9.9.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH09_F09_Hagiwara](../Images/CH09_F09_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 9.9 With a cosine learning rate schedule with warm-up, the learning rate
+    ramps up first, then declines following a cosine function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now we are ready to train our BERT-based sentiment analyzer. The next listing
+    shows our training loop.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 9.3 Training loop for the BERT-based sentiment analyzer
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Turns on the training mode
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Moves the batch to GPU (if available)
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Remember to reset the gradients (in PyTorch gradients accumulate).
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Forward pass
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Backpropagation
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❻ Computes the accuracy by counting the number of correct instances
+  prefs: []
+  type: TYPE_NORMAL
+- en: When you train a model using PyTorch (and, consequently, AllenNLP and Transformers,
+    two libraries that are built on top of it), remember to call model.train() to
+    turn on the “training mode” of the model. This is important because some layers
+    such as BatchNorm and dropout behave differently between training and evaluation
+    (we’ll cover dropout in chapter 10). On the other hand, when you validate or test
+    your model, be sure to call model.eval().
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The code in listing 9.3 does not show the validation phase, but the code for
+    validation would look almost the same as that for training. When you validate/test
+    your model, pay attention to the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: As mentioned previously, make sure to call model.eval() before validating/testing
+    your model.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Optimization calls (loss.backward(), optimizer.step(), and scheduler.step())
+    are not necessary because you are not updating the model.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Losses are still recorded and reported for monitoring. Be sure to wrap your
+    forward pass call with with torch.no_grad()—this will disable gradient computation
+    and save memory.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Accuracy is computed in exactly the same way (this is the point of validation!).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'When I ran this, I got the following output to stdout (with intermediate epochs
+    omitted):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: The dev accuracy peaked around 0.483 at epoch 8 and didn’t improve after that.
+    Compared to the result we got from LSTM (dev accuracy ~0.35, in chapter 2) and
+    CNN (dev accuracy ~0.40, in chapter 7), this is the best result we have achieved
+    on this dataset. We’ve done very little hyperparameter tuning, so it’s too early
+    to conclude that BERT is the best model of the three we compared, but we at least
+    know that it is a strong baseline to start from!
+  prefs: []
+  type: TYPE_NORMAL
+- en: 9.4 Other pretrained language models
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: BERT is neither the first nor the last of popular pretrained language models
+    (PLMs) commonly used in the NLP community nowadays. In this section, we’ll learn
+    several other popular PLMs and how they are different from BERT. Most of these
+    models are already implemented and publicly available from the Transformers library,
+    so you can integrate them with your NLP application by changing just a couple
+    of lines of your code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 9.4.1 ELMo
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: ELMo (Embeddings from Language Models), proposed[⁴](#pgfId-1111949) in early
+    2018, is one of the earliest PLMs for deriving contextualized embeddings using
+    unlabeled texts. Its core idea is simple—train an LSTM-based language model (similar
+    to the one we trained back in chapter 5) and use its hidden states as additional
+    “features” for downstream NLP tasks. Because the language model is trained to
+    predict the next token given the previous context, the hidden states can encode
+    the information needed to “understand the language.” ELMo does the same with another,
+    backward LM and combines the embeddings from both directions so that it can also
+    encode the information in both directions. See figure 9.10 for an illustration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH09_F10_Hagiwara](../Images/CH09_F10_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 9.10 ELMo computes contextualized embeddings by combining forward and
+    backward LSTMs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: After pretraining LMs in both directions, downstream NLP tasks can simply use
+    the ELMo embeddings as features. Note that ELMo uses multilayer LSTM, so the features
+    are the sum of hidden states taken from different layers, weighted in a task-specific
+    way. The inventors of ELMo showed that adding these features improves the performance
+    of a wide range of NLP tasks, including sentiment analysis, named entity recognition,
+    and question answering. Although ELMo is not implemented in Hugging Face’s Transformers
+    library, you can use it with AllenNLP fairly easily.[⁵](#pgfId-1111959)
+  prefs: []
+  type: TYPE_NORMAL
+- en: ELMo is a historically important PLM, although it is not often used in research
+    or production anymore today—it predates BERT (and the advent of the Transformer)
+    and there are other PLMs (including BERT) that outperform ELMo and are widely
+    available today.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 9.4.2 XLNet
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'XLNet, proposed in 2019, is an important successor of BERT and often referenced
+    as one of the most powerful PLMs as of today. XLNet addresses two main issues
+    of how BERT is trained: train-test skew and the independence of masks. The first
+    issue has to do with how BERT is pretrained using the masked language model (MLM)
+    objective. During training time, BERT is trained so that it can accurately predict
+    masked tokens, whereas during prediction, it just sees the input sentence, which
+    does not contain any masks. This means that there’s a discrepancy of information
+    to which BERT is exposed to between training and testing, and that creates the
+    train-test skew problem.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The second issue has to do with how BERT makes predictions for masked tokens.
+    If there is more than one [MASK] token in the input, BERT makes predictions for
+    them in parallel. There doesn’t seem to be anything wrong with this approach at
+    first glance—for example, if the input was “The Statue of [MASK] in New [MASK],”
+    the model wouldn’t have difficulties answering this as “Liberty” and “York.” If
+    the input was “The Statue of [MASK] in Washington, [MASK],” most of you (and probably
+    a language model) would predict “Lincoln” and “DC.” However, what if the input
+    was the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The Statue of [MASK] in [MASK] [MASK]
+  prefs: []
+  type: TYPE_NORMAL
+- en: Then there is no information to bias your prediction one way or the other. BERT
+    won’t learn the fact that “The Statue of Liberty in Washington, DC” or “The Statue
+    of Lincoln in New York” don’t make much sense during the training from this example,
+    because these predictions are all made in parallel. This is a good example showing
+    that you cannot simply make independent predictions on tokens and combine them
+    to create a sentence that makes sense.
+  prefs: []
+  type: TYPE_NORMAL
+- en: NOTE This issue is related to the multimodality of natural language, which means
+    there are multiple modes in the joint probability distribution, and combinations
+    of best decisions made independently do not necessarily lead to globally best
+    decisions. Multimodality is a big challenge in natural language generation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To address this issue, instead of making predictions in parallel, you can make
+    predictions sequentially. In fact, this is exactly what typical language models
+    do—generate tokens from left to right, one by one. However, here we have a sentence
+    interspersed with masked tokens, and predictions depend not only on the tokens
+    on the left (e.g., “The Statue of” in the previous example) but also on the right
+    (“in”). XLNet solves this by generating missing tokens in a random order, as shown
+    in figure 9.11\. For example, you can choose to generate “New” first, which gives
+    a strong clue for the next words, “York” and “Liberty,” and so on. Note that prediction
+    is still made based on all the tokens generated previously. If the model chose
+    to generate “Washington” first, then the model would proceed to generate “DC”
+    and “Lincoln” and would never mix up these two.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH09_F11_Hagiwara](../Images/CH09_F11_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 9.11 XLNet generates tokens in an arbitrary order.
+  prefs: []
+  type: TYPE_NORMAL
+- en: XLNet is already implemented in the Transformers library, and you can use the
+    model with only a few lines of code change.[⁶](#pgfId-1111990)
+  prefs: []
+  type: TYPE_NORMAL
+- en: 9.4.3 RoBERTa
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: RoBERTa (from “robustly optimized BERT”)[⁷](#pgfId-1111996) is another important
+    PLM that is commonly used in research and industry. RoBERTa revisits and modifies
+    many training decisions of BERT, which makes it match or even exceed the performance
+    of post-BERT PLMs, including XLNet, which we covered earlier. My personal impression
+    is that RoBERTa is the second most referenced PLM after BERT as of this writing
+    (mid-2020), and it shows robust performance in many downstream NLP tasks in English.
+  prefs: []
+  type: TYPE_NORMAL
+- en: RoBERTa makes several improvements over BERT, but the most important (and the
+    most straightforward) is the amount of its training data. The developers of RoBERTa
+    collected five English corpora of varying sizes and domains, which total over
+    160 GB of text (versus 16 GB used for training BERT). Simply by using a lot more
+    data for training, RoBERTa overperforms some of the other powerful PLMs, including
+    XLNet, in downstream tasks after fine-tuning. The second modification has to do
+    with the next-sentence prediction (NSP) objective we touched on in section 9.2.3,
+    where BERT is pretrained to classify whether the second sentence is the “true”
+    sentence that follows the first one in a corpus. The developers of RoBERTa found
+    that, by removing NSP (and training with the MLM objective only), the performance
+    of downstream tasks stays about the same or slightly improves. In addition to
+    these, they also revisited the batch size and the way masking is done for MLM.
+    Combined, the new pretrained language model achieved the state-of-the-art results
+    on downstream tasks such as question answering and reading comprehension.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Because RoBERTa uses the identical architecture to BERT and both are implemented
+    in Transformers, switching to RoBERTa is extremely easy if your application already
+    uses BERT.
+  prefs: []
+  type: TYPE_NORMAL
+- en: NOTE Similar to BERT versus RoBERTa, the cross-lingual language model XLM (covered
+    in section 8.4.4) has its “robustly optimized” sibling called XLM-R (short for
+    XML-RoBERTa).[⁸](#pgfId-1112008) XLM-R pretrains on 100 languages and shows competitive
+    performance on many cross-lingual NLP tasks.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 9.4.4 DistilBERT
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Although pretrained models such as BERT and RoBERTa are powerful, they are computationally
+    expensive, not just for pretraining but also for tuning and making predictions.
+    For example, BERT-base (the regular-sized BERT) and BERT-large (the larger counterpart)
+    have 110 million and 340 million parameters, respectively, and virtually every
+    input has to go through this huge network to get predictions. If you were to fine-tune
+    and make predictions with a BERT-based model (such as the one we built in section
+    9.3), you’d most certainly need a GPU, which is not always available, depending
+    on your computational environment. For example, if you’d like to run some real-time
+    text analytics on a mobile phone, BERT wouldn’t be a great choice (and it might
+    not even fit in the memory).
+  prefs: []
+  type: TYPE_NORMAL
+- en: To reduce the computational requirement of modern large neural networks, *knowledge
+    distillation* (or simply *distillation*) is often used. This is a machine learning
+    technique where, given a large pretrained model (called the *teacher model*),
+    a smaller model (called the *student model*) is trained to mimic the behavior
+    of the larger model. See figure 9.12 for more details. The student model is trained
+    with the masked language model (MLM) loss (same as BERT), as well as the cross-entropy
+    loss between the teacher and the student. This pushes the student model to produce
+    the probability distribution over predicted tokens that are as similar to the
+    teacher as possible.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH09_F12_Hagiwara](../Images/CH09_F12_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 9.12 Knowledge distillation combines cross entropy and the masked LM
+    objectives.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Researchers at Hugging Face developed a distilled version of BERT called *DistilBERT*,[⁹](#pgfId-1112026)
+    which is 40% smaller and 60% faster while retraining 97% of task performance compared
+    to BERT. You can use DistilBERT by simply replacing the model name you pass to
+    AutoModel.from_pretrained() for BERT (e.g., bert-base-cased) with distilled versions
+    (e.g., distilbert-base-cased), while keeping the rest of your code the same.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 9.4.5 ALBERT
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Another pretrained language model that addresses the computational complexity
+    problem of BERT is ALBERT,[^(10)](#pgfId-1112036) short for “A Lite BERT.” Instead
+    of resorting to knowledge distillation, ALBERT makes a few changes to its model
+    and the training procedure.
+  prefs: []
+  type: TYPE_NORMAL
+- en: One design change ALBERT makes to its model is how it handles word embeddings.
+    In most deep NLP models, word embeddings are represented by and stored in a big
+    lookup table that contains one word embedding vector per word. This way of managing
+    embeddings is usually fine for smaller models such as RNNs and CNNs. However,
+    for Transformer-based models such as BERT, the dimensionality (i.e., the length)
+    of input needs to match that of the hidden states, which is usually as big as
+    768 dimensions. This means that the model needs to maintain a big lookup table
+    of size V times 768, where V is the number of unique vocabulary items. Because
+    in many NLP models V is also large (e.g., 30,000), the resulting lookup table
+    becomes huge and takes up a lot of memory and computation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ALBERT addresses this issue by decomposing word embedding lookup into two stages,
+    as shown in figure 9.13\. The first stage is similar to how word embeddings are
+    retrieved from a mapping table, except that the output dimensionality of word
+    embedding vectors is smaller (say, 128 dimensions). In the next stage, these shorter
+    vectors are expanded using a linear layer so that they match the desired input
+    dimensionality of the model (say, 768). This is similar to how we expanded word
+    embeddings with the Skip-gram model (section 3.4). Thanks to this decomposition,
+    ALBERT needs to store only two smaller lookup tables (V × 128, plus 128 × 768)
+    instead of one big look-up table (V × 768).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH09_F13_Hagiwara](../Images/CH09_F13_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 9.13 ALBERT (right) decomposes word embeddings into two smaller projections.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Another design change that ALBERT implements is parameter sharing between Transformer
+    layers. Transformer models use a series of self-attention layers to transform
+    the input vector. The way these layers transform the input is usually different
+    from layer to layer—the first layer may transform the input one way (e.g., capture
+    basic phrases), and the second one may do so another way (e.g., capture some syntactic
+    information). However, this means that the model needs to retain all the necessary
+    parameters (projections for keys, queries, and values) per each layer, which is
+    expensive and takes up a lot of memory. Instead, ALBERT’s layers all share the
+    same set of parameters, meaning that the model applies the same transformation
+    repeatedly to the input. These parameters are adjusted in such a way that the
+    series of transformations are effective for predicting the objective, even though
+    they are identical.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Finally, ALBERT uses a training objective called *sentence-order prediction*
+    (SOP) for pretraining, instead of the next-sentence prediction (NSP) adopted by
+    BERT. As mentioned earlier, the developers of RoBERTa and some others found out
+    that the NSP objective is basically useless and decided to eliminate it. ALBERT
+    replaces NSP with sentence-order prediction (SOP), a task where the model is asked
+    to predict the ordering of two consecutive segments of text. For example:[^(11)](#pgfId-1112056)
+  prefs: []
+  type: TYPE_NORMAL
+- en: (A) She and her boyfriend decided to go for a long walk. (B) After walking for
+    over a mile, something happened.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: (C) However, one of the teachers around the area helped me get up. (D) At first,
+    no one was willing to help me up.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In the first example, you can tell that A happens before B. In the second, the
+    order is flipped, and D should come before C. This is an easy feat for humans,
+    but a difficult task for machines—an NLP model needs to learn to ignore superficial
+    topical signals (e.g., “go for a long walk,” “walking for over a mile,” “helped
+    me get up,” and “help me up”) and focus on discourse-level coherence. Training
+    with this objective makes the model more robust and effective for deeper natural
+    language understanding tasks.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As a result, ALBERT was able to scale up its training and outperform BERT-large
+    with fewer parameters. As with DistilBERT, the model architecture of ALBERT is
+    almost identical to that of BERT, and you can use it by simply supplying the model
+    name when you call AutoModel.from_pretrained() (e.g., albert-base-v1).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '9.5 Case study 2: Natural language inference with BERT'
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In this final section of this chapter, we will build an NLP model for natural
+    language inference, a task where the system predicts logical relationship between
+    sentences. We’ll use AllenNLP for building the model while demonstrating how to
+    integrate BERT (or any other Transformer-based pretrained models) into your pipeline.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 9.5.1 What is natural language inference?
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '*Natural* *language inference* (or NLI, for short) is the task of determining
+    the logical relationship between a pair of sentences. Specifically, given one
+    sentence (called *premise*) and another sentence (called *hypothesis*), you need
+    to determine whether the hypothesis is logically inferred from the premise. This
+    is easier to see in the following examples.[^(12)](#pgfId-1112076)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| Premise | Hypothesis | Label |'
+  prefs: []
+  type: TYPE_TB
+- en: '| A man inspects the uniform of a figure in some East Asian country. | The
+    man is sleeping. | contradiction |'
+  prefs: []
+  type: TYPE_TB
+- en: '| An older and younger man smiling. | Two men are smiling and laughing at the
+    cats playing on the floor. | neutral |'
+  prefs: []
+  type: TYPE_TB
+- en: '| A soccer game with multiple males playing. | Some men are playing a sport.
+    | entailment |'
+  prefs: []
+  type: TYPE_TB
+- en: In the first example, the hypothesis (“The man is sleeping”) clearly contradicts
+    the premise (“A man inspects . . .”) because someone cannot be inspecting something
+    while asleep. In the second example, you cannot tell if the hypothesis contradicts
+    or is entailed by the premise (especially the “laughing at the cats” part), which
+    makes the relationship “neutral.” In the third example, you can logically infer
+    the hypothesis from the premise—in other words, the hypothesis is entailed by
+    the premise.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As you can guess, NLI can be tricky even for humans. The task requires not only
+    lexical knowledge (e.g., plural of “man” is “men,” soccer is one type of sport)
+    but also some “common sense” (e.g., you cannot inspect while sleeping). NLI is
+    one of the most typical natural language understanding (NLU) tasks. How can you
+    build an NLP model to solve this task?
+  prefs: []
+  type: TYPE_NORMAL
+- en: Fortunately, NLI is a well-studied field in NLP. The most popular dataset for
+    NLI, the Standard Natural Language Inference (SNLI) corpus ([https://nlp.stanford.edu/projects/snli/](https://nlp.stanford.edu/projects/snli/)),
+    has been used in numerous NLP studies as a benchmark. In what follows, we’ll build
+    a neural NLI model with AllenNLP and learn how to use BERT for this particular
+    task.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Before moving on, make sure that you have AllenNLP (we use version 2.5.0) and
+    the AllenNLP model’s modules installed. You can install them by running the following
+    code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: This also installs the Transformers library as a dependency.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 9.5.2 Using BERT for sentence-pair classification
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Before we start building the model, notice that every input to the NLI task
+    consists of two pieces: a premise and a hypothesis. Most of the NLP tasks we covered
+    in this book had just one part—usually a single sentence—as the input to the model.
+    How can we build a model that makes predictions for instances that are pairs of
+    sentences?'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We have multiple ways to deal with multipart input for NLP models. We can encode
+    each sentence with an encoder and apply some mathematical operations (e.g., concatenation,
+    subtractions) to the result to derive an embedding for the pair (which, by the
+    way, is the basic idea of Siamese networks[^(13)](#pgfId-1112121)). Researchers
+    have also come up with more complex neural network models with attention (such
+    as BiDAF[^(14)](#pgfId-1112124)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: However, there’s inherently nothing preventing BERT from accepting more than
+    one sentence. Because the Transformer accepts a sequence of any tokens, you can
+    simply concatenate the two sentences and feed them to the model. If you are worried
+    about the model mixing up the two sentences, you can separate them with a special
+    token, [SEP]. You can also add different values to each sentence as an extra signal
+    to the model. BERT uses these two techniques to solve sentence-pair classification
+    tasks such as NLI with little modification to the model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The rest of the pipeline proceeds in a similar way to other classification tasks.
+    A special token [CLS] is appended to every sentence pair, from which the final
+    embedding of the input is extracted. Finally, you can use a classification head
+    to convert the embedding into a set of values (called *logits*) corresponding
+    to the classes. This is illustrated in figure 9.14.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH09_F14_Hagiwara](../Images/CH09_F14_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 9.14 Feeding and classifying a pair of sentences with BERT
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In practice, concatenating and inserting special tokens are both taken care
+    of by SnliReader, an AllenNLP dataset reader specifically built for dealing with
+    the SNLI dataset. You can initialize the dataset and observe how it turns the
+    data into AllenNLP instances with the following snippet:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: The dataset reader takes a JSONL (JSON line) file from the Stanford NLI corpus
+    and turns it into a series of AllenNLP instances. We specify the URL of a dataset
+    file that I put online (S3). Note that you need to specify add_special_tokens=False
+    when initializing the tokenizer. This sounds a little bit strange—aren’t the special
+    tokens the very things we need to add here? This is necessary because the dataset
+    reader (SnliReader), not the tokenizer, will take care of the special tokens.
+    If you were to use the Transformer library only (without AllenNLP), you wouldn’t
+    need this option.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The previous snippet produces the following dump of generated instances:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: Notice that every sentence is tokenized, and the sentences are concatenated
+    and separated by [SEP] special tokens. Each instance also has a label field containing
+    the gold label.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'NOTE You may have noticed some weird characters in the tokenized results, such
+    as ##bracing and ##i. These are the results of byte-pair encoding (BPE), a tokenization
+    algorithm for splitting words into what’s called *subword units*. We’ll cover
+    BPE in detail in chapter 10.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 9.5.3 Using Transformers with AllenNLP
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Now we are ready to build our model with AllenNLP. The good news is you don’t
+    need to write any Python code to build an NLI model thanks to AllenNLP’s built-in
+    modules—all you need to do is write a Jsonnet config file (as we did in chapter
+    4). AllenNLP also integrates Hugging Face’s Transformer library seamlessly, so
+    you usually need to make little change, even if you want to integrate Transformer-based
+    models such as BERT into your existing models.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You need to make changes to the following four components when integrating
+    BERT into your model and pipeline:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Tokenizer*—As you did in section 9.3 earlier, you need to use a tokenizer
+    that matches the pretrained model you are using.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Token indexer*—Token indexers turn tokens into integer indices. Because pretrained
+    models come with their own predefined vocabularies, it is important that you use
+    a matching token indexer.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Token embedder*—Token embedders turn tokens into embeddings. This is where
+    the main computation of BERT happens.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Seq2Vec encoder*—The raw output from BERT is a sequence of embeddings. You
+    need a Seq2Vec encoder to turn it into a single embedding vector.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Don’t worry if this sounds intimidating—in most cases, all you need to do is
+    remember to initialize the right modules with the name of the model you want.
+    I’ll walk you through these steps next.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, let’s define the dataset we use for reading and converting the SNLI
+    dataset. We already did this with Python code earlier, but here we will write
+    the corresponding initialization in Jsonnet. First, let’s define the model name
+    we’ll use throughout the pipeline using the following code. One of the cool features
+    of Jsonnet over vanilla JSON is you can define and use variables:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The first section of the config file where the dataset is initialized looks
+    like the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'At the top level, this is initializing a dataset reader specified by the type
+    snli, which is the SnliReader we experimented with previously. The dataset reader
+    takes two parameters—tokenizer and token_indexers. For the tokenizer, we initialize
+    a PretrainedTransformerTokenizer (type: pretrained_transformer) with a model name.
+    Again, this is the tokenizer we initialized and used earlier in the Python code.
+    Notice how the Python code and the Jsonnet config file correspond to each other
+    nicely. Most of AllenNLP modules are designed in such a way that there’s nice
+    correspondence between these two, as shown in the following table.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| Python code | Jsonnet config |'
+  prefs: []
+  type: TYPE_TB
+- en: '| tokenizer = PretrainedTransformerTokenizer(model_name=BERT_MODEL,add_special_tokens=False)
+    | "tokenizer": {"type": "pretrained_transformer","model_name": bert_model,"add_special_tokens":
+    false} |'
+  prefs: []
+  type: TYPE_TB
+- en: 'The section for initializing a token indexer may look a bit confusing. It is
+    initializing a PretrainedTransformerIndexer (type: pretrained_transformer) with
+    a model name. The indexer will store the indexed result to a section named bert
+    (the key corresponding to the token indexer). Fortunately, this code is a boilerplate
+    that changes little from model to model, and chances are you can simply copy and
+    paste this section when you work on a new Transformer-based model.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As for the training/validation data, we can use the ones in this book’s S3
+    repository, shown here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now we are ready to move on to defining our model:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'At the top level, this section is defining a BasicClassifier model (type: basic_
+    classifier). It is a generic text classification model that embeds the input,
+    encodes it with a Seq2Vec encoder, and classifies it with a classification head
+    (with a softmax layer). You can “plug in” embedders and encoders of your choice
+    as the subcomponents of the model. For example, you can embed the tokens via word
+    embeddings and encode the sequence with an RNN (this is what we did in chapter
+    4). Alternatively, you can encode the sequence with a CNN, as we did in chapter
+    7\. This is where the design of AllenNLP excels—the generic model specifies only
+    *what* (e.g., a TextFieldEmbedder and a Seq2VecEncoder) but not exactly *how*
+    (e.g., word embeddings, RNNs, BERT). You can use any submodules for embedding/encoding
+    input, as long as those submodules conform to the specified interfaces (i.e.,
+    they are subclasses of the required classes).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this case study, we will use BERT to embed the input sequence first. This
+    is achieved by a special token embedder, PretrainedTransformerEmbedder (type:
+    pretrained_transformer), which takes the result of a Transformer tokenizer, puts
+    it through a pretrained BERT model, and produces the embedded input. You need
+    to pass this embedder as the value for the bert key (the one you specified for
+    token_indexers earlier) of the token_embedders parameter.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The raw output from BERT, however, is a sequence of embeddings. Because we
+    are interested in classifying the given pair of sentences, we need to extract
+    the embeddings for the entire sequence, which can be done by taking out the embeddings
+    corresponding to the CLS special token. AllenNLP implements a type of Seq2VecEncoder
+    called BertPooler (type: bert_pooler) that does exactly this.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: After embedding and encoding the input, the basic classifier model takes care
+    of the rest—the embeddings go through a linear layer that converts them into a
+    set of logits, and the entire network is trained with a cross-entropy loss, just
+    like other classification models. The entire config file is shown here.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 9.4 Config file for training an NLI model with BERT
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'It’s OK if you are not familiar with what’s going on in the data_loader and
+    trainer sections. We’ll discuss these topics (batching, padding, optimizing, hyperparameter
+    tuning) in chapter 10\. After saving this config file under examples/nli/snli_
+    transformers.jsonnnet, you can start the training process by running the following
+    code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This will run for a while (even on a fast GPU such as Nvidia V100) and produce
+    a large amount of log messages on stdout. The following is a snippet of log messages
+    I got after four epochs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: Pay attention to the validation accuracy (0.908). This looks very good considering
+    that this is a three-class classification and the random baseline would be just
+    0.3\. In comparison, when I replaced BERT with an LSTM-based RNN, the best validation
+    accuracy I got was around ~0.68\. We need to run experiments more carefully to
+    make a fair comparison between different models, but this result seems to suggest
+    that BERT is a powerful model for solving natural language understanding problems.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Transfer learning is a machine learning concept where a model learned for one
+    task is applied to another by transferring knowledge between them. It is an underlying
+    concept for many modern, powerful, pretrained models.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: BERT is a Transformer encoder pretrained with masked language modeling and next-sentence
+    prediction objectives to produce contextualized embeddings, a series of word embeddings
+    that take context into account.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: ELMo, XLNet, RoBERTa, DistilBERT, and ALBERT are other popular pretrained models
+    commonly used in modern deep NLP.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: You can build BERT-based NLP applications by using Hugging Face’s Transformers
+    library directly, or by using AllenNLP, which integrates the Transformers library
+    seamlessly.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: ^(1.)Ramponi and Plank, “Neural Unsupervised Domain Adaptation in NLP—A Survey,”
+    (2020). [https://arxiv.org/abs/2006.00632](https://arxiv.org/abs/2006.00632).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '^(2.)Jacob Devlin, Ming-Wei Chang, Kenton Lee, and Kristina Toutanova, “BERT:
+    Pre-Training of Deep Bidirectional Transformers for Language Understanding,” (2018).
+    [https://arxiv.org/abs/1810.04805](https://arxiv.org/abs/1810.04805).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '^(3.)Bryan McCann, James Bradbury, Caiming Xiong, and Richard Socher, “Learned
+    in Translation: Contextualized Word Vectors,” in NIPS 2017.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ^(4.)Peters et al., “Deep Contextualized Word Representations,” (2018). [https://arxiv.org/abs/1802.05365](https://arxiv.org/abs/1802.05365).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '^(5.)See here for the detailed documentation on how to use ELMo with AllenNLP:
+    [https://allennlp.org/elmo](https://allennlp.org/elmo).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ^(6.) See [https://huggingface.co/transformers/model_doc/xlnet.html](https://huggingface.co/transformers/model_doc/xlnet.html)
+    for the documentation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '^(7.)Liu et al., “RoBERTa: A Robustly Optimized BERT Pretraining Approach,”
+    (2019). [https://arxiv.org/abs/1907.11692](https://arxiv.org/abs/1907.11692).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ^(8.)Conneau et al., “Unsupervised Cross-lingual Representation Learning at
+    Scale,” (2019). [https://arxiv.org/abs/1911.02116](https://arxiv.org/abs/1911.02116).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '^(9.)Sanh et al., “DistilBERT, a distilled version of BERT: smaller, faster,
+    cheaper and lighter,” (2019). [https://arxiv.org/abs/1910.01108](https://arxiv.org/abs/1910.01108).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '^(10.)Lan et al., “ALBERT: A Lite BERT for Self-Supervised Learning of Language
+    Representations,” (2020). [https://arxiv.org/abs/1909.11942](https://arxiv.org/abs/1909.11942).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '^(11.)These examples are taken from ROCStories: [https://cs.rochester.edu/nlp/rocstories/](https://cs.rochester.edu/nlp/rocstories/).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ^(12.)These examples are taken from [http://nlpprogress.com/english/natural_language_inference.html](http://nlpprogress.com/english/natural_language_inference.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '^(13.)Reimers and Gurevych, “Sentence-BERT: Sentence Embeddings Using Siamese
+    BERT-Networks,” (2019). [https://arxiv.org/abs/1908.10084](https://arxiv.org/abs/1908.10084).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ^(14.)Seo et al., “Bidirectional Attention Flow for Machine Comprehension,”
+    (2018). [https://arxiv.org/abs/1611 .01603](https://arxiv.org/abs/1611.01603).
+  prefs: []
+  type: TYPE_NORMAL

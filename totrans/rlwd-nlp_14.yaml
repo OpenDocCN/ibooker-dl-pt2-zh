@@ -1,0 +1,1127 @@
+- en: 10 Best practices in developing NLP applications
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter covers
+  prefs: []
+  type: TYPE_NORMAL
+- en: Making neural network inference more efficient by sorting, padding, and masking
+    tokens
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Applying character-based and BPE tokenizationfor splitting text into tokens
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Avoiding overfitting via regularization
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Dealing with imbalanced datasets by using upsampling, downsampling, and loss
+    weighting
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Optimizing hyperparameters
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: We’ve covered a lot of ground so far, including deep neural network models such
+    as RNNs, CNNs, and the Transformer, and modern NLP frameworks such as AllenNLP
+    and Hugging Face Transformers. However, we’ve paid little attention to the details
+    of training and inference. For example, how do you train and make predictions
+    efficiently? How do you avoid having your model overfit? How do you optimize hyperparameters?
+    These factors could make a huge impact on the final performance and generalizability
+    of your model. This chapter covers these important topics that you need to consider
+    to build robust and accurate NLP applications that perform well in the real world.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 10.1 Batching instances
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In chapter 2, we briefly mentioned *batching*, a machine learning technique
+    where instances are grouped together to form batches and sent to the processor
+    (CPU or, more often, GPU). Batching is almost always necessary when training large
+    neural networks—it is critical for efficient and stable training. In this section,
+    we’ll dive into some more techniques and considerations related to batching.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 10.1.1 Padding
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Training large neural networks requires a number of linear algebra operations
+    such as matrix addition and multiplication, which involve executing basic mathematical
+    operations on many, many numbers at once. This is why it requires specialized
+    hardware such as GPUs, processors designed to execute such operations in a highly
+    parallelized manner. Data is sent to the GPU as tensors, which are just high-dimensional
+    arrays of numbers, along with some instructions as to what types of mathematical
+    operations it needs to execute. The result is sent back as another tensor.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In chapter 2, we likened GPUs to factories overseas that are highly specialized
+    and optimized for manufacturing the same type of products in a large quantity.
+    Because there is considerable overhead in communicating and shipping products,
+    it is more efficient if you make a small number of orders for manufacturing a
+    large quantity of products by shipping all the required materials in batches,
+    rather than shipping materials on demand.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Materials and products are usually shipped back and forth in standardized containers.
+    If you have ever loaded a moving pod or trailer yourself (or observed someone
+    else do it), you may know that there are many considerations that are important
+    for safe and reliable shipping. You need to put furniture and boxes in tightly
+    so that they don’t shift around in transition. You need to wrap them with blankets
+    and fix them with ropes to prevent them from being damaged. You need to put heavy
+    stuff at the bottom so that lighter stuff won’t get crushed, and so on.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Batches in machine learning are similar to containers for shipping stuff in
+    the real world. Just like shipping containers are all the same size and rectangular,
+    batches in machine learning are just rectangular tensors packed with numbers of
+    the same type. If you want to “ship” multiple instances of different shapes in
+    a single batch to the GPU, you need to pack them so that the packed numbers form
+    a rectangular tensor.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In NLP, we often deal with sequences of text in different lengths. Because batches
+    have to be rectangular, we need to do *padding*, (i.e., append special tokens,
+    <PAD>, to each sequence so that each row of the tensor has the same length. You
+    need as many padding tokens as necessary to make the sequences the same length,
+    which means that you need to pad short sequences until they are all as long as
+    the longest sequence in the same batch. This is illustrated in figure 10.1.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH10_F01_Hagiwara](../Images/CH10_F01_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 10.1 Padding and batching. Black squares are tokens, gray ones are EOS
+    tokens, and white ones are padding.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In reality, each token in natural language text is often represented as a vector
+    of length *D*, generated by the word embeddings method. This means that each batched
+    tensor is a three-dimensional tensor that has a “depth” of *D*. In many NLP models,
+    sequences are represented as batches of size *N* × *L* × *D* (see figure 10.2),
+    where *N*, *L*, *D* are the number of instances per batch, the maximum length
+    of the sequences, and the dimension of word embeddings, respectively.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH10_F02_Hagiwara](../Images/CH10_F02_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 10.2 Padding and batching of embedded sequences create rectangular, three-dimensional
+    tensors.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is starting to look more like real containers!
+  prefs: []
+  type: TYPE_NORMAL
+- en: 10.1.2 Sorting
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Because each batch has to be rectangular, if one batch happens to include both
+    short sequences and long sequences, you need to add a lot of padding to short
+    sequences so that they are as long as the longest sequence in the same batch.
+    This often leads to some wasted space in the batch—see “batch 1” in figure 10.3
+    for an illustration. The shortest sequence (six tokens) needs to be padded with
+    eight more tokens to be equally long as the longest sequence (14 tokens). Wasted
+    space in a tensor means wasted memory and computation, so it is best avoided,
+    but how?
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH10_F03_Hagiwara](../Images/CH10_F03_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 10.3 Sorting instances before batching (right) reduces the total number
+    of tensors.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can reduce the amount of padding by putting instances of similar size in
+    the same batch. If shorter instances are batched only with other equally shorter
+    ones, they don’t need to get padded with many padding tokens. Similarly, if longer
+    instances are batched only with other longer ones, they don’t need a lot of padding
+    either, because they are already long. One idea is to sort instances by their
+    length and batch accordingly. Figure 10.3 compares two situations—one in which
+    the instances are batched in their original order, and the other where instances
+    are first sorted before batching. The numbers below each batch indicate how many
+    tokens are required to represent the batch, including the padding tokens. Notice
+    that the number of total tokens is reduced from 144 to 120 by sorting. Because
+    the number of tokens in the original sentences doesn’t change, this is purely
+    because sorting reduced the number of padding tokens. Smaller batches require
+    less memory to store and less computation to process, so sorting instances before
+    batching improves the efficiency of training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'All these techniques sound somewhat complicated, but the good news is, you
+    rarely need to write code for sorting, padding, and batching instances yourself
+    as long as you use high-level frameworks such as AllenNLP. Recall that we used
+    a combination of DataLoader and BucketBatchSampler for building our sentiment
+    analysis model back in chapter 2 as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: The sorting_keys given to BucketBatchSampler specifies which field to use for
+    sorting. As you can guess from its name, by specifying “tokens” you are telling
+    the data loader to sort the instances by the number of tokens (which is what you
+    want in most cases). The pipeline will take care of padding and batching automatically,
+    and the data loader will give you a series of batches you can feed into your model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 10.1.3 Masking
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: One final detail that you need to pay attention to is *masking*. Masking is
+    an operation where you ignore some part of the network that corresponds to padding.
+    This becomes relevant especially when you are dealing with a sequential-labeling
+    or a language-generation model. To recap, sequential labeling is a task where
+    the system assigns a label per token in the input sequence. We built a POS tagger
+    with a sequential labeling model (RNN) in chapter 5.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As shown in figure 10.4, sequential-labeling models are trained by minimizing
+    the per-token loss aggregated across all tokens in a given sentence. We do this
+    because we’d like to minimize the number of “errors” the network makes per token.
+    This is fine as long as we are dealing with “real” tokens (“time,” “flies,” and
+    “like” in the figure), although it becomes an issue when the input batch includes
+    padded tokens. Because they exist just to pad the batch, they should be ignored
+    when computing the total loss.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH10_F04_Hagiwara](../Images/CH10_F04_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 10.4 Loss for a sequence is the sum of per-token cross entropy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We usually do this by creating an extra vector for masking the loss. The vector
+    for masking has the same length as the input, whose elements are 1s for “real”
+    tokens and 0s for padding. When computing the total loss, you can simply take
+    an element-wise product between the per-token loss and the mask and then sum up
+    the result.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Fortunately, as long as you are building standard sequential-labeling models
+    with AllenNLP, you rarely need to implement masking yourself. Remember, in chapter
+    5, we wrote the forward pass of the POS tagger model as shown in listing 10.1\.
+    Here, we get the mask vector from the get_text_field_mask() helper function and
+    compute the final loss with sequence_cross_entropy_with_logits().
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 10.1 Forward pass of the POS tagger
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If you take a peek at what’s inside mask (e.g., by inserting a print statement
+    in this forward method), you’ll see the following tensor made of binary (True
+    or False) values:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: Each row of this tensor corresponds to one sequence of tokens, and locations
+    with False are where padding occurred. The loss function (sequence_cross_entropy
+    _with_logits) receives the prediction, the ground truth (the correct labels),
+    and the mask and computes the final loss while ignoring all the elements marked
+    as False.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 10.2 Tokenization for neural models
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In chapter 3, we covered the basic linguistic units (words, characters, and
+    n-grams) and how to compute their embeddings. In this section, we will go deeper
+    and focus on how to analyze texts and obtain these units—a process called *tokenization*.
+    Neural network models pose a set of unique challenges on how to deal with tokens,
+    and we’ll cover some of the modern models to deal with these challenges.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 10.2.1 Unknown words
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: A vocabulary is a set of tokens that an NLP model deals with. Many neural NLP
+    models operate within a fixed, finite set of tokens. For example, when we built
+    a sentiment analyzer in chapter 2, the AllenNLP pipeline first tokenized the training
+    dataset and constructed a Vocabulary object that consists of all unique tokens
+    that appeared more than, say, three times. The model then uses an embedding layer
+    to convert tokens into word embeddings, which are some abstract representation
+    of the input tokens.
+  prefs: []
+  type: TYPE_NORMAL
+- en: So far, so good, right? But the number of all words in the world is not finite.
+    We constantly make up new words that didn’t exist before (I don’t think people
+    talked about “NLP” a hundred years ago). What if the model receives a word that
+    it has never seen during training? Because the word is not part of the vocabulary,
+    the model cannot even convert it to an index, let alone look up its embeddings.
+    Such words are called *out-of-vocabulary* (OOV) *words*, and they are one of the
+    biggest problems when building NLP applications.
+  prefs: []
+  type: TYPE_NORMAL
+- en: By far the most common (but not the best) way to deal with this problem is to
+    represent all the OOV tokens as a special token, which is conventionally named
+    UNK (for “unknown”). The idea is that every time the model sees a token that is
+    not part of the vocabulary, it pretends it saw a special token UNK instead and
+    proceeds as usual. This means that the vocabulary and the embedding table both
+    have a designated “slot” for UNK so that the model can deal with words that it
+    has never seen. The embeddings (and any other parameters) for UNK are trained
+    in the same manner as other regular tokens.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Do you see any problems with this approach? Treating all OOV tokens with a single
+    UNK token means that they are collapsed into a single embedding vector. It doesn’t
+    matter if the word is “NLP” or “doggy”—as long as it’s something unseen, it always
+    gets treated as a UNK token and assigned the same vector, which becomes a generic,
+    catch-all representation of various words. Because of this, the model cannot tell
+    the differences among OOV words, no matter what the identity of the words is.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This may be fine if you are building, for example, a sentiment analyzer. OOV
+    words are, by definition, very rare and might not affect the prediction of most
+    of the input sentences. However, this becomes a huge problem if you are building
+    a machine translation system or a conversational engine. It wouldn’t be a usable
+    MT system or a chatbot if it produces “I don’t know” every time it sees new words!
+    In general, the OOV problem is more serious for language-generation systems (including
+    machine translation and conversational AI) compared to NLP systems for prediction
+    (sentiment analysis, POS tagging, and so on).
+  prefs: []
+  type: TYPE_NORMAL
+- en: How can we do better? OOV tokens are such a big problem in NLP that there has
+    been a lot of research work on how to deal with them. In the following subsections,
+    we’ll cover character-based and subword-based models, two techniques commonly
+    used for building robust neural NLP models.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 10.2.2 Character models
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The simplest yet effective solution for dealing with the OOV problem is to treat
+    characters as tokens. Specifically, we break the input text into individual characters,
+    even including punctuation and whitespace, and treat them as if they are regular
+    tokens. The rest of the application is unchanged—“word” embeddings are assigned
+    to characters, which are further processed by the model. If the model produces
+    text, it does so character-by-character.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In fact, we used a character-level model in chapter 5 when we built a language
+    generator. Instead of generating text word-by-word, the RNN produces text one
+    character at a time, as illustrated in figure 10.5\. Thanks to this strategy,
+    the model was able to produce words that look like English but actually aren’t.
+    Notice a number of peculiar words (*despoit*, *studented*, *redusention*, *distaples*)
+    that resemble English words in the output shown in listing 10.2\. If the model
+    operated on words, it produces only known words (or UNKs when unsure), and this
+    wouldn’t have been possible.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH10_F05_Hagiwara](../Images/CH10_F05_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 10.5 A language-generation model that generates text character-by-character
+    (including whitespace)
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 10.2 Generated sentences by a character-based language model
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: Character-based models are versatile and put few assumptions on the structure
+    of the language. For languages with small sets of alphabets (like English), it
+    effectively eradicates unknown words, because almost any words, no matter how
+    rare they are, can be broken down into characters. Tokenizing into characters
+    is also an effective strategy for languages with large alphabets (like Chinese),
+    although you need to watch out for “unknown character” problems.
+  prefs: []
+  type: TYPE_NORMAL
+- en: However, this strategy is not without drawbacks. The biggest issue is its inefficiency.
+    To encode a sentence, the network (be it an RNN or the Transformer) needs to go
+    over all the characters in it. For example, a character-based model needs to process
+    “t,” “h,” “e,” and “_” (whitespace) to process a single word “the,” whereas a
+    word-based model can finish this in a single step. This inefficiency takes its
+    biggest toll on the Transformers, where the attention computation increases quadratically
+    when the input sequence gets longer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 10.2.3 Subword models
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: So far, we studied two extremes—the word-based approach is efficient but not
+    great at dealing with unknown words. The character-based approach is great at
+    dealing with unknown words but is inefficient. Is there something in between?
+    Can we use some tokenization that is both efficient and robust to unknown words?
+  prefs: []
+  type: TYPE_NORMAL
+- en: Subword models are a recent invention that addresses this problem for neural
+    networks. In subword models, the input text is segmented into a unit called *subwords*,
+    which simply means something smaller than words. There is no formal linguistic
+    definition as to what subwords actually are, but they roughly correspond to part
+    of words that appear frequently. For example, one way to segment “dishwasher”
+    is “dish + wash + er,” although some other segmentation is possible.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Some varieties of algorithms (such as WordPiece[¹](#pgfId-1107258) and SentencePiece[²](#pgfId-1107261))
+    tokenize input into subwords, but by far the most widely used is *byte-pair encoding*
+    (BPE).[³](#pgfId-1107267) BPE was originally invented as a compression algorithm,[⁴](#pgfId-1107270)
+    but since 2016, it’s been widely used as a tokenization method for neural models,
+    particularly in machine translation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The basic concept of BPE is to keep frequent words (such as “the” and “you”)
+    and n-grams (such as “-able” and “anti-”) unsegmented, while breaking up rarer
+    words (such as “dishwasher”) into subwords (“dish + wash + er”). Keeping frequent
+    words and n-grams together helps the model process those tokens efficiently, whereas
+    breaking up rare words ensures there are no UNK tokens, because everything can
+    be ultimately broken up into individual characters, if necessary. By flexibly
+    choosing where to tokenize based on the frequency, BPE achieves the best of two
+    worlds—being efficient while addressing the unknown word problem.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s see how BPE determines where to tokenize with real examples. BPE is a
+    purely statistical algorithm (it doesn’t use any language-dependent information)
+    and operates by merging the most frequently occurring pair of consecutive tokens,
+    one at a time. First, BPE tokenizes all the input texts into individual characters.
+    For example, if your input is four words low, lowest, newer, and wider, it will
+    tokenize them into l o w _, l o w e s t _, n e w e r _, w i d e r _. Here, “_”
+    is a special symbol that indicates the end of each word. Then, the algorithm identifies
+    any two consecutive elements that appear most often. In this example, the pair
+    l o appears most often (two times), so these two characters are merged, yielding
+    lo w _, lo w e s t _, n e w e r _, w i d e r _. Then, lo w will be merged into
+    low, e r into er, er _ into er_, at which time you have low _, low e s t _, n
+    e w er_, w i d er_. This process is illustrated in figure 10.6.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH10_F06_Hagiwara](../Images/CH10_F06_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 10.6 BPE learns subword units by iteratively merging consecutive units
+    that cooccur frequently.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Notice that, after four merge operations, lowest is segmented into low e s t
+    where frequent substrings such as low are merged together whereas infrequent ones
+    such as est are broken apart. To segment a new input (e.g., lower), the same sequence
+    of merge operations is applied in order, yielding low e r _. If you start from
+    52 unique letters (26 upper- and lowercase letters), you will end up with 52 +
+    N unique tokens in your vocabulary, where N is the number of merge operations
+    executed. In this way, you have complete control over the size of the vocabulary.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In practice, you rarely need to implement BPE (or any other subword tokenization
+    algorithms) yourself. These algorithms are implemented in many open source libraries
+    and platforms. Two popular options are Subword-NMT ([https://github.com/rsennrich/subword-nmt](https://github.com/rsennrich/subword-nmt))
+    and SentencePiece ([https://github.com/google/sentencepiece](https://github.com/google/sentencepiece))
+    (which also supports a variant of subword tokenization using a unigram language
+    model). Many of the default tokenizers shipped with NLP frameworks, such as the
+    one implemented in Hugging Face Transformers, support subword tokenization.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 10.3 Avoiding overfitting
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '*Overfitting* is one of the most common and important issues you need to address
+    when building any machine learning applications. An ML model is said to overfit
+    when it fits the given data so well that it loses its generalization ability to
+    unseen data. In other words, the model may capture the training data very well
+    and show good performance on it, but it may not be able to capture its inherent
+    patterns well and shows poor performance on data that the model has never seen
+    before.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Because overfitting is so prevalent in machine learning, researchers and practitioners
+    have come up with a number of algorithms and techniques to combat overfitting
+    in the past. In this section, we’ll learn two such techniques—regularization and
+    early stopping. These are popular in any ML applications (not just NLP) and worth
+    getting under your belt.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 10.3.1 Regularization
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '*Regularization* in machine learning refers to techniques that encourage the
+    simplicity and the generalization of the model. You can think of it as one form
+    of penalty you'
+  prefs: []
+  type: TYPE_NORMAL
+- en: impose on your ML model to ensure that it is as generic as possible. What does
+    it mean? Say you are building an “animal classifier” by training word embeddings
+    from a corpus and by drawing a line between animals and other stuff in this embedding
+    space (i.e., you represent each word as a multidimensional vector and classify
+    whether the word describes an animal based on the coordinates of the vector).
+    Let’s simplify this problem a lot and assume that each word is a two-dimensional
+    vector, and you end up with the plot shown in figure 10.7\. You can now visualize
+    how a machine learning model makes a classification decision by drawing lines
+    where the decision flips between different classes (animals and non-animals),
+    which is called the *classification boundary*. How would you draw a classification
+    boundary so that animals (blue circles) are separated from everything else (triangles)?
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH10_F07_Hagiwara](../Images/CH10_F07_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 10.7 Animal vs. non-animal classification plot
+  prefs: []
+  type: TYPE_NORMAL
+- en: One simple way to separate animals is to draw one straight line, as in the first
+    plot in figure 10.8\. This simple classifier makes several mistakes (in classifying
+    words like “hot” and “bat”), but it correctly classifies the majority of data
+    points. This sounds like a good start.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH10_F08_Hagiwara](../Images/CH10_F08_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 10.8 Classification boundaries with increasing complexity
+  prefs: []
+  type: TYPE_NORMAL
+- en: What if you are told that the decision boundary doesn’t have to be a straight
+    line? You may want to draw something like the one shown in the middle in figure
+    10.8\. This one looks better—it makes fewer mistakes than the first one, although
+    it is still not perfect. It appears tractable for a machine learning model because
+    the shape is simple.
+  prefs: []
+  type: TYPE_NORMAL
+- en: But there’s nothing that stops you here. If you want to make as few errors as
+    possible, you can also draw something wiggly like the one shown in the third plot.
+    That decision boundary doesn’t even make any classification errors, which means
+    that we achieved 100% classification accuracy!
+  prefs: []
+  type: TYPE_NORMAL
+- en: Not so fast—remember that up until here, we’ve been thinking only about the
+    training time, but the main purpose of machine learning models is to achieve good
+    classification performance *at the test time* (i.e., they need to classify unobserved,
+    new instances as correctly as possible). Now let’s think about how the three decision
+    boundaries described earlier fare at test time. If we assume the test instances
+    are distributed similarly to the training instances we saw in figure 10.8, the
+    new “animal” points are most likely to fall in the upper-right region of the plot.
+    The first two decision boundaries will achieve decent accuracy by classifying
+    the majority of new instances correctly. But how about the third one? Training
+    instances such as “hot” shown in the plot are most likely exceptions rather than
+    the norm, so the curved sections of the decision boundary that tried to accommodate
+    as many training instances as possible may do more harm than good at the test
+    time by inadvertently misclassifying test instances. This is exactly what overfitting
+    looks like—the model fits the training data so well that it sacrifices its generalization
+    ability, which is what’s happening here.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Then, the question is, how can we avoid having your model look like the third
+    decision boundary? After all, it is doing a very good job correctly classifying
+    the training data. If you looked only at the training accuracy and/or the loss,
+    there would be nothing to stop you from choosing it. One way to avoid overfitting
+    is to use a separate, held-out dataset (called a *validation set*; see section
+    2.2.3) to validate the performance of your model. But can we do this even without
+    using a separate dataset?
+  prefs: []
+  type: TYPE_NORMAL
+- en: The third decision boundary just doesn’t look right—it’s overly complex. With
+    all other things being equal, we should prefer simpler models, because in general,
+    simpler models generalize better. This is also in line with Occam’s razor, which
+    states that a simpler solution is preferable to a more complex one. How can we
+    balance between the training fit and the simplicity of the model?
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is where regularization comes into play. Think of regularization as additional
+    constraints imposed on the model so that simpler and/or more general models are
+    preferred. The model is optimized so that it achieves the best training fit while
+    being as generic as possible.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Numerous regularization techniques have been proposed in machine learning because
+    overfitting is such an important topic. We are going to introduce only a few of
+    the most important ones—L2 regularization (weight decay), dropout, and early stopping.
+  prefs: []
+  type: TYPE_NORMAL
+- en: L2 Regularization
+  prefs: []
+  type: TYPE_NORMAL
+- en: L2 regularization, also called *weight decay*, is one of the most common regularization
+    methods not just for NLP or deep learning but for a wide range of ML models. We
+    are not going into its mathematical details, but in short, L2 regularization adds
+    a penalty for the complexity of a model measured by how large its parameters are.
+    To represent a complex classification boundary, an ML model needs to adjust a
+    large number of parameters (the “magic constants”) to extreme values, measured
+    by the L2 loss, which captures how far away they are from zero. Such models incur
+    a larger L2 penalty, which is why L2 encourages simpler models. If you are interested
+    in learning more about L2 regularization (and other related topics about NLP in
+    general), check out textbooks such as *Speech and Language Processing* by Jurafsky
+    and Martin ([https://web.stanford .edu/~jurafsky/slp3/5.pdf](https://web.stanford.edu/~jurafsky/slp3/5.pdf))
+    or Goodfellow et al.’s *Deep Learning* ([https://www.deep learningbook.org/contents/regularization.html](https://www.deeplearningbook.org/contents/regularization.html)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Dropout
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Dropout* is another popular regularization technique commonly used with neural
+    networks. Dropout works by randomly “dropping” neurons during training, where
+    a “neuron” is basically a dimension of an intermediate layer and “dropping” means
+    to mask it with zeros. You can think of dropout as a penalty to the model’s structural
+    complexity and its reliance on particular features and values. As a result, the
+    network tries to make the best guess with the remaining smaller number of values,
+    which forces it to generalize well. Dropout is easy to implement and effective
+    in practice and is used as a default regularization method in many deep learning
+    models. For more information on dropout, the regularization chapter of the Goodfellow
+    book mentioned earlier provides a good introduction and mathematical details of
+    regularization techniques.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 10.3.2 Early stopping
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Another popular approach for combatting overfitting in machine learning is *early
+    stopping*. Early stopping is a relatively simple technique where you stop training
+    your model when the model performance stops improving, usually measured by the
+    validation set loss. In chapter 6, we plotted learning curves when we built an
+    English-Spanish machine translation model (shown again in figure 10.9). Notice
+    that the validation loss curve flattens out around the eighth epoch and starts
+    to creep up after that, which is a sign of overfitting. Early stopping would detect
+    this, stop the training, and use the result from the best epoch when the loss
+    is lowest. In general, early stopping has a “patience” parameter, which is the
+    number of nonimproving epochs for early stopping to kick in. When patience is
+    10 epochs, for example, the training pipeline will wait 10 epochs after the loss
+    stops improving to stop the training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH10_F09_Hagiwara](../Images/CH10_F09_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 10.9 The validation loss curve flattens out around the eighth epoch and
+    creeps back up.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Why does early stopping help mitigate overfitting? What does it have to do with
+    model complexity? Without getting into mathematical details, it takes some time
+    (training epochs) for the model to learn complex, overfitted decision boundaries.
+    Most models start from something simple (e.g., straight decision lines) and gradually
+    increase their complexity over the course of training. By stopping the training
+    early, early stopping can prevent the model from becoming overly complex.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Many machine learning frameworks have built-in support for early stopping.
+    For example, AllenNLP’s trainer supports early stopping by default. Recall that
+    we used the following configuration in section 9.5.3 when we trained a BERT-based
+    natural language inference model, where we used early stopping (with patience
+    = 10) without paying much attention. This allows the trainer to stop if the validation
+    metric doesn’t improve for 10 epochs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 10.3.3 Cross-validation
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '*Cross-validation* is not exactly a regularization method, but it is one of
+    the techniques commonly used in machine learning. A common situation in building
+    and validating a machine learning model is this—you have only a couple of hundred
+    instances available for training. As we’ve seen so far in this book, you can’t
+    train a reliable ML model just on the training set—you need a separate set for
+    validation, and preferably another separate set for testing. How much you use
+    for validation/testing depends on the task and the data size, but in general,
+    it is advised that you set aside 5-20% of your training instances for validation
+    and testing. This means that if your training data is small, your model is validated
+    and tested on just a few dozen instances, which can make the estimated metrics
+    unstable. Also, how you choose these instances has a large impact on the evaluation
+    metrics, which is not ideal.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The basic idea of cross-validation is to iterate this phase (splitting the dataset
+    into training and validation portions) multiple times with different splits to
+    improve the stability of the result. Specifically, in a typical setting called
+    *k-fold cross validation*, you first split the dataset into *k* different portions
+    of equal size called *folds*. You use one of the folds for validation while training
+    the model on the rest (*k* - 1 folds), and repeat this process *k* times, using
+    a different fold for validation every time. See figure 10.10 for an illustration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH10_F10_Hagiwara](../Images/CH10_F10_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 10.10 In k-fold cross validation, the dataset is split into k equally
+    sized folds and one is used for validation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The validation metrics are computed for every fold, and the final metrics are
+    averaged over all iterations. This way, you can obtain a more stable estimate
+    of the evaluation metrics that are not impacted heavily by the way the dataset
+    is split.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The use of cross-validation in deep learning models is not common, because these
+    models require a large amount of data, and you don’t need cross-validation if
+    you have a large dataset, although its use is more common for more traditional
+    and industrial settings where the amount of training data is limited.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 10.4 Dealing with imbalanced datasets
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In this section, we’ll focus on one of the most common problems you may encounter
+    in building NLP and ML models—the class imbalance problem. The goal of a classification
+    task is to assign one of the classes (e.g., spam or nonspam) to each instance
+    (e.g., an email), but these classes are rarely distributed evenly. For example,
+    in spam filtering, the number of nonspam emails is usually larger than the number
+    of spam emails. In
+  prefs: []
+  type: TYPE_NORMAL
+- en: document classification, some topics (such as politics or sports) are usually
+    more popular than other topics. Classes are said to be imbalanced when some classes
+    have way more instances than others (see figure 10.11 for an example).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH10_F11_Hagiwara](../Images/CH10_F11_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 10.11 Imbalanced dataset
+  prefs: []
+  type: TYPE_NORMAL
+- en: Many classification datasets have imbalanced classes, which poses some additional
+    challenges when you train your classifier. The signals your model gets from smaller
+    classes are overwhelmed by larger classes, which causes your model to perform
+    poorly on minority classes. In the following subsections, I’m going to discuss
+    some techniques you can consider when faced with an imbalanced dataset.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 10.4.1 Using appropriate evaluation metrics
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Before you even begin tweaking your dataset or your model, make sure you are
+    validating your model with an appropriate metric. In section 4.3, we discussed
+    why it is a bad idea to use accuracy as your evaluation metric when the dataset
+    is imbalanced. In one extreme case, if 90% of your instances belong to class A
+    and the other 10% belong to class B, even a stupid classifier that assigns class
+    A to everything can achieve 90% accuracy. This is called a *majority class baseline*.
+    A slightly more clever (but still stupid) classifier that randomly assigns label
+    A 90% of the time and label B 10% of the time without even looking at the instance
+    will achieve 0.9 * 0.9 + 0.1 * 0.1 = 82% accuracy. This is called a *random baseline*,
+    and the more imbalanced your dataset is, the higher the accuracy of these baseline
+    models will become.
+  prefs: []
+  type: TYPE_NORMAL
+- en: But this kind of random baseline is rarely a good model for minority classes.
+    Imagine what would happen to class B if you used the random baseline. Because
+    it will assign class A 90% of the time no matter what, 90% of the instances belonging
+    to class B will be assigned class A. In other words, the accuracy of this random
+    baseline for class B is only 10%. If this was a spam filter, it would let 90%
+    of spam emails go through, no matter what the content is, just because 90% of
+    emails you receive are not spam! This would make a terrible spam filter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If your dataset is imbalanced and you care about the classification performance
+    on the minority class, you should consider using metrics that are more appropriate
+    for such settings. For example, if your task is a “needle in a haystack” type
+    of setting, where the goal is to find a very small number of instances among others,
+    you may want to use the F1-measure instead of accuracy. As we saw in chapter 4,
+    the F-measure is some sort of average between precision (how hay-free your prediction
+    is) and recall (how much of the needle you actually found). Because the F1-measure
+    is calculated per class, it does not underrepresent minority classes. If you’d
+    like to measure the model’s overall performance including majority classes, you
+    can compute the macro-averaged F-measure, which is simply an arithmetic average
+    of F-measures computed per class.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 10.4.2 Upsampling and downsampling
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Now let’s look at concrete techniques that can mitigate the class imbalance
+    problem. First of all, if you can collect more labeled training data, you should
+    seriously consider doing that first. Unlike academic and ML competition settings
+    where the dataset is fixed while you tweak your model, in a real-world setting
+    you are free to do whatever is necessary to improve your model (of course, as
+    long as it’s lawful and practical). Often, the best thing you can do to improve
+    a model’s generalization is expose it to more data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If your dataset is imbalanced and the model is making biased predictions, you
+    can either *upsample* or *downsample* your data so that classes have roughly equal
+    representations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In upsampling (see the second figure in figure 10.12), you artificially increase
+    the size of the minority class by copying the instances multiple times. Take the
+    scenario we discussed earlier for example—if you duplicate the instances of class
+    B and add eight extra copies of each instance to the dataset, they have an equal
+    number of instances. This can mitigate the biased prediction issue. More sophisticated
+    data augmentation algorithms such as SMOTE[⁵](#pgfId-1107425) are available, although
+    they are not widely used in NLP, due to the inherent difficulty in generating
+    linguistic examples artificially.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH10_F12_Hagiwara](../Images/CH10_F12_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 10.12 Upsampling and downsampling
+  prefs: []
+  type: TYPE_NORMAL
+- en: If your model is biased not because the minority class is too small but because
+    the majority class is too large, you can instead choose to downsample (the third
+    figure in figure 10.12). In downsampling, you artificially decrease the size of
+    the majority class by choosing a subset of the instances belonging to that class.
+    For example, if you sample one out of nine instances from class A, you’ll end
+    up with the equal number of instances in classes A and B. You can downsample in
+    multiple ways—the easiest is to randomly choose the subset. If you would like
+    to make sure that the downsampled dataset still preserves the diversity in the
+    original data, you can try *stratified sampling*, where you sample some number
+    of instances per group defined by some attributes. For example, if you have too
+    many nonspam emails and want to downsample, you can group them by the sender’s
+    domain first, then sample a fixed number of emails per domain. This will ensure
+    that your sampled dataset will contain a diverse set of domains.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that neither upsampling nor downsampling is a magic bullet. If you “correct”
+    the distribution of classes too aggressively, you risk making unfair predictions
+    for the majority class, if that’s what you care about. Always make sure to check
+    your model with a held-out validation set with appropriate evaluation metrics.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 10.4.3 Weighting losses
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Another approach for mitigating the class imbalance problem is to use weighting
+    when computing the loss, instead of making modification to your training data.
+    Remember that the loss function is used to measure how “off” the model’s prediction
+    for an instance is compared against the ground truth. When you measure how bad
+    the model’s prediction is, you can tweak the loss so that it penalizes more when
+    the ground truth belongs to the minority class.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s take a look at a concrete example. The binary cross-entropy loss, a common
+    loss function used for training a binary classifier, looks like the curve shown
+    in figure 10.13, when the correct label is 1\. The *x*-axis is the predicted probability
+    of the target class, and the *y*-axis is the amount of loss the prediction will
+    incur. When the prediction is perfectly correct (probability = 1), there’s no
+    penalty, whereas as the prediction gets worse (probability < 1), the loss goes
+    up.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH10_F13_Hagiwara](../Images/CH10_F13_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 10.13 Binary cross-entropy loss (when the correct label is 1)
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you care more about the model’s performance on the minority class, you can
+    tweak this loss. Specifically, you can change the shape of this loss (by simply
+    multiplying it by a constant number) just for that class so that the model incurs
+    a larger loss when it makes mistakes on the minority class. One such tweaked loss
+    curve is shown in the figure 10.14 as the top curve. This weighting has the same
+    effect as upsampling the minority class, although modifying the loss is computationally
+    cheaper because you don’t need to actually increase the amount of training data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH10_F14_Hagiwara](../Images/CH10_F14_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 10.14 Weighted binary cross entropy loss
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'It is easy to implement loss weighting in PyTorch and AllenNLP. PyTorch’s binary
+    cross-entropy implementation BCEWithLogitLoss already supports different weights
+    for different classes. You simply need to pass the weight as the pos_weight parameter
+    as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: In this code snippet, we randomly generate prediction (input) and the ground
+    truth (target). There are three instances in total, two of which are of class
+    0 (majority) and one belongs to class 1 (minority). We first compute the loss
+    without weighting by calling the BCEWithLogitsLoss object, which returns the three
+    loss values, one for each instance. We then compute the loss with weighting by
+    passing the weight 2—this means that the wrong prediction will be penalized twice
+    as much if the target class is positive (class 1). Notice that the third element
+    corresponding to class 1 is twice as large as the one returned by the unweighted
+    loss function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 10.5 Hyperparameter tuning
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In this final section of this chapter, we’ll discuss hyperparameter tuning.
+    *Hyperparameters* are parameters about the model and the training algorithm. This
+    term is used in contrast with *parameters*, which are numbers that are used by
+    the model to make predictions from the input. This is what we’ve been calling
+    “magic constants” throughout this book—they work like constants in programming
+    languages, although their exact values are automatically adjusted by optimization
+    so that the prediction matches the desired output as closely as possible.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Correctly tuning hyperparameters is critical for many machine learning models
+    to work properly and achieve their highest potential, and ML practitioners spend
+    a lot of time tuning hyperparameters. Knowing how to tune hyperparameters effectively
+    has a huge impact on your productivity in building NLP and ML systems.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 10.5.1 Examples of hyperparameters
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Hyperparameters are “meta”-level parameters—unlike model parameters, they are
+    used not to make predictions but for controlling the structure of the model and
+    how the model is trained. For example, if you are working on word embeddings or
+    an RNN, how many hidden units (dimensions) to use for representing words is one
+    important hyperparameter. The number of RNN layers to use is another hyperparameter.
+    In addition to these two hyperparameters (the number of hidden units and layers),
+    the Transformer model we covered in chapter 9 has a number of other parameters,
+    such as the number of attention heads and the dimension of the feed-forward network.
+    Even the type of architecture you use, such as RNN versus Transformer, can be
+    thought of as one hyperparameter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Besides, the optimization algorithm you use may have hyperparameters, too. For
+    example, the learning rate (section 9.3.3), one of the most important hyperparameters
+    in many ML settings, determines how much to tweak the model parameters per optimization
+    step. The number of epochs (iterations through the training dataset) is also an
+    important hyperparameter, too.
+  prefs: []
+  type: TYPE_NORMAL
+- en: So far, we have been paying little attention to those hyperparameters, let alone
+    optimizing them. However, hyperparameters can have a huge impact on the performance
+    of machine learning models. In fact, many ML models have a “sweet spot” of hyperparameters
+    that makes them most effective, whereas using a set of hyperparameters outside
+    of this spot may make the model perform poorly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Many ML practitioners tune hyperparameters by hand. This means that you start
+    from a set of hyperparameters that look reasonable and measure the model’s performance
+    on a validation set. Then you change one or more of the hyperparameters slightly
+    and measure the performance again. You repeat this process several times until
+    you hit the “plateau,” where any change of hyperparameters provides only a marginal
+    improvement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: One issue with this manual tuning approach is that it is slow and arbitrary.
+    Let’s say you start from one set of hyperparameters. How do you know which ones
+    to adjust next, and how much? How do you know when to stop? If you have experience
+    tuning a wide range of ML models, you might have some “hunch” about how these
+    models respond to certain hyperparameter changes, but if not, it’s like shooting
+    in the dark. Hyperparameter tuning is such an important topic that ML researchers
+    have been working on better and more organized ways to optimize them.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 10.5.2 Grid search vs. random search
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: We understand that manual optimization of hyperparameters is inefficient, but
+    how should we go about optimizing them, then? We have two more-organized ways
+    of tuning hyperparameters—grid search and random search.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In *grid search*, you simply try every possible combination of the hyperparameter
+    values you want to optimize. For example, let’s assume your model has just two
+    hyperparameters—the number of RNN layers and the embedding dimension. You first
+    define reasonable ranges for these two hyperparameters, for example, [1, 2, 3]
+    for the number of layers and [128, 256, 512] for the dimensionality. Then grid
+    search measures the model’s validation performance for every combination—(1, 128),
+    (1, 256), (1, 512), (2, 128), . . . , (3, 512)—and simply picks the best-performing
+    combination. If you plot these combinations on a 2-D plot, it looks like a grid
+    (see the illustration in figure 10.15), which is why this is called *grid search*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Grid search is a simple and intuitive way to optimize the hyperparameters. However,
+    if you have many hyperparameters and/or their ranges are large, this method gets
+    out of hand. The number of possible combinations is exponential, which makes it
+    impossible to explore all of them in a reasonable amount of time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH10_F15_Hagiwara](../Images/CH10_F15_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 10.15 Grid search vs. random search for hyperparameter tuning. (Adapted
+    from Bergstra and Bengio, 2012; [https://www.jmlr.org/papers/volume13/bergstra12a/bergstra12a.pdf.)](https://www.jmlr.org/papers/volume13/bergstra12a/bergstra12a.pdf)
+  prefs: []
+  type: TYPE_NORMAL
+- en: A better alternative to grid search is *random search*. In random search, instead
+    of trying every possible combination of hyperparameter values, you randomly sample
+    the values and measure the model’s performance on a specified number of combinations
+    (which are called *trials*). For example, in the previous example, random search
+    may choose (2, 87), (1, 339), (2, 101), (3, 254), and so on until it hits the
+    specified number of trials. See the illustration in figure 10.15 (right).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Unless your hyperparameter search space is very small (like the first example),
+    random search is usually recommended over grid search if you want to optimize
+    hyperparameters efficiently. Why? In many machine learning settings, not every
+    hyper-parameter is made equal—there are usually only a small number of hyperparameters
+    that actually matter for the performance, whereas many others do not. Grid search
+    will waste a lot of computation searching for the best combination of hyperparameters
+    that do not really matter, while being unable to explore the few hyperparameters
+    that do matter in detail (figure 10.15, left). On the other hand, random search
+    can explore many possible points on the axis that matters for the performance
+    (figure 10.15, right). Notice that random search can find a better model by exploring
+    more points on the x-axis with the same number of trials (total of nine trials).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 10.5.3 Hyperparameter tuning with Optuna
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: OK, we’ve covered some ways to tune hyperparameters including manual, grid,
+    and random search, but how should you go about implementing it in practice? You
+    can always write your own for-loop (or “for-loops,” in the case of grid search),
+    although it would quickly get tiring if you need to write this type of boilerplate
+    code for every model and task you work on.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Hyperparameter optimization is such a universal topic that many ML researchers
+    and engineers have been working on better algorithms and software libraries. For
+    example, AllenNLP has its own library called *Allentune* ([https://github.com/allenai/allentune](https://github.com/allenai/allentune))
+    that you can easily integrate with your AllenNLP training pipeline. In the remainder
+    of this section, however, I’m going to introduce another hyperparameter tuning
+    library called *Optuna* ([https://optuna.org/](https://optuna.org/)) and show
+    how to use it with AllenNLP to optimize your hyperparameters. Optuna implements
+    state-of-the-art algorithms that search for optimal hyperparameters efficiently
+    and provides integration with a wide range of machine learning frameworks, including
+    TensorFlow, PyTorch, and AllenNLP.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, we assume that you have installed AllenNLP (1.0.0+) and the Optuna plugin
+    for AllenNLP. These can be installed by running the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Also, as instructed by the official documentation ([https://github.com/himkt/allennlp
+    -optuna](https://github.com/himkt/allennlp-optuna)), you need to register the
+    plugin with AllenNLP by running the next code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We are going to use the LSTM-based classifier for the Stanford Sentiment Treebank
+    dataset we built in chapter 2\. You can find the AllenNLP config file in the book
+    repository ([http://www.realworldnlpbook.com/ch10.html#config](http://www.realworldnlpbook.com/ch10.html#config)).
+    Note that you need to reference the variables (std.extVar) for Optuna to have
+    control over the parameters. Specifically, you need to define them at the beginning
+    of the config file:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Then, you need to tell Optuna which parameters to optimize. You can do this
+    by writing a JSON file (hparams.json ([http://www.realworldnlpbook.com/ch10.html#
+    hparams](http://www.realworldnlpbook.com/ch10.html#hparams))). You need to specify
+    every hyperparameter you want Optuna to optimize with its types and ranges as
+    follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Next, invoke this command to start the optimization:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note that we are running 20 trials (—n-trials) with validation accuracy (—metrics
+    best_validation_accuracy) as the metric to maximize (—direction maximize). If
+    you do not specify the metric and the direction, by default Optuna tries to minimize
+    the validation loss.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This will take a while, but after all the trials are finished you will see
+    the following one-line summary of the optimization:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Finally, Optuna supports a wide range of visualization of the optimization
+    result, including very nice contour plots ([http://www.realworldnlpbook.com/ch10.html#
+    contour)](http://www.realworldnlpbook.com/ch10.html#contour), but here we''ll
+    simply use its web-based dashboard to quickly inspect the optimization process.
+    All you need to do is invoke its dashboard from the command line as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now you can access http:/./localhost:5006/dashboard to see the dashboard, shown
+    in figure 10.16.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH10_F16_Hagiwara](../Images/CH10_F16_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 10.16 The Optuna dashboard shows the evaluation metrics of the parameters
+    for each trial.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'From this dashboard you can quickly see not only that your optimal trial was
+    trial #14 but also the optimal hyperparameters at each trial.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Instances are sorted, padded, and batched together for more efficient computation.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Subword tokenization algorithms such as BPE split words into units smaller than
+    words to mitigate the out-of-vocabulary problem in neural network models.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Regularization (such as L2 and dropout) is a technique to encourage model simplicity
+    and generalizability in machine learning.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: You can use data upsampling, downsampling, or loss weights for addressing the
+    data imbalance issue.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Hyperparameters are parameters about the model or the training algorithm. They
+    can be optimized using manual, grid, or random search. Even better, use hyperparameter
+    optimization libraries such as Optuna, which integrates easily with AllenNLP.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '^(1.)Wu et al., “Google’s Neural Machine Translation System: Bridging the Gap
+    between Human and Machine Translation,” (2016). [https://arxiv.org/abs/1609.08144](https://arxiv.org/abs/1609.08144).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '^(2.)Kudo, “Subword Regularization: Improving Neural Network Translation Models
+    with Multiple Subword Candidates,” (2018). [https://arxiv.org/abs/1804.10959](https://arxiv.org/abs/1804.10959).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ^(3.)Sennrich et al., “Neural Machine Translation of Rare Words with Subword
+    Units,” (2016). [https://arxiv.org/abs/1508.07909](https://arxiv.org/abs/1508.07909).
+  prefs: []
+  type: TYPE_NORMAL
+- en: ^(4.)See [https://www.derczynski.com/papers/archive/BPE_Gage.pdf](https://www.derczynski.com/papers/archive/BPE_Gage.pdf).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '^(5.)Chawla et al., “SMOTE: Synthetic Minority Over-Sampling Technique,” (2002).
+    [https://arxiv.org/abs/1106.1813](https://arxiv.org/abs/1106.1813).'
+  prefs: []
+  type: TYPE_NORMAL

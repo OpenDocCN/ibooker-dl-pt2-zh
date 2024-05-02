@@ -1,0 +1,1064 @@
+- en: 11 Deploying and serving NLP applications
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter covers
+  prefs: []
+  type: TYPE_NORMAL
+- en: Choosing the right architecture for your NLP application
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Version-controlling your code, data, and model
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Deploying and serving your NLP model
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Interpreting and analyzing model predictions with LIT (Language Interpretability
+    Tool)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Where chapters 1 through 10 of this book are about building NLP models, this
+    chapter covers everything that happens *outside* NLP models. Why is this important?
+    Isn’t NLP all about building high-quality ML models? It may come as a surprise
+    if you don’t have much experience with production NLP systems, but a large portion
+    of an NLP system has very little to do with NLP at all. As shown in figure 11.1,
+    only a tiny fraction of a typical real-world ML system is the ML code, but the
+    “ML code” part is supported by numerous components that provide various functionalities,
+    including data collection, feature extraction, and serving. Let’s use a nuclear
+    power plant as an analogy. In operating a nuclear power plant, only a tiny fraction
+    concerns nuclear reaction. Everything else is a vast and complex infrastructure
+    that supports safe and efficient generation and transportation of materials and
+    electricity—how to use the generated heat to turn the turbine to make electricity,
+    how to cool and circulate water safely, how to transmit the electricity efficiently,
+    and so on. All those supporting infrastructures have little to do with nuclear
+    physics.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH11_F01_Hagiwara](../Images/CH11_F01_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 11.1 A typical ML system consists of many different components, and the
+    ML code is only a tiny fraction of it. We cover the highlighted components in
+    this chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Partly due to the “AI hype” in popular media, I personally think people pay
+    too much attention to the ML modeling part and too little attention to how to
+    serve the model in a useful way. After all, the goal of your product is to deliver
+    values to the users, not provide them with the raw predictions of the model. Even
+    if your model is 99% accurate, it’s not useful if you cannot make the most of
+    the prediction so that users can benefit from them. Using the previous analogy,
+    users want to power their appliances and light their houses with electricity and
+    do not care much how exactly the electricity is generated in the first place.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the rest of this chapter, we’ll discuss how to architect your NLP applications—we
+    focus on some of the best practices when it comes to designing and developing
+    NLP applications in a reliable and effective manner. Then we talk about deploying
+    your NLP models—this is how we bring the NLP models to production and serve their
+    predictions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 11.1 Architecting your NLP application
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '*Machine learning engineering* is still software engineering. All the best
+    practices (decoupled software architectures, well-designed abstractions, clean
+    and readable code, version control, continuous integration, etc.) apply to ML
+    engineering as well. In this section, we’ll discuss some best practices specific
+    to designing and building NLP/ML applications.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 11.1.1 Before machine learning
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: I understand this is a book about NLP and ML, but you should seriously think
+    about whether you need ML at all for your product before you start working on
+    your NLP application. Building an ML system is no easy feat—it requires a lot
+    of money and time to collect data, train models, and serve predictions. If you
+    can solve your problem by writing some rules, by all means do so. As a rule of
+    thumb, if a deep learning model can achieve an accuracy of 80%, a simpler, rule-based
+    model can take you at least halfway there.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Also, you should consider using existing solutions, if any. Many open source
+    NLP libraries (including AllenNLP and Transformers, the two libraries that we’ve
+    been using extensively throughout the book) exist that come with a wide range
+    of pretrained models. Cloud service providers (such as AWS AI services ([https://aws.amazon.com/machine-learning/ai-services/](https://aws.amazon.com/machine-learning/ai-services/)),
+    Google Cloud AutoML ([https://cloud.google.com/automl](https://cloud.google.com/automl)),
+    and Microsoft Azure Cognitive Services ([https://azure.microsoft.com/en-us/services/cognitive-services/](https://azure.microsoft.com/en-us/services/cognitive-services/)))
+    offer a wide range of ML-related APIs for many domains, including NLP. If your
+    task is something that can be solved using their offerings with no or little modification,
+    that’d usually be a cost-efficient way to build your NLP application. After all,
+    the most expensive component of any NLP application is usually highly skilled
+    talent (i.e., your salary), and you should think twice before you go all-in and
+    build in-house NLP solutions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In addition, you shouldn’t rule out “traditional” machine learning approaches.
+    We’ve paid little attention to traditional ML models in this book, but you can
+    find rich literature of statistical NLP models that were mainstream before the
+    advent of deep NLP methods. Quickly building a prototype with statistical features
+    (such as n-grams) and ML models (such as SVM) is often a great start. Non-deep
+    algorithms such as *gradient-boosted decision trees* (GBDTs) often work almost
+    as well as, if not better than, deep learning methods at a fraction of the cost.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Finally, I always recommend that practitioners start by developing the validation
+    set and choosing the right evaluation metric first, even before starting to choose
+    the right ML approach. A validation set doesn’t need to be big, and most people
+    can afford to sit down for a couple of hours and manually annotate a couple of
+    hundred instances. Doing this offers many benefits—first, by solving the task
+    manually, you get a feel of what’s important when it comes to solving the problem
+    and whether it’s something that a machine can really solve automatically. Second,
+    by putting yourself in the machine’s shoes, you gain a lot of insights into the
+    task (what the data looks like, how the input and output data are distributed,
+    and how they are related), which become valuable when it comes to actually designing
+    an ML system to solve it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 11.1.2 Choosing the right architecture
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Except for rare occasions where the output of an ML system is the end product
+    itself (such as machine translation), NLP modules usually interact with a larger
+    system that collectively provide some values to the end users. For example, a
+    spam filter is usually implemented as a module or a microservice embedded in a
+    larger application (email service). Voice assistant systems are usually large,
+    complex combinations of many ML/NLP subcomponents, including voice recognition,
+    sentence-intent classification, question answering, and speech generation, that
+    interact with each other. Even machine translation models can be one tiny component
+    in a larger complex system if you include data pipelines, the backend, and the
+    translation interface that the end users interact with.
+  prefs: []
+  type: TYPE_NORMAL
+- en: An NLP application can take many forms. Surprisingly, many NLP components can
+    be structured as a one-off task that takes some static data as its input and produces
+    transformed data as its output. For example, if you have a static database of
+    some documents and you’d like to classify them by their topics, your NLP classifier
+    can be a simple one-off Python script that runs this classification task. If you’d
+    like to extract common entities (e.g., company names) from the same database,
+    you can write a Python script that runs a named entity recognition (NER) model
+    to do it. Even a text-based recommender engine that finds objects based on textual
+    similarity can be a daily task that reads from and writes data to the database.
+    You don’t need to architect a complex software system with many services talking
+    to each other.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Many other NLP components can be structured as a (micro)service that runs prediction
+    in batches, which is the architecture that I recommend for many scenarios. For
+    example, a spam filter doesn’t need to classify every single email as soon as
+    they arrive—the system can queue a certain number of emails that arrive at the
+    system and pass the batched emails to the classifier service. The NLP application
+    usually communicates with the rest of the system via some intermediary (e.g.,
+    a RESTful API or a queuing system). This configuration is great for applications
+    that require some freshness for their prediction (after all, users do not want
+    to wait for hours until their emails arrive to their inbox), but the requirement
+    is not that strict.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Finally, NLP components can also be designed so that they serve real-time prediction.
+    This is necessary when, for example, an audience needs real-time subtitles for
+    a speech. Another example is when the system wants to show ads based on the user’s
+    real-time behavior. For these cases, the NLP service needs to receive a stream
+    of input data (such as audio or user events) and produce another stream of data
+    (such as transcribed text or ad-click probabilities). *Real-time streaming frameworks*
+    such as Apache Flink ([https://flink.apache.org/](https://flink.apache.org/))
+    are often used for processing such stream data. Also, if your application is based
+    on a server-client architecture, as with typical mobile and web apps, and you
+    want to show some real-time prediction to the users, you can choose to run ML/NLP
+    models on the client side, such as the web browser or the smartphones. Client-side
+    ML frameworks such as TensorFlow.js ([https://www.tensorflow.org/js](https://www.tensorflow.org/js)),
+    Core ML ([https://developer.apple.com/documentation/coreml](https://developer.apple.com/documentation/coreml)),
+    and ML Kit ([https://developers.google.com/ml-kit](https://developers.google.com/ml-kit))
+    can be used for such purposes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 11.1.3 Project structure
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Many NLP applications follow somewhat similar project structures. A typical
+    NLP project may need to manage datasets to train a model from, intermediate files
+    generated by preprocessing data, model files produced as a result of training,
+    source code for training and inference, and log files that store additional information
+    about the training and inference.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Because typical NLP applications have many components and directories in common,
+    it’d be useful if you simply follow best practices as your default choice when
+    starting a new project. Here are my recommendations for structuring your NLP projects:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Data management*—Make a directory called data and put all the data in it.
+    It may also be helpful to subdivide this into raw, interim, and result directories.
+    The raw directory contains the unprocessed dataset files you obtained externally
+    (such as the Stanford Sentiment Treebank we’ve been using throughout this book)
+    or built internally. It is very critical that *you do not modify any files in
+    this raw directory by hand*. If you need to make changes, write a script that
+    runs some processing against the raw files and then writes the result to the interim
+    directory, which serves as a place for intermediate results. Or make a patch file
+    that manages the “diff” you made to the raw file, and version-control the patch
+    files instead. The final results such as predictions and metrics should be stored
+    in the result directory.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Virtual environment*—It is strongly recommended that you work in a virtual
+    environment so that your dependencies are separated and reproducible. You can
+    use tools like Conda ([https://docs.conda.io/en/latest/](https://docs.conda.io/en/latest/))
+    (my recommendation) and venv ([https://docs.python.org/3/library/venv.html](https://docs.python.org/3/library/venv.html))
+    to set up a separate environment for your project and use pip to install individual
+    packages. Conda can export the environment configuration into an environment.yml
+    file, which you can use to recover the exact Conda environment. You can also keep
+    track of pip packages for the project in a requirements.txt file. Even better,
+    you can use Docker containers to manage and package the entire ML environment.
+    This greatly reduces dependency-related issues and simplifies deployment and serving.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Experiment management*—Training and inference pipelines for an NLP application
+    usually consist of several steps, such as preprocessing and joining the data,
+    converting them into features, training and running the model, and converting
+    the results back to a human-readable format. These steps can easily get out of
+    hand if you try to remember to manage them manually. A good practice is to keep
+    track of the steps for the pipeline in a shell script file so that the experiments
+    are reproducible with a single command, or use dependency management software
+    such as GNU Make, Luigi ([https://github.com/spotify/luigi](https://github.com/spotify/luigi)),
+    and Apache Airflow ([https://airflow.apache.org/](https://airflow.apache.org/)).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Source code*—Python source code is usually put in a directory of the same
+    name as the project, which is further subdivided into directories such as data
+    (for data-processing code), model (for model code), and scripts (for putting scripts
+    for training and other one-off tasks).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 11.1.4 Version control
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: You probably don’t need to be convinced that version-controlling your source
+    code is important. Tools like Git help you keep track of the changes and manage
+    different versions of the source code. Development of NLP/ML applications is usually
+    an iterative process where you (often with other people) make many changes to
+    the source code and experiment with many different models. You can easily end
+    up with a number of slightly different versions of the same code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In addition to version-controlling your source code, it is also important to
+    *version-control your data and models*. This means that you should version-control
+    your training data, source code, and models separately, as shown in the dotted-line
+    boxes in figure 11.2\. This is one of the major differences between regular software
+    projects and ML applications. Machine learning is about improving computer algorithms
+    through data. By definition, the behavior of any ML system depends on data it
+    is fed. This could lead to a situation where the behavior of the system is different
+    even if you use the same code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tools like Git Large File Storage ([https://git-lfs.github.com/](https://git-lfs.github.com/))
+    and DVC ([https://dvc.org](https://dvc.org)) can version-control your data and
+    models in a seamless way. Even if you are not using these tools, you should at
+    least manage different versions as separate files that are named clearly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH11_F02_Hagiwara](../Images/CH11_F02_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 11.2 Machine learning components to version-control: training data,
+    source code, and models'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In a larger and more complex ML project, you may want to version-control your
+    model and your feature pipeline separately, because the behavior of an ML model
+    can be different depending on how you preprocess the input, even with the same
+    model and input data. This will also mitigate the train-serve skew problem we’ll
+    discuss later in section 11.3.2.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Finally, when working on ML applications, you will experiment with a lot of
+    different settings—different combinations of training datasets, feature pipelines,
+    models, and hyperparameters—which can easily get out of control. I recommend keeping
+    track of the training settings using some experiment management system, such as
+    Weights & Biases ([https://wandb.ai/](https://wandb.ai/)), but you can also use
+    something as simple as a spreadsheet in which you enter experiment information
+    manually. When keeping track of experiments, be sure to record the following information
+    for each experiment:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Versions of the model code, feature pipeline, and the training data used
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Hyperparameters used to train the model
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Evaluation metrics for the training and the validation data
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Platforms like AllenNLP support experiment configuration by default, which makes
+    the first two items easy. Tools like TensorBoard, which is supported by AllenNLP
+    and Hugging Face out of the box, make it trivial to keep track of various metrics.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 11.2 Deploying your NLP model
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In this section, we’ll move on to the deployment stage, where your NLP application
+    is put on a server and becomes available for use. We’ll discuss practical considerations
+    when deploying NLP/ML applications.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 11.2.1 Testing
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: As with software engineering, testing is an important part of building reliable
+    NLP/ML applications. The most fundamental and important tests are unit tests,
+    which automatically check whether small units of software (such as methods and
+    classes) are working as expected. In NLP/ML applications, it is important to unit-test
+    your feature pipeline. For example, if you write a method that converts raw text
+    into a tensor representation, make sure that it works for typical and corner cases
+    with unit tests. In my experience, this is where bugs often sneak in. Reading
+    a dataset, building a vocabulary from a corpus, tokenizing, converting tokens
+    into integer IDs—these are all essential yet error-prone steps in preprocessing.
+    Fortunately, frameworks such as AllenNLP offer standardized, well-tested components
+    for these steps, which makes building NLP applications easier and bug-free.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In addition to unit tests, you need to make sure that your model learns what
+    it’s told to learn. This corresponds to testing logic errors in regular software
+    engineering—types of errors where the software runs without crashing yet produces
+    incorrect results. This type of error is more difficult to catch and fix in NLP/ML,
+    because you need more insight into how the learning algorithm works mathematically.
+    Moreover, many ML algorithms involve some randomness, such as random initialization
+    and sampling, which makes testing even more difficult.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'One recommended technique for testing NLP/ML models is sanity checks against
+    the model output. You can start with a small and simple model and just a few toy
+    instances with obvious labels. If you are testing a sentiment analysis model,
+    for example, this goes as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Create a small and simple model for debugging, such as a toy encoder that simply
+    averages the input word embeddings with a softmax layer on top.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Prepare a few toy instances, such as “The best movie ever!” (positive) and “This
+    is an awful movie!” (negative).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Feed these instances to the model, and train it until convergence. Because we
+    are using a very small dataset without a validation set, the model will heavily
+    overfit to the instances, and that’s totally fine. Check whether the training
+    loss goes down as expected.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Feed the same instances to the trained model, and check whether the predicted
+    labels match the expected ones.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Try the steps above with more toy instances and a larger model.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: As a related technique, I always recommend you start with a smaller dataset,
+    especially if the original dataset is large. Because training NLP/ML models takes
+    a long time (hours or even days), you often find that your code has some errors
+    only after your training is finished. You can subsample your training data, for
+    example, by simply taking one out of every 10 instances, so that your entire training
+    finishes quickly. Once you are sure that your model works as expected, you can
+    gradually ramp up the amount of data you use for training. This technique is also
+    great for quickly iterating and experimenting with many different architectures
+    and hyperparameter settings. When you have just started building your model, you
+    don’t usually have clear understanding of the best models for your task. With
+    a smaller dataset, you can quickly validate a large number of different options
+    (RNN versus Transformers, different tokenizers, etc.) and narrow down the set
+    of candidate models that work best. One caveat to this approach is that the best
+    model architectures and hyperparameters may depend on the size of the training
+    data. Because of this, don’t forget to run the validation against the full dataset,
+    too.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Finally, you can use integration tests to verify whether the individual components
+    of your application work in combination. For NLP, this usually means running the
+    whole pipeline to see if the prediction is correct. Similar to the unit tests,
+    you can prepare a small number of instances where the expected prediction is clear
+    and run them against the trained model. Note that these instances are not for
+    measuring how good the model is, but rather to serve as a sanity check whether
+    your model can produce correct predictions for “obvious” cases. It is a good practice
+    to run integration tests every time a new model or code is deployed. This is usually
+    part of *continuous integration* (CI) used for regular software engineering.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 11.2.2 Train-serve skew
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: One common source of errors in ML applications is called *train-serve skew*,
+    a situation where there’s a discrepancy between how instances are processed at
+    the training and the inference times. This could occur in various situations,
+    but let’s discuss a concrete example. Say you are building a sentiment-analyzer
+    system with AllenNLP and would like to convert texts into instances. You usually
+    start writing a data loader first, which reads the dataset and produces instances.
+    Then you write a Python script or a config file that tells AllenNLP how the model
+    should be trained. You train and validate your model. So far, so good. However,
+    when it comes to using the model for prediction, things look slightly different.
+    You need to write a predictor, which, given an input text, converts it into an
+    instance and passes it to the model’s forward method. Notice that now you have
+    two independent pipelines that preprocess the input—one for the training in the
+    dataset reader, and another for the inference in the predictor.
+  prefs: []
+  type: TYPE_NORMAL
+- en: What happens if you want to modify the way the input text is processed? For
+    example, let’s say you find something you want to improve in your tokenization
+    process, and you make changes to how input text is tokenized in your data loader.
+    You update your data loader code, retrain the model, and deploy the model. However,
+    you forgot to update the corresponding tokenization code in your predictor, effectively
+    creating a discrepancy in how input is tokenized between training and serving.
+    This is illustrated in figure 11.3.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH11_F03_Hagiwara](../Images/CH11_F03_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 11.3 Train-serve skew is caused by discrepancies in how input is processed
+    between training and serving.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The best way to fix this—or even better, to prevent this from happening in the
+    first place—is to share as much of the feature pipeline as possible between the
+    training and the serving infrastructure. A common practice in AllenNLP is to implement
+    a method called _text_to_instance() in the dataset reader, which takes an input
+    and returns an instance. By making sure that both the dataset reader and the predictor
+    refer to the same method, you can minimize the discrepancy between the pipelines.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In NLP, the fact that input text is tokenized and converted to numerical values
+    makes debugging your model even more difficult. For example, an obvious bug in
+    tokenization that you can spot easily with your naked eyes can be quite difficult
+    to identify if everything is numerical values. A good practice is to log some
+    intermediate results into a log file that you can inspect later.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Finally, note that some behaviors of neural networks do differ between training
+    and serving. One notable example is dropout, a regularization method we briefly
+    covered in section 10.3.1\. To recap, dropout regularizes the model by randomly
+    masking activation values in a neural network. This makes sense in training, because
+    by removing activations, the model learns to make robust predictions based on
+    available values. However, remember to turn it off at the serving time, because
+    you don’t want your model to randomly drop neurons. PyTorch models implement methods—train()
+    and eval()—that switch between the training and prediction modes, affecting how
+    layers like dropout behave. If you are implementing a training loop manually,
+    remember to call model.eval()to disable dropout. The good news is that frameworks
+    such as AllenNLP can handle this automatically as long as you are using their
+    default trainer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 11.2.3 Monitoring
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: As with other software services, deployed ML systems should be monitored continuously.
+    In addition to the usual server metrics (e.g., CPU and memory usage), you should
+    also monitor metrics related to the input and the output of the model. Specifically,
+    you can monitor some higher-level statistics such as the distribution of input
+    values and output labels. As mentioned earlier, logic errors, which are a type
+    of error that causes the model to produce wrong results without crashing it, are
+    the most common and hardest to find in ML systems. Monitoring those high-level
+    statistics makes it easier to find them. Libraries and platforms like PyTorch
+    Serve and Amazon SageMaker (discussed in section 11.3) support monitoring by default.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 11.2.4 Using GPUs
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Training large modern ML models almost always requires hardware accelerators
+    such as GPUs. Recall that back in chapter 2, we used overseas factories as an
+    analogy for GPUs, which are designed to execute a huge number of arithmetic operations
+    such as vector and matrix addition and multiplications in parallel. In this subsection,
+    we’ll cover how to use GPUs to accelerate the training and prediction of ML models.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you don’t own GPUs or have never used cloud-based GPU solutions before, the
+    easiest way to “try” GPUs for free is to use Google Colab. Go to its URL ([https://colab.research.google.com/](https://colab.research.google.com/)),
+    create a new notebook, go to the Runtime menu, and choose “Change runtime type.”
+    This will bring up the dialog box shown in figure 11.4.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH11_F04_Hagiwara](../Images/CH11_F04_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 11.4 Google Colab allows you to choose the type of hardware accelerator.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Choose GPU as the type of the hardware accelerator, and type !nvidia-smi in
+    a code block and execute it. Some detailed information about your GPU is displayed,
+    as shown next:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: The nvidia-smi command (short for Nvidia System Management Interface) is a handy
+    tool for checking information about Nvidia GPUs on the machine. From the previous
+    snippet, you can see the version of the driver and CUDA (an API and a library
+    for interacting with GPUs), type of GPUs (Tesla T4), available and used memory
+    (15109 MiB and 3 MiB), and the list of processes that currently use GPUs (there
+    aren’t any). The most typical use of this command is to check how much memory
+    your current process(es) use, because in GPU programming, you can easily get an
+    out-of-memory error if your program uses more memory than is available.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you use cloud infrastructures such as AWS (Amazon Web Services) and GCP (Google
+    Cloud Platform), you’ll find a wide array of virtual machine templates that you
+    can use to quickly create cloud instances that support GPUs. For example, GCP
+    has Nvidia’s official GPU-optimized images for PyTorch and TensorFlow, which you
+    can use as templates to launch your GPU instances. AWS offers Deep Learning AMIs
+    (Amazon Machine Images), which preinstall basic GPU libraries such as CUDA, as
+    well as deep learning libraries such as PyTorch. With these templates, you don’t
+    need to install necessary drivers and libraries manually—you can start building
+    your ML applications right away. Note that although these templates are free,
+    you do need to pay for the infrastructure. The price for GPU-enabled virtual machines
+    is usually significantly higher than CPU machines. Make sure to check their price
+    before you keep them running for an extended period of time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you are setting up GPU instances from scratch, you can find detailed instructions[¹](#pgfId-1107018)
+    for how to set up necessary drivers and libraries. To build NLP applications with
+    the libraries that we covered in this book (namely, AllenNLP and Transformers),
+    you need to install CUDA drivers and toolkits, as well as a PyTorch version that
+    supports GPU.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If your machine has GPU(s), you can enable GPU acceleration by specifying cuda_device
+    in an AllenNLP config file as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: This tells the trainer to use the first GPU for training and validating the
+    AllenNLP model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If you are writing PyTorch code from scratch, you need to manually transfer
+    your model and tensors to the GPU. Using an analogy, this is when your materials
+    get shipped to an overseas factory in container ships. First, you can specify
+    the device (GPU ID) to use, and invoke the to() method of tensors and models to
+    move them between devices. For example, you can use the following code snippet
+    to run text generation on a GPU with Hugging Face Transformers:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: The rest is identical to the code we used in section 8.4.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '11.3 Case study: Serving and deploying NLP applications'
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In this section, we will go over a case study where we serve and deploy an NLP
+    model built with Hugging Face. Specifically, we’ll take a pretrained language
+    generation model (DistilGPT2), serve it with TorchServe, and deploy it to a cloud
+    server using Amazon SageMaker.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 11.3.1 Serving models with TorchServe
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: As you have seen, deploying an NLP application is more than just writing an
+    API for your ML model. You need to take care of a number of production-related
+    considerations, including how to deal with high traffic by parallelizing model
+    inference with multiple workers, how to store and manage different versions of
+    multiple ML models, how to consistently handle pre- and postprocessing of the
+    data, and how to monitor the health of the server as well as various metrics about
+    the data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Because these problems are so common, ML practitioners have been working on
+    general-purpose platforms for serving and deploying ML models. In this section,
+    we’ll use TorchServe ([https://github.com/pytorch/serve](https://github.com/pytorch/serve)),
+    an easy-to-use framework for serving PyTorch models jointly developed by Facebook
+    and Amazon. TorchServe is shipped with many functionalities that can address the
+    issues mentioned earlier.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'TorchServe can be installed by running the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: In this case study, we’ll use a pretrained language model called *DistilGPT2*.
+    DistilGPT2 is a smaller version of GPT-2 built using a technique called *knowledge
+    distillation*. Knowledge distillation (or simply *distillation*) is a machine
+    learning technique where a smaller model (called a *student*) is trained in such
+    a way that it mimics the predictions produced by a larger model (called a *teacher*).
+    It is a great way to train a smaller model that produces high quality output,
+    and it often produces a better model than training a smaller model from scratch.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, let’s download the pretrained DistilGPT2 model from the Hugging Face
+    repository by running the following commands. Note that you need to install Git
+    Large File Storage ([https://git-lfs.github.com/](https://git-lfs.github.com/)),
+    a Git extension for handling large files under Git:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: This creates a subdirectory called distilgpt2, which contains files such as
+    config.json and pytorch_model.bin.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As the next step, you need write a handler for TorchServe, a lightweight wrapper
+    class that specifies how to initialize your model, preprocess and postprocess
+    the input, and run the inference on the input. Listing 11.1 shows the handler
+    code for serving the DistilGPT2 model. In fact, nothing in the handler is specific
+    to the particular model we use (DistilGPT2). You can use the same code for other
+    GPT-2-like models, including the original GPT-2 models, as long as you use the
+    Transformers library.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 11.1 Handler for TorchServe
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Initializes the model
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Preprocesses and tokenizes the incoming data
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Runs inference on the data
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Postprocesses the prediction
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ The handler method called by TorchServe
+  prefs: []
+  type: TYPE_NORMAL
+- en: Your handler needs to inherit from BaseHandler and override a few methods including
+    initialize() and inference(). Your handler script also includes handle(), a top-level
+    method where the handler is initialized and called.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The next step is to run torch-model-archiver, which is a command-line tool
+    that packages your model and your handler, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: The first two options specify the name and the version of the model. The next
+    option, serialized-file, specifies the main weight file of the PyTorch model you
+    want to package (which usually ends with .bin or .pt). You can also add any extra
+    files (specified by extra-files) that are needed for the model to run. Finally,
+    you need to pass the handler file you just wrote to the handler option.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When finished, this creates a file named distilgpt2.mar (.mar stands for “model
+    archive”) in the same directory. Let’s create a new directory named model_ store
+    and move the .mar file there as follows. This directory serves as a model store,
+    a place where all the model files are stored and served from:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now you are ready to spin up TorchServe and start serving your model! All you
+    need is to run the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When the server is fully up, you can start making the HTTP requests to the
+    server. It exposes a couple of endpoints, but if you just want to run inference,
+    you need to invoke http://127.0.0.1:8080/predictions/ with the model name as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Here, we are using a prompt from OpenAI’s original post about GPT-2 ([https://openai.com/blog/better-language-models/](https://openai.com/blog/better-language-models/)).
+    This returns the generated sentences, shown next. The generated text is of decent
+    quality, considering that the model is a distilled, smaller version:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*In a shocking finding, scientist discovered a herd of unicorns living in a
+    remote, previously unexplored valley, in the Andes Mountains. Even more surprising
+    to the researchers was the fact that the unicorns spoke perfect English. They
+    used to speak the Catalan language while working there, and so the unicorns were
+    not just part of the local herd, they were also part of a population that wasn''t
+    much less diverse than their former national-ethnic neighbors, who agreed with
+    them.*'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*“In a sense they learned even better than they otherwise might have been,”
+    says Andrea Rodriguez, associate professor of language at the University of California,
+    Irvine. “They told me that everyone else was even worse off than they thought.”*'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*The findings, like most of the research, will only support the new species
+    that their native language came from. But it underscores the incredible social
+    connections between unicorns and foreigners, especially as they were presented
+    with a hard new platform for studying and creating their own language.*'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*“Finding these people means finding out the nuances of each other, and dealing
+    with their disabilities better,” Rodriguez says.*'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*...*'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When you are finished, you can run the following command to stop serving:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 11.3.2 Deploying models with SageMaker
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Amazon SageMaker is a managed platform for training and deploying machine learning
+    models. It enables you to spin up a GPU server, run a Jupyter Notebook inside
+    it, build and train ML models there, and directly deploy them in a hosted environment.
+    Our next step is to deploy the machine learning model as a cloud SageMaker endpoint
+    so that production systems can make requests to it. The concrete steps for deploying
+    an ML model with SageMaker consist of the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Upload your model to S3.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Register and upload your inference code to Amazon Elastic Container Registry
+    (ECR).
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Create a SageMaker model and an endpoint.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Make requests to the endpoint.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'We are going to follow the official tutorial ([http://mng.bz/p9qK](http://mng.bz/p9qK))
+    with a slight modification. First, let’s go to the SageMaker console ([https://console.aws.amazon.com/sagemaker/home](https://console.aws.amazon.com/sagemaker/home))
+    and start a notebook instance. When you open the notebook, run the following code
+    to install the necessary packages and start a SageMaker session:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: The variable bucket_name contains a string like sagemaker-xxx-yyy where xxx
+    is the region name (like us-east-1). Take note of this name—you need it to upload
+    your model to S3 in the next step.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, you need to upload your model to an S3 bucket by running the following
+    commands from the machine where you just created the .mar file (not from the SageMaker
+    notebook instance). Before uploading, you first need to compress your .mar file
+    into a tar.gz file, a format supported by SageMaker. Remember to replace sagemaker-xxx-yyy
+    with the actual bucket name specified by bucket_name:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The next step is to register and push the TorchServe inference code to ECR.
+    Before you start, in your SageMaker notebook instance, open torchserve-examples/Dockerfile
+    and modify the following line (add —no-cache-dir transformers):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now you can build a Docker container and push it to ECR as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now you are ready to create a SageMaker model and create an endpoint for it,
+    as shown next:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The predictor object is something you can call directly to run the inference
+    as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The content of the response should look something like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: Congratulations! We just completed our journey—we started building an ML model
+    in chapter 2 and came all the way to deploying it to a cloud platform in this
+    chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 11.4 Interpreting and visualizing model predictions
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: People often talk about the metrics and leaderboard performance on standardized
+    datasets, but analyzing and visualizing model predictions and internal states
+    is important for NLP applications in the real world. Although deep learning models
+    can be really good at what they do, often reaching human-level performance on
+    some NLP tasks, those deep models are black boxes, and it is difficult to know
+    *why* they make certain predictions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Because of this (somewhat troubling) property of deep learning models, a growing
+    field in AI called *explainable AI* (XAI) is working to develop methods to explain
+    the predictions and behavior of ML models. Interpreting ML models is useful for
+    debugging—it gives you a lot of clues if you know why it made certain predictions.
+    In some domains such as medical applications and self-driving cars, making ML
+    models explainable is critical for legal and practical reasons. In this final
+    section of the chapter, we’ll go over a case study where we use the *Language
+    Interpretability Tool* (LIT) ([https://pair-code.github.io/lit/](https://pair-code.github.io/lit/))
+    for visualizing and interpreting the predictions and behavior of NLP models.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'LIT is an open source toolkit developed by Google and offers a browser-based
+    interface for interpreting and visualizing ML predictions. Note that it is framework
+    agnostic, meaning that it works with any Python-based ML frameworks of choice,
+    including AllenNLP and Hugging Face Transformers.[²](#pgfId-1107296) LIT offers
+    a wide range of features, including the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Saliency map*—Visualizing in color which part of the input played an important
+    role to reach the current prediction'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Aggregate statistics*—Showing aggregate statistics such as dataset metrics
+    and confusion matrices'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Counterfactuals*—Observing how model predictions change for generated new
+    examples'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In the remainder of this section, let’s take one of the AllenNLP models we trained
+    (the BERT-based sentiment analysis model in chapter 9) and analyze it via LIT.
+    LIT offers a set of extensible abstractions such as datasets and models to make
+    it easier to work with any Python-based ML models.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, let’s install LIT. It can be installed with a single call of pip as
+    follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Next, you need to wrap your dataset and model with the abstract classes defined
+    by LIT. Let’s create a new script called run_lit.py, and import the necessary
+    modules and classes, as shown here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The next code shows how to define a dataset for LIT. Here, we are creating
+    a toy dataset that consists of just four hardcoded examples, but in practice,
+    you may want to read a real dataset that you want to explore. Remember to define
+    the spec() method that returns the type specification of the dataset:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now, we are ready to define the main model, as shown next.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 11.2 Defining the main model for LIT
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Loads the AllenNLP archive
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Extracts and sets the predictor
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Runs the predict method of the predictor
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the constructor (__init__), we are loading an AllenNLP model from an archive
+    file and creating a predictor from it. We are assuming that your model is put
+    under model/model.tar.gz and hard-coding its path, but feel free to modify this,
+    depending on where your model is located.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The model prediction is computed in predict_minibatch(). Given the input (which
+    is simply an array of dataset instances), it runs the model via the predictor
+    and returns the result. Note that the predictions are made instance-by-instance,
+    although in practice, you should consider making predictions in batches because
+    it will improve throughput for larger input data. The method also returns the
+    embeddings for predicted classes (as cls_emb), which will be used for visualizing
+    embeddings (figure 11.5).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH11_F05_Hagiwara](../Images/CH11_F05_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 11.5 LIT can show saliency maps, aggregate statistics, and embeddings
+    for analyzing your model and predictions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Finally, here’s the code for running the LIT server:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: After running the script above, go to http:/./localhost:5432/ on your browser.
+    You should see a screen similar to the one shown in figure 11.5\. You can see
+    an array of panels corresponding to various information about the data and predictions,
+    including embeddings, the dataset table and editor, classification results, and
+    saliency maps (which shows contributions of tokens computed via an automated method
+    called *LIME*[³](#pgfId-1107391)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Visualizing and interacting with model predictions are a great way to get insights
+    into how the model works and how you should improve it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 11.5 Where to go from here
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In this book, we’ve only scratched the surface of this vast, long-historied
+    field of natural language processing. If you are interested in learning the practical
+    aspects of NLP further, *Natural Language Processing in Action* by Hobson Lane
+    and others (Manning Publications, 2019) and *Practical Natural Language Processing*
+    by Sowmya Vajjala and others (O’Reilly, 2020) can be a good next step. *Machine
+    Learning Engineering* by Andriy Burkov (True Positive Inc., 2020) is also a good
+    book to learn engineering topics for machine learning in general.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you are interested in learning more mathematical and theoretical aspects
+    of NLP, I’d recommend giving some popular textbooks a try, such as *Speech and
+    Language Processing* by Dan Jurafsky and James H. Martin (Prentice Hall, 2008)[⁴](#pgfId-1107407)
+    and *Introduction to Natural Language Processing* by Jacob Eisenstein (MIT Press,
+    2019). *Foundations of Statistical Natural Language Processing* by Christopher
+    D. Manning and Hinrich Schütze (Cambridge, 1999), though a bit outdated, is also
+    a classic textbook that can give you a solid foundation for a wide variety of
+    NLP methods and models.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Also remember that you can often find great resources online for free. A free
+    AllenNLP course, “A Guide to Natural Language Processing with AllenNLP” ([https://guide
+    .allennlp.org/](https://guide.allennlp.org/)), and the documentation for Hugging
+    Face Transformers ([https://huggingface.co/transformers/index.html](https://huggingface.co/transformers/index.html))
+    are great places to go to if you want to learn those libraries in depth.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Finally, the most effective way to learn NLP is actually doing it yourself.
+    If you have problems for your hobby, work, or anything that involves dealing with
+    natural language text, think whether any of the techniques you learned in this
+    book are applicable. Is it a classification, tagging, or sequence-to-sequence
+    problem? Which models do you use? How do you get the training data? How do you
+    evaluate your model? If you don’t have NLP problems laying around, don’t worry—head
+    over to Kaggle, where you can find a number of NLP-related competitions in which
+    you can “get your hands dirty” and gain NLP experience while working on real-world
+    problems. NLP conferences and workshops often host shared tasks, where participants
+    can compete on a common task, datasets, and evaluation metrics, which are also
+    a great way to learn further if you want to deep dive into a particular field
+    of NLP.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Machine learning code is usually a small portion in real-world NLP/ML systems,
+    supported by a complex infrastructure for data collection, feature extraction,
+    and model serving and monitoring.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: NLP modules can be developed as a one-off script, a batch prediction service,
+    or a real-time prediction service.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: It is important to version-control your model and data, in addition to the source
+    code. Beware of train-serve skew that causes discrepancies between the training
+    and the testing times.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: You can easily serve PyTorch models with TorchServe and deploy them to Amazon
+    SageMaker.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Explainable AI is a new field for explaining and interpreting ML models and
+    their predictions. You can use LIT (Language Interpretability Tool) to visualize
+    and interpret model predictions.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '^(1.)GCP: [https://cloud.google.com/compute/docs/gpus/install-drivers-gpu;](https://cloud.google.com/compute/docs/gpus/install-drivers-gpu)
+    AWS: [https://docs.aws.amazon .com/AWSEC2/latest/UserGuide/install-nvidia-driver.html](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/install-nvidia-driver.html).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ^(2.)There is another toolkit called AllenNLP Interpret ([https://allennlp.org/interpret](https://allennlp.org/interpret))
+    that offers a similar set of features for understanding NLP models, although it
+    is specifically designed to interact with AllenNLP models.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '^(3.)Ribeiro et al., “‘Why Should I Trust You?’: Explaining the Predictions
+    of Any Classifier,” (2016). [https://arxiv.org/abs/1602.04938](https://arxiv.org/abs/1602.04938).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ^(4.)You can read the draft of the third edition (2021) for free at [https://web.stanford.edu/~jurafsky/slp3/](https://web.stanford.edu/~jurafsky/slp3/).
+  prefs: []
+  type: TYPE_NORMAL

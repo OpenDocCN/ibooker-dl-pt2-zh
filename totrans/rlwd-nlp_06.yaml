@@ -1,0 +1,1415 @@
+- en: 4 Sentence classification
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter covers
+  prefs: []
+  type: TYPE_NORMAL
+- en: Handling variable-length input with recurrent neural networks (RNN)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Working with RNNs and their variants (LSTMs and GRUs)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using common evaluation metrics for classification problems
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Developing and configuring a training pipeline using AllenNLP
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Building a language detector as a sentence classification task
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In this chapter, we are going to study the task of sentence classification,
+    where an NLP model receives a sentence and assigns some label to it. A spam filter
+    is an application of sentence classification. It receives an email message and
+    assigns whether or not it is spam. If you want to classify news articles into
+    different topics (business, politics, sports, and so on), it’s also a sentence-classification
+    task. Sentence classification is one of the simplest NLP tasks that has a wide
+    range of applications, including document classification, spam filtering, and
+    sentiment analysis. Specifically, we are going to revisit the sentiment classifier
+    we introduced in chapter 2 and discuss its components in detail. At the end of
+    this section, we are going to study another application of sentence classification—language
+    detection.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.1 Recurrent neural networks (RNNs)
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The first step in sentence classification is to represent variable-length sentences
+    using neural networks (RNNs). In this section, I’m going to present the concept
+    of recurrent neural networks, one of the most important concepts in deep NLP.
+    Many modern NLP models use RNNs in some way. I’ll explain why they are important,
+    what they do, and introduce their simplest variant.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.1.1 Handling variable-length input
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The Skip-gram network structure shown in the previous chapter was simple. It
+    takes a word vector of a fixed size, runs it through a linear layer, and obtains
+    a distribution of scores over all the context words. The structure and the size
+    of the input, output, and the network are all fixed throughout the training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: However, many, if not most, of what we deal with in NLP are sequences of variable
+    lengths. For example, words, which are sequences of characters, can be short (“a,”
+    “in”) or long (“internationalization”). Sentences (sequences of words) and documents
+    (sequences of sentences) can be of any lengths. Even characters, if you look at
+    them as sequences of strokes, can be simple (e.g., “O” and “L” in English) or
+    more complex (e.g., “鬱” is a Chinese character meaning “depression” which, depressingly,
+    has 29 strokes).
+  prefs: []
+  type: TYPE_NORMAL
+- en: As we discussed in the previous chapter, neural networks can handle only numbers
+    and arithmetic operations. That was why we needed to convert words and documents
+    to numbers through embeddings. We used linear layers to convert a fixed-length
+    vector into another. But to do something similar with variable-length inputs,
+    we need to figure out how to structure the neural networks so that they can handle
+    them.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'One idea is to first convert the input (e.g., a sequence of words) to embeddings,
+    that is, a sequence of vectors of floating-point numbers, then average them. Let’s
+    assume the input sentence is sentence = ["john", "loves", "mary", "."], and you
+    already know word embeddings for each word in the sentence v("john"), v("loves"),
+    and so on. The average can be obtained with the following code and illustrated
+    in figure 4.1:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: '![CH04_F01_Hagiwara](../Images/CH04_F01_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.1 Averaging embedding vectors
+  prefs: []
+  type: TYPE_NORMAL
+- en: This method is quite simple and is actually used in many NLP applications. However,
+    it has one critical issue, which is that it cannot take word order into account.
+    Because the order of input elements doesn’t affect the result of averaging, you’d
+    get the same vector for both “Mary loves John” and “John loves Mary.” Although
+    it’s up to the task in hand, it’s hard to imagine many NLP applications would
+    want this kind of behavior.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If we step back and reflect how we humans read language, this “averaging” is
+    far from actuality. When we read a sentence, we don’t usually read individual
+    words in isolation and remember them first, then move on to figuring out what
+    the sentence means. We usually scan the sentence from the beginning, one word
+    at a time, while holding what the “partial” sentence means up until the part you
+    are reading in our short-term memory. In other words, you maintain some sort of
+    mental representation of the sentence while you read it. When you reach the end
+    of the sentence, the mental representation is its meaning.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Can we design a neural network structure that simulates this incremental reading
+    of the input? The answer is a resounding yes. That structure is called *recurrent
+    neural networks* (RNNs), which I’ll explain in detail next.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.1.2 RNN abstraction
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'If you break down the reading process mentioned earlier, its core is the repetition
+    of the following series of operations:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Read a word.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Based on what has been read so far (your “mental state”), figure out what the
+    word means.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Update the mental state.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Move on to the next word.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Let’s see how this works using a concrete example. If the input sentence is
+    sentence = ["john", "loves", "mary", "."], and each word is already represented
+    as a word-embedding vector. Also, let’s denote your “mental state” as state, which
+    is initialized by init_state(). Then, the reading process is represented by the
+    following incremental operations:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: The final value of state becomes the representation of the entire sentence from
+    this process. Notice that if you change the order in which these words are processed
+    (e.g., by flipping “John” and “Mary”), the final value of state also changes,
+    meaning that the state also encodes some information about the word order.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You can achieve something similar if you can design a network substructure
+    that is applied to each element of the input while updating some internal states.
+    RNNs are neural network structures that do exactly this. In a nutshell, an RNN
+    is a neural network with a loop. At its core is an operation that is applied to
+    every element in the input as they come in. If you wrote what RNNs do in Python
+    pseudocode, it’d be like the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: Notice that there is state that gets initialized first and passed around during
+    the iteration. For every input word, state is updated based on the previous state
+    and the input using the function update. The network substructure corresponding
+    to this step (the code block inside the loop) is called a *cell*. This stops when
+    the input is exhausted, and the final value of state becomes the result of this
+    RNN. See figure 4.2 for the illustration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH04_F02_Hagiwara](../Images/CH04_F02_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.2 RNN abstraction
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can see the parallelism here. When you are reading a sentence (sequence
+    of words), your internal mental representation of the sentence, state, is updated
+    after reading each word. You can assume that the final state encodes the representation
+    of the entire sentence.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The only remaining work is to design two functions—init_state() and update().
+    The state is usually initialized with zero (i.e., a vector filled with zeros),
+    so you usually don’t have to worry about how to go about defining the former.
+    It’s more important how you design update(), which determines the characteristics
+    of the RNN.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.1.3 Simple RNNs and nonlinearity
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'In section 3.4.3, I talked about how to implement a linear layer with an arbitrary
+    number of inputs and outputs. Can we do something similar and implement update(),
+    which is basically a function that takes two input variables and produces one
+    output variable? After all, a cell is a neural network with its own input and
+    output, right? The answer is yes, and it looks like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: Notice that this is strikingly similar to the linear2() function in section
+    3.4.3\. In fact, if you ignore the difference in variable names, it’s exactly
+    the same except for the f() function. An RNN defined by this type of the update
+    function is called a *simple RNN* or *Elman RNN*, which is, as its name suggests,
+    one of the simplest RNN structures.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You may be wondering, then, what is this function f() doing here? What does
+    it look like? Do we need it here at all? The function, called an *activation function*
+    or *nonlinearity*, takes a single input (or a vector) and transforms it (or every
+    element of a vector) in a nonlinear fashion. Many kinds of nonlinearities exist,
+    and they play an indispensable role in making neural networks truly powerful.
+    What they exactly do and why they are important requires some math to understand,
+    which is outside the scope of this book, but I’ll attempt an intuitive explanation
+    with a simple example next.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Imagine you are building an RNN that recognizes “grammatical” English sentences.
+    Differentiating grammatical sentences from ungrammatical ones is itself a difficult
+    NLP problem, which is, in fact, a well-established research area (see section
+    1.2.1), but here, let’s simplify it and consider agreement only between the subject
+    and the verb. Let’s further simplify it and assume that there are only four words
+    in this “language”—“I,” “you,” “am,” and “are.” If the sentence is either “I am”
+    or “you are,” it’s grammatically correct. The other two combinations, “I are”
+    and “you am,” are incorrect. What you want to build is an RNN that outputs 1 for
+    the correct sentences while producing 0 for the incorrect ones. How would you
+    go about building such a neural network?
+  prefs: []
+  type: TYPE_NORMAL
+- en: The first step in almost every modern NLP model is to represent words with embeddings.
+    As mentioned in the previous chapter, they are usually learned from a large dataset
+    of natural language text, but here, we are simply going to give them some predefined
+    values, as shown in figure 4.3.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH04_F03_Hagiwara](../Images/CH04_F03_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.3 Recognizing grammatical English sentences using an RNN
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, let’s imagine there was no activation function. The previous update_ simple()
+    function simplifies to the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We will assume the initial value of state is simply [0, 0], because the specific
+    initial values are not relevant to the discussion here. The RNN takes the first
+    word embedding, x1, updates state, takes the second word embedding, x2, then produces
+    the final state, which is a two-dimensional vector. Finally, the two elements
+    in this vector are summed and converted to result. If result is close to 1, the
+    sentence is grammatical. Otherwise, it is not. If you apply the update_simple_linear()
+    function twice and simplify it a little bit, you get the following function, which
+    is all this RNN does, after all:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: Remember, w1, w2, and b are parameters of the model (aka “magic constants”)
+    that need to be trained (adjusted). Here, instead of adjusting these parameters
+    using a training dataset, let’s assign some arbitrary values and see what happens.
+    For example, when w1 = [1, 0], w2 = [0, 1], and b = [0, 0], the input and the
+    output of this RNN will be as shown in figure 4.4.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH04_F04_Hagiwara](../Images/CH04_F04_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.4 Input and output when w1 = [1, 0], w2 = [0, 1], and b = [0, 0] without
+    an activation function
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you look at the values of result, this RNN groups ungrammatical sentences
+    (e.g., “I are”) with grammatical ones (e.g., “you are”), which is not the desired
+    behavior. How about we try another set of values for the parameters? Let’s use
+    w1 = [1, 0], w2 = [-1, 0], and b = [0, 0] and see what happens (see figure 4.5
+    for the result).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH04_F05_Hagiwara](../Images/CH04_F05_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.5 Input and output when w1 = [1, 0], w2 = [-1, 0], and b = [0, 0] without
+    an activation function
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is much better, because the RNN is successful in grouping ungrammatical
+    sentences by assigning 0 to both “I are” and “you am.” However, it also assigns
+    completely opposite values (2 and -2) to grammatical sentences (“I am” and “you
+    are”).
+  prefs: []
+  type: TYPE_NORMAL
+- en: I’m going to stop here, but as it turns out, you cannot use this neural network
+    to differentiate grammatical sentences from ungrammatical ones, no matter how
+    hard you try. Despite the values you assign to the parameters, this RNN cannot
+    produce results that are close enough to the desired values and, thus, are able
+    to group sentences by their grammaticality.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s step back and think why this is the case. If you look at the previous
+    update function, all it does is multiply the input by some value and add them
+    up. In more specific terms, it only transforms the input *in a linear fashion*.
+    The result of this neural network always changes by some constant amount when
+    you change the value of the input by some amount. But this is obviously not desirable—you
+    want the result to be 1 only when the input variables are some specific values.
+    In other words, you don’t want this RNN to be linear; you want it to be nonlinear.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To use an analogy, imagine you can use only assignment (“=”), addition (“+”),
+    and multiplication (“*”) in your programming language. You can tweak the input
+    values to some degree to come up with the result, but you can’t write more complex
+    logic in such a restricted setting.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now let’s put the activation function f() back and see what happens. The specific
+    activation function we are going to use is called *the hyperbolic tangent function*,
+    or more commonly, *tanh*, which is one of the most commonly used activation functions
+    in neural networks. The details of this function are not important in this discussion,
+    but in a nutshell, it behaves as follows: tanh doesn’t do much to the input when
+    it is close to zero, for example, 0.3 or -0.2\. In other words, the input passes
+    through the function almost unchanged. When the input is far from zero, tanh tries
+    to squeeze it between -1 and 1\. For example, when the input is large (say, 10.0),
+    the output becomes very close to 1.0, whereas when it is small (say, -10.0), the
+    output becomes almost -1.0\. This creates an effect similar to the OR logical
+    gate (or an AND gate, depending on the weights) if two or more variables are fed
+    into the activation function. The output of the gate becomes ON (~1) and OFF (~-1)
+    depending on the input.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: When w1 = [-1, 2], w2 = [-1, 2], b = [0, 1], and the tanh activation function
+    is used, the result of the RNN becomes a lot closer to what we desire (see figure
+    4.6). If you round them to the closest integers, the RNN successfully groups sentences
+    by their grammaticality.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH04_F06_Hagiwara](../Images/CH04_F06_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.6 Input and output when w1 = [-1, 2], w2 = [-1, 2], and b = [0, 1]
+    with an activation function
+  prefs: []
+  type: TYPE_NORMAL
+- en: To use the same analogy, using activation functions in your neural networks
+    is like using ANDs and ORs and IFs in your programming language, in addition to
+    basic math operations like addition and multiplication. In this way, you can write
+    complex logic and model complex interactions between input variables, like the
+    example in this section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: NOTE This example I use in this section is a slightly modified version of the
+    popular XOR (or *exclusive-or*) example commonly seen in deep learning textbooks.
+    This is the most basic and simplest example that can be solved by neural networks
+    but not by other linear models.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Some final notes on RNNs—they are trained just like any other neural networks.
+    The final outcome is compared with the desired outcome using the loss function,
+    then the difference between the two—the loss—is used for updating the “magic constants.”
+    The magic constants are, in this case, w1, w2, and b in the update_simple() function.
+    Note that the update function and its magic constants are identical across all
+    the timesteps in the loop. This means that what RNNs are learning is a general
+    form of updates that can be applied to any situation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.2 Long short-term memory units (LSTMs) and gated recurrent units (GRUs)
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In fact, the simple RNNs that we discussed earlier are rarely used in real-world
+    NLP applications due to one problem called the *vanishing gradients problem*.
+    In this section, I’ll show the issue associated with simple RNNs and how more
+    popular RNN architectures, namely LSTMs and GRUs, solve this particular problem.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.2.1 Vanishing gradients problem
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Just like any programming language, if you know the length of the input, you
+    can rewrite a loop without using one. An RNN can also be rewritten without using
+    a loop, which makes it look just like a regular neural network with many layers.
+    For example, if you know that there are only six words in the input, the rnn()
+    from earlier can be rewritten as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Representing RNNs without loops is called *unrolling*. Now we know what update()
+    looks like for a simple RNN (update_simple), so we can replace the function calls
+    with their bodies, as shown here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This is getting a bit ugly, but I just want you to notice the very deeply nested
+    function calls and multiplications. Now, recall the task we wanted to accomplish
+    in the previous section—classifying grammatical English sentences by recognizing
+    subject-verb agreement. Let’s say the input is sentence = ["The", "books", "I",
+    "read", "yesterday", "were"]. In this case, the innermost function call processes
+    the first word “The,” the next one processes the second word “books,” and so on,
+    all the way to the outermost function call, which processes “were.” If we rewrite
+    the previous pseudocode slightly, as shown in the next code snippet, you can understand
+    it more intuitively:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: To recognize that the input is indeed a grammatical English sentence (or a prefix
+    of a sentence), the RNN needs to retain the information about the subject (“the
+    books”) in state until it sees the verb (“were”) without being distracted by anything
+    in between (“I read yesterday”). In the previous pseudocode, the states are represented
+    by the return values of function calls, so the information about the subject (return
+    value of process_main_subject) needs to propagate all the way up in this chain
+    until it reaches the outermost function (process_main_verb). This is starting
+    to sound like a difficult task.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Things don’t look any better when it comes to training this RNN. RNNs, as well
+    as any other neural networks, are trained using an algorithm called *backpropagation*.
+    Backpropagation is a process where the components of a neural network communicate
+    with previous components on how to adjust the parameters to minimize the loss.
+    This is how it works for this particular case. First, you look at the outcome,
+    that is, the return value of is_grammatical()and compare it with what you desire.
+    The difference between these two is called the *loss*. The outermost function,
+    is_grammatical(), basically has four ways to decrease the loss to make its output
+    closer to what is desired—1) adjust w1 while fixing the return value of the nested
+    function process_adverb(), 2) adjust w2, 3) adjust b, or 4) adjust the return
+    value of process_adverb() while fixing the parameters. Adjusting the parameters
+    (w1, w2, and b) is the easy part because the function knows the exact effect of
+    adjusting each parameter to its return value. Adjusting the return value of the
+    previous function, however, is not easy, because the caller has no idea about
+    the inner workings of the function. Because of this, the caller tells the previous
+    function (callee) to adjust its return values to minimize the loss. See figure
+    4.7 for how the loss is propagated back to the parameters and previous functions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH04_F07_Hagiwara](../Images/CH04_F07_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.7 Backpropagation of loss
+  prefs: []
+  type: TYPE_NORMAL
+- en: The nested function calls repeat this process and plays the Telephone game until
+    the message reaches the innermost function. By that time, because the message
+    needs to pass through many layers, it becomes so weak and obscure (or so strong
+    and skewed because of some misunderstanding) that the inner functions have a difficult
+    time figuring out what they did wrong.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Technically, the deep learning literature calls this the *vanishing gradients
+    problem*. A *gradient* is a mathematical term that corresponds to the message
+    signal that each function receives from the next one that states how exactly they
+    should improve their process (how to change their magic constants). The reverse
+    Telephone game, where messages are passed backward from the final function (=
+    loss function), is called backpropagation. I’m not going into the mathematical
+    details of these terms, but it is useful to understand them at least conceptually.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Because of the vanishing gradients problem, simple RNNs are difficult to train
+    and rarely used in practice nowadays.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.2.2 Long short-term memory (LSTM)
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The way the nested functions mentioned earlier process information about grammar
+    seems too inefficient. After all, why doesn’t the outermost function (is_grammatical)
+    tell the particular function in charge (e.g., process_main_subject) what went
+    wrong directly, instead of playing the Telephone game? It can’t, because the message
+    can change its shape entirely after each function call because of w2 and f().
+    The outermost function cannot tell which function was responsible for which part
+    of the message from only the final output.
+  prefs: []
+  type: TYPE_NORMAL
+- en: How could we address this inefficiency? Instead of passing the information through
+    an activation function every time and changing its shape completely, how about
+    adding and subtracting information relevant to the part of the sentence being
+    processed at each step? For example, if process_main_subject() can directly add
+    information about the subject to some type of “memory,” and the network can make
+    sure the memory passes through the intermediate functions intact, is_grammatical()will
+    have a much easier time telling the previous functions what to do to adjust its
+    output.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Long short-term memory* units (LSTMs) are a type of RNN cell that is proposed
+    based on this insight. Instead of passing around states, LSTM cells share a “memory”
+    that each cell can remove old information from and/or add new information to,
+    something like an assembly line in a manufacturing factory. Specifically, LSTM
+    RNNs use the following function for updating states:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: '![CH04_F08_Hagiwara](../Images/CH04_F08_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.8 LSTM update function
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Although this looks relatively complicated compared to its simple version,
+    if you break it down to subcomponents, it’s not that difficult to understand what
+    is going on here, as described next and shown in figure 4.8:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The LSTM states comprise two halves—the cell state (the “memory” part) and the
+    hidden state (the “mental representation” part).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The function forget() returns a value between 0 and 1, so multiplying by this
+    number means erasing old memory from cell_state. How much to erase is determined
+    from hidden_state and word (input). Controlling the flow of information by multiplying
+    by a value between 0 and 1 is called *gating*. LSTMs are the first RNN architecture
+    that uses this gating mechanism.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The function add()returns a new value added to the memory. The value again is
+    determined from hidden_state and word.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Finally, hidden_state is updated using a function, whose value is computed from
+    the previous hidden state, the updated memory, and the input word.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: I abstracted the update function by hiding some mathematical details in the
+    functions forget(), add(), and update_hidden(), which are not important for the
+    discussion here. If you are interested in understanding LSTMs more deeply, I refer
+    you to a wonderful blog post Chris Olah wrote on this topic ([http://colah.github.io/posts/2015-08-Understanding-LSTMs/](http://colah.github.io/posts/2015-08-Understanding-LSTMs/)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Because LSTMs have this cell state that stays constant across different timesteps
+    unless explicitly modified, they are easier to train and relatively well behaved.
+    Because you have a shared “memory” and functions are adding and removing information
+    related to different parts of the input sentence, it is easier to pinpoint which
+    function did what and what went wrong. The error signal from the outermost function
+    can reach responsible functions more directly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A word on the terminology—LSTM refers to one particular type of architecture
+    mentioned here, but people use “LSTMs” to mean RNNs with LSTM cells. Also, “RNN”
+    is often used to mean “simple RNN,” introduced in section 4.1.3\. When you see
+    “RNNs” in the literature, you need to be aware of which exact architectures they
+    are using.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.2.3 Gated recurrent units (GRUs)
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Another RNN architecture, called *Gated Recurrent Units* (GRUs), uses the gating
+    mechanism. The philosophy behind GRUs is similar to that of LSTMs, but GRUs use
+    only one set of states instead of two halves. The update function for GRUs is
+    shown next:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: Instead of erasing or updating the memory, GRUs use a switching mechanism. The
+    cell first computes the new state from the old state and the input. It then computes
+    switch, a value between 0 and 1\. The state is chosen between the new state and
+    the old one based on the value of switch. If it’s 0, the old state passes through
+    intact. If it’s 1, it’s overwritten by the new state. If it’s somewhere in between,
+    the state will be a mix of two. See figure 4.9 for an illustration of the GRU
+    update function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH04_F09_Hagiwara](../Images/CH04_F09_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.9 GRU update function
+  prefs: []
+  type: TYPE_NORMAL
+- en: Notice that the update function for GRUs is much simpler than that for the LSTMs.
+    Indeed, it has fewer parameters (magic constants) that need to be trained compared
+    to LSTMs. Because of this, GRUs are faster to train than LSTMs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Finally, although we introduced two different types of RNN architecture, LSTM
+    and GRU, there’s no consensus in the community on which type of architecture is
+    the best for all applications. You often need to treat them as a hyperparameter
+    and experiment with different configurations. Fortunately, it is easy to experiment
+    with different types of RNN cells as long as you are using modern deep learning
+    frameworks such as PyTorch and TensorFlow.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.3 Accuracy, precision, recall, and F-measure
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In section 2.7, I briefly talked about some metrics that we use for evaluating
+    the performance of a classification task. Before we move on to actually building
+    a sentence classifier, I’d like to further discuss the evaluation metrics we are
+    going to use—what they mean and what they actually measure.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.3.1 Accuracy
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Accuracy is probably the simplest of all the evaluation metrics that we talk
+    about here. In a classification setting, accuracy is the fraction of instances
+    that your model got right. For example, if there are 10 emails and your spam-filtering
+    model got 8 of them correct, the accuracy of your prediction is 0.8, or 80% (see
+    figure 4.10).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH04_F10_Hagiwara](../Images/CH04_F10_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.10 Calculating accuracy
+  prefs: []
+  type: TYPE_NORMAL
+- en: Though simple, accuracy is not without its limitations. Specifically, accuracy
+    can be misleading when the test set is imbalanced. An *imbalanced* dataset contains
+    multiple class labels that greatly differ in their numbers. For example, if a
+    spam-filtering dataset is imbalanced, it may contain 90% nonspam emails and 10%
+    spams. In such a case, even a stupid classifier that labels everything as nonspam
+    would be able to achieve an accuracy of 90%. As an example, if a “stupid” classifier
+    classifies everything as “nonspam” in figure 4.10, it would still achieve an accuracy
+    of 70% (7 out of 10 instances). If you look at this number in isolation, you might
+    be fooled into thinking the performance of the classifier is actually great. When
+    you are using accuracy as a metric, it is always a good idea to compare with the
+    hypothetical, stupid classifier (*majority vote*) as a baseline.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.3.2 Precision and recall
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The rest of the metrics—precision, recall, and F-measure—are used in a binary
+    classification setting. The goal of a binary classification task is to identify
+    one class (called a *positive class*) from the other (called a *negative class*).
+    In the spam-filtering setting, the positive class is spam, whereas the negative
+    class is nonspam.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The Venn diagram in figure 4.11 contains four subregions: true positives, false
+    positives, false negatives, and true negatives. True positives (TP) are instances
+    that are predicted as positive (= spam) and are indeed in the positive class.
+    False positives (FP) are instances that are predicted as positive (= spam) but
+    are actually not in the positive class. These are noises in the prediction, that
+    is, innocent nonspam emails that are mistakenly caught by the spam filter and
+    end up in the spam folder of your email client.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: On the other hand, false negatives (FN) are instances that are predicted as
+    negative but are actually in the positive class. These are spam emails that slip
+    through the spam filter and end up in your inbox. Finally, true negatives (TN)
+    are instances that are predicted as negative and are indeed in the negative class
+    (nonspam emails in your inbox).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Precision is the fraction of instances that the model classifies as positive
+    that are indeed correct. For example, if your spam filter identifies three emails
+    as spam, and two of them are indeed spam, the precision will be 2/3, or about
+    66%.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Recall is somewhat opposite of precision. It is the fraction of positive instances
+    in your dataset that are identified as positive by your model. Again, using spam
+    filtering as an example, if your dataset contains three spam emails and your model
+    identifies two of them as spam successfully, the recall will be 2/3, or about
+    66%.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 4.11 shows the relationship between predicted and true labels as well
+    as recall and precision.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH04_F11_Hagiwara](../Images/CH04_F11_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.11 Precision and recall
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.3.3 F-measure
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: You may have noticed a tradeoff between precision and recall. Imagine there’s
+    a spam filter that is very, very careful in classifying emails. It outputs only
+    one out of several thousand emails as spam, but when it does, it is always correct.
+    This is not a difficult task, because some spam emails are pretty obvious—if they
+    contain a word “v1@gra” in the text and it’s sent from someone in the spam blacklist,
+    it should be pretty safe to mark it as a spam. What would the precision of this
+    spam filter be? 100%. Similarly, there’s another spam filter that is very, very
+    careless in classifying emails. It classifies every single email as spam, including
+    the ones from your colleagues and friends. Its recall? 100%. Would any of these
+    two spam filters be useful? Hardly!
+  prefs: []
+  type: TYPE_NORMAL
+- en: As you’ve seen, improving precision or recall alone while ignoring the other
+    is not a good practice, because of the tradeoff between them. It’s like you were
+    looking only at your body weight when you are on a diet. You lost 10 pounds? Great!
+    But what if you are seven feet tall? Not so much. You need to take into account
+    both your height and weight—how much is too much depends on the other variable.
+    That’s why there are measures like BMI (body mass index) that take both measures
+    into account. Similarly, researchers came up with this metric called *F-measure*,
+    which is an average (or, more precisely speaking, a harmonic mean) of precision
+    and recall. Most often, a special case called *F1*-measure is used, which is the
+    equally weighted version of F-measure. In a classification setting, it is a good
+    practice to measure and try to maximize the F-measure.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.4 Building AllenNLP training pipelines
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In this section, we are going to revisit the sentiment analyzer we built in
+    chapter 2 and discuss how to build its training pipeline in more detail. Although
+    I already showed the important steps for building an NLP application using AllenNLP,
+    in this section we will dive deep into some important concepts and abstractions.
+    Understanding these concepts is important not just in using AllenNLP but also
+    in designing NLP applications in general, because NLP applications are usually
+    built using these abstractions in some way or the other.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To run the code in this section, you need to import the necessary classes and
+    modules, as shown in the following code snippet (the code examples in this section
+    can also be accessed via Google Colab, [http://www.realworldnlpbook.com/ch2.html#sst-nb](http://www.realworldnlpbook.com/ch2.html#sst-nb)):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 4.4.1 Instances and fields
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: As mentioned in section 2.2.1, an instance is the atomic unit for which a prediction
+    is made by a machine learning algorithm. A dataset is a collection of instances
+    of the same form. The first step in most NLP applications is to read in or receive
+    some data (e.g., from a file or via network requests) and convert them to instances
+    so that the NLP/ML algorithm can consume them.
+  prefs: []
+  type: TYPE_NORMAL
+- en: AllenNLP supports an abstraction called DatasetReader whose job is to read in
+    some input (raw strings, CSV files, JSON data structures from network requests,
+    and so on) and convert it to instances. AllenNLP already provides a wide range
+    of dataset readers for major formats used in NLP, such as the CoNLL format (used
+    in popular shared tasks for language analysis) and the Penn Treebank (a popular
+    dataset for syntactic parsing). To read the Standard Sentiment Treebank, you can
+    use the built-in StanfordSentimentTreeBankDatasetReader, which we used earlier
+    in chapter 2\. You can also write your own dataset reader just by overriding some
+    core methods from DatasetReader.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The AllenNLP class Instance represents a single instance. An instance can have
+    one or more fields, which hold some type of data. For example, an instance for
+    the sentiment analysis task has two fields—the text body and the label—which can
+    be created by passing a dictionary of fields to its constructor as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here we assumed that you already created tokens, which is a list of tokens,
+    and sentiment, a string label corresponding to the sentiment class, from reading
+    the input file. AllenNLP supports other types of fields, depending on the task.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The read()method of DatasetReader returns an iterator over instances, which
+    enables you to enumerate the generated instances and visually check them, as shown
+    in the following snippet:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In many cases, you access your dataset readers through data loaders. A data
+    loader is an AllenNLP abstraction (which is really a thin wrapper around PyTorch’s
+    data loaders) that handles the data and iterates over batched instances. You can
+    specify how instances are sorted, grouped into batches, and fed to the training
+    algorithm by supplying a batch sampler. Here, we are using a BucketBatchSampler,
+    which does this by sorting instances by their length and grouping instances with
+    similar lengths into a single batch, as shown next:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 4.4.2 Vocabulary and token indexers
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The second step in many NLP applications is to build the vocabulary. In computer
+    science, vocabulary is a theoretical concept that represents the set of *all*
+    possible words in a language. In NLP, though, it often means just the set of all
+    unique tokens that appeared in a dataset. It is simply impossible to know all
+    the possible words in a language, nor is it necessary for an NLP application.
+    What is stored in a vocabulary is called a *vocabulary item* (or just an *item*).
+    A vocabulary item is usually a word, although depending on the task at hand, it
+    can be any form of linguistic units, including characters, character n-grams,
+    and labels for linguistic annotation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: AllenNLP provides a class called Vocabulary. It not only takes care of storing
+    vocabulary items that appeared in a dataset, but it also holds mappings between
+    vocabulary items and their IDs. As mentioned earlier, neural networks and machine
+    learning models in general can deal only with numbers, and there needs to be a
+    way to map discrete items such as words to some numerical representations such
+    as word IDs. The vocabulary is also used to map the results of an NLP model back
+    to the original words and labels so that humans can actually read them.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You can create a Vocabulary object from instances as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'A couple of things to note here: first, because we are dealing with iterators
+    (returned by the data loaders’ iter_instances()method), we need to use the chain
+    method from itertools to enumerate all the instances in both datasets.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Second, AllenNLP’s Vocabulary class supports *namespaces*, which are a system
+    to separate different sets of items so that they don’t get mixed up. Here’s why
+    they are useful—say you are building a machine translation system, and you just
+    read a dataset that contains English and French translations. Without namespaces,
+    you’d have just one set that contains all words in English and French. This is
+    usually not a big issue because English words (“hi,” “thank you,” “language”)
+    and French words (“bonjour,” “merci, “langue”) look quite different in most cases.
+    However, a number of words look exactly the same in both languages. For example,
+    “chat” means “talk” in English and “cat” in French, but it’s hard to imagine anybody
+    wanting to mix those two words and assign the same ID (and embeddings). To avoid
+    this conflict, Vocabulary implements namespaces and assigns separate sets of items
+    of different types.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You may have noticed the form_instances() function call has a min_count argument.
+    For each namespace, this specifies the minimum number of occurrences in the dataset
+    that is necessary for an item to be included in the vocabulary. All the items
+    that appear less frequently than this threshold are treated as “unknown” items.
+    Here’s why this is a good idea: in a typical language, a very small number of
+    words appear a lot (in English: “the,” “a,” “of”) and a very large number of words
+    appear very infrequently. This usually exhibits a long tail distribution of word
+    frequencies. But it is not likely that these super infrequent words add anything
+    useful to the model, and precisely because they appear infrequently, it is difficult
+    to learn any useful patterns from them anyway. Also, because there are so many
+    of them, they inflate the size of the vocabulary and the number of model parameters.
+    In such a case, a common practice in NLP is to cut this long tail and collapse
+    all the infrequent words to a single entity <UNK> (for “unknown” words).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Finally, a *token indexer* is an AllenNLP abstraction that takes in a token
+    and returns its index, or a list of indices that represent the token. In most
+    cases, there’s a one-to-one mapping between unique tokens and their indices, but
+    depending on your model, you may need more advanced ways to index the tokens (such
+    as using character n-grams).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'After you create a vocabulary, you can tell the data loaders to index the tokens
+    with the specified vocabulary, as shown in the next code snippet. This means that
+    the tokens that the data loaders read from the datasets are converted to integer
+    IDs according to the vocabulary’s mappings:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 4.4.3 Token embedders and RNNs
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'After you index words using a vocabulary and token indexers, you need to convert
+    them to embeddings. An AllenNLP abstraction called TokenEmbedder takes word indices
+    as an input and produces word embedding vectors as an output. You can embed words
+    using continuous vectors in many ways, but if all you want is to map unique tokens
+    to embedding vectors one-to-one, you can use the Embedding class as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: This will create an Embedding instance that takes word IDs and converts them
+    to fixed-length vectors in a one-to-one fashion. The number of unique words this
+    instance can support is given by num_embeddings, which is equal to the size of
+    the tokens vocabulary namespace. The dimensionality of embeddings (i.e., the length
+    of embedded vectors) is given by embedding_dim.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, let’s define our RNN and convert a variable-length input (a list of embedded
+    words) to a fixed-length vector representation of the input. As we discussed in
+    section 4.1, you can think of an RNN as a neural network structure that consumes
+    a sequence of things (words) and returns a fixed-length vector. AllenNLP abstracts
+    such models into the Seq2VecEncoder class, and you can create an LSTM RNN by using
+    PytorchSeq2VecWrapper as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: A lot is happening here, but essentially this wraps PyTorch’s LSTM implementation
+    (torch.nn.LSTM) and makes it pluggable to the rest of the AllenNLP pipeline. The
+    first argument to torch.nn.LSTM() is the dimensionality of the input vector, and
+    the second one is that of LSTM’s internal state. The last one, batch_first, specifies
+    the structure of the input/output tensors for batching, but you usually don’t
+    have to worry about its details as long as you are using AllenNLP.
+  prefs: []
+  type: TYPE_NORMAL
+- en: NOTE In AllenNLP, everything is batch first, meaning that the first dimension
+    of any tensor is always equal to the number of instances in a batch.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.4.4 Building your own model
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Now that we defined all the subcomponents, we are ready to build the model that
+    executes the prediction. Thanks to AllenNLP’s well-designed abstractions, you
+    can easily build your model by inheriting AllenNLP’s Model class and overriding
+    the forward() method. You don’t usually need to be aware of details such as the
+    shapes and dimensions of tensors. The following listing defines the LSTM RNN used
+    for classifying sentences.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.1 LSTM sentence classifier
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ AllenNLP models inherit Model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Creates a linear layer to convert the RNN output to a vector of another length
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ F1Measure() requires the label ID for the positive class. '4' means “very
+    positive.”
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Cross-entropy loss is used for classification tasks. CrossEntropyLoss directly
+    takes logits (no softmax needed).
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Instances are destructed to individual fields and passed to forward().
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❻ Output of forward() is a dict, which contains a “loss” key.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❼ Returns accuracy, precision, recall, and F1-measure as the metrics
+  prefs: []
+  type: TYPE_NORMAL
+- en: Every AllenNLP Model inherits from PyTorch’s Module class, meaning you can use
+    PyTorch’s low-level operations if necessary. This gives you a lot of flexibility
+    in defining your model while leveraging AllenNLP’s high-level abstractions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.4.5 Putting it all together
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Finally, we finish this section by implementing the entire pipeline to train
+    the sentiment analyzer, as shown next.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.2 Training pipeline for the sentiment analyzer
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Defines how to construct the data loaders
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Initializes the model
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Defines the optimizer
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Initializes the trainer
+  prefs: []
+  type: TYPE_NORMAL
+- en: The training pipeline completes when the Trainer instance is created and invoked
+    with train(). You pass all the ingredients that you need for training—the model,
+    optimizer, data loaders, datasets, and a bunch of hyperparameters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: An optimizer implements an algorithm for adjusting the parameters of the model
+    to minimize the loss. Here, we are using one type of optimizer called *Adam*,
+    which is a good “default” optimizer to use as your first option. However, as I
+    mentioned in chapter 2, you often need to experiment with many different optimizers
+    that work best for your model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.5 Configuring AllenNLP training pipelines
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: You may have noticed that very little of listing 4.2 is actually specific to
+    the sentence-classification problem. Indeed, loading datasets, initializing a
+    model, and plugging an iterator and an optimizer into the trainer are all common
+    steps across almost every NLP training pipeline. What if you want to reuse the
+    same training pipeline for many related tasks without writing the training script
+    from scratch? Also, what if you want to experiment with different sets of configurations
+    (e.g., different hyperparameters, neural network architectures) and save the exact
+    configurations you tried?
+  prefs: []
+  type: TYPE_NORMAL
+- en: For those problems, AllenNLP provides a convenient framework where you can write
+    configuration files in the JSON format. The idea is that you write the specifics
+    of your training pipeline—for example, which dataset reader to use, which models
+    and their subcomponents to use, and what hyper-parameters to use for training—in
+    a JSON-formatted file (more precisely, AllenNLP uses a format called *Jsonnet*,
+    which is a superset of JSON). Instead of rewriting your model file or the training
+    script, you feed the configuration file to the AllenNLP executable, and the framework
+    takes care of running the training pipeline. If you want to try a different configuration
+    for your model, you simply change the configuration file (or make a new one) and
+    run the pipeline again, without changing the Python code. This is a great practice
+    for making your experiment manageable and reproducible. You need to manage only
+    the configuration files and their results—the same configuration always yields
+    the same result.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A typical AllenNLP configuration file consists of three main parts—the dataset,
+    your model, and the training pipeline. The first part, shown next, specifies which
+    dataset files to use and how:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Three keys are in this part: dataset_reader, train_data_path, and validation_data_path.
+    The first key, dataset_reader, specifies which DatasetReader to use to read the
+    files. Dataset readers, models, and predictors, as well as many other types of
+    modules in AllenNLP, can be registered using the decorator syntax and be referred
+    to from configuration files. For example, if you peek at the following code where
+    StanfordSentimentTreeBankDatasetReader is defined'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'you notice that it is decorated by @DatasetReader.register("sst_tokens"). This
+    registers StanfordSentimentTreeBankDatasetReader under the name sst_tokens, which
+    allows you to refer it by "type": "sst_tokens" from the configuration files.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the second part of the configuration file, you specify the main model to
+    be trained as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As mentioned before, models in AllenNLP can be registered using the decorator
+    syntax and be referred from the configuration files via the type key. For example,
+    the LstmClassifier class referred here is defined as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: Other keys in the model definition JSON dict correspond to the names of the
+    parameters of the model constructor. In the previous definition, because LstmClassifier’s
+    constructor takes two parameters, word_embeddings and encoder (in addition to
+    vocab, which is passed by default and can be omitted, and positive_label, for
+    which we are going to use the default value), the model definition has two corresponding
+    keys, the values of which are also model definitions and follow the same convention.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the final part of the configuration file, the data loader and the trainer
+    are specified. The convention here is similar to the model definition—you specify
+    the type of the class along with other parameters passed to the constructor as
+    follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'You can see the full JSON configuration file in the code repository ([http://realworldnlpbook.com/ch4.html#sst-json](http://realworldnlpbook.com/ch4.html#sst-json)).
+    Once you define the JSON configuration file, you can simply feed it to the allennlp
+    command as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: The —serialization-dir specifies where the trained model (along with additional
+    information such as serialized vocabulary data) is going to be stored. You also
+    need to specify the module path to LstmClassifier using —include-package so that
+    the configuration file can find the registered class.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As we saw in chapter 2, when the training is finished, you can launch a simple
+    web-based demo interface using the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: '4.6 Case study: Language detection'
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In this final section of the chapter, we are going to discuss another scenario—language
+    detection—which can also be formulated as a sentence-classification task. A language-detection
+    system, given a piece of text, detects the language the text is written in. It
+    has a wide range of uses in other NLP applications. For example, a web search
+    engine may want to detect the language a web page is written in before processing
+    and indexing it. Google Translate also switches the source language automatically
+    based on what is typed in the input textbox.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s see what this actually looks like. Can you tell the language of each of
+    the following lines? These sentences are all taken from the Tatoeba project ([https://tatoeba.org/](https://tatoeba.org/)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Contamos con tu ayuda.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Bitte überleg es dir.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Parti için planları tartıştılar.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Je ne sais pas si je peux le faire.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Você estava em casa ontem, não estava?
+  prefs: []
+  type: TYPE_NORMAL
+- en: Ĝi estas rapida kaj efika komunikilo.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Ha parlato per un'ora.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Szeretnék elmenni és meginni egy italt.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Ttwaliɣ nezmer ad nili d imeddukal.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The answer is: Spanish, German, Turkish, French, Portuguese, Esperanto, Italian,
+    Hungarian, and Berber. I chose them from the top 10 most popular languages on
+    Tatoeba that are written in the roman alphabet. You may not be familiar with some
+    of the languages listed here. For those of you who are not, Esperanto is a constructed
+    auxiliary language invented in the late 19th century. Berber is actually a group
+    of related languages spoken in some parts of North Africa that are cousins of
+    Semitic languages such as Arabic.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Maybe you were able to recognize some of these languages, even though you don’t
+    actually speak them. I’d like you to step back and think *how* you did it. It’s
+    quite interesting that people can do this without actually being able to speak
+    the language, because these languages are all written in the roman alphabet and
+    could look quite similar to each other. You may have recognized some unique diacritic
+    marks (accents) for some of the languages—for example, “ü” for German and “ã”
+    for Portuguese. These are a strong clue for these languages. Or you just knew
+    some words—for example, “ayuda” for Spanish (meaning “help”) and “pas” in French
+    (“ne . . . pas” is a French negation syntax). It appears that every language has
+    its own characteristics—be it some unique characters or words—that makes it easy
+    to tell it apart from others. This is starting to sound a lot like a kind of problem
+    that machine learning is good at solving. Can we build an NLP system that can
+    do this automatically? How should we go about building it?
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.6.1 Using characters as input
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: A language detector can also be built in a similar way to the sentiment analyzer.
+    You can use an RNN to read the input text and convert it to some internal representation
+    (hidden states). You can then use a linear layer to convert them to a set of scores
+    corresponding to how likely the text is written in each language. Finally, you
+    can use cross-entropy loss to train the model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: One major difference between the sentiment analyzer and the language detector
+    is how you feed the input into an RNN. When building the sentiment analyzer, we
+    used the Stanford Sentiment Treebank and were able to assume that the input text
+    is always English and already tokenized. But this is not the case for language
+    detection. In fact, you don’t even know whether the input text is written in a
+    language that can be tokenized easily—what if the sentence is written in Chinese?
+    Or in Finnish, which is infamous for its complex morphology? You could use a tokenizer
+    that is specific to the language if you know what language it is, but we are building
+    the language detector because we don’t know what language it is in the first place.
+    This sounds like a typical chicken-and-egg problem.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To address this issue, we are going to use characters instead of tokens as the
+    input to an RNN. The idea is to break down the input into individual characters,
+    even including whitespace and punctuation, and feed them to the RNN one at a time.
+    Using characters is a common practice used when the input can be better represented
+    as a sequence of characters (such as Chinese, or of an unknown origin), or when
+    you’d like to make the best use of internal structures of words (such as the fastText
+    model we mentioned in chapter 3). The RNN’s powerful representational power can
+    still capture interactions between characters and some common words and n-grams
+    mentioned earlier.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.6.2 Creating a dataset reader
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'For this language-detection task, I created the train and the validation datasets
+    from the Tatoeba project by taking the 10 most popular languages on Tatoeba that
+    use the roman alphabet and by sampling 10,000 sentences for the train set and
+    1,000 for the validation set. An excerpt of this dataset follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: The first field is a three-letter language code that describes which language
+    the text is written in. The second field is the text itself. The fields are delimited
+    by a tab character. You can obtain the datasets from the code repository ([https://github.com/mhagiwara/realworldnlp/tree/master/data/tatoeba](https://github.com/mhagiwara/realworldnlp/tree/master/data/tatoeba)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The first step in building a language detector is to prepare a dataset reader
+    that can read datasets in this format. In the previous example (the sentiment
+    analyzer), because AllenNLP already provides StanfordSentimentTreeBankDatasetReader,
+    you just needed to import and use it. In this scenario, however, you need to write
+    your own. Fortunately, writing a dataset reader that can read this particular
+    format is not that difficult. To write a dataset reader, you just need to do the
+    following three things:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Create your own dataset reader class by inheriting DatasetReader.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Override the text_to_instance() method that takes raw text and converts it to
+    an instance object.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Override the_read() method that reads the content of a file and yields instances,
+    by calling text_to_instance() above.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The complete dataset reader for the language detector is shown in listing 4.3\.
+    We also assume that you already imported necessary modules and classes as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: Listing 4.3 Dataset reader for the language detector
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Every new dataset reader inherits DatasetReader.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Uses CharacterTokenizer() to tokenize text into characters
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Label will be None at test time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ If file_path is an URL, returns the actual path to a cached file on disk
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Yields instances using text_to_instance(), defined earlier
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that the dataset reader in listing 4.3 uses CharacterTokenizer() to tokenize
+    text into characters. Its tokenize() method returns a list of tokens, which are
+    AllenNLP objects that represent tokens but actually contain characters in this
+    scenario.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.6.3 Building the training pipeline
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Once you build the dataset reader, the rest of the training pipeline looks
+    similar to that of the sentiment analyzer. In fact, we can reuse the LstmClassifier
+    class we defined previously without any modification. The entire training pipeline
+    is shown in listing 4.4\. You can access the Google Colab notebook of the entire
+    code from here: [http://realworldnlpbook.com/ch4.html#langdetect](http://realworldnlpbook.com/ch4.html#langdetect).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.4 Training pipeline for the language detector
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When you run this training pipeline, you’ll get the metrics on the dev set
+    that are in the ballpark of the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: This is not bad at all! This means that the trained detector makes only one
+    mistake out of about 20 sentences. Precision of 0.9481 means there’s only one
+    false positive (non-English sentence) out of 20 instances that are classified
+    as English. Recall of 0.9490 means there’s only one false negative (English sentence
+    that was missed by the detector) out of 20 true English instances.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.6.4 Running the detector on unseen instances
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Finally, let’s try running the detector we just trained on a set of unseen instances
+    (instances that didn’t appear either in the train or the validation sets). It
+    is always a good idea to try feeding a small number of instances to your model
+    and observe how it behaves.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The recommended way for feeding instances into a trained AllenNLP model is
+    to use a predictor, as we did in chapter 2\. But here I’d like to do something
+    simpler and instead write a method that, given a piece of text and a model, runs
+    the prediction pipeline. To run a model on arbitrary instances, you can call the
+    model’s forward_ on_instances() method, as shown in the following snippet:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: This method first takes the input (text and model) and passes it through a tokenizer
+    to create an instance object. Then it calls model’s forward_on_instance() method
+    to retrieve the logits, the scores for target labels (languages). It gets the
+    label ID that corresponds to the maximum logit value by calling np.argmax and
+    then converts it to the label text by using the vocabulary object associated with
+    the model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When I ran this method on some sentences that are not in the two datasets,
+    I got the following results. Note that the result you get may be different from
+    mine due to some randomness:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: These predictions are almost perfect, except the very first sentence—it is English,
+    not French. It is surprising that the model makes a mistake on such a seemingly
+    easy sentence while it predicts more difficult languages (such as Hungarian) perfectly.
+    But remember, how difficult the language is for English speakers has nothing to
+    do with how difficult it is for a computer to classify. In fact, some of the “difficult”
+    languages such as Hungarian and Turkish here have very clear signals (accent marks
+    and unique words) that make it easy to detect them. On the other hand, lack of
+    clear signals in the first sentence may have made it more difficult to classify
+    it from other languages.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As a next step, you could try a couple of things: for example, you can tweak
+    some of the hyperparameters to see how the evaluation metrics and the final prediction
+    results change. You can also try a larger number of test instances to see how
+    exactly the mistakes are distributed (e.g., between which two languages). You
+    can also zero in on some of the instances and see why the model made such mistakes.
+    These are all important practices when you are working on real-world NLP applications.
+    I’ll discuss these topics in detail in chapter 10.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: A recurrent neural network (RNN) is a neural network with a loop. It can transform
+    a variable-length input to a fixed-length vector.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Nonlinearity is a crucial component that makes neural networks truly powerful.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: LSTMs and GRUs are two variants of RNN cells and are easier to train than vanilla
+    RNNs.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: You use accuracy, precision, recall, and F-measure for classification problems.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: AllenNLP provides useful NLP abstractions such as dataset readers, instances,
+    and vocabulary. It also provides a way to configure the training pipeline in the
+    JSON format.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: You can build a language detector as a sentence-classification application similar
+    to the sentiment analyzer.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL

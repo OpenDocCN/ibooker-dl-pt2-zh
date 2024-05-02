@@ -1,0 +1,1182 @@
+- en: 5 Sequential labeling and language modeling
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter covers
+  prefs: []
+  type: TYPE_NORMAL
+- en: Solving part-of-speech (POS) tagging and named entity recognition (NER) using
+    sequential labeling
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Making RNNs more powerful—multilayer and bidirectional recurrent neural networks
+    (RNNs)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Capturing statistical properties of language using language models
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using language models to evaluate and generate natural language text
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In this chapter, we are going to discuss sequential labeling—an important NLP
+    framework where systems tag individual words with corresponding labels. Many NLP
+    applications, such as part-of-speech tagging and named entity recognition, can
+    be framed as sequential-labeling tasks. In the second half of the chapter, I’ll
+    introduce the concept of language models, one of the most fundamental yet exciting
+    topics in NLP. I’ll talk about why they are important and how to use them to evaluate
+    and even generate some natural language text.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.1 Introducing sequential labeling
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In the previous chapter, we discussed sentence classification, where the task
+    is to assign some label to a given sentence. Spam filtering, sentiment analysis,
+    and language detection are some concrete examples of sentence classification.
+    Although many real-world NLP problems can be formulated as a sentence-classification
+    task, this method can also be quite limited, because the model, by definition,
+    allows us to assign only a single label to the whole sentence. But what if you
+    wanted something more granular? For example, what if you wanted to do something
+    with individual words, not just with the sentence? The most typical scenario you
+    encounter is when you want to extract something from the sentence, which cannot
+    be easily solved by sentence classification. This is where sequential labeling
+    comes into play.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.1.1 What is sequential labeling?
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '*Sequential* *labeling* is an NLP task where, given a sequence such as a sentence,
+    the NLP system assigns a label to each element (e.g., word) of the input sequence.
+    This contrasts with sentence classification, where a label is assigned just to
+    the input *sentence*. Figure 5.1 illustrates this contrast.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH05_F01_Hagiwara](../Images/CH05_F01_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.1 Sentence classification vs. sequential labeling
+  prefs: []
+  type: TYPE_NORMAL
+- en: But why is this even a good idea? When do we need a label per word? A typical
+    scenario where sequential labeling comes in handy is when you want to analyze
+    a sentence and produce some linguistic information per word. For example, part-of-speech
+    (POS) tagging, which I mentioned in chapter 1, produces a POS tag such as nouns,
+    verbs, and prepositions for each word in the input sentence and is a perfect match
+    for sequential labeling. See figure 5.2 for an illustration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH05_F02_Hagiwara](../Images/CH05_F02_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.2 Part-of-speech (POS) tagging using sequential labeling
+  prefs: []
+  type: TYPE_NORMAL
+- en: POS tagging is one of the most fundamental, important NLP tasks. Many English
+    words (and words in many other languages as well) are ambiguous, meaning that
+    they have multiple possible interpretations. For example, the word “book” can
+    be used to describe a physical or electronic object consisting of pages (“I read
+    a book”) or an action for reserving something (“I need to book a flight”). Downstream
+    NLP tasks, such as parsing and classification, benefit greatly by knowing what
+    each appearance of “book” actually means to process the input sentence. If you
+    were to build a speech synthesis system, you must know the POS of certain words
+    to pronounce them correctly—“lead” as a noun (a kind of metal) rhymes with “bed,”
+    whereas “lead” as a verb (to direct, guide) rhymes with “bead.” POS tagging is
+    an important first step toward solving this ambiguity.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Another scenario is when you want to extract some pieces of information from
+    a sentence. For example, if you want to extract subsequences (phrases) such as
+    noun phrases and verb phrases, this is also a sequential-labeling task. How can
+    you achieve extraction using labeling? The idea is to mark the beginning and the
+    end (or the beginning and the continuation, depending on how you represent it)
+    of the desired piece of information using labeling. An example of this is *named
+    entity recognition* (NER), which is a task to identify mentions to real-world
+    entities, such as proper nouns and numerical expressions, from a sentence (illustrated
+    in figure 5.3.).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH05_F03_Hagiwara](../Images/CH05_F03_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.3 Named entity recognition (NER) using sequential labeling
+  prefs: []
+  type: TYPE_NORMAL
+- en: Notice that all the words that are not part of any named entities are tagged
+    as O (for “Outside”). For now, you can ignore some cryptic labels in figure 5.3
+    such as B-GPE and I-MONEY. I’ll talk more about how to formulate NER as a sequential-labeling
+    problem in section 5.4.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.1.2 Using RNNs to encode sequences
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'In sentence classification, we used recurrent neural networks (RNNs) to convert
+    an input of variable length into a fixed-length vector. The fixed-length vector,
+    which is converted to a set of “scores” by a linear layer, captures the information
+    about the input sentence that is necessary for deriving the sentence label. As
+    a reminder, what this RNN does can be represented by the following pseudocode
+    and the diagram shown in figure 5.4:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: '![CH05_F04_Hagiwara](../Images/CH05_F04_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.4 Recurrent neural network (RNN) for sentence classification
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'What kind of neural network could be used for sequential tagging? We seem to
+    need some information for every input word in the sentence, not just at the end.
+    If you look at the pseudocode for rnn_vec() carefully, you can notice that we
+    already have information for every word in the input, which is captured by state.
+    The function just happens to return only the final value of state, but there is
+    no reason we can’t store intermediate values of state and return them as a list
+    instead, as in the following function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If you apply this function to the “time flies” example shown in figure 5.2
+    and unroll it—that is, write it without using a loop—it will look like the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note that v() here is a function that returns the embedding for the given word.
+    This can be visualized as shown in figure 5.5\. Notice that for each input word
+    word, the network produces the corresponding state that captures some information
+    about word. The length of the list states is the same as that of words. The final
+    value of states, that is, states[-1], is identical to the return value of rnn_vec()
+    from earlier.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH05_F05_Hagiwara](../Images/CH05_F05_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.5 Recurrent neural network (RNN) for sequential labeling
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you think of this RNN as a black box, it takes a sequence of something (e.g.,
+    word embeddings) and converts it to a sequence of vectors that encode some information
+    about individual words in the input, so this architecture is called a *Seq2Seq*
+    (for “sequence-to-sequence”) encoder in AllenNLP.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The final step is to apply a linear layer to each state of this RNN to derive
+    a set of scores that correspond to how likely each label is. If this is a part-of-speech
+    tagger, we
+  prefs: []
+  type: TYPE_NORMAL
+- en: need one score for the label NOUN, another for VERB, and so on for each and
+    every word. This conversion is illustrated in figure 5.6\. Note that the same
+    linear layer (with the same set of parameters) is applied to every state.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH05_F06_Hagiwara](../Images/CH05_F06_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.6 Applying a linear layer to RNN
+  prefs: []
+  type: TYPE_NORMAL
+- en: To sum up, we can use almost the same structure for sequential labeling as the
+    one we used for sentence classification. The only difference is the former produces
+    a hidden state per each word, not just per sentence. To derive scores used for
+    determining labels, a linear layer is applied to every hidden state.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.1.3 Implementing a Seq2Seq encoder in AllenNLP
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'AllenNLP implements an abstract class called Seq2SeqEncoder for abstracting
+    all Seq2Seq encoders that take in a sequence of vectors and return another sequence
+    of modified vectors. In theory, you can inherit the class and implement your own
+    Seq2Seq encoder. In practice, however, you most likely will use one of the off-the-shelf
+    implementations that PyTorch/AllenNLP provide, such as LSTM and GRU. Remember,
+    when we built the encoder for the sentiment analyzer, we used PyTorch’s built-in
+    torch.nn.LSTM and wrapped it with PytorchSeq2VecWrapper, as shown next, which
+    makes it compatible with AllenNLP’s abstraction:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'AllenNLP also implements PytorchSeq2SeqWrapper, which takes one of PyTorch’s
+    built-in RNN implementations and makes it compliant with AllenNLP’s Seq2SeqEncoder,
+    so there’s very little change you need to initialize a Seq2Seq encoder, as shown
+    here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: That’s it! There are a couple more things to note, but there’s surprisingly
+    few changes you need to make to the sentence classification code to make it work
+    for sequential labeling. This is thanks to the powerful abstraction of AllenNLP—most
+    of the time you need to worry only about how individual components interact with
+    each other, not about how these components work internally.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.2 Building a part-of-speech tagger
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'In this section, we are going to build our first sequential-labeling application—a
+    part-of-speech (POS) tagger. You can see the entire code for this section on the
+    Google Colab notebook ([http://realworldnlpbook.com/ch5.html#pos-nb](http://realworldnlpbook.com/ch5.html#pos-nb)).
+    We assume that you have already imported all necessary dependencies as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 5.2.1 Reading a dataset
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: As we saw in chapter 1, a *part of speech* (POS) is a category of words that
+    share similar grammatical properties. Part-of-speech tagging is the process of
+    tagging each word in a sentence with a corresponding part-of-speech tag. A training
+    set for POS tagging follows a tagset, which is a set of predefined POS tags for
+    the language.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To train a POS tagger, we need a dataset where every word in every sentence
+    is tagged with its corresponding POS tag. In this experiment, we are going to
+    use the English Universal Dependencies (UD) dataset. Universal Dependencies is
+    a language-independent dependency grammar framework developed by a group of researchers.
+    UD also defines a tagset called the *Universal part-of-speech tagset* ([http://realworldnlpbook.com/ch1.html#universal-pos](http://realworldnlpbook.com/ch1.html#universal-pos)).
+    The use of UD and the Universal POS tagset has been very popular in the NLP community,
+    especially for language-independent tasks and models such as POS tagging and parsing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We are going to use one subcorpus of UD called *A Gold Standard Universal Dependencies
+    Corpus for English*, which is built on top of the English Web Treebank (EWT) ([http://realworldnlpbook.com/ch5.html#ewt](http://realworldnlpbook.com/ch5.html#ewt))
+    and can be used under a Creative Commons license. You can download the entire
+    dataset from the dataset page ([http://realworldnlpbook.com/ch5.html#ewt-data](http://realworldnlpbook.com/ch5.html#ewt-data)),
+    if needed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Universal Dependencies datasets are distributed in a format called the *CoNLL-U
+    format* ([http://universaldependencies.org/docs/format.html](http://universaldependencies.org/docs/format.html)).
+    The AllenNLP models package already implements a dataset reader called UniversalDependenciesDatasetReader
+    that reads datasets in this format and returns a collection of instances that
+    include information like word forms, POS tags, and dependency relationship, so
+    all you need to do is initialize and use it as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Also, don’t forget to initialize data loaders and a Vocabulary instance, too,
+    as shown next:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 5.2.2 Defining the model and the loss
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The next step for building a POS tagger is to define the model. In the previous
+    section, we already saw that you can initialize a Seq2Seq encoder with very little
+    modification using AllenNLP’s built-in PytorchSeq2VecWrapper. Let’s define other
+    components (word embeddings and LSTM) and some variables necessary for the model
+    as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now we are ready to define the body of the POS tagger model, as shown here.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 5.1 POS tagger model
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ We use accuracy to evaluate the POS tagger.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ We need **args to capture unnecessary instance fields that AllenNLP automatically
+    destructures.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ The Seq2Seq encoder is trained using a sequence cross-entropy loss.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Notice that the code shown in listing 5.1 is very similar to the code for LstmClassifier
+    (listing 4.1), which we used for building a sentiment analyzer. In fact, except
+    for some naming differences, only one fundamental difference exists—the type of
+    loss function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Recall that we used a loss function called *cross entropy* for sentence classification
+    tasks, which basically measures how far apart two distributions are. If the model
+    produces a high probability for the true label, the loss will be low. Otherwise,
+    it will be high. But this assumed that there is only one label per sentence. How
+    can we measure how far the prediction is from the true label when there is one
+    label per word?
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The answer is: still use the cross entropy, but average it over all the elements
+    in the input sequence. For POS tagging, you compute the cross entropy per word
+    as if it were an individual classification task, sum it over all the words in
+    the input sentence, and divide by the length of the sentence. This will give you
+    a number reflecting how well your model is predicting the POS tags for the input
+    sentence on average. See figure 5.7 for an illustration.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH05_F07_Hagiwara](../Images/CH05_F07_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.7 Computing loss for sequence
+  prefs: []
+  type: TYPE_NORMAL
+- en: As for the evaluation metric, POS taggers are usually evaluated using accuracy,
+    which we are going to use here. Average human performance on POS tagging is around
+    97%, whereas the state-of-the-art POS taggers slightly outperform this ([http://realworldnlp
+    book.com/ch5.html#pos-sota](http://realworldnlpbook.com/ch5.html#pos-sota)). You
+    need to note that accuracy is not without a problem, however—assume there is a
+    relatively rare POS tag (e.g., SCONJ, which means subordinating conjugation),
+    which accounts for only 2% of total tokens, and a POS tagger messes it up every
+    time it appears. If the tagger gets the rest of the tokens all correct, it still
+    achieves 98% accuracy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.2.3 Building the training pipeline
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Now we are ready to move on to building the training pipeline. As with the previous
+    tasks, training pipelines in AllenNLP look very similar to each other. See the
+    next listing for the training code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 5.2 Training pipeline for POS tagger
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When you run this code, AllenNLP alternates between two phases: 1) training
+    the model using the train set, and 2) evaluating it using the validation set for
+    each epoch, while monitoring the loss and accuracy on both sets. Validation set
+    accuracy plateaus around 88% after several epochs. After the training is over,
+    you can run the model for an unseen instance as shown next:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This code uses UniversalPOSPredictor, a predictor that I wrote for this particular
+    POS tagger. Although its details are not important, you can look at its code if
+    you are interested ([http://realworldnlpbook.com/ch5#upos-predictor](http://realworldnlpbook.com/ch5#upos-predictor)).
+    If successful, this will show a list of POS tags: [''DET'', ''NOUN'', ''VERB'',
+    ''DET'', ''NOUN'', ''PUNCT''], which is indeed a correct POS tag sequence for
+    the input sentence.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.3 Multilayer and bidirectional RNNs
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: As we’ve seen so far, RNNs are a powerful tool for building NLP applications.
+    In this section, I talk about their structural variants—multilayer and bidirectional
+    RNNs—which are even more powerful components for building highly accurate NLP
+    applications.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.3.1 Multilayer RNNs
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: If you look at an RNN as a black box, it is a neural network structure that
+    converts a sequence of vectors (word embeddings) into another sequence of vectors
+    (hidden states). The input and output sequences are of the same length, usually
+    the number of input tokens. This means that you can repeat this “encoding” process
+    multiple times by stacking RNNs on top of each other. The output (hidden states)
+    of one RNN becomes the input of another RNN that is just above the previous one.
+    A substructure (such as a single RNN) of a bigger neural network is called a *layer*,
+    because you can stack them together like layers. The structure of a two-layered
+    RNN is shown in figure 5.8.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH05_F08_Hagiwara](../Images/CH05_F08_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.8 Two-layered RNN
+  prefs: []
+  type: TYPE_NORMAL
+- en: Why is this a good idea? If you think of a layer of RNN as a machine that takes
+    in something concrete (e.g., word embeddings) and extracts some abstract concepts
+    (e.g., scores for POS tags), you can expect that, by repeating this process, RNNs
+    are able to extract increasingly more abstract concepts as the number of layers
+    increases. Although not fully theoretically proven, many real-world NLP applications
+    use multilayer RNNs. For example, Google’s Neural Machine Translation (NMT) system
+    uses a stacked RNN consisting of eight layers for both the encoder and the decoder
+    ([http://realworldnlpbook.com/ch5.html#nmt-paper](http://realworldnlpbook.com/ch5.html#nmt-paper)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To use multilayer RNNs in your NLP application, all you need to do is change
+    how the encoder is initialized. Specifically, you need to specify only the number
+    of layers using the num_layers parameter, as shown in the next code snippet, and
+    AllenNLP makes sure that the rest of the training pipeline works as-is:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: If you change this line and rerun the POS tagger training pipeline, you will
+    notice that accuracy on the validation set is almost unchanged or slightly lower
+    than the previous model with a single-layer RNN. This is not surprising—information
+    required for POS tagging is mostly superficial, such as the identity of the word
+    being tagged and neighboring words. Very rarely does it require deep understanding
+    of the input sentence. On the other hand, adding layers to an RNN is not without
+    additional cost. It slows down the training and inference and increases the number
+    of parameters, which makes it susceptible to overfitting. For this small experiment,
+    adding layers to the RNN seems to do more harm than good. When you change the
+    structure of the network, always remember to verify its effect on a validation
+    set.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.3.2 Bidirectional RNNs
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: So far, we’ve been feeding words to RNNs as they come in—from the beginning
+    of the sentence to the end. This means that when an RNN is processing a word,
+    it can leverage only the information it has encountered so far, which is the word’s
+    left context. True, you can get a lot of information from a word’s left context.
+    For example, if a word is preceded by a modal verb (e.g., “can”), it is a strong
+    signal that the next word is a verb. However, the right context holds a lot of
+    information as well. For example, if you know that the next word is a determiner
+    (e.g., “a”), it is a strong signal that “book” on its left is a verb, not a noun.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Bidirectional RNNs (or simply biRNNs) solve this problem by combining two RNNs
+    with opposite directions. A forward RNN is a forward-facing RNN that we’ve been
+    using so far in this book—it scans the input sentence left to right and uses the
+    input word and all the information on its left to update the state. A backward
+    RNN, on the other hand, scans the input sentence right to left. It uses the input
+    word and all the information on its right to update the state. This is equivalent
+    to flipping the order of the input sentence and feeding it to a forward RNN. The
+    final hidden states produced by biRNNs are concatenations of hidden states from
+    the forward and backward RNNs. See figure 5.9 for an illustration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH05_F09_Hagiwara](../Images/CH05_F09_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.9 Bidirectional RNN
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s use a concrete example to illustrate this. Assume the input sentence is
+    “time flies like an arrow” and you’d like to know the POS tag for the word “like”
+    in the middle of this sentence. The forward RNN processes “time” and “flies,”
+    and by the time it reaches “like,” its internal state (A in figure 5.9) encodes
+    all the information about “time flies like.” Similarly, the backward RNN processes
+    “arrow” and “an,” and by the time it reaches “like,” the internal state (B in
+    figure 5.9) has encoded all the information about “like an arrow.” The internal
+    state from the biRNN for “like” is the concatenation of these two states (A +
+    B). You literally stitch together two vectors—no mathematical operations involved.
+    As a result, the internal state for “like” encodes all the information from the
+    entire sentence. This is a great improvement over just knowing half the sentence!
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Implementing a biRNN is similarly easy—you just need to add the bidirectional=True
+    flag when initializing the RNN as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: If you train the POS tagger with this change, the validation set accuracy will
+    jump from ~88% to 91%. This implies that incorporating the information on both
+    sides of the word is effective for POS tagging.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that you can combine the two techniques introduced in this section by stacking
+    bidirectional RNNs. The output from one layer of biRNN (concatenation of a forward
+    and a backward layer) becomes the input to another layer of biRNN (see figure
+    5.10). You can implement this by specifying both flags—num_layers and bidirectional—when
+    initializing the RNN in PyTorch/AllenNLP.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH05_F10_Hagiwara](../Images/CH05_F10_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.10 Two-layered bidirectional RNN
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.4 Named entity recognition
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Sequential labeling can be applied to many information extraction tasks, not
+    just to part-of-speech tagging. In this section, I’ll introduce the task of named
+    entity recognition (NER) and demonstrate how to build an NER tagger using sequential
+    labeling. The code for this section can be viewed and executed via the Google
+    Colab platform ([http://realworldnlpbook.com/ch5#ner-nb](http://realworldnlpbook.com/ch5#ner-nb)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.4.1 What is named entity recognition?
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'As mentioned earlier, named entities are mentions of real-world entities such
+    as proper nouns. Common named entities that are usually covered by NER systems
+    include the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Personal name (PER): Alan Turing, Lady Gaga, Elon Musk'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Organization (ORG): Google, United Nations, Giants'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Location (LOC): Mount Rainer, Bali Island, Nile'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Geopolitical entity (GPE): UK, San Francisco, Southeast Asia'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: However, different NER systems deal with different sets of named entities. The
+    concept of named entities is a bit overloaded in NLP to mean any mentions that
+    are of interest to the application’s user. For example, in the medical domain,
+    you may want to extract mentions to names of drugs and chemical compounds. In
+    the financial domain, companies, products, and stock symbols may be of interest.
+    In many domains, numerical and temporal expressions are also considered.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Identifying named entities is in itself important, because named entities (who,
+    what, where, when, and so on) are often what most people are interested in. But
+    NER is also an important first step for many other NLP applications. One such
+    task is *relation extraction*: extracting all relations between named entities
+    from the given document. For example, given a press release document, you may
+    want to extract an event described in the release, such as which company purchased
+    which other company for what price. This often assumes that all the parties are
+    already identified via NER. Another task that is closely related to NER is *entity
+    linking*, where mentions of named entities are linked to some knowledge base,
+    such as Wikipedia. When Wikipedia is used as a knowledge base, entity linking
+    is also called *Wikification*.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: But you may be wondering, what’s so difficult about simply extracting named
+    entities? If they are just proper nouns, can you simply compile a dictionary of,
+    say, all the celebrities (or all the countries, or whatever you are interested
+    in) and use it? The idea is, whenever the system encounters a noun, it would run
+    the name through this dictionary and tag the mention if it appears in it. Such
+    dictionaries are called *gazetteers*, and many NER systems do use them as a component.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'However, relying solely on such dictionaries has one major issue—*ambiguity*.
+    Earlier we saw that a single word type could have multiple parts of speech (e.g.,
+    “book” as a noun and a verb), and named entities are no exception. For example,
+    “Georgia” can be the name of a country, a US state, towns and communities across
+    the United States (Georgia, Indiana; Georgia, Nebraska), a film, a number of songs,
+    ships, and a personal name. Simple words like “book” could also be named entities,
+    including: Book (a community in Louisiana), Book/Books (a surname), The Books
+    (an American band), and so on. Simply matching mentions against dictionaries would
+    tell you nothing about their identities if they are ambiguous.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Fortunately, sentences often offer clues that can be used to *disambiguate*
+    the mentions. For example, if the sentence reads “I live in Georgia,” it’s usually
+    a strong signal that “Georgia” is a name of a place, not a film or a person’s
+    name. NER systems use a combination of signals about the mentions themselves (e.g.,
+    whether they are in a predefined dictionary) and about their context (whether
+    they are preceded or followed by certain words) to determine their tags.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.4.2 Tagging spans
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Unlike POS tagging, where each word is assigned a POS tag, mentions to named
+    entities can span over more than one word, for example, “the United States” and
+    “World Trade Organization.” A *span* in NLP is simply a range over one or more
+    contiguous words. How can we use the same sequential tagging framework to model
+    spans?
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A common practice in NLP is to use some form of encoding to convert spans into
+    per-word tags. The most common encoding scheme used in NER is called *IOB2 tagging*.
+    It represents spans by a combination of the positional tag and the category tag.
+    Three types of positional tags follow:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'B (Beginning): assigned to the first (or the only) token of a span'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'I (Inside): assigned to all but the first token of a span'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'O (Outside): assigned to all words outside of any spans'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Now, let’s take a look at the NER example we saw earlier and is shown in figure
+    5.11\. The token “Apple” is the first (and the only) token of ORG (for “organization”),
+    and it is assigned a B-ORG tag. Similarly, “UK”, the first and the only token
+    of GPE (for “geopolitical entity”), is assigned B-GPE. For “$1” and “billion,”
+    the first and the second tokens of a monetary expression (MONEY), B-MONEY and
+    I-MONEY are assigned, respectively. All the other tokens are given O.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH05_F11_Hagiwara](../Images/CH05_F11_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.11 Named entity recognition (NER) using sequential labeling
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The rest of the pipeline for solving NER is very similar to that of part-of-speech
+    tagging: both are concerned with assigning an appropriate tag for each word and
+    can be solved by RNNs. In the next section, we are going to build a simple NER
+    system using neural networks.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.4.3 Implementing a named entity recognizer
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'To build an NER system, we use the Annotated Corpus for Named Entity Recognition
+    prepared by Abhinav Walia published on Kaggle ([http://realworldnlpbook.com/ch5.html#ner-data](http://realworldnlpbook.com/ch5.html#ner-data)).
+    In what follows, I’m going to assume that you downloaded and expanded the dataset
+    under data/entity-annotated-corpus. Alternatively, you can use the copy of the
+    dataset I uploaded to S3 ([http://realworldnlpbook.com/ch5.html#ner-data-s3](http://realworldnlpbook.com/ch5.html#ner-data-s3)),
+    which is what the following code does. I wrote a dataset reader for this dataset
+    ([http://realworldnlpbook.com/ch5.html#ner-reader](http://realworldnlpbook.com/ch5.html#ner-reader)),
+    so you can simply import (or copy and paste) it and use it:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Because the dataset is not separated into train, validation, and test sets,
+    the dataset reader will separate it into train and validation splits for you.
+    All you need to do is specify which split you want when you initialize data loaders,
+    as shown here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: The RNN-based sequential tagging model and the rest of the training pipeline
+    look almost the same as the previous example (POS tagger). The only difference
+    is how we evaluate our NER model. Because most of the tags for a typical NER dataset
+    are simply “O,” using tag accuracy is misleading—a stupid system that tags everything
+    “O” would achieve very high accuracy. Instead, NER is usually evaluated as an
+    information extraction task, where the goal is to extract named entities from
+    texts, not just to tag them. We’d like to evaluate NER systems based on the “cleanness”
+    of retrieved named entities (how many of them are actual entities) and their “completeness”
+    (how many of actual entities the system was able to retrieve). Does any of this
+    sound familiar to you? Yes, these are the definition of recall and precision we
+    talked about in section 4.3\. Because there are usually multiple types of named
+    entities, these metrics (precision, recall, and F1-measure) are computed per entity
+    type.
+  prefs: []
+  type: TYPE_NORMAL
+- en: NOTE If these metrics are computed while ignoring entity types, it’s called
+    a *micro average*. For example, the micro-averaged precision is the total number
+    of true positives of all types divided by the total number of retrieved named
+    entities regardless of the type. On the other hand, if these metrics are computed
+    per entity type and are then averaged, it’s called a *macro average*. For example,
+    if the precision for PER and GPE is 80% and 90%, respectively, its macro average
+    is 85%. What AllenNLP computes in the following is the micro average.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'AllenNLP implements SpanBasedF1Measure, which computes per-type metrics (precision,
+    recall, and F1-measure) as well as the average. You can define the metric in __init__()
+    of your model as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'And use it to get metrics during training and validation, as shown next:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: If you run this training pipeline, you get an accuracy around 0.97, and precision,
+    recall, F1-measure will all hover around 0.83\. You can also use the predict()
+    method to obtain named entity tags for an unseen sentence as
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'which produces the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: This is not perfect—the NER tagger got the first named entity (“Apple”) correct
+    but missed two others (“UK” and “$1 billion”). If you look at the training data,
+    the mention “UK” never appears, and no monetary values are tagged. It is not surprising
+    that the system is struggling to tag entities that it has never seen before. In
+    NLP (and also machine learning in general), the characteristic of the test instances
+    needs to match that of the train data for the model to be fully effective.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.5 Modeling a language
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In this section, I’ll switch gears a little bit and introduce *language models*,
+    which is one of the most important concepts in NLP. We’ll discuss what they are,
+    why they are important, and how to train them using the neural network components
+    we’ve introduced so far.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.5.1 What is a language model?
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Imagine you are asked to predict what word comes next given a partial sentence:
+    “My trip to the beach was ruined by bad ___.” What words could come next? Many
+    things could ruin a trip to a beach, but most likely it’s bad weather. Maybe it’s
+    bad-mannered people at the beach, or maybe it’s bad food that the person had eaten
+    before the trip, but most would agree that “weather” is a likely word that comes
+    after this partial sentence. Few other nouns (*people*, *food*, *dogs*) and words
+    of other parts of speech (*be*, *the*, *run*, *green*) are as appropriate as “weather”
+    in this context.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: What you just did is to assign some belief (or probability) to an English sentence.
+    You just compared several alternatives and judged how likely they are as English
+    sentences. Most people would agree that the probability of “My trip to the beach
+    was ruined by bad weather” is a lot higher than “My trip to the beach was ruined
+    by bad dogs.”
+  prefs: []
+  type: TYPE_NORMAL
+- en: Formally, a *language model* is a statistical model that gives a probability
+    to a piece of text. An English language model would assign higher probabilities
+    to sentences that look like English. For example, an English language model would
+    give a higher probability to “My trip to the beach was ruined by bad weather”
+    than it does to “My trip to the beach was ruined by bad dogs” or even “by weather
+    was trip my bad beach the ruined to.” The more grammatical and the more “sense”
+    the sentence makes, the higher the probability is.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.5.2 Why are language models useful?
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: You may be wondering what use such a statistical model has. Although predicting
+    the next word might come in handy when you are answering fill-in-the-blank questions
+    for an exam, what particular roles do language models play in NLP?
+  prefs: []
+  type: TYPE_NORMAL
+- en: The answer is, it is essential for any systems that generate natural language.
+    For example, machine translation systems, which generate a sentence in a language
+    given a sentence in another language, would benefit greatly from high-quality
+    language models. Why? Let’s say we’d like to translate a Spanish sentence “Está
+    lloviendo fuerte” into English (“It is raining hard”). The last word “fuerte”
+    has several English equivalents—*strong*, *sharp*, *loud*, *heavy*, and so on.
+    How would you determine which English equivalent is the most appropriate in this
+    context? There could be many approaches to solve this problem, but one of the
+    simplest is to use an English language model and rerank several different translation
+    candidates. Assuming you’ve finished translating up to “It is raining,” you would
+    simply replace the word “fuerte” with all the equivalents you can find in a Spanish-English
+    dictionary, which generates “It is raining strong,” “It is raining sharp,” “It
+    is raining loud,” “It is raining hard.” Then all you need to do is ask the language
+    model which one of these candidates has the highest probability.
+  prefs: []
+  type: TYPE_NORMAL
+- en: NOTE In fact, neural machine translation models can be thought of as a variation
+    of a language model that generates sentences in the target language conditioned
+    on its input (sentences in the source language). Such a language model is a called
+    a *conditional language model* as opposed to an *unconditional language model*,
+    which we discuss here. We’ll discuss machine translation models in chapter 6.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A similar situation arises in speech recognition, too, which is another task
+    that generates text given spoken audio input. For example, if somebody uttered
+    “You’re right,” how would a speech recognition system know it’s actually “you’re
+    right?” Because “you’re” and “your” can have the same pronunciation, and so can
+    “right” and “write” and even “Wright” and “rite,” the system output could be any
+    one of “You’re write,” “You’re Wright,” “You’re rite,” “Your right,” “Your write,”
+    “Your Wright,” and so on. Again, the simplest approach to resolving this ambiguity
+    is to use a language model. An English language model would properly rerank these
+    candidates and determine “you’re right” is the most likely transcription.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In fact, humans do this type of disambiguation all the time, though unconsciously.
+    When you are having a conversation with somebody else at a large party, the actual
+    audio signal you receive is often very noisy. Most people can still understand
+    each other without any issues because people’s language models help them “correct”
+    what you hear and interpolate any missing parts. You’ll notice this most if you
+    try to converse in a less proficient, second language—you’d have a lot harder
+    time understanding the other person in a noisy environment, because your language
+    model is not as good as your first language’s.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.5.3 Training an RNN language model
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: At this point, you may be wondering what the connection is between predicting
+    the next word and assigning a probability to a sentence. These two are actually
+    equivalent. Instead of explaining the theory behind it, which requires you to
+    understand some math (especially probability theory), I’ll attempt an intuitive
+    example next without going into mathematical details.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Imagine you want to estimate the chance of tomorrow’s weather being rainy and
+    the ground wet. Let’s simplify this and assume there are only two types of weather,
+    sunny and rainy. There are only two outcomes for the ground: dry or wet. This
+    is equivalent to estimating the probably of a sequence: [rain, wet].'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Further assume that there’s a 50-50 chance of rain on a given day. After raining,
+    the ground is wet with a 90% chance. Then, what is the probability of the rain
+    and the ground being wet? It’s simply 50% times 90%, which is 45%, or 0.45\. If
+    we know the probability of one event happening after another, you can simply multiply
+    two probabilities to get the total probability for the sequence. This is called
+    the *chain rule* in probability theory.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Similarly, if you can correctly estimate the probability of one word occurring
+    after a partial sentence, you can simply multiply it with the probability of the
+    partial sentence. Starting from the first word, you can keep doing this until
+    you reach the end of the sentence. For example, if you’d like to compute the probability
+    for “The trip to the beach was . . . ,” you can multiply the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The probability of “The” occurring at the beginning of a sentence
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The probability of “trip” occurring after “The”
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The probability of “to” occurring after “The trip”
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The probability of “the” occurring after “The trip to”
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: And so on
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This means that to build a language model, you need a model that predicts the
+    probability (or, more precisely, the probability distribution) of the next word
+    given the context. You may have noticed that this sounds a little familiar. Indeed,
+    what’s done here is very similar to the sequential-labeling models that we’ve
+    been talking about in this chapter. For example, a part-of-speech (POS) tagging
+    model predicts the probability distribution over the possible POS tags given the
+    context. A named entity recognition (NER) model does it for the possible named
+    entity tags. The difference is that a language model does it for the possible
+    next words, given what the model has encountered so far. Hopefully it’s starting
+    to make some sense why I talk about language models in this chapter!
+  prefs: []
+  type: TYPE_NORMAL
+- en: In summary, to build a language model, you tweak an RNN-based sequence-labeling
+    model a little bit so that it gives the estimates for the next word, instead of
+    POS or NER tags. In chapter 3, I talked about the Skip-gram model, which predicts
+    the words in a context given the target word. Notice the similarity here—both
+    models predict the probability over possible words. The input to the Skip-gram
+    model is just a single word, whereas the input to the language model is the partial
+    sequence. You can use a similar mechanism for converting one vector to another
+    using a linear layer, then converting it to a probability distribution using softmax,
+    as we discussed in chapter 3\. The architecture is shown in figure 5.12.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH05_F12_Hagiwara](../Images/CH05_F12_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.12 Architecture of RNN-based language model
+  prefs: []
+  type: TYPE_NORMAL
+- en: The way RNN-based language models are trained is similar to other sequential-labeling
+    models. The loss function we use is the sequential cross-entropy loss, which measures
+    how “off” the predicted words are from actual words. The cross-entropy loss is
+    computed per word and averaged over all words in the sentence.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.6 Text generation using RNNs
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: We saw that language models give probabilities to natural language sentences.
+    But the more fun part is you can generate natural language sentences from scratch
+    using a language model! In the final section of this chapter, we are going to
+    build a language model. You can use the trained model to evaluate and generate
+    English sentences. You can find the entire script for this subsection on a Google
+    Colab notebook ([http://realworldnlpbook.com/ch5.html#lm-nb](http://realworldnlpbook.com/ch5.html#lm-nb)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.6.1 Feeding characters to an RNN
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: In the first half of this section, we are going to build an English language
+    model and train it using a generic English corpus. Before we start, we note that
+    the RNN language model we build in this chapter operates on *characters*, not
+    on words or tokens. All the RNN models we’ve seen so far operate on words, which
+    means the input to the RNN was always sequences of words. On the other hand, the
+    RNN we are going to use in this section takes sequences of characters as the input.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In theory, RNNs can operate on sequences of anything, be it tokens or characters
+    or something completely different (e.g., waveform for speech recognition), as
+    long as they are something that can be turned into vectors. In building language
+    models, we often feed characters, even including whitespace and punctuations as
+    the input, treating them as words of length 1\. The rest of the model works exactly
+    the same—individual characters are first embedded (converted to vectors) and then
+    fed into the RNN, which is in turn trained so that it can best predict the distribution
+    over the characters that are likely to come next.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You have a couple of considerations when you are deciding whether you should
+    feed words or characters to an RNN. Using characters will definitely make the
+    RNN less efficient, meaning that it would need more computation to “figure out”
+    the same concept. For example, a word-based RNN can receive the word “dog” at
+    a timestep and update its internal states, whereas a character-based RNN would
+    not able to do it until it receives three elements *d*, *o*, and *g*, and probably
+    “_” (whitespace). A character-based RNN needs to “learn” that a sequence of these
+    three characters means something special (the concept of “dog”).
+  prefs: []
+  type: TYPE_NORMAL
+- en: On the other hand, by feeding characters to RNNs, you can bypass many issues
+    arising from dealing with tokens. One such issue is related to out-of-vocabulary
+    (or OOV) words. When training a word-based RNN, you usually fix the entire set
+    of vocabulary, often by enumerating all words that appeared in the train set.
+    But whenever it encounters an OOV word in the test set, it doesn’t know what to
+    do with it. Oftentimes, it assigns a special token <UNK> to all OOV words and
+    treats them in the same way, which is not ideal. A character-based RNN, on the
+    contrary, can still operate on individual characters, so it may be able to figure
+    out what “doggy” means, for example, based on the rules it has learned by observing
+    “dog” in the train set, even though it has never seen the exact word “doggy” before.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.6.2 Evaluating text using a language model
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Let’s start building a character-based language model. The first step is to
+    read a plain text dataset file and generate instances for training the model.
+    I’m going to show how to construct an instance without using a dataset reader
+    for a demonstration purpose. Suppose you have a Python string object text that
+    you’d like to turn into an instance for training a language model. First you need
+    to segment it into characters using CharacterTokenizer as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Note that tokens here is a list of Token objects. Each Token object contains
+    a single character, instead of a single word. Then you insert the <START> and
+    <END> symbols at the beginning and at the end of the list as shown next:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: Inserting special symbols like these at the beginning and end of each sentence
+    is a common practice in NLP. With these symbols, models can distinguish between
+    occurrences of a token in the middle of a sentence versus at the beginning/end
+    of a sentence. For example, a period is a lot more likely to occur at the end
+    of a sentence (“. <END>”) than the beginning (“<START> .”), to which a language
+    model can give two very different probabilities, which is impossible to do without
+    the use of these symbols.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Finally, you can construct an instance by specifying individual text fields.
+    Notice that the “output” of a language model is identical to the input, simply
+    shifted by one token, as shown here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Here token_indexers specifies how individual tokens are mapped into IDs. We
+    simply use SingleIdTokenIndexer we’ve been using so far as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: Figure 5.13 shows an instance created from this process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH05_F13_Hagiwara](../Images/CH05_F13_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.13 Instance for training a language model
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The rest of the training pipeline, as well as the model, is very similar to
+    that for sequential labeling mentioned earlier in this chapter. See the Colab
+    notebook for more details. As shown in the next code snippet, after the model
+    is fully trained, you can construct instances from new texts, turn them into instances,
+    and compute the loss, which basically measures how successful the model was in
+    predicting what comes next:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: The loss here is the cross-entropy loss between the predicted and the expected
+    characters. The more “unexpected” the characters there are, the higher the values
+    will be, so you can use these values to measure how natural the input is as English
+    text. As expected, natural sentences (such as the first one) are given scores
+    that are lower than unnatural sentences (such as the last one).
+  prefs: []
+  type: TYPE_NORMAL
+- en: NOTE If you calculate 2 to the power of the cross entropy, the value is called
+    *perplexity*. Given a fixed natural language text, perplexity becomes lower because
+    the language model is better at predicting what comes next, so it is commonly
+    used for evaluating the quality of language models in the literature.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.6.3 Generating text using a language model
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The most interesting aspect of (fully trained) language models is that they
+    can predict possible characters that may appear next given some context. Specifically,
+    they can give you a probability distribution over possible characters that may
+    come next, from which you choose to determine the next character. For example,
+    if the model has generated “t” and “h,” and the LM is trained on generic English
+    text, it would probably assign a high probability on the letter “e,” generating
+    common English words including *the*, *they*, *them*, and so on. If you start
+    this process from the <START> token and keep doing this until you reach the end
+    of the sentence (i.e., by generating <END>), you can generate an English sentence
+    from scratch. By the way, this is another reason why tokens such as <START> and
+    <END> are useful—you need something to feed to the RNN to kick off the generation,
+    and you also need to know when the sentence stops.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s look at this process in a Python-like pseudocode next:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This loop looks very similar to the one for updating RNNs with one key difference:
+    here, we are not receiving any input but instead are generating characters and
+    feeding them as the input. In other words, the RNN operates on the sequence of
+    characters that the RNN itself generated so far. Such models that operate on past
+    sequences they produced are called *autoregressive models*. See figure 5.14 for
+    an illustration of this.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH05_F14_Hagiwara](../Images/CH05_F14_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.14 Generating text using an RNN
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the previous code snippet, init_state() and update() functions are the ones
+    that initialize and update the hidden states of the RNN, as we’ve seen earlier.
+    In generating text, we assume that the model and its parameters are already trained
+    on a large amount of natural language text. softmax() is a function to run Softmax
+    on the given vector, and linear() is the linear layer to expand/shrink the size
+    of the vector. The function sample() returns a character according to the given
+    probability distribution. For example, if the distribution is “a”: 0.6, “b”: 0.3,
+    “c”: 0.1, it will choose “a” 60% of the time, “b” 30% of the time, and “c” 10%
+    of the time. This ensures that the generated string is different every time while
+    every string is likely to look like a real English sentence.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: NOTE You can use PyTorch’s torch.multinomial() for sampling an element from
+    a probability distribution.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If you train this language model using the English sentences from Tatoeba and
+    generate sentences according to this algorithm, the system will produce something
+    similar to the following cherry-picked examples:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: This is not a bad start! If you look at these sentences, there are many words
+    and phrases that make sense as valid English (*You can say that*, *That’s a problem*,
+    *to go there*, *see him go*, etc.). Even when the system generates peculiar words
+    (*despoit*, *studented*, *redusention*, *distaples*), they look almost like real
+    English words because they all basically follow morphological and phonological
+    rules of English. This means that the language model was successful in learning
+    the basic building blocks of English, such as how to arrange letters (orthography),
+    how to form words (morphology), and how to form basic sentence structures (syntax).
+  prefs: []
+  type: TYPE_NORMAL
+- en: However, if you look at sentences as a whole, few of them make any sense (e.g.,
+    *What you see him go as famous to eat!*). This means the language model we trained
+    falls short of modeling semantic consistency of sentences. This is potentially
+    because our model is not powerful enough (our LSTM-RNN needs to compress everything
+    about the sentence into a 256-dimensional vector) or the training dataset is too
+    small (just 10,000 sentences), or both. But you can easily imagine that if we
+    keep increasing the model capacity as well as the size of the train set, the model
+    gets incredibly good at producing realistic natural language text. In February
+    2019, OpenAI announced that it developed a huge language model based on the Transformer
+    model (which we’ll cover in chapter 8) trained on 40 GB of internet text. The
+    model shows that it can produce realistic-looking text that shows near-perfect
+    grammar and long-term topical consistency given a prompt. In fact, the model was
+    so good that OpenAI decided not to release the large model they had trained due
+    to their concerns about malicious use of the technology. But it is important to
+    keep in mind that, no matter how intelligent the output looks, their model is
+    trained on the same principle as our toy example in this chapter—just trying to
+    predict the next character!
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Sequential-labeling models tag each word in the input with a label, which can
+    be achieved by recurrent neural networks (RNNs).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Part-of-speech (POS) tagging and named entity recognition (NER) are two instances
+    of sequential-labeling tasks.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Multilayer RNNs stack multiple layers of RNNs, whereas bidirectional RNNs combine
+    forward and backward RNNs to encode the entire sentence.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Language models assign probabilities to natural language text, which is achieved
+    by predicting the next word.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: You can use a trained language model to assess how “natural” a natural language
+    sentence is or even to generate realistic-looking text from scratch.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL

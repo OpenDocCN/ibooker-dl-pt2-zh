@@ -1,0 +1,615 @@
+- en: 7 Convolutional neural networks
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter covers
+  prefs: []
+  type: TYPE_NORMAL
+- en: Solving text classification by detecting patterns
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using convolutional layers to detect patterns and produce scores
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using pooling layers to aggregate the scores produced by convolution
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Building a convolutional neural network (CNN) by combining convolution and pooling
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Building a CNN-based text classifier using AllenNLP
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In previous chapters, we covered linear layers and RNNs, two main neural network
+    architectures commonly used in NLP. In this chapter, we introduce another important
+    class of neural networks called *convolutional neural networks* (CNNs). CNNs have
+    different characteristics than RNNs that make them suitable for NLP tasks where
+    detecting linguistic patterns is important, such as text classification.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.1 Introducing convolutional neural networks (CNNs)
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: This section introduces convolutional neural networks (CNNs), another type of
+    neural network architecture that operates in a different way from how RNNs work.
+    CNNs are particularly good at pattern-matching tasks and are increasingly popular
+    in the NLP community.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.1.1 RNNs and their shortcomings
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: In chapter 4, we covered sentence classification, which is an NLP task that
+    receives some text as the input and produces a label for it. We also discussed
+    how to use recurrent neural networks (RNNs) for that task. As a refresher, an
+    RNN is a type of neural network that has a “loop” in it, which processes the input
+    sequence one element at a time from the beginning until the end. The internal
+    loop variable, which is updated at every step, is called the *hidden state*. When
+    the RNN finishes processing the entire sequence, the hidden state at the final
+    timestep represents the compressed content of the input sequence, which can be
+    used for NLP tasks including sentence classification. Alternatively, you can take
+    out the hidden state after every step and use it to assign labels (such as PoS
+    and named entity tags) to individual words. The structure that is applied repeatedly
+    in the loop is called a *cell*. An RNN with a simple multiplication and nonlinearity
+    is called a *vanilla* or an *Elman* RNN. On the other hand, LSTM and GRU-based
+    RNNs use more complicated cells that employ memory and gating.
+  prefs: []
+  type: TYPE_NORMAL
+- en: RNNs are a powerful tool in modern NLP with a wide range of applications; however,
+    they are not without shortcomings. First, RNNs are slow—they need to scan the
+    input sequence element by element no matter what. Their computational complexity
+    is proportional to the length of the input sequences. Second, due to their sequential
+    nature, RNNs are hard to parallelize. Think of a multilayer RNN where multiple
+    RNN layers are stacked on top of each other (as shown in figure 7.1). In a naive
+    implementation, each layer needs to wait until all the layers below it finish
+    processing the input
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH07_F01_Hagiwara](../Images/CH07_F01_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.1 Multilayer RNN
+  prefs: []
+  type: TYPE_NORMAL
+- en: Third, the RNN structure is simply overkill and inefficient for some tasks.
+    For example, recall the task of detecting grammatical English sentences that we
+    covered in chapter 4\. In its simplest form, the task is to recognize valid and
+    invalid subject-verb agreement in a two-word sentence. If a sentence contains
+    phrases such as “I am” and “you are,” it’s grammatical. If it contains “I are”
+    or “you am,” it’s not. In chapter 4, we built a simple LSTM-RNN with a nonlinearity
+    to recognize the grammaticality of two-word sentences with a vocabulary of four
+    words. But what if you need to classify whether an arbitrary long sentence with
+    a very large vocabulary is grammatical? Suddenly, this process starts to sound
+    very complex. Your LSTM needs to learn to pick up the signal (subject-verb agreement)
+    from a large amount of noise (all other words and phrases that have nothing to
+    do with agreement), while learning to do all this using the update operation that
+    gets repeated for every single element of the input.
+  prefs: []
+  type: TYPE_NORMAL
+- en: But if you think about it, no matter how long the sentence is or how large the
+    vocabulary is, your network’s job should still be quite simple—if the sentence
+    contains valid collocations (such as “I am” and “you are”), it’s grammatical.
+    Otherwise, it’s not. The task is actually not very far from the “if-then” sentiment
+    analyzer that we saw in chapter 1\. It is obvious that the structure of LSTM RNNs
+    is overkill for this task, where simple pattern matching over words and phrases
+    would suffice.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.1.2 Pattern matching for sentence classification
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: If you look at text classification in general, many tasks can be effectively
+    solved by this “pattern matching.” Take spam filtering, for example—if you want
+    to detect spam emails, simply look for words and phrases such as “v1agra” and
+    “business opportunity” without even reading the entire email; it doesn’t matter
+    where these patterns appear. If you want to detect sentiment from movie reviews,
+    detecting positive and negative words such as “amazing” and “awful” would go a
+    long way. In other words, learning and detecting such local linguistic patterns,
+    regardless of their location, is an effective and efficient strategy for text-classification
+    tasks, and possibly for other NLP tasks as well.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In chapter 3, we learned the concept of n-grams—contiguous sequences of one
+    or more words. They are often used in NLP as proxies for more formally defined
+    linguistic units such as phrases and clauses. If there’s some tool that can wade
+    through a large amount of noise in text and detect n-grams that serve as signals,
+    it would be a great fit for text classification.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.1.3 Convolutional neural networks (CNNs)
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Convolutional neural networks, or CNNs, do exactly this. A CNN is a type of
+    neural network that involves a mathematical operation called *convolution*, which,
+    put simply, detects local patterns that are useful for the task at hand. A CNN
+    usually consists of one or more convolutional layers, which do convolution, and
+    pooling layers, which are responsible for aggregating the result of convolution.
+    See figure 7.2 for a diagram. Sections 7.2 and 7.3 provide some detail of convolutional
+    layers and pooling layers, respectively.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH07_F02_Hagiwara](../Images/CH07_F02_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.2 Convolutional neural network
+  prefs: []
+  type: TYPE_NORMAL
+- en: CNNs, which are inspired by the visual system in the human brain, have been
+    widely used for computer vision tasks such as image classification and object
+    detection. In recent years, the use of CNNs has been increasingly popular in NLP,
+    especially for tasks such as text classification, sequential labeling, and machine
+    translation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.2 Convolutional layers
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In this section, we’ll discuss convolutional layers, the essential part of the
+    CNN architecture. The term *convolution* may sound a bit scary, but at its essence,
+    it’s just pattern matching. We’ll use diagrams and intuitive examples to illustrate
+    how it really works.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.2.1 Pattern matching using filters
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Convolutional layers are the most important component in CNNs. As mentioned
+    earlier, convolutional layers apply a mathematical operation called convolution
+    to input vectors and produce output. But what is convolution? Understanding the
+    strict definition of convolution requires knowing linear algebra, so we’ll use
+    some analogy and concrete examples to understand it. Imagine holding a rectangular-shaped
+    patch of colored glass with complex patterns (like the stained glass you see in
+    a church) and sliding it over the input sequence while looking through it. If
+    the input pattern matches that of the patch, more light goes through the glass
+    and you get larger output values. If the input pattern does not look like that
+    of the patch or looks the opposite, you get smaller output values. In other words,
+    you are looking for particular patterns in the input sequence using a patch of
+    colored glass.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This analogy is a little bit too vague, so let’s revisit the grammaticality-detection
+    example we used in chapter 4 and see how we’d apply a convolutional layer to the
+    task. To recap, our neural network receives a two-word sentence as an input and
+    needs to distinguish grammatical sequences from ungrammatical ones. There are
+    only four words in the vocabulary—“I,” “you,” “am,” and “are,” which are represented
+    by word embeddings. Similarly, there are only four possibilities for the input
+    sentence—“I am,” “I are,” “you am,” and “you are.” You want the network to produce
+    1s for the first and the last cases and 0s for others. See figure 7.3 for an illustration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH07_F03_Hagiwara](../Images/CH07_F03_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.3 Recognizing grammatical English sentences
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now, let’s represent word embeddings as patterns. We’ll draw a black circle
+    for value -1 and a white one for 1\. Then you can represent each word vector as
+    a pair of two circles (see the table on the left in figure 7.3). Similarly, you
+    can represent each two-word sentence as a small “patch” of two vectors, or four
+    circles (see the table on the right in figure 7.3). Our task is beginning to look
+    more like a pattern-recognition task, where the network needs to learn black-and-white
+    patterns that correspond to grammatical sentences.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Then, let’s think of a “filter” of the same size (two circles × two circles)
+    that acts as the colored glass we talked about earlier. Each circle of this filter
+    is also either black or white, corresponding to values -1 and 1\. You are going
+    to look at a pattern through this filter and determine whether the pattern is
+    the one you are looking for. You do this by putting the filter over a pattern
+    and counting the number of color matches between the two. For each one of four
+    positions, you get a score of +1 if the colors match (black-black or white-white)
+    and a score of -1 if they don’t (black-white or white-black). Your final score
+    is the sum of four scores, which varies from -4 (no matches) to +4 (four matches).
+    See figure 7.4 for some examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH07_F04_Hagiwara](../Images/CH07_F04_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.4 Examples of convolutional filters
+  prefs: []
+  type: TYPE_NORMAL
+- en: The score you get varies depending on the pattern and the filter, but as you
+    can see in the figure, the score becomes larger when the filter looks similar
+    to the pattern and becomes smaller when the two are not similar. You get the largest
+    score (4) when the two match exactly and the smallest score (-4) when the two
+    are exactly opposite. The filter acts as a pattern detector against the input.
+    Although this is a very simplified example, it basically shows what a convolutional
+    layer is doing. In convolutional neural networks, such filters are called *kernels*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In a more general setting, you have an input sentence of arbitrary length, and
+    you slide a kernel over the sentence from left to right. See figure 7.5 for an
+    illustration of this. The kernel is repeatedly applied to two consecutive words
+    to produce a sequence of scores. Because the kernel we are using here covers two
+    words, it is said to have a *size* of 2\. Also, because there are two dimensions
+    in the input embeddings (which are called *channels*), the number of the kernel’s
+    input channels is 2.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH07_F05_Hagiwara](../Images/CH07_F05_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.5 Sliding a kernel over the input sentence
+  prefs: []
+  type: TYPE_NORMAL
+- en: NOTE The reason embedding dimensions are called channels is because CNNs are
+    most commonly applied to computer vision tasks where the input is often a 2-D
+    image of different channels that correspond to intensities of different colors
+    (such as red, green, and blue). In computer vision, kernels are two dimensional
+    and move over the input 2-D images, which is also called *2-D convolution*. In
+    NLP, however, kernels are usually one-dimensional (1-D convolution) and have only
+    one size.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.2.2 Rectified linear unit (ReLU)
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: As the next step, let’s think about how we can get the desired output (the Desired
+    column in figure 7.3) using kernels. How about if we use the filter shown in the
+    second column of figure 7.4? The kernel, which we’ll call kernel 1 from now on,
+    matches the first pattern exactly and gives it a high score, while giving zero
+    or negative scores to others. Figure 7.6 shows the score (called score 1) when
+    kernel 1 is applied to each pattern.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH07_F06_Hagiwara](../Images/CH07_F06_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.6 Applying kernel 1 to patterns
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s forget the magnitude of the scores for now and focus on their signs (positive
+    and negative). The signs for the first three patterns match between Score 1 and
+    Desired, but not for the last pattern. To score it correctly—that is, to give
+    it a positive score—you need to use another filter that matches the last pattern
+    exactly. Let’s call this kernel 2\. Figure 7.7 shows the score (called score 2)
+    when kernel 2 is applied to each pattern.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Kernel 2 can give correct scores that match the signs of the desired ones for
+    the last three patterns, but not for the first one. But if you observe figures
+    7.6 and 7.7 carefully, it looks like you could get closer to the desired scores
+    if there was a way to somehow disregard the output when a kernel gives negative
+    scores and then combine the scores from multiple kernels.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH07_F07_Hagiwara](../Images/CH07_F07_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.7 Applying kernel 2 to patterns
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s think of a function that clamps any negative input to zero while passing
+    any positive values through unchanged. In Python, this function can be written
+    as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: or even simpler
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: You can disregard negative values by applying this function to score 1 and score
+    2, as shown in figures 7.8 and 7.9.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH07_F08_Hagiwara](../Images/CH07_F08_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.8 Applying ReLU to score 1
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH07_F09_Hagiwara](../Images/CH07_F09_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.9 Applying ReLU to score 2
+  prefs: []
+  type: TYPE_NORMAL
+- en: This function, which is called a *rectified linear unit*, or ReLU (pronounced
+    “rel-you”), is one of the simplest yet most commonly used activation functions
+    in deep learning. It is often used with a convolutional layer, and although it
+    is very simple (all it does is just clamp negative values to zero), it is still
+    an activation function that enables neural networks to learn complex nonlinear
+    functions (see chapter 4 for why nonlinear activation functions are important).
+    It also has favorable mathematical properties that make it easier to optimize
+    the network, although the theoretical details are beyond the scope of this book.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.2.3 Combining scores
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: If you look at both figures 7.8 and 7.9, the “clamped” scores—shown in the f(Score
+    1) and f(Score 2) columns—capture the desired scores at least partially. All you
+    need to do is combine them together (by summing) and adjust the range (by dividing
+    by 4). Figure 7.10 shows the result of this.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH07_F10_Hagiwara](../Images/CH07_F10_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.10 Combining the results from two kernels
+  prefs: []
+  type: TYPE_NORMAL
+- en: After combining, the scores match the desired outcomes exactly. All we did so
+    far was design kernels that match the patterns we want to detect and then simply
+    combine the scores. Compare this to the RNN example we worked on in section 4.1.3,
+    where we needed to use some complicated numeric computation to derive the parameters.
+    Hopefully this example is enough to show you how simple and powerful CNNs can
+    be for text classification!
+  prefs: []
+  type: TYPE_NORMAL
+- en: The example we worked on in this section is simply for introducing the basic
+    concepts of CNNs, so we cut many corners. First, in practice, patterns and kernels
+    are not just black and white but contain real-valued numbers. The score after
+    applying a kernel to a pattern is obtained not by counting color matches but through
+    a mathematical operation called *inner product*, which captures the similarity
+    between the two. Second, the scores produced by kernels aren’t combined by some
+    arbitrary operation (like we did in this section) but usually by a linear layer
+    (see section 3.4.3), which can learn a linear transformation against the input
+    to produce the output. Finally, kernels and the weights (magic constants w and
+    b) in the final linear layer are all trainable parameters of a CNN, meaning that
+    their values are adjusted so that the CNN can produce the desired scores.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.3 Pooling layers
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In the previous section, we assumed that the input is just a combination of
+    two words—subjects and verbs—although in practice, the input to a CNN can be of
+    arbitrary length. Your CNN needs to not only detect patterns but also find them
+    in a potentially large amount of noise in the input. As we saw in section 7.2,
+    you slide a kernel over the sentence from left to right, and the kernel is repeatedly
+    applied to two consecutive words to produce a sequence of scores. The remaining
+    question is what to do with these produced scores. Specifically, what operation
+    should we use in the “?” position in figure 7.11 to derive the desired score?
+    This operation needs to have some properties—it must be something that can be
+    applied to an arbitrarily large number of scores, because the sentence can be
+    very long. It also needs to aggregate the scores in a way that is agnostic to
+    where the target pattern (word embeddings for “I am”) is in the input sentence.
+    Can you figure out the answer?
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH07_F11_Hagiwara](../Images/CH07_F11_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.11 Aggregating scores to derive the desired score
+  prefs: []
+  type: TYPE_NORMAL
+- en: The simplest thing you can do to aggregate the scores is to take their maximum.
+    Because the largest score in figure 7.11 is 4, it will become the output of this
+    layer. This aggregation operation is called *pooling*, and the neural network
+    substructure that does pooling is called a *pooling layer*. You can also do other
+    types of mathematical operations that do aggregation, such as taking the average,
+    although taking the maximum (called *max pooling*) is most commonly used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The pooled score will be fed to a linear layer, optionally combined with scores
+    from other kernels, and used as a predicted score. This entire process is illustrated
+    in figure 7.12\. Now we have a fully functional CNN!
+  prefs: []
+  type: TYPE_NORMAL
+- en: As with other neural networks we’ve seen so far, the output from the linear
+    layer is fed to softmax to produce a probability distribution over labels. These
+    predicted values are then compared with the true labels to produce the loss and
+    used for optimizing the network.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Before we wrap up, a few more words on CNNs: notice that the CNN in figure
+    7.12 produces the same prediction value no matter where the search pattern (“I
+    am”) is in the input sentence. This is due to the kernel locality as well as the
+    property of the max pooling layer we just added. In general, CNNs produce the
+    same prediction, even if the input sentence is modified by shifting by a few words.
+    In a technical term, the CNN is called *transformation invariant*, which is an
+    important property of CNNs. This property is perhaps more intuitive if you use
+    an image recognition example. An image of a cat is still an image of a cat, no
+    matter where the cat is in the image. Similarly, a grammatical English sentence
+    (e.g., “I am a student”) is still grammatical, even if the sentence is transformed
+    by adding a few words (e.g., “that’s right”) to the beginning, making it “That’s
+    right, I am a student.”'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CH07_F12_Hagiwara](../Images/CH07_F12_Hagiwara.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.12 A full CNN with multiple kernels
+  prefs: []
+  type: TYPE_NORMAL
+- en: Because the kernels in a CNN do not depend on each other (unlike RNNs, where
+    one cell needs to wait until all the preceding cells finish processing the input),
+    CNNs are computationally efficient. GPUs can process these kernels in parallel
+    without waiting on other kernels’ output. Due to this property, CNNs are usually
+    faster than RNNs of similar size.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '7.4 Case study: Text classification'
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Now that we know the basics of CNNs, in this section we are going to build an
+    NLP application using a CNN and see how it works in practice. As mentioned previously,
+    one of the most popular and straightforward applications of CNNs in NLP is text
+    classification. CNNs are good at detecting patterns (such as salient words and
+    phrases in text), which is also the key to accurate text classification.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '7.4.1 Review: Text classification'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: We already covered text classification in chapters 2 and 4, but to recap, text
+    classification is a task where an NLP system assigns a label to a given piece
+    of text. If the text is an email and the label is whether the email is spam, it’s
+    spam filtering. If the text is a document (such as a news article) and the label
+    is its topic (such as politics, business, technology, or sports), it’s called
+    *document classification*. Many other variants of text classification exist, depending
+    on what the input and the output are. But the task we’ll be working on in this
+    section is again sentiment analysis, where the input is some text in which the
+    writer’s subjective opinions are expressed (such as movie and product reviews)
+    and the output is the label for the opinion (such as positive or negative, or
+    even the number of stars), also called *polarity*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In chapters 2 and 4, we built an NLP system that detected the polarity given
+    a movie review using the Stanford Sentiment Treebank, a dataset containing movie
+    reviews and their polarity (strongly positive, positive, neutral, negative, or
+    strongly negative). In this section, we will build the same text classifier but
+    with a CNN instead of an RNN. The good news is that we can reuse most of the code
+    we wrote in chapter 2 in this section—in fact, we need to modify only a few lines
+    of code to swap the RNN with a CNN. This is largely thanks to AllenNLP’s powerful,
+    well-designed abstractions, which let you work with many modules with different
+    architectures through the common interfaces. Let’s see this in action next.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.4.2 Using CnnEncoder
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Remember that back in section 4.4, we defined our LstmClassifier for text classification
+    as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We hadn’t put much thought into what this definition meant, but from this constructor
+    we can see that the model is built on top of two subcomponents: a TextFieldEmbedder
+    called embedder and a Seq2VecEncoder called encoder, in addition to the vocabulary
+    and the string for the positive label, which are not relevant to our discussion
+    here. We discussed word embeddings in chapter 3 at length, although we only briefly
+    touched on the encoder. What does this Seq2VecEncoder actually mean?'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In AllenNLP, Seq2VecEncoder is a class of neural network architectures that
+    take a sequence of vectors (or tensors in general) and return a single vector.
+    An RNN, one example of this, takes a variable-length input consisting of multiple
+    vectors and converts it into a single vector at the last cell. We created an instance
+    of Seq2VecEncoder based on an LSTM-RNN using the following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: But as long as your component has the same input and output specifications,
+    you can use any neural network architecture as a Seq2VecEncoder. In programming
+    language, Seq2VecEncoder is analogous to an interface in Java (and in many other
+    languages)—interfaces define what your class looks like and what it does, but
+    they do not care about *how* your class does it. In fact, your model can do something
+    as simple as just summing up all the input vectors to produce the output, without
+    any complex transformations such as nonlinearities. This is, in fact, what BagOfEmbeddingsEncoder—one
+    of the Seq2VecEncoders implemented in AllenNLP—does.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, we use a CNN to “squash” a sequence of vectors into a single vector.
+    A CNN-based Seq2VecEncoder is implemented as CnnEncoder in AllenNLP, which can
+    be instantiated as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: In this example, embedding_dim specifies the dimensionality of the input embeddings.
+    The second argument, num_filters, tells how many filters (or kernels, as explained
+    in section 7.2.1) will be used per n-gram. The final argument, ngram_ filter_sizes,
+    specifies the list of n-gram sizes, which are the sizes of these kernels. Here,
+    we are using n-gram sizes of 2, 3, 4, and 5, meaning there are 8 kernels for bigrams,
+    8 kernels for trigrams, and so on, up to 5-grams. In total, this CNN can learn
+    32 different kernels to detect patterns. CnnEncoder runs these results from the
+    kernels through a max pooling layer and comes up with a single vector that summarizes
+    the input.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The rest of the training pipeline looks almost identical to the LSTM version
+    we saw in chapter 2\. The entire code is available on Google Colab ([http://www.realworld
+    nlpbook.com/ch7.html#cnn-nb](http://www.realworldnlpbook.com/ch7.html#cnn-nb)).
+    There is one caveat: because some n-gram filters have a wide shape (e.g., 4- and
+    5-grams), you need to make sure that each text field is at least that long, even
+    when the original text is short (e.g., just one or two words). You need to know
+    how batching and padding work in AllenNLP (which we’ll cover in chapter 10) to
+    fully understand how to deal with this, but in a nutshell, you need to specify
+    the token_min_padding_length parameter when initializing the token indexer as
+    follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 7.4.3 Training and running the classifier
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'When you run the script, you’ll see something like the following log output
+    at the end of the training:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: This means that the training accuracy reaches ~99%, whereas the validation accuracy
+    tops around 40%. Again, this is a typical symptom of overfitting, where your model
+    is so powerful that it fits the training data well, but it doesn’t generalize
+    to the validation and test datasets as well. Our CNN has many filters that can
+    remember salient patterns in the training data, but these patterns are not necessarily
+    the ones that help predict the labels for the validation instances. We are not
+    worried too much about overfitting in this chapter. See chapter 10 for common
+    techniques for avoiding overfitting.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If you want to make predictions for new instances, you can use the same Predictor
+    as we did in chapter 2\. Predictors in AllenNLP are a thin wrapper around your
+    trained model, which take care of formatting the input and output in a JSON format
+    and feeding the instance to the model. You can use the following snippet to make
+    predictions using your trained CNN model:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: Summary
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: CNNs use filters called kernels and an operation called convolution to detect
+    local linguistic patterns in the input.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: An activation function called ReLU, which clamps negative values to zero, is
+    used with convolution layers.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: CNNs then use pooling layers to aggregate the result from the convolutional
+    layer.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: CNN prediction is transformation invariant, meaning it remains unchanged even
+    after linear modification of the input.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: You can use a CNN-based encoder as a Seq2VecEncoder in AllenNLP by modifying
+    a few lines of code of your text classifier.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
