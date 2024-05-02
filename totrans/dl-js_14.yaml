@@ -1,0 +1,2695 @@
+- en: Chapter 6\. Working with data
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '*This chapter covers*'
+  prefs: []
+  type: TYPE_NORMAL
+- en: How to use the `tf.data` API to train models using large datasets
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Exploring your data to find and fix potential issues
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: How to use data augmentation to create new “pseudo-examples” to improve model
+    quality
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The wide availability of large volumes of data is a major factor leading to
+    today’s machine-learning revolution. Without easy access to large amounts of high-quality
+    data, the dramatic rise in machine learning would not have happened. Datasets
+    are now available all over the internet—freely shared on sites like Kaggle and
+    OpenML, among others—as are benchmarks for state-of-the-art performance. Entire
+    branches of machine learning have been propelled forward by the availability of
+    “challenge” datasets, setting a bar and a common benchmark for the community.^([[1](#ch06fn1)])
+    If machine learning is our generation’s Space Race, then data is clearly our rocket
+    fuel;^([[2](#ch06fn2)]) it’s potent, it’s valuable, it’s volatile, and it’s absolutely
+    critical to a working machine-learning system. Not to mention that polluted data,
+    like tainted fuel, can quickly lead to systemic failure. This chapter is about
+    data. We will cover best practices for organizing data, how to detect and clean
+    out issues, and how to use it efficiently.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ¹
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: See how ImageNet propelled the field of object recognition or what the Netflix
+    challenge did for collaborative filtering.
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ²
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Credit for the analogy to Edd Dumbill, “Big Data Is Rocket Fuel,” *Big Data*,
+    vol. 1, no. 2, pp. 71–72.
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: “But haven’t we been working with data all along?” you might protest. It’s true—in
+    previous chapters we worked with all sorts of data sources. We’ve trained image
+    models using both synthetic and webcam-image datasets. We’ve used transfer learning
+    to build a spoken-word recognizer from a dataset of audio samples, and we accessed
+    tabular datasets to predict prices. So what’s left to discuss? Aren’t we already
+    proficient in handling data?
+  prefs: []
+  type: TYPE_NORMAL
+- en: Recall in our previous examples the patterns of our data usage. We’ve typically
+    needed to first download our data from a remote source. Then we (usually) applied
+    some transformation to get our data into the correct format—for instance, by converting
+    strings into one-hot vocabulary vectors or by normalizing the means and variances
+    of tabular sources. We have then always needed to batch our data and convert it
+    into a standard block of numbers represented as a tensor before connecting it
+    to our model. All this before we even ran our first training step.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This download-transform-batch pattern is very common, and TensorFlow.js comes
+    packaged with tooling to make these types of manipulations easier, more modular,
+    and less error prone. This chapter will introduce the tools in the `tf.data` namespace:
+    most importantly, `tf.data.Dataset`, which can be used to lazily stream data.
+    The lazy-streaming approach allows for downloading, transforming, and accessing
+    data on an as-needed basis rather than downloading the data source in its entirety
+    and holding it in memory as it is accessed. Lazy streaming makes it much easier
+    to work with data sources that are too large to fit in a single browser tab or
+    even too large within the RAM of a single machine.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We will first introduce the `tf.data.Dataset` API and show how to configure
+    it and connect it to a model. We will then introduce some theory and tooling to
+    help you review and explore your data and resolve problems you might discover.
+    The chapter wraps up by introducing data augmentation, a method for expanding
+    a dataset to improve model quality by creating synthetic pseudo-examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 6.1\. Using tf.data to manage data
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: How would you train a spam filter if your email database were hundreds of gigabytes
+    and required special credentials to access? How can you construct an image classifier
+    if your database of training images is too large to fit on a single machine?
+  prefs: []
+  type: TYPE_NORMAL
+- en: Accessing and manipulating large volumes of data is a key skill for the machine-learning
+    engineer, but so far, we have been dealing with applications in which the data
+    could conceivably fit within the memory available to our application. Many applications
+    require working with large, cumbersome, and possibly privacy-sensitive data sources
+    that this technique is not suitable for. Large applications require technology
+    for accessing data from a remote source, piece by piece, on demand.
+  prefs: []
+  type: TYPE_NORMAL
+- en: TensorFlow.js comes packaged with an integrated library designed just for this
+    sort of data management. It is built to enable users to ingest, preprocess, and
+    route data in a concise and readable way, inspired by the `tf.data` API in the
+    Python version of TensorFlow. Assuming your code imports TensorFlow.js using an
+    import statement like
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: this functionality will be available under the `tf.data` namespace.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 6.1.1\. The tf.data.Dataset object
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: Most interaction with `tfjs-data` comes through a single object type called
+    `Dataset`. The `tf.data.Dataset` object provides a simple, configurable, and performant
+    way to iterate over and process large (possibly unlimited) lists of data elements.^([[3](#ch06fn3)])
+    In the coarsest abstraction, you can imagine a dataset as an iterable collection
+    of arbitrary elements, not unlike the `Stream` in Node.js. Whenever the next element
+    is requested from the dataset, the internal implementation will download it, access
+    it, or execute a function to create it, as needed. This abstraction makes it easy
+    for the model to train on more data than can conceivably be held in memory at
+    once. It also makes it convenient to share and organize datasets as first-class
+    objects when there is more than one dataset to keep track of. `Dataset` provides
+    a memory benefit by streaming only the required bits of data, rather than accessing
+    the whole thing monolithically. The `Dataset` API also provides performance optimizations
+    over the naive implementation by prefetching values that are about to be needed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ³
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: In this chapter, we will use the term *elements* frequently to refer to the
+    items in the `Dataset`. In most cases, *element* is synonymous with *example*
+    or *datapoint*—that is, in the training dataset, each element is an (*x, y*) pair.
+    When reading from a CSV source, each element is a row of the file. `Dataset` is
+    flexible enough to handle heterogeneous types of elements, but this is not recommended.
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: 6.1.2\. Creating a tf.data.Dataset
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: As of TensorFlow.js version 1.2.7, there are three ways to connect up `tf.data
+    .Dataset` to some data provider. We will go through each in some detail, but [table
+    6.1](#ch06table01) contains a brief summary.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Table 6.1\. Creating a `tf.data.Dataset` object from a data source
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '| How to get a new tf.data.Dataset | API | How to use it to build a dataset
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| From a JavaScript array of elements; also works for typed arrays like Float32Array
+    | tf.data.array(items) | const dataset = tf.data.array([1,2,3,4,5]); See [listing
+    6.1](#ch06ex01) for more. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| From a (possibly remote) CSV file, where each row is an element | tf.data.csv(
+    source,'
+  prefs: []
+  type: TYPE_NORMAL
+- en: csvConfig) | const dataset = tf.data.csv("https://path/to/my.csv"); See [listing
+    6.2](#ch06ex02) for more. The only required parameter is the URL from which to
+    read the data. Additionally, csvConfig accepts an object with keys to help guide
+    the parsing of the CSV file. For instance,
+  prefs: []
+  type: TYPE_NORMAL
+- en: columnNames—A string[] can be provided to set the names of the columns manually
+    if they don’t exist in a header or need to be overridden.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: delimiter—A single character string can be used to override the default comma
+    delimiter.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: columnConfigs—A map of string columnName to columnConfig objects can be provided
+    to guide the parsing and return type of the dataset. The columnConfig will inform
+    the parser of the element’s type (string or int), or if the column is to be considered
+    as the dataset label.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: configuredColumnsOnly—Whether to return data for each column in the CSV or only
+    those columns included in the columnConfigs object.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: More detail is available in the API docs at js.[tensorflow.org](http://tensorflow.org).
+    |
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| From a generic generator function that yields elements | tf.data.generator(
+    generatorFunction) | function* countDownFrom10() { for (let i=10; i>0; i--) {'
+  prefs: []
+  type: TYPE_NORMAL
+- en: yield(i);
+  prefs: []
+  type: TYPE_NORMAL
+- en: '}'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '}'
+  prefs: []
+  type: TYPE_NORMAL
+- en: const dataset =
+  prefs: []
+  type: TYPE_NORMAL
+- en: tf.data.generator(countDownFrom10); See [listing 6.3](#ch06ex03) for more. Note
+    that the argument passed to tf.data.generator() when called with no arguments
+    returns a Generator object. |
+  prefs: []
+  type: TYPE_NORMAL
+- en: Creating a tf.data.Dataset from an array
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: The simplest way to create a new `tf.data.Dataset` is to build one from a JavaScript
+    array of elements. Given an array already in memory, you can create a dataset
+    backed by the array using the `tf.data.array()` function. Of course, it won’t
+    bring any training speed or memory-usage benefit over using the array directly,
+    but accessing an array via a dataset offers other important benefits. For instance,
+    using datasets makes it easier to set up preprocessing and makes our training
+    and evaluation easier through the simple `model.fitDataset()` and `model.evaluateDataset()`
+    APIs, as we will see in [section 6.2](#ch06lev1sec2). In contrast to `model.fit(x,
+    y)`, `model.fitDataset(myDataset)` does not immediately move all of the data into
+    GPU memory, meaning that it is possible to work with datasets larger than the
+    GPU can hold. Realize that the memory limit of the V8 JavaScript engine (1.4 GB
+    on 64-bit systems) is usually larger than TensorFlow.js can hold in WebGL memory
+    at a time. Using the `tf.data` API is also good software engineering practice,
+    as it makes it easy to swap in another type of data in a modular fashion without
+    changing much code. Without the dataset abstraction, it is easy to let the details
+    of the implementation of the dataset source leak into its usage in the training
+    of the model, an entanglement that will need to be unwound as soon as a different
+    implementation is used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To build a dataset from an existing array, use `tf.data.array(itemsAsArray)`,
+    as shown in the following listing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 6.1\. Building a `tf.data.Dataset` from an array
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** Creates the tfjs-data dataset backed by an array. Note that this does
+    not clone the array or its elements.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***2*** Uses the forEachAsync() method to iterate on all values provided by
+    the dataset. Note that forEachAsync() is an async function, and hence you should
+    use await with it.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: We iterate over the elements of the dataset using the `forEachAsync()` function,
+    which yields each element in turn. See more details about the `Dataset.forEachAsync`
+    function in [section 6.1.3](#ch06lev2sec3).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Elements of datasets may contain JavaScript primitives^([[4](#ch06fn4)]) (such
+    as numbers and strings) as well as tuples, arrays, and nested objects of such
+    structures, in addition to tensors. In this tiny example, the three elements of
+    the dataset all have the same structure. They are all objects with the same keys
+    and the same type of values at those keys. `tf.data.Dataset` can in general support
+    a mixture of types of elements, but the common use case is that dataset elements
+    are meaningful semantic units of the same type. Typically, they should represent
+    examples of the same kind of thing. Thus, except in very unusual use cases, each
+    element should have the same type and structure.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ⁴
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: If you are familiar with the Python TensorFlow implementation of `tf.data`,
+    you may be surprised that `tf.data.Dataset` can contain JavaScript primitives
+    in addition to tensors.
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Creating a tf.data.Dataset from a CSV file
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: A very common type of dataset element is a key-value object representing one
+    row of a table, such as one row of a CSV file. The next listing shows a very simple
+    program that will connect to and list out the Boston-housing dataset, the one
+    we first used in [chapter 2](kindle_split_013.html#ch02).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 6.2\. Building a `tf.data.Dataset` from a CSV file
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** Creates the tfjs-data dataset backed by a remote CSV file'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***2*** Uses the forEachAsync() method to iterate on all values provided by
+    the dataset. Note that forEachAsync() is an async function.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Instead of `tf.data.array()`, here we use `tf.data.csv`() and point to a URL
+    of a CSV file. This will create a dataset backed by the CSV file, and iterating
+    over the dataset will iterate over the CSV rows. In Node.js, we can connect to
+    a local CSV file by using a URL handle with the file:// prefix, like the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: When iterating, we see that each CSV row is transformed into a JavaScript object.
+    The elements returned from the dataset are objects with one property for each
+    column of the CSV, and the properties are named according to the column names
+    in the CSV file. This is convenient for interacting with the elements in that
+    it is no longer necessary to remember the order of the fields. [Section 6.3.1](#ch06lev2sec5)
+    will go into more detail describing how to work with CSVs and will go through
+    an example.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Creating a tf.data.Dataset from a generator function
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: The third and most flexible way to create a `tf.data.Dataset` is to build one
+    from a generator function. This is done using the `tf.data.generator()` method.
+    `tf.data.generator()` takes a JavaScript *generator function* (or `function*`)^([[5](#ch06fn5)])
+    as its argument. If you are not familiar with generator functions, which are relatively
+    new to JavaScript, you may wish to take a moment to read their documentation.
+    The purpose of a generator function is to “yield” a sequence of values as they
+    are needed, either forever or until the sequence is exhausted. The values that
+    are yielded from the generator function flow through to become the values of the
+    dataset. A very simple generator function might, for instance, yield random numbers
+    or extract snapshots of data from a piece of attached hardware. A sophisticated
+    generator may be integrated with a video game, yielding screen captures, scores,
+    and control input-output. In the following listing, the very simple generator
+    function yields samples of dice rolls.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ⁵
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Learn more about ECMAscript generator functions at [http://mng.bz/Q0rj](http://mng.bz/Q0rj).
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Listing 6.3\. Building a `tf.data.Dataset` for random dice rolls
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** numPlaysSoFar is closed over by rollTwoDice(), which allows us to calculate
+    how many times the function is executed by the dataset.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***2*** Defines a generator function (using function* syntax) that will yield
+    the result of calling rollTwoDice() an unlimited number of times'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***3*** The dataset is created here.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***4*** Takes a sample of exactly one element of the dataset. The take() method
+    will be described in [section 6.1.4](#ch06lev2sec4).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A couple of interesting notes regarding the game-simulation dataset created
+    in [listing 6.3](#ch06ex03). First, note that the dataset created here, `myGeneratorDataset`,
+    is infinite. Since the generator function never returns, we could conceivably
+    take samples from the dataset forever. If we were to execute `forEachAsync()`
+    or `toArray()` (see [section 6.1.3](#ch06lev2sec3)) on this dataset, it would
+    never end and would probably crash our server or browser, so watch out for that.
+    In order to work with such objects, we need to create some other dataset that
+    is a limited sample of the unlimited one using `take(n)`. More on this in a moment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Second, note that the dataset closes over a local variable. This is helpful
+    for logging and debugging to determine how many times the generator function has
+    been executed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Third, note that the data does not exist until it is requested. In this case,
+    we only ever access exactly one sample of the dataset, and this would be reflected
+    in the value of `numPlaysSoFar`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Generator datasets are powerful and tremendously flexible and allow developers
+    to connect models to all sorts of data-providing APIs, such as data from a database
+    query, from data downloaded piecemeal over the network, or from a piece of connected
+    hardware. More details about the `tf.data.generator()` API are provided in [info
+    box 6.1](#ch06sb01).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '|  |'
+  prefs: []
+  type: TYPE_TB
+- en: '**tf.data.generator() argument specification**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `tf.data.generator()` API is flexible and powerful, allowing the user to
+    hook the model up to many sorts of data providers. The argument passed to `tf.data.generator()`
+    must meet the following specifications:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: It must be callable with zero arguments.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'When called with zero arguments, it must return an object that conforms to
+    the iterator and iterable protocol. This means that the returned object must have
+    a method `next()`. When `next()` is called with no arguments, it should return
+    a JavaScript object `{value: ELEMENT, done: false}` in order to pass forward the
+    value `ELEMENT`. When there are no more values to return, it should return `{value:
+    undefined, done: true}`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: JavaScript’s generator functions return `Generator` objects, which meet this
+    spec and are thus the easiest way to use `tf.data.generator()`. The function may
+    close over local variables, access local hardware, connect to network resources,
+    and so on.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Table 6.1](#ch06table01) contains the following code illustrating how to use
+    `tf.data.generator()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If you wish to avoid using generator functions for some reason and would rather
+    implement the iterable protocol directly, you can also write the previous code
+    in the following, equivalent way:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: '|  |'
+  prefs: []
+  type: TYPE_TB
+- en: 6.1.3\. Accessing the data in your dataset
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: Once you have your data as a dataset, inevitably you are going to want to access
+    the data in it. Data structures you can create but never read from are not really
+    useful. There are two APIs to access the data from a dataset, but `tf.data` users
+    should only need to use these infrequently. More typically, higher-level APIs
+    will access the data within a dataset for you. For instance, when training a model,
+    we use the `model.fitDataset()` API, described in [section 6.2](#ch06lev1sec2),
+    which accesses the data in the dataset for us, and we, the users, never need to
+    access the data directly. Nevertheless, when debugging, testing, and coming to
+    understand how the `Dataset` object works, it’s important to know how to peek
+    into the contents.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The first way to access data from a dataset is to stream it all out into an
+    array using `Dataset.toArray()`. This function does exactly what it sounds like.
+    It iterates through the entire dataset, pushing all the elements into an array
+    and returning that array to the user. The user should use caution when executing
+    this function to not inadvertently produce an array that is too large for the
+    JavaScript runtime. This mistake is easy to make if, for instance, the dataset
+    is connected to a large remote data source or is an unlimited dataset reading
+    from a sensor.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The second way to access data from a dataset is to execute a function on each
+    example of the dataset using `dataset.forEachAsync(f)`. The argument provided
+    to `forEachAsync()` will apply to each element in turn in a way similar to the
+    `forEach()` construct in JavaScript arrays and sets—that is, the native `Array.forEach()`
+    and `Set.forEach()`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: It is important to note that `Dataset.forEachAsync()` and `Dataset.toArray()`
+    are both async functions. This is in contrast to `Array.forEach()`, which is synchronous,
+    so it might be easy to make a mistake here. `Dataset.toArray()` returns a promise
+    and will in general require `await` or `.then()` if synchronous behavior is required.
+    Take care that if `await` is forgotten, the promise might not resolve in the order
+    you expect, and bugs will arise. A typical bug is for the dataset to appear empty
+    because the contents are iterated over before the promise resolves.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The reason why `Dataset.forEachAsync()` is asynchronous while `Array.forEach()`
+    is not is that the data being accessed by the dataset might, in general, need
+    to be created, calculated, or fetched from a remote source. Asynchronicity here
+    allows us to make efficient use of the available computation while we wait. These
+    methods are summarized in [table 6.2](#ch06table02).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Table 6.2\. Methods that iterate over a dataset
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '| Instance method of the tf.data.Dataset object | What it does | Example |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| .toArray() | Asynchronously iterates over the entire dataset and pushes each
+    element into an array, which is returned | const a = tf.data.array([1, 2, 3, 4,
+    5, 6]); const arr = await a.toArray();'
+  prefs: []
+  type: TYPE_NORMAL
+- en: console.log(arr);
+  prefs: []
+  type: TYPE_NORMAL
+- en: // 1,2,3,4,5,6 |
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| .forEachAsync(f) | Asynchronously iterates over all the elements of the dataset
+    and executes f on each | const a = tf.data.array([1, 2, 3]); await a.forEachAsync(e
+    => console.log("hi " + e));'
+  prefs: []
+  type: TYPE_NORMAL
+- en: // hi 1
+  prefs: []
+  type: TYPE_NORMAL
+- en: // hi 2
+  prefs: []
+  type: TYPE_NORMAL
+- en: // hi 3 |
+  prefs: []
+  type: TYPE_NORMAL
+- en: 6.1.4\. Manipulating tfjs-data datasets
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: It certainly is very nice when we can use data directly as it has been provided,
+    without any cleanup or processing. But in the experience of the authors, this
+    *almost never* happens outside of examples constructed for educational or benchmarking
+    purposes. In the more common case, the data must be transformed in some way before
+    it can be analyzed or used in a machine-learning task. For instance, often the
+    source contains extra elements that must be filtered; or data at certain keys
+    needs to be parsed, deserialized, or renamed; or the data was stored in sorted
+    order and thus needs to be randomly shuffled before using it to train or evaluate
+    a model. Perhaps the dataset must be split into nonoverlapping sets for training
+    and testing. Preprocessing is nearly inevitable. If you come across a dataset
+    that is clean and ready-to-use out of the box, chances are that someone already
+    did the cleanup and preprocessing for you!
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`tf.data.Dataset` provides a chainable API of methods to perform these sorts
+    of operations, described in [table 6.3](#ch06table03). Each of these methods returns
+    a new `Dataset` object, but don’t be misled into thinking that all the elements
+    of the dataset are copied or that all the elements are iterated over for each
+    method call! The `tf.data .Dataset` API only loads and transforms elements in
+    a lazy fashion. A dataset that was created by chaining together several of these
+    methods can be thought of as a small program that will execute only once elements
+    are requested from the end of the chain. It is only at that point that the `Dataset`
+    instance crawls back up the chain of operations, possibly all the way to requesting
+    data from the remote source.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Table 6.3\. Chainable methods on the `tf.data.Dataset` object
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '| Instance method of the tf.data.Dataset object | What it does | Example |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| .filter(predicate) | Returns a dataset containing only elements for which
+    the predicate evaluates to true | myDataset.filter(x => x < 10); Returns a dataset
+    containing only values from myDataset that are less than 10. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| .map(transform) | Applies the provided function to every element in the dataset
+    and returns a new dataset of the mapped elements | myDataset.map(x => x * x);
+    Returns a dataset of the squared values of the original dataset. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| .mapAsync( asyncTransform) | Like map, but the provided function must be
+    asynchronous | myDataset.mapAsync(fetchAsync); Assuming fetchAsync is an asynchronous
+    function that yields the data fetched from a provided URL, will return a new dataset
+    containing the data at each URL. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| .batch( batchSize,'
+  prefs: []
+  type: TYPE_NORMAL
+- en: smallLastBatch?) | Bundles sequential spans of elements into single-element
+    groups and converts primitive elements into tensors | const a = tf.data.array(
+    [1, 2, 3, 4, 5, 6, 7, 8])
+  prefs: []
+  type: TYPE_NORMAL
+- en: .batch(4);
+  prefs: []
+  type: TYPE_NORMAL
+- en: await a.forEach(e => e.print());
+  prefs: []
+  type: TYPE_NORMAL
+- en: '// Prints:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: // Tensor [1, 2, 3, 4]
+  prefs: []
+  type: TYPE_NORMAL
+- en: // Tensor [5, 6, 7, 8] |
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| .concatenate( dataset) | Concatenates the elements from two datasets together
+    to form a new dataset | myDataset1.concatenate(myDataset2) Returns a dataset that
+    will iterate over all the values of myDataset1 first, and then over all the values
+    of myDataset2. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| .repeat(count) | Returns a dataset that will iterate over the original dataset
+    multiple (possibly unlimited) times | myDataset.repeat(NUM_EPOCHS) Returns a dataset
+    that will iterate over all the values of myDataset NUM_EPOCHS times. If NUM_EPOCHS
+    is negative or undefined, the result will iterate an unlimited number of times.
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| .take(count) | Returns a dataset containing only the first count examples
+    | myDataset.take(10); Returns a dataset containing only the first 10 elements
+    of myDataset. If myDataset contains fewer than 10 elements, then there is no change.
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| .skip(count) | Returns a dataset that skips the first count examples | myDataset.skip(10);
+    Returns a dataset that contains all the elements of myDataset except the first
+    10\. If myDataset contains 10 or fewer elements, this returns an empty dataset.
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| .shuffle( bufferSize,'
+  prefs: []
+  type: TYPE_NORMAL
+- en: seed?
+  prefs: []
+  type: TYPE_NORMAL
+- en: ') | Produces a dataset that shuffles the elements of the original dataset Be
+    aware: this shuffling is done by selecting randomly within a window of size bufferSize;
+    thus, the ordering beyond the size of the window is preserved. | const a = tf.data.array(
+    [1, 2, 3, 4, 5, 6]).shuffle(3);'
+  prefs: []
+  type: TYPE_NORMAL
+- en: await a.forEach(e => console.log(e));
+  prefs: []
+  type: TYPE_NORMAL
+- en: // prints, e.g., 2, 4, 1, 3, 6, 5 Prints the values 1 through 6 in a randomly
+    shuffled order. The shuffle is partial, in that not all orders are possible since
+    the window is smaller than the total data size. For example, it is not possible
+    that the last element, 6, will now be the first in the new order, since the 6
+    would need to move back more than bufferSize (3) spaces. |
+  prefs: []
+  type: TYPE_NORMAL
+- en: These operations can be chained together to create simple but powerful processing
+    pipelines. For instance, to split a dataset randomly into training and testing
+    datasets, you can follow the recipe in the following listing (see tfjs-examples/iris-fitDataset/data.js).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 6.4\. Creating a train/test split using `tf.data.Dataset`
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** We use the same shuffle seed for the training and testing data; otherwise
+    they will be shuffled independently, and some samples will be in both training
+    and testing.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***2*** Takes the first N samples for the training data'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***3*** Skips the first N samples for the testing data'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: There are some important considerations to attend to in this listing. We would
+    like to randomly assign samples into the training and testing splits, and thus
+    we shuffle the data first. We take the first `N` samples for the training data.
+    For the testing data, we skip those samples, taking the rest. It is very important
+    that the data is shuffled *the same way* when we are taking the samples, so we
+    don’t end up with the same example in both sets; thus we use the same random seed
+    for both when sampling both pipelines.
+  prefs: []
+  type: TYPE_NORMAL
+- en: It’s also important to notice that we apply the `map()` function *after* the
+    skip operation. It would also be possible to call `.map(preprocessFn)` *before*
+    the skip, but then the `preprocessFn` would be executed even for examples we discard—a
+    waste of computation. This behavior can be verified with the following listing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 6.5\. Illustrating `Dataset.forEach skip()` and `map()` interactions
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** Skips then maps'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***2*** Maps then skips'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Another common use for `dataset.map()` is to normalize our input data. We can
+    imagine a scenario in which we wish to normalize our input to be zero mean, but
+    we have an unlimited number of input samples. In order to subtract the mean, we
+    would need to first calculate the mean of the distribution, but calculating the
+    mean of an unlimited set is not tractable. We could also consider taking a representative
+    sample and calculating the mean of that sample, but we could be making a mistake
+    if we don’t know what the right sample size is. Consider a distribution in which
+    nearly all values are 0, but every ten-millionth example has a value of 1e9\.
+    This distribution has a mean value of 100, but if you calculate the mean on the
+    first 1 million examples, you will be quite off.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We can perform a streaming normalization using the dataset API in the following
+    way ([listing 6.6](#ch06ex06)). In this listing, we will keep a running tally
+    of how many samples we’ve seen and what the sum of those samples has been. In
+    this way, we can perform a streaming normalization. This listing operates on scalars
+    (not tensors), but a version designed for tensors would have a similar structure.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 6.6\. Streaming normalization using `tf.data.map()`
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** Returns a unary function, which will return its input minus the mean
+    of all its input so far'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Note that we generate a new mapping function, which closes over its own copy
+    of the sample counter and accumulator. This is to allow for multiple datasets
+    to be normalized independently. Otherwise, both datasets would use the same variables
+    to count invocations and sums. This solution is not without its own limitations,
+    especially with the possibility of numeric overflow in `sumSoFar` or `samplesSoFar`,
+    so some care is warranted.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 6.2\. Training models with model.fitDataset
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The streaming dataset API is nice, and we’ve seen that it allows us to do some
+    elegant data manipulation, but the main purpose of the `tf.data` API is to simplify
+    connecting data to our model for training and evaluation. How is `tf.data` going
+    to help us here?
+  prefs: []
+  type: TYPE_NORMAL
+- en: Ever since [chapter 2](kindle_split_013.html#ch02), whenever we’ve wanted to
+    train a model, we’ve used the `model.fit()` API. Recall that `model.fit()` takes
+    at least two mandatory arguments—`xs` and `ys`. As a reminder, the `xs` variable
+    must be a tensor that represents a collection of input examples. The `ys` variable
+    must be bound to a tensor that represents a corresponding collection of output
+    targets. For example, in the previous chapter’s [listing 5.11](kindle_split_016.html#ch05ex11),
+    we trained and fine-tuned on our synthetic object-detection model with calls like
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: where `images` was, by default, a rank-4 tensor of shape `[2000, 224, 224, 3]`,
+    representing a collection of 2,000 images. The `modelFitArgs` configuration object
+    specified the batch size for the optimizer, which was by default 128\. Stepping
+    back, we see that TensorFlow.js was given an in-memory^([[6](#ch06fn6)]) collection
+    of 2,000 examples, representing the entirety of the data, and then looped through
+    that data 128 examples at a time to complete each epoch.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ⁶
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: In *GPU* memory, which is usually more limited than the system RAM!
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: What if this wasn’t enough data, and we wanted to train with a much larger dataset?
+    In this situation, we are faced with a pair of less than ideal options. Option
+    1 is to load a much larger array and see if it works. At some point, however,
+    TensorFlow.js is going to run out of memory and emit a helpful error indicating
+    that it was unable to allocate the storage for the training data. Option 2 is
+    for us to instead upload our data to the GPU in separate chunks and call `model.fit()`
+    on each chunk. We would need to perform our own orchestration of `model.fit()`,
+    training our model on pieces of our training data iteratively whenever it is ready.
+    If we wanted to perform more than one epoch, we would need to go back and re-download
+    our chunks again in some (presumably shuffled) order. Not only is this orchestration
+    cumbersome and error prone, but it also interferes with TensorFlow’s own reporting
+    of the epoch counter and reported metrics, which we will be forced to stitch back
+    together ourselves.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Tensorflow.js provides us a much more convenient tool for this task using the
+    `model.fitDataset()` API:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`model.fitDataset()` accepts a dataset as its first argument, but the dataset
+    must meet a certain pattern to work. Specifically, the dataset must yield objects
+    with two properties. The first property is named `xs` and has a value of type
+    `Tensor`, representing the features for a batch of examples; this is similar to
+    the `xs` argument to `model.fit()`, but the dataset yields elements one batch
+    at a time rather than the whole array at once. The second required property is
+    named `ys` and contains the corresponding target tensor.^([[7](#ch06fn7)]) Compared
+    to `model.fit()`, `model.fitDataset()` provides a number of advantages. Foremost,
+    we don’t need to write code to manage and orchestrate the downloading of pieces
+    of our dataset—this is handled for us in an efficient, as-needed streaming manner.
+    Caching structures built into the dataset allow for prefetching data that is anticipated
+    to be needed, making efficient use of our computational resources. This API call
+    is also more powerful, allowing us to train on much larger datasets than can fit
+    on our GPU. In fact, the size of the dataset we can train on is now limited only
+    by how much time we have because we can continue to train for as long as we are
+    able to get new training examples. This behavior is illustrated in the data-generator
+    example in the tfjs-examples repository.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ⁷
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: For models with multiple inputs, an array of tensors is expected instead of
+    the individual feature tensors. The pattern is similar for models fitting multiple
+    targets.
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: 'In this example, we will train a model to learn how to estimate the likelihood
+    of winning a simple game of chance. As usual, you can use the following commands
+    to check out and run the demo:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The game used here is a simplified card game, somewhat like poker. Both players
+    are given `N` cards, where `N` is a positive integer, and each card is represented
+    by a random integer between 1 and 13\. The rules of the game are as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The player with the largest group of same-valued cards wins. For example, if
+    player 1 has three of a kind, and player 2 has only a pair, player 1 wins.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If both players have the same-sized maximal group, then the player with the
+    group with the largest face value wins. For example, a pair of 5s beats a pair
+    of 4s.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If neither player even has a pair, the player with the highest single card wins.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Ties are settled randomly, 50/50.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: It should be easy to convince yourself that each player has an equal chance
+    of winning. Thus, if we know nothing about our cards, we should only be able to
+    guess whether we will win or not half of the time. We will build and train a model
+    that takes as input player 1’s cards and predicts whether that player will win.
+    In the screenshot in [figure 6.1](#ch06fig01), you should see that we were able
+    to achieve approximately 75% accuracy on this problem after training on about
+    250,000 examples (50 epochs * 50 batches per epoch * 100 samples per batch). Five
+    cards per hand were used in this simulation, but similar accuracies are achieved
+    for other counts. Higher accuracies are achievable by running with larger batches
+    and for more epochs, but even at 75%, our intelligent player has a significant
+    advantage over the naive player at estimating the likelihood that they will win.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 6.1\. The UI of the data-generator example. A description of the rules
+    of the game and a button to run simulations are at top-left. Below that are the
+    generated features and the data pipeline. The Dataset-to-Array button runs the
+    chained dataset operations that will simulate the game, generate features, batch
+    samples together, take `N` such batches, convert them to an array, and print the
+    array out. At top-right, there are affordances to train a model using this data
+    pipeline. When the user clicks the Train-Model-Using-Fit-Dataset button, the `model.fitDataset()`
+    operation takes over and pulls samples from the pipeline. Loss and accuracy curves
+    are printed below this. At bottom-right, the user may enter values for player
+    1’s hand and press a button to make predictions from the model. Larger predictions
+    indicate that the model believes the hand is more likely to win. Values are drawn
+    with replacement, so five of a kind can happen.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](06fig01a_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: If we were to perform this operation using `model.fit()`, we would need to create
+    and store a tensor of 250,000 examples just to represent the input features. The
+    data in this example are pretty small—only tens of floats per instance—but for
+    our object-detection task in the previous chapter, 250,000 examples would have
+    required 150 GB of GPU memory,^([[8](#ch06fn8)]) far beyond what is available
+    in most browsers in 2019.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ⁸
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: numExamples × width × height × colorDepth × sizeOfInt32 = 250,000 × 224 × 224
+    × 3 × 4 bytes .
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Let’s take a dive into relevant portions of this example. First, let’s look
+    at how we generate our dataset. The code in the following listing (simplified
+    from tfjs-examples/data-generator/index.js) is similar to the dice-rolling generator
+    dataset in [listing 6.3](#ch06ex03), with a bit more complexity since we are storing
+    more information.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 6.7\. Building a `tf.data.Dataset` for our card game
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** The game library provides randomHand() and compareHands(), functions
+    to generate a hand from a simplified poker-like card game and to compare two such
+    hands to tell which player has won.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***2*** Simulates two players in a simple, poker-like card game'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***3*** Calculates the winner of the game'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***4*** Returns the two hands and who won'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Once we have our basic generator dataset connected up to the game logic, we
+    want to format the data in a way that makes sense for our learning task. Specifically,
+    our task is to attempt to predict the `player1Win` bit from the `player1Hand`.
+    In order to do so, we are going to need to make our dataset return elements of
+    the form `[batchOf-Features, batchOfTargets]`, where the features are calculated
+    from player 1’s hand. The following code is simplified from tfjs-examples/data-generator/index.js.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 6.8\. Building a dataset of player features
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** Takes the state of one complete game and returns a feature representation
+    of player 1’s hand and the win status'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***2*** handOneHot has the shape [numCards, max_value_card]. This operation
+    sums the number of each type of card, resulting in a tensor with the shape [max_value_card].'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***3*** Converts each element from the game output object format to an array
+    of two tensors: one for the features and one for the target'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***4*** Groups together BATCH_SIZE consecutive elements into a single element.
+    This would also convert the data from JavaScript arrays to tensors if they weren''t
+    already tensors.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Now that we have a dataset in the proper form, we can connect it to our model
+    using `model.fitDataset()`, as shown in the following listing (simplified from
+    tfjs-examples/data-generator/index.js).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 6.9\. Building and training a model on the dataset
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** This call launches the training.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***2*** How many batches constitutes an epoch. Since our dataset is unlimited,
+    this needs to be defined to tell TensorFlow.js when to execute the epoch-end callback.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***3*** We are using the training data as validation data. Normally this is
+    bad, since we will get a biased impression of how well we are doing. In this case,
+    it is not a problem since the data used for training and the data used for validation
+    are guaranteed to be independent by virtue of the generator.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***4*** We need to tell TensorFlow.js how many samples to take from the validation
+    dataset to constitute one evaluation.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***5*** model.fitDataset() creates history that is compatible with tfvis, just
+    like model.fit().'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'As we see in the previous listing, fitting a model to a dataset is just as
+    simple as fitting a model to a pair of x, y tensors. As long as our dataset yields
+    tensor values in the right format, everything just works, we get the benefit of
+    streaming data from a possibly remote source, and we don’t need to manage the
+    orchestration on our own. Beyond passing in a dataset instead of a tensor pair,
+    there are a few differences in the configuration object that merit discussion:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`batchesPerEpoch`—As we saw in [listing 6.9](#ch06ex09), the configuration
+    for `model.fitDataset()` takes an optional field for specifying the number of
+    batches that constitute an epoch. When we handed the entirety of the data to `model.fit()`,
+    it was easy to calculate how many examples there are in the whole dataset. It’s
+    just `data.shape[0]`! When using `fitDataset()`, we can tell TensorFlow.js when
+    an epoch ends in one of two ways. The first way is to use this configuration field,
+    and `fitDataset()` will execute `onEpochEnd` and `onEpochStart` callbacks after
+    that many batches. The second way is to have the dataset itself end as a signal
+    that the dataset is exhausted. In [listing 6.7](#ch06ex07), we could change'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: to
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: to mimic this behavior.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '`validationData`—When using `fitDataset()`, the `validationData` may be a dataset
+    also. But it doesn’t have to be. You can continue to use tensors for `validationData`
+    if you want to. The validation dataset needs to meet the same specification with
+    respect to the format of returned elements as the training dataset does.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`validationBatches`—If your validation data comes from a dataset, you need
+    to tell TensorFlow.js how many samples to take from the dataset to constitute
+    a complete evaluation. If no value is specified, then TensorFlow.js will continue
+    to draw from the dataset until it returns a done signal. Because the code in [listing
+    6.7](#ch06ex07) uses a never-ending generator to generate the dataset, this would
+    never happen, and the program would hang.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The rest of the configuration is identical to that of the `model.fit()` API,
+    so no changes are necessary.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 6.3\. Common patterns for accessing data
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: All developers need some solutions for connecting their data to their model.
+    These connections range from common stock connections, to well-known experimental
+    datasets like MNIST, to completely custom connections, to proprietary data formats
+    within an enterprise. In this section, we will review how `tf.data` can help to
+    make these connections simple and maintainable.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 6.3.1\. Working with CSV format data
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'Beyond working with common stock datasets, the most common way to access data
+    involves loading prepared data stored in some file format. Data files are often
+    stored in CSV (comma separated value) format^([[9](#ch06fn9)]) due to its simplicity,
+    human readability, and broad support. Other formats have other advantages in storage
+    efficiency and access speed, but CSV might be considered the *lingua franca* of
+    datasets. In the JavaScript community, we typically want to be able to conveniently
+    stream data from some HTTP endpoint. This is why TensorFlow.js provides native
+    support for streaming and manipulating data from CSV files. In [section 6.1.2](#ch06lev2sec2),
+    we briefly described how to construct a `tf.data.Dataset` backed by a CSV file.
+    In this section, we will dive deeper into the CSV API to show how `tf.data` makes
+    working with these data sources very easy. We will describe an example application
+    that connects to remote CSV datasets, prints their schema, counts the elements
+    of the dataset, and offers the user an affordance to select and print the individual
+    examples. Check out the example using the familiar commands:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ⁹
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: As of January 2019, the data science and machine-learning challenge site [kaggle.com/datasets](http://kaggle.com/datasets)
+    boasts 13,971 public datasets, of which over two-thirds are hosted in the CSV
+    format.
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This should pop open a site that instructs us to enter the URL of a hosted
+    CSV file or to use one of the suggested four URLs by clicking, for example, Boston
+    Housing CSV. See [figure 6.2](#ch06fig02) for an illustration. Underneath the
+    URL entry input box, buttons are provided to perform three actions: 1) count the
+    rows in the dataset, 2) retrieve the column names of the CSV, if they exist, and
+    3) access and print a specified sample row of the dataset. Let’s go through how
+    these work and how the `tf.data` API makes them very easy.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 6.2\. Web UI for our tfjs-data CSV example. Click one of the preset CSV
+    buttons at the top or enter a path to your own hosted CSV, if you have one. Be
+    sure to enable CORS access for your CSV if you go with your own hosted file.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](06fig01_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: We saw earlier that creating a tfjs-data dataset from a remote CSV is very simple
+    using a command like
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: where `url` is either a string identifier using the http://, https://, or file://
+    protocol, or a `RequestInfo`. This call does *not* actually issue any requests
+    to the URL to check whether, for example, the file exists or is accessible, because
+    of the lazy iteration. In [listing 6.10](#ch06ex10), the CSV is first fetched
+    at the asynchronous `myData.forEach()` call. The function we call in the `forEach()`
+    will simply stringify and print elements in the dataset, but we could imagine
+    doing other things with this iterator, such as generating UI elements for every
+    element in the set or computing statistics for a report.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 6.10\. Printing the first 10 records in a remote CSV file
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** Creates the tfjs-data dataset by providing the URL to tf.data.csv()'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***2*** Creates a dataset consisting of the first 10 rows of the CSV dataset.
+    Then, uses the forEach() method to iterate over all values provided by the dataset.
+    Note that forEach() is an async function.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'CSV datasets often use the first row as a metadata header containing the names
+    associated with each column. By default, `tf.data.csv()` assumes this to be the
+    case, but it can be controlled using the `csvConfig` object passed in as the second
+    argument. If column names are not provided by the CSV file itself, they can be
+    provided manually in the constructor like so:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: If you provide a manual `columnNames` configuration to the CSV dataset, it will
+    take precedence over the header row read from the data file. By default, the dataset
+    will assume the first line is a header row. If the first row is not a header,
+    the absence must be configured and `columnNames` provided manually.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Once the `CSVDataset` object exists, it is possible to query it for the column
+    names using `dataset.columnNames()`, which returns an ordered string list of the
+    column names. The `columnNames()` method is specific to the `CSVDataset` subclass
+    and is not generally available from datasets built from other sources. The Get
+    Column Names button in the example is connected to a handler that uses this API.
+    Requesting the column names results in the `Dataset` object making a fetch call
+    to the provided URL to access and parse the first row; thus the async call in
+    the following listing (condensed from tfjs-examples/csv-data/index.js).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 6.11\. Accessing column names from a CSV
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** Contacts the remote CSV to collect and parse the column headers'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Now that we have the column names, let’s get a row from our dataset. In [listing
+    6.12](#ch06ex12), we show how the web app prints out a single selected row of
+    the CSV file, where the user selects which row via an input element. In order
+    to fulfill this request, we will first use the `Dataset.skip()` method to create
+    a new dataset the same as the original one, but skipping the first `n - 1` elements.
+    We will then use the `Dataset.take()` method to create a dataset that ends after
+    one element. Finally, we will use `Dataset.toArray()` to extract the data into
+    a standard JavaScript array. If everything goes right, our request will produce
+    an array that contains exactly one element at the specified position. This sequence
+    is put together in the following listing (condensed from tfjs-examples/csv-data/index.js).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 6.12\. Accessing a selected row from a remote CSV
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** sampleIndex is a number returned by a UI element.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***2*** Creates the dataset myData, configured to read from url, but does not
+    actually connect yet'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***3*** Creates a new dataset but skips over the first sampleIndex values'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***4*** Creates a new dataset, but only keeps the first 1 element'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***5*** This is the call that actually causes the Dataset object to contact
+    the URL and perform the fetch. Note that the return type is an array of objects,
+    in this case, containing exactly one object, with keys corresponding to the header
+    names and values associated with those columns.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'We can now take the output of the row, which—as you can see from the output
+    of the `console.log` in [listing 6.12](#ch06ex12) (repeated in a comment)—comes
+    in the form of an object mapping the column name to the value, and styles it for
+    insertion into our document. Something to watch out for: if we ask for a row that
+    doesn’t exist, perhaps the 400th element of a 300-element dataset, we will end
+    up with an empty array.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: It’s pretty common when connecting to remote datasets to make a mistake and
+    use a bad URL or improper credentials. In these circumstances, it’s best to catch
+    the error and provide the user with a reasonable error message. Since the `Dataset`
+    object does not actually contact the remote resource until the data is needed,
+    it’s important to take care to write the error handling in the right place. The
+    following listing shows a short snippet of how error handling is done in our CSV
+    example web app (condensed from tfjs-examples/csv-data/index.js). For more details
+    about how to connect to CSV files guarded by authentication, see [info box 6.2](#ch06sb02).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 6.13\. Handling errors arising from failed connections
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** Wrapping this line in a try block wouldn’t help because the bad URL
+    is not fetched here.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***2*** The error from a bad connection will be thrown at this step.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'In [section 6.2](#ch06lev1sec2), we learned how to use `model.fitDataset()`.
+    We saw that the method requires a dataset that yields elements in a very particular
+    form. Recall that the form is an object with two properties `{xs, ys}`, where
+    `xs` is a tensor representing a batch of the input, and `ys` is a tensor representing
+    a batch of the associated target. By default, the CSV dataset will return elements
+    as JavaScript objects, but we can configure the dataset to instead return elements
+    closer to what we need for training. For this, we will need to use the `csvConfig.columnConfigs`
+    field of `tf.data.csv`(). Consider a CSV file about golf with three columns: “club,”
+    “strength,” and “distance.” If we wished to predict distance from club and strength,
+    we could apply a map function on the raw output to arrange the fields into `xs`
+    and `ys`; or, more easily, we could configure the CSV reader to do this for us.
+    [Table 6.4](#ch06table04) shows how to configure the CSV dataset to separate the
+    feature and label properties, and perform batching so that the output is suitable
+    for entry into `model.fitDataset()`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Table 6.4\. Configuring a CSV dataset to work with `model.fitDataset()`
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '| How the dataset is built and configured | Code for building the dataset |
+    Result of dataset.take(1).toArray()[0] (the first element returned from the dataset)
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Raw CSV default | dataset = tf.data.csv(csvURL) | {club: 1, strength: 45,
+    distance: 200} |'
+  prefs: []
+  type: TYPE_TB
+- en: '| CSV with label configured in columnConfigs | columnConfigs = {distance: {isLabel:
+    true}};'
+  prefs: []
+  type: TYPE_NORMAL
+- en: dataset = tf.data.csv(csvURL,
+  prefs: []
+  type: TYPE_NORMAL
+- en: '{columnConfigs}); | {xs: {club: 1, strength: 45}, ys: {distance: 200}} |'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| CSV with columnConfigs and then batched | columnConfigs = {distance: {isLabel:
+    true}};'
+  prefs: []
+  type: TYPE_NORMAL
+- en: dataset = tf.data
+  prefs: []
+  type: TYPE_NORMAL
+- en: .csv(csvURL,
+  prefs: []
+  type: TYPE_NORMAL
+- en: '{columnConfigs})'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '.batch(128); | [xs: {club: Tensor, strength: Tensor},'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'ys: {distance:Tensor}] Each of these three tensors has shape = **[128]**. |'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| CSV with columnConfigs and then batched and mapped from object to array |
+    columnConfigs = {distance: {isLabel: true}};'
+  prefs: []
+  type: TYPE_NORMAL
+- en: dataset = tf.data
+  prefs: []
+  type: TYPE_NORMAL
+- en: .csv(csvURL,
+  prefs: []
+  type: TYPE_NORMAL
+- en: '{columnConfigs})'
+  prefs: []
+  type: TYPE_NORMAL
+- en: .map(({xs, ys}) =>
+  prefs: []
+  type: TYPE_NORMAL
+- en: '{'
+  prefs: []
+  type: TYPE_NORMAL
+- en: return
+  prefs: []
+  type: TYPE_NORMAL
+- en: '{xs:Object.values(xs),'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ys:Object.values(ys)};
+  prefs: []
+  type: TYPE_NORMAL
+- en: '})'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '.batch(128); | {xs: Tensor, ys: Tensor} Note that the mapping function returned
+    items of the form {xs: [number, number], ys: [number]}. The batch operation automatically
+    converts numeric arrays to tensors. Thus, the first tensor (xs) has shape = [128,2].
+    The second tensor (ys) has shape = [128, 1]. |'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '|  |'
+  prefs: []
+  type: TYPE_TB
+- en: '**Fetching CSV data guarded by authentication**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the previous examples, we have connected to data available from remote files
+    by simply providing a URL. This works well both in Node.js and from the browser
+    and is very easy, but sometimes our data is protected, and we need to provide
+    `Request` parameters. The `tf.data.csv()` API allows us to provide `RequestInfo`
+    in place of a raw string URL, as shown in the following code. Other than the additional
+    authorization parameter, there is no change in the dataset:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: '|  |'
+  prefs: []
+  type: TYPE_TB
+- en: 6.3.2\. Accessing video data using tf.data.webcam()
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: One of the most exciting applications for TensorFlow.js projects is to train
+    and apply machine-learning models to the sensors directly available on mobile
+    devices. Motion recognition using the mobile’s onboard accelerometer? Sound or
+    speech understanding using the onboard microphone? Visual assistance using the
+    onboard camera? There are so many good ideas out there, and we’ve just begun.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In [chapter 5](kindle_split_016.html#ch05), we explored working with the webcam
+    and microphone in the context of transfer learning. We saw how to use the camera
+    to control a game of Pac-Man, and we used the microphone to fine-tune a speech-understanding
+    system. While not every modality is available as a convenient API call, `tf.data`
+    does have a simple and easy API for working with the webcam. Let’s explore how
+    that works and how to use it to predict from trained models.
+  prefs: []
+  type: TYPE_NORMAL
+- en: With the `tf.data` API, it is very simple to create a dataset iterator yielding
+    a stream of images from the webcam. [Listing 6.14](#ch06ex14) shows a basic example
+    from the documentation. The first thing we notice is the call to the `tf.data.webcam`().
+    This constructor returns a webcam iterator by taking an optional HTML element
+    as its input argument. The constructor works only in the browser environment.
+    If the API is called in the Node.js environment, or if there is no available webcam,
+    then the constructor will throw an exception indicating the source of the error.
+    Furthermore, the browser will request permission from the user before opening
+    the webcam. The constructor will throw an exception if the permission is denied.
+    Responsible development should cover these cases with user-friendly messages.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 6.14\. Creating a dataset using `tf.data.webcam()` and an HTML element
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** Element shows webcam video and determines tensor size'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***2*** Constructor for the video Dataset object. The element will display
+    content from the webcam. The element also configures the size of the created tensors.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***3*** Takes one frame from the video stream and offers the value as a tensor'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***4*** Stops the video stream and pauses the webcam iterator'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: When creating a webcam iterator, it is important that the iterator knows the
+    shape of the tensors to be produced. There are two ways to control this. The first
+    way, shown in [listing 6.14](#ch06ex14), uses the shape of the provided HTML element.
+    If the shape needs to be different, or perhaps the video isn’t to be shown at
+    all, the desired shape can be provided via a configuration object, as shown in
+    [listing 6.15](#ch06ex15). Note that the provided HTML element argument is undefined,
+    meaning that the API will create a hidden element in the DOM to act as a handle
+    to the video.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 6.15\. Creating a basic webcam dataset using a configuration object
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** Building a webcam dataset iterator using a configuration object instead
+    of an HTML element. Here, we also specify which camera to use on a device featuring
+    multiple cameras. ‘user’ refers to the camera facing the user; as an alternative
+    to ‘user,’ ‘environment’ refers to the rear camera.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: It is also possible to use the configuration object to crop and resize portions
+    of the video stream. Using the HTML element and the configuration object in tandem,
+    the API allows the caller to specify a location to crop from and a desired output
+    size. The output tensor will be interpolated to the desired size. See the next
+    listing for an example of selecting a rectangular portion of a square video and
+    then reducing the size to fit a small model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 6.16\. Cropping and resizing data from a webcam
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** Without the explicit configuration, the videoElement would control
+    the output size, 300 × 300 here.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***2*** The user requests a 150 × 100 extraction from the video.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***3*** The extracted data will be from the center of the original video.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***4*** Data captured from this webcam iterator depends on both the HTML element
+    and the webcamConfig.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: It is important to point out some obvious differences between this type of dataset
+    and the datasets we’ve been working with so far. For example, the values yielded
+    from the webcam depend on when you extract them. Contrast this with the CSV dataset,
+    which will yield the rows in order no matter how fast or slowly they are drawn.
+    Furthermore, samples can be drawn from the webcam for as long as the user desires
+    more. The API callers must explicitly tell the stream to end when they are done
+    with it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Data is accessed from the webcam iterator using the `capture()` method, which
+    returns a tensor representing the most recent frame. API users should use this
+    tensor for their machine-learning work, but must remember to dispose of it to
+    prevent a memory leak. Because of the intricacies involved in asynchronous processing
+    of the webcam data, it is better to apply necessary preprocessing functions directly
+    to the captured frame rather than use the deferred `map()` functionality provided
+    by `tf.data`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: That is to say, rather than processing data using `data.map()`,
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'apply the function directly to the image:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `forEach()` and `toArray()` methods should not be used on a webcam iterator.
+    For processing long sequences of frames from the device, users of the `tf.data.webcam()`
+    API should define their own loop using, for example, `tf.nextFrame()` and call
+    `capture()` at a reasonable frame rate. The reason is that if you were to call
+    `forEach()` on your webcam, then the framework would draw frames as fast as the
+    browser’s JavaScript engine can possibly request them from the device. This will
+    typically create tensors faster than the frame rate of the device, resulting in
+    duplicate frames and wasted computation. For similar reasons, a webcam iterator
+    should *not* be passed as an argument to the `model.fit()` method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Listing 6.17](#ch06ex17) shows the abbreviated prediction loop from the webcam-transfer-learning
+    (Pac-Man) example we saw in [chapter 5](kindle_split_016.html#ch05). Note that
+    the outer loop will continue for as long as `isPredicting` is true, which is controlled
+    by a UI element. Internally, the rate of the loop is moderated by a call to `tf.nextFrame()`,
+    which is pinned to the UI’s refresh rate. The following code is from tfjs-examples/webcam-transfer-learning/index.js.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 6.17\. Using `tf.data.webcam()` in a prediction loop
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** Captures a frame from the webcam and normalizes it between –1 and 1\.
+    Returns a batched image (1-element batch) of shape [1, w, h, c].'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***2*** webcam here refers to an iterator returned from tfd.webcam; see init()
+    in [listing 6.18](#ch06ex18).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***3*** Draws the next frame from the webcam iterator'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***4*** Waits until the next animation frame before performing another prediction'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'One final note: when using the webcam, it is often a good idea to draw, process,
+    and discard an image before making predictions on the feed. There are two good
+    reasons for this. First, passing the image through the model ensures that the
+    relevant model weights have been loaded to the GPU, preventing any stuttering
+    slowness on startup. Second, this gives the webcam hardware time to warm up and
+    begin sending actual frames. Depending on the hardware, sometimes webcams will
+    send blank frames while the device is powering up. See the next listing for a
+    snippet showing how this is done in the webcam-transfer-learning example (from
+    webcam-transfer-learning/index.js).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 6.18\. Creating a video dataset from `tf.data.webcam()`
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** Constructor for the video dataset object. The ‘webcam’ element is a
+    video element in the HTML document.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***2*** Makes a prediction on the first frame returned from the webcam to make
+    sure the model is completely loaded on the hardware'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***3*** The value returned from webcam.capture() is a tensor. It must be disposed
+    to prevent a leak.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 6.3.3\. Accessing audio data using tf.data.microphone()
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: Along with image data, `tf.data` also includes specialized handling to collect
+    audio data from the device microphone. Similar to the webcam API, the microphone
+    API creates a lazy iterator allowing the caller to request frames as needed, packaged
+    neatly as tensors suitable for consumption directly into a model. The typical
+    use case here is to collect frames to be used for prediction. While it’s technically
+    possible to produce a training stream using this API, zipping it together with
+    the labels would be challenging.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Listing 6.19](#ch06ex19) shows an example of how to collect one second of
+    audio data using the `tf.data.microphone()` API. Note that executing this code
+    will trigger the browser to request that the user grant access to the microphone.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 6.19\. Collecting one second of audio data using the `tf.data.microphone()`
+    API
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** The microphone configuration allows the user to control some common
+    audio parameters. We spell out some of these in the main text.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***2*** Executes the capture of audio from the microphone'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***3*** The audio spectrum data is returned as a tensor of shape [43, 232,
+    1].'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***4*** In addition to the spectrogram data, it is also possible to retrieve
+    the waveform data directly. The shape of this data will be [fftSize * numFramesPerSpectrogram,
+    1] = [44032, 1].'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***5*** Users should call stop() to end the audio stream and turn off the microphone.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The microphone includes a number of configurable parameters to give users fine
+    control over how the fast Fourier transform (FFT) is applied to the audio data.
+    Users may want more or fewer frames of frequency-domain audio data per spectrogram,
+    or they may be interested in only a certain frequency range of the audio spectrum,
+    such as those frequencies necessary for audible speech. The fields in [listing
+    6.19](#ch06ex19) have the following meaning:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`sampleRateHz`: `44100`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The sampling rate of the microphone waveform. This must be exactly 44,100 or
+    48,000 and must match the rate specified by the device itself. It will throw an
+    error if the specified value doesn’t match the value made available by the device.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`fftSize: 1024`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Controls the number of samples used to compute each nonoverlapping “frame” of
+    audio. Each frame undergoes an FFT, and larger frames give more frequency sensitivity
+    but have less time resolution, as time information *within the frame* is lost.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Must be a power of 2 between 16 and 8,192, inclusive. Here, `1024` means that
+    energy within a frequency band is calculated over a span of about 1,024 samples.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Note that the highest measurable frequency is equal to half the sample rate,
+    or approximately 22 kHz.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`columnTruncateLength: 232`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Controls how much frequency information is retained. By default, each audio
+    frame contains `fftSize` points, or 1,024 in our case, covering the entire spectrum
+    from 0 to maximum (22 kHz). However, we are typically interested in only the lower
+    frequencies. Human speech is generally only up to 5 kHz, and thus we only keep
+    the part of the data representing zero to 5 kHz.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Here, 232 = (5 kHz/22 kHz) * 1024.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`numFramesPerSpectrogram: 43`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The FFT is calculated on a series of nonoverlapping windows (or frames) of the
+    audio sample to create a spectrogram. This parameter controls how many are included
+    in each returned spectrogram. The returned spectrogram will be of shape `[numFramesPerSpectrogram,
+    fftSize, 1]`, or `[43, 232, 1]` in our case.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The duration of each frame is equal to the `sampleRate`/`fftSize`. In our case,
+    44 kHz * 1,024 is about 0.023 seconds.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: There is no delay between frames, so the entire spectrogram duration is about
+    43 * 0.023 = 0.98, or just about 1 second.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`smoothingTimeConstant: 0`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: How much to blend the previous frame’s data with this frame. It must be between
+    0 and 1.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`includeSpectogram: True`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If true, the spectrogram will be calculated and made available as a tensor.
+    Set this to false if the application does not actually need to calculate the spectrogram.
+    This can happen only if the waveform is needed.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`includeWaveform: True`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If true, the waveform is kept and made available as a tensor. This can be set
+    to false if the caller will not need the waveform. Note that at least one of `includeSpectrogram`
+    and `includeWaveform` must be true. It is an error if they are both false. Here
+    we have set them both to true to show that this is a valid option, but in a typical
+    application, only one of the two will be necessary.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Similar to the video stream, the audio stream sometimes takes some time to start,
+    and data from the device might be nonsense to begin with. Zeros and infinities
+    are commonly encountered, but actual values and durations are platform dependent.
+    The best solution is to “warm up” the microphone for a short amount of time by
+    throwing away the first few samples until the data no longer is corrupted. Typically,
+    200 ms of data is enough to begin getting clean samples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '6.4\. Your data is likely flawed: Dealing with problems in your data'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: It’s nearly a guarantee that there are problems with your raw data. If you’re
+    using your own data source, and you haven’t spent several hours with an expert
+    combing through the individual features, their distributions, and their correlations,
+    then there is a very high chance that there are flaws that will weaken or break
+    your machine-learning model. We, the authors of this book, can say this with confidence
+    because of our experience with mentoring the construction of many machine-learning
+    systems in many domains and building some ourselves. The most common symptom is
+    that some model is not converging, or is converging to an accuracy well below
+    what is expected. Another related but even more nefarious and difficult-to-debug
+    pattern is when the model converges and performs well on the validation and testing
+    data but then fails to meet expectations in production. Sometimes there is a genuine
+    modeling issue, or a bad hyperparameter, or just bad luck, but, by far, the most
+    common root cause for these bugs is that there is a flaw in the data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Behind the scenes, all the datasets we’ve used (such as MNIST, iris-flowers,
+    and speech-commands) went through manual inspection, pruning of bad examples,
+    formatting into a standard and suitable format, and other data science operations
+    that we didn’t talk about. Data issues can arise in many forms, including missing
+    fields, correlated samples, and skewed distributions. There is such a richness
+    and diversity of complexity in working with data, someone could write a book on
+    it. In fact, please see *Data Wrangling with JavaScript* by Ashley Davis for a
+    fuller exposition!^([[10](#ch06fn10)])
+  prefs: []
+  type: TYPE_NORMAL
+- en: ^(10)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Available from Manning Publications, [www.manning.com/books/data-wrangling-with-javascript](http://www.manning.com/books/data-wrangling-with-javascript).
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Data scientists and data managers have become full-time professional roles in
+    many companies. The tools these professionals use and best practices they follow
+    are diverse and often depend on the specific domain under scrutiny. In this section,
+    we will touch on the basics and point to a few tools to help you avoid the heartbreak
+    of long model debugging sessions only to find out that it was the data itself
+    that was flawed. For a more thorough treatment of data science, we will offer
+    references where you can learn more.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 6.4.1\. Theory of data
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: In order to know how to detect and fix *bad* data, we must first know what *good*
+    data looks like. Much of the theory underpinning the field of machine learning
+    rests on the premise that our data comes from a *probability distribution*. In
+    this formulation, our training data consists of a collection of independent *samples*.
+    Each sample is described as an (*x*, *y*) pair, where *y* is the part of the sample
+    we wish to predict from the *x* part. Continuing this premise, our inference data
+    consists of a collection of samples *from the exact same distribution as our training
+    data*. The only important difference between the training data and the inference
+    data is that at inference time, we do not get to see *y*. We are supposed to estimate
+    the *y* part of the sample from the *x* part using the statistical relationships
+    learned from the training data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: There are a number of ways that our real-life data can fail to live up to this
+    platonic ideal. If, for instance, our training data and inference data are samples
+    from *different* distributions, we say there is dataset *skew*. As a simple example,
+    if you are estimating road traffic based on features like weather and time of
+    day, and all of your training data comes from Mondays and Tuesdays while your
+    test data comes from Saturdays and Sundays, you can expect that the model accuracy
+    will be less than optimal. The distribution of auto traffic on weekdays is not
+    the same as the distribution of traffic on weekends. As another example, imagine
+    we are building a face-recognition system, and we train the system to recognize
+    faces based on a collection of labeled data from our home country. We should not
+    be surprised to find that the system struggles and fails when used in locations
+    with different demographics. Most data-skew issues you’ll encounter in real machine-learning
+    settings will be more subtle than these two examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Another way that skew can sneak into a dataset is if there was some shift during
+    data collection. If, for instance, we are taking audio samples to learn speech
+    signals, and then halfway through the construction of our training set, our microphone
+    breaks, so we purchase an upgrade, we can expect that the second half of our training
+    set will have a different noise and audio distribution than our first half. Presumably,
+    at inference time, we will be testing using only the new microphone, so skew exists
+    between the training and test set as well.
+  prefs: []
+  type: TYPE_NORMAL
+- en: At some level, dataset skew is unavoidable. For many applications, our training
+    data necessarily comes from the past, and the data we pass to our application
+    necessarily comes from right now. The underlying distribution producing these
+    samples is bound to change as cultures, interests, fashions, and other confounding
+    factors change with the times. In such a situation, all we can do is understand
+    the skew and minimize the impact. For this reason, many machine-learning models
+    in production settings are constantly retrained using the freshest available training
+    data in an attempt to keep up with continually shifting distributions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Another way our data samples can fail to live up to the ideal is by failing
+    to be independent. Our ideal states that the samples are *independent and identically
+    distributed* (IID). But in some datasets, one sample gives clues to the likely
+    value of the next. Samples from these datasets are not independent. The most common
+    way that sample-to-sample dependence creeps into a dataset is by the phenomenon
+    of sorting. For access speed and all sorts of other good reasons, we have been
+    trained as computer scientists to organize our data. In fact, database systems
+    often organize our data for us without us even trying. As a result, when you stream
+    your data from some source, you have to be very careful that the results do not
+    have some pattern in their order.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Consider the following hypothetical. We wish to build an estimate of the cost
+    of housing in California for an application in real estate. We get a CSV dataset
+    of housing prices^([[11](#ch06fn11)]) from around the state, along with relevant
+    features, such as the number of rooms, the age of the development, and so on.
+    We might be tempted to simply begin training a function from features to price
+    right away since we have the data, and we know how to do it. But knowing that
+    data often has flaws, we decide to take a look first. We begin by plotting some
+    features versus their index in the array, using datasets and Plotly.js. See the
+    plots in [figure 6.3](#ch06fig03) for an illustration^([[12](#ch06fn12)]) and
+    the following listing (summarized from [https://codepen.io/tfjs-book/pen/MLQOem](https://codepen.io/tfjs-book/pen/MLQOem))
+    for how the illustrations were made.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ^(11)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: A description of the California housing dataset used here is available from
+    the Machine Learning Crash Course at [http://mng.bz/Xpm6](http://mng.bz/Xpm6).
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ^(12)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: The plots in [figure 6.3](#ch06fig03) were made using the CodePen at [https://codepen.io/tfjs-book/pen/MLQOem](https://codepen.io/tfjs-book/pen/MLQOem).
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Figure 6.3\. Plots of four dataset features vs. the sample index. Ideally, in
+    a clean IID dataset, we would expect the sample index to give us no information
+    about the feature value. We see that for some features, the distribution of y
+    values clearly depends on x. Most egregiously, the “longitude” feature seems to
+    be sorted by the sample index.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](06fig02_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Listing 6.20\. Building a plot of a feature vs. index using tfjs-data
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** Takes the first 1,000 samples and collects their values and their indices.
+    Don’t forget await, or your plot will (probably) be empty!'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Imagine we were to construct a train-test split with this dataset where we
+    took the first 500 samples for training and the remainder for testing. What would
+    happen? It appears from this analysis that we would be training with data from
+    one geographic area and testing with data from another. The Longitude panel in
+    [figure 6.3](#ch06fig03) shows the crux of the problem: the first samples are
+    from a higher longitude (more westerly) than any of the others. There is still
+    probably plenty of signal in the features, and the model would “work” somewhat,
+    but it would not be as accurate or high-quality as if our data were truly IID.
+    If we didn’t know better, we might spend days or weeks playing with different
+    models and hyperparameters before we figured out what was wrong and looked at
+    our data!'
+  prefs: []
+  type: TYPE_NORMAL
+- en: What can we do to clean this up? Fixing this particular issue is pretty simple.
+    In order to remove the relationship between the data and the index, we can just
+    shuffle our data into a random order. However, there is something we must watch
+    out for here. TensorFlow.js datasets have a built-in shuffle routine, but it is
+    a *streaming window* shuffle routine. This means that samples are randomly shuffled
+    within a window of fixed size but no further. This is out of necessity because
+    TensorFlow.js datasets stream data, and they may stream an unlimited number of
+    samples. In order to completely shuffle a never-ending data source, you first
+    need to wait until it is done.
+  prefs: []
+  type: TYPE_NORMAL
+- en: So, can we make do with this streaming window shuffle for our longitude feature?
+    Certainly if we know the size of the datasets (17,000 in this case), we can specify
+    the window to be larger than the entire dataset, and we are all set. In the limit
+    of very large window sizes, windowed shuffling and our normal exhaustive shuffling
+    are identical. If we don’t know how large our dataset is, or the size is prohibitively
+    large (that is, we can’t hold the whole thing at once in a memory cache), we may
+    have to make do with less.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Figure 6.4](#ch06fig04), created with [https://codepen.io/tfjs-book/pen/JxpMrj](https://codepen.io/tfjs-book/pen/JxpMrj),
+    illustrates what happens when we shuffle our data with four different window sizes
+    using `tf.data` `.Dataset`’s `shuffle()` method:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: Figure 6.4\. Four plots of longitude vs. the sample index for four shuffled
+    datasets. The shuffle window size is different for each, increasing from 10 to
+    6,000 samples. We see that even at a window size of 250, there is still a strong
+    relationship between the index and the feature value. There are more large values
+    near the beginning. It isn’t until we are using a shuffle window size almost as
+    large as the dataset that the data’s IID nature is nearly restored.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](06fig03_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: We see that the structural relationship between the index and the feature value
+    remains clear even for relatively large window sizes. It isn’t until the window
+    size is 6,000 that it looks to the naked eye like the data can now be treated
+    as IID. So, is 6,000 the right window size? Was there a number between 250 and
+    6,000 that would have worked? Is 6,000 still not enough to catch distributional
+    issues we aren’t seeing in these illustrations? The right approach here is to
+    shuffle the entire dataset by using a `windowSize` >= the number of samples in
+    the dataset. For datasets where this is not possible due to memory limitations,
+    time constraints, or possibly unlimited datasets, you must put on your data scientist
+    hat and examine the distribution to determine an appropriate window size.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 6.4.2\. Detecting and cleaning problems with data
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'In the previous section, we went through how to detect and fix one type of
+    data problem: sample-to-sample dependence. Of course, this is just one of the
+    many types of problems that can arise in data. A full treatment of all the types
+    of things that can go wrong is far beyond the scope of this book, because there
+    are as many things that can go wrong with data as there are things that can go
+    wrong with code. Let’s go through a few here, though, so you will recognize the
+    problems when you see them and know what terms to search for to find more information.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Outliers
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: Outliers are samples in our dataset that are very unusual and somehow do not
+    belong to the underlying distribution. For instance, if we were working with a
+    dataset of health statistics, we might expect the typical adult’s weight to be
+    between roughly 40 and 130 kilograms. If, in our dataset, 99.9% of our samples
+    were in this range, but every so often we encountered a nonsensical sample report
+    of 145,000 kg, or 0 kg, or worse, NaN,^([[13](#ch06fn13)]) we would consider these
+    samples as outliers. A quick online search reveals that there are many opinions
+    about the right way to deal with outliers. Ideally, we would have very few outliers
+    in our training data, and we would know how to find them. If we could write a
+    program to reject outliers, we could remove them from our dataset and go on training
+    without them. Of course, we would want to also trigger that same logic at inference
+    time; otherwise we would introduce skew. In this case, we could use the same logic
+    to inform the user that their sample constitutes an outlier to the system, and
+    that they must try something different.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ^(13)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Ingesting a value of NaN in our input features would propagate that NaN throughout
+    our model.
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Another common way to deal with outliers at the feature level is to clamp values
+    by providing a reasonable minimum and maximum. In our case, we might replace weight
+    with
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In such circumstances, it is also a good idea to add a new feature, indicating
+    that the outlier value has been replaced. This way, an original value of 40 kg
+    can be distinguished from a value of –5 kg that was clamped to 40 kg, giving the
+    network the opportunity to learn the relationship between the outlier status and
+    the target, if such a relationship exists:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: Missing data
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: Frequently, we are confronted with situations in which some samples are missing
+    some features. This can happen for any number of reasons. Sometimes the data comes
+    from hand-entered forms, and some fields are just skipped. Sometimes sensors were
+    broken or down at the time of data collection. For some samples, perhaps some
+    features just don’t make sense. For example, what is the most recent sale price
+    of a home that has never been sold? Or what is the telephone number of a person
+    without a telephone?
+  prefs: []
+  type: TYPE_NORMAL
+- en: As with outliers, there are many ways to address the problem of missing data,
+    and data scientists have different opinions about which techniques are appropriate
+    in which situations. Which technique is best depends on a few considerations,
+    including whether the likelihood of the feature to be missing depends on the value
+    of the feature itself, or whether the “missingness” can be predicted from other
+    features in the sample. [Info box 6.3](#ch06sb03) outlines a glossary of categories
+    of missing data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '|  |'
+  prefs: []
+  type: TYPE_TB
+- en: '**Categories of missing data**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Missing at random (MAR):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The likelihood of the feature to be missing does not depend on the hidden missing
+    value, but it may depend on some other observed value.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Example: If we had an automated visual system recording automobile traffic,
+    it might record, among other things, license plate numbers and time of day. Sometimes,
+    if it’s dark, we are unable to read the license plate. The plate’s presence does
+    not depend on the license plate value, but it may depend on the (observed) time-of-day
+    feature.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Missing completely at random (MCAR)
+  prefs: []
+  type: TYPE_NORMAL
+- en: The likelihood of the feature to be missing does not depend on the hidden missing
+    value or any of the observed values.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Example: Cosmic rays interfere with our equipment and sometimes corrupt values
+    from our dataset. The likelihood of corruption does not depend on the value stored
+    or on other values in the dataset.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Missing not at random (MNAR)
+  prefs: []
+  type: TYPE_NORMAL
+- en: The likelihood of the feature to be missing depends on the hidden value, given
+    the observed data.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Example: A personal weather station keeps track of all sorts of statistics,
+    like air pressure, rainfall, and solar radiation. However, when it snows, the
+    solar radiation meter does not take a signal.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '|  |'
+  prefs: []
+  type: TYPE_TB
+- en: When data is missing from our training set, we have to apply some corrections
+    to be able to turn the data into a fixed-shape tensor, which requires a value
+    in every cell. There are four important techniques for dealing with the missing
+    data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The simplest technique, if the training data is plentiful and the missing fields
+    are rare, is to discard training samples that have missing data. However, be aware
+    that this can introduce a bias in your trained model. To see this plainly, imagine
+    a problem in which there is missing data much more commonly from the positive
+    class than the negative class. You would end up learning an incorrect likelihood
+    of the classes. Only if your missing data is MCAR are you completely safe to discard
+    samples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 6.21\. Handling missing features by removing the data
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** Keeps only those elements whose value of ‘featureName’ is truthy: that
+    is, not 0, null, undefined, NaN, or an empty string'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Another technique for dealing with missing data is to fill the missing data
+    in with some value, also known as *imputation*. Common imputation techniques include
+    replacing missing numeric feature values with the mean, median, or mode value
+    of that feature. Missing categorical features may be replaced with the most common
+    value for that feature (also mode). More sophisticated techniques involve building
+    predictors for the missing features from the available features and using those.
+    In fact, using neural networks is one of the “sophisticated techniques” for the
+    imputation of missing data. The downside of using imputation is that the learner
+    is not aware that the feature was missing. If there is information in the missingness
+    about the target variable, it will be lost in imputation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 6.22\. Handling missing features with imputation
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** Function to calculate the value to use for imputation. Remember to
+    only include valid values when computing the mean.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***2*** Both undefined and null values are considered to be missing here. Some
+    datasets might use sentinel values like –1 or 0 to indicate missingness. Be sure
+    to look at your data!'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***3*** Note that this will return NaN when all the data is missing.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***4*** Function to conditionally update a row if the value at featureName
+    is missing'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***5*** Uses the tf.data.Dataset map() method to map the replacement over all
+    the elements'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Sometimes missing values are replaced with a *sentinel value*. For instance,
+    a missing body weight value might be replaced with a –1, indicating that no weight
+    was taken. If this appears to be the case with your data, take care to handle
+    the sentinel value *before* clamping it as an outlier (for example, based on our
+    prior example, replacing this –1 with 40 kg).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Conceivably, if there is a relationship between the missingness of the feature
+    and the target to be predicted, the model may be able to use the sentinel value.
+    In practice, the model will spend some of its computational resources learning
+    to distinguish when the feature is used as a value and when it is used as an indicator.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Perhaps the most robust way to manage missing data is to both use imputation
+    to fill in a value and add a second indicator feature to communicate to the model
+    when that feature was missing. In this case, we would replace the missing body
+    weight with a guess and also add a new feature `weight_missing`, which is 1 when
+    weight was missing and 0 when it was provided. This allows the model to leverage
+    the missingness, if valuable, and also to not conflate it with the actual value
+    of the weight.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 6.23\. Adding a feature to indicate missingness
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** Function to add a new feature to each row, which is 1 if the feature
+    is missing and 0 otherwise'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***2*** Uses the tf.data.Dataset map() method to map the additional feature
+    into each row'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Skew
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: Earlier in this chapter, we described the concept of skew, a difference in distribution
+    from one dataset to another. It is one of the major problems machine-learning
+    practitioners face when deploying trained models to production. Detecting skew
+    involves modeling the distributions of the datasets and comparing them to see
+    if they match. A simple way to quickly look at the statistics of your dataset
+    is to use a tool like Facets ([https://pair-code.github.io/facets/](https://pair-code.github.io/facets/)).
+    See [figure 6.5](#ch06fig05) for a screenshot. Facets will analyze and summarize
+    your datasets to allow you to look at per-feature distributions, which will help
+    you to quickly suss out problems with different distributions between your datasets.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 6.5\. A screenshot of Facets showing per-feature value distributions
+    for the training and test split of the UC Irvine Census Income datasets (see [http://archive.ics.uci.edu/ml/datasets/Census+Income](http://archive.ics.uci.edu/ml/datasets/Census+Income)).
+    This dataset is the default loaded at [https://pair-code.github.io/facets/](https://pair-code.github.io/facets/),
+    but you can navigate to the site and upload your own CSVs to compare. This view
+    is known as Facets Overview.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](06fig04_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: A simple, rudimentary skew-detection algorithm may calculate the mean, median,
+    and variance of each feature and check whether any differences across datasets
+    are within acceptable bounds. More sophisticated methods may attempt to predict,
+    given samples, which dataset they are from. Ideally, this should not be possible
+    since they are from the same distribution. If it is possible to predict whether
+    a data point is from training or testing, this is a sign of skew.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Bad strings
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: Very commonly, categorical data is provided as string-valued features. For instance,
+    when users access your web page, you might keep logs of which browser was used
+    with values like `FIREFOX`, `SAFARI`, and `CHROME`. Typically, before ingesting
+    these values into a deep-learning model, the values are converted into integers
+    (either through a known vocabulary or by hashing), which are then mapped into
+    an *n*-dimensional vector space (See [section 9.2.3](kindle_split_021.html#ch09lev2sec5)
+    on word embeddings). A common problem is where the strings from one dataset have
+    different formatting from the strings in a different dataset. For instance, the
+    training data might have `FIREFOX`, while at service time, the model receives
+    `FIREFOX\n`, with the newline character included, or `"FIREFOX"`, with quotes.
+    This is a particularly insidious form of skew and should be handled as such.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Other things to watch out for in your data
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: 'In addition to the problems called out in the previous sections, here are a
+    few more things to be aware of when feeding your data to a machine-learning system:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Overly unbalanced data*—If there are some features that take the same value
+    for nearly every sample in your dataset, you may consider getting rid of them.
+    It is very easy to overfit with this type of signal, and deep-learning methods
+    do not handle very sparse data well.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Numeric/categorical distinction*—Some datasets will use integers to represent
+    elements of an enumerated set, and this can cause problems when the rank order
+    of these integers is meaningless. For instance, if we have an enumerated set of
+    music genres, like `ROCK`, `CLASSICAL`, and so on, and a vocabulary that mapped
+    these values to integers, it is important that we handle the values like enumerated
+    values when we pass them into the model. This means encoding the values using
+    one-hot or embedding (see [chapter 9](kindle_split_021.html#ch09)). Otherwise,
+    these numbers will be interpreted as floating-point values, suggesting spurious
+    relationships between terms based on the numeric distance between their encodings.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Massive scale differences*—This was mentioned earlier, but it bears repeating
+    in this section on what can go wrong with data. Watch out for numeric features
+    that have large-scale differences. They can lead to instability in training. In
+    general, it’s best to z-normalize (normalize the mean and standard deviation of)
+    your data before training. Just be sure to use the same preprocessing at serving
+    time as you did during training. You can see an example of this in the tensorflow/tfjs-examples
+    iris example, as we explored in [chapter 3](kindle_split_014.html#ch03).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Bias, security, and privac**y*—Obviously, there is much more to responsible
+    machine-learning development than can be covered in a book chapter. It is critical,
+    if you are developing machine-learning solutions, that you spend the time to familiarize
+    yourself with at least the basics of the best practices for managing bias, security,
+    and privacy. A good place to get started is the page on responsible AI practices
+    at [https://ai.google/education/responsible-ai-practices](https://ai.google/education/responsible-ai-practices).
+    Following these practices is just the right thing to do to be a good person and
+    a responsible engineer—obviously important goals in and of themselves. In addition,
+    paying careful attention to these issues is a wise choice from a purely selfish
+    perspective, as even small failures of bias, security, or privacy can lead to
+    embarrassing systemic failures that quickly lead customers to look elsewhere for
+    more reliable solutions.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In general, you should aim to spend time convincing yourself that your data
+    is as you expect it to be. There are many tools to help you do this, from notebooks
+    like Observable, Jupyter, Kaggle Kernel, and Colab, to graphical UI tools like
+    Facets. See [figure 6.6](#ch06fig06) for another way to explore your data in Facets.
+    Here, we use Facets’ plotting feature, known as Facets Dive, to view points from
+    the State Universities of New York (SUNY) dataset. Facets Dive allows the user
+    to select columns from the data and visually express each field in a custom way.
+    Here, we’ve used the drop-down menus to use the Longitude1 field as the x-position
+    of the point, the Latitude1 field as the y-position of the point, the City string
+    field as the name of the point, and the Undergraduate Enrollment as the color
+    of the point. We expect the latitude and longitude, plotted on the 2D plane, to
+    reveal a map of New York state, and indeed that’s what we see. The correctness
+    of the map can be verified by comparing it to SUNY’s web page at [www.suny.edu/attend/visit-us/campus-map/](http://www.suny.edu/attend/visit-us/campus-map/).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 6.6\. Another screenshot of Facets, this time exploring the State of
+    New York, Campuses dataset from the data-csv example. Here, we see the Facets
+    Dive view that allows you to explore the relationships between different features
+    of a dataset. Each point shown is a data point from the dataset, and here we have
+    it configured so that the point’s x-position is set to the Latitude1 feature,
+    the y-position is the Longitude1 feature, the color is related to the Undergraduate
+    Enrollment feature, and the words on the front are set to the City feature, which
+    contains, for each data point, the name of the city the university campus is in.
+    We can see from this visualization a rough outline of the state of New York, with
+    Buffalo in the west and New York in the southeast. Apparently, the city of Selden
+    contains one of the largest campuses by undergraduate enrollment.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](06fig05_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 6.5\. Data augmentation
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: So, we’ve collected our data, we’ve connected it to a `tf.data.Dataset` for
+    easy manipulation, and we’ve scrutinized it and cleaned it of problems. What else
+    can we do to help our model succeed?
+  prefs: []
+  type: TYPE_NORMAL
+- en: Sometimes, the data you have isn’t enough, and you wish to expand the dataset
+    programmatically, creating new examples by making small changes to existing data.
+    For instance, recall the MNIST hand-written digit-classification problem from
+    [chapter 4](kindle_split_015.html#ch04). MNIST contains 60,000 training images
+    of 10 hand-written digits, or 6,000 per digit. Is that enough to learn all the
+    types of flexibility we want for our digit classifier? What happens if someone
+    draws a digit too large or small? Or rotated slightly? Or skewed? Or with a thicker
+    or thinner pen? Will our model still understand?
+  prefs: []
+  type: TYPE_NORMAL
+- en: If we take an MNIST sample digit and alter the image by moving the digit one
+    pixel to the left, the semantic label of the digit doesn’t change. The 9 shifted
+    to the left is still a 9, but we have a new training example. This type of programmatically
+    generated example, created from mutating an actual example, is known as a *pseudo-example*,
+    and the process of adding pseudo-examples to the data is known as *data augmentation*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Data augmentation takes the approach of generating more training data from existing
+    training samples. In the case of image data, various transformations such as rotating,
+    cropping, and scaling often yield believable-looking images. The purpose is to
+    increase the diversity of the training data in order to benefit the generalization
+    power of the trained model (in other words, to mitigate overfitting), which is
+    especially useful when the size of the training dataset is small.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Figure 6.7](#ch06fig07) shows data augmentation applied to an input example
+    consisting of an image of a cat, from a dataset of labeled images. The data is
+    augmented by applying rotations and skew in such a way that the label of the example,
+    that is, “CAT” does not change, but the input example changes significantly.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 6.7\. Generation of cat pictures via random data augmentation. A single
+    labeled example can yield a whole family of training samples by providing random
+    rotations, reflections, translations, and skews. Meow.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](06fig06_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: If you train a new network using this data-augmentation configuration, the network
+    will never see the same input twice. But the inputs it sees are still heavily
+    intercorrelated because they come from a small number of original images—you can’t
+    produce new information, you can only remix existing information. As such, this
+    may not be enough to completely get rid of overfitting. Another risk of using
+    data augmentation is that the training data is now less likely to match the distribution
+    of the inference data, introducing skew. Whether the benefits of the additional
+    training pseudo-examples outweigh the costs of skew is application-dependent,
+    and it’s something you may just need to test and experiment with.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Listing 6.24](#ch06ex24) shows how you can include data augmentation as a
+    `dataset.map()` function, injecting allowable transformations into your dataset.
+    Note that augmentation should be applied per example. It’s also important to see
+    that augmentation should *not* be applied to the validation or testing set. If
+    we test on augmented data, then we will have a biased measure of the power of
+    our model because the augmentations will not be applied at inference time.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 6.24\. Training a model on a dataset with data augmentation
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** The augmentation function takes a sample in {image, label} format and
+    returns a new, perturbed sample in the same format.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***2*** Assume that randomRotate, randomSkew, and randomMirror are defined
+    elsewhere by some library. The amount to rotate, skew, and so on is generated
+    randomly for each call. The augmentation should depend only on the features, not
+    the label of the sample.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***3*** This function returns two tf.data.Datasets, each with element type
+    {image, label}.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***4*** The augmentation is applied to the individual elements before batching.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***5*** We fit the model on the augmented dataset.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***6*** IMPORTANT! Do not apply augmentation to the validation set. Repeat
+    is called on the validationData here since the data won’t loop automatically.
+    Only 10 batches are taken per validation measurement, as configured.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Hopefully, this chapter convinced you of the importance of understanding your
+    data before throwing machine-learning models at it. We talked about out-of-the-box
+    tools such as Facets, which you can use to examine your datasets and thereby deepen
+    your understanding of them. However, when you need a more flexible and customized
+    visualization of your data, it becomes necessary to write some code to do that
+    job. In the next chapter, we will teach you the basics of tfjs-vis, a visualization
+    module maintained by the authors of TensorFlow.js that can support such data-visualization
+    use cases.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Exercises
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Extend the simple-object-detection example from [chapter 5](kindle_split_016.html#ch05)
+    to use `tf.data .generator()` and `model.fitDataset()` instead of generating the
+    full dataset up front. What advantages are there to this structure? Does performance
+    meaningfully improve if the model is provided a much larger dataset of images
+    to train from?
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Add data augmentation to the MNIST example by adding small shifts, scales, and
+    rotations to the examples. Does this help in performance? Does it make sense to
+    validate and test on the data stream with augmentation, or is it more proper to
+    test only on “real” natural examples?
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Try plotting some of the features from some of the datasets we’ve used in other
+    chapters using the techniques in [section 6.4.1](#ch06lev2sec8). Does the data
+    meet the expectations of independence? Are there outliers? What about missing
+    values?
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Load some of the CSV datasets we’ve discussed here into the Facets tool. What
+    features look like they could cause problems? Any surprises?
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Consider some of the datasets we’ve used in earlier chapters. What sorts of
+    data augmentation techniques would work for those?
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Data is a critical force powering the deep-learning revolution. Without access
+    to large, well-organized datasets, most deep-learning applications could not happen.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: TensorFlow.js comes packaged with the `tf.data` API to make it easy to stream
+    large datasets, transform data in various ways, and connect them to models for
+    training and prediction.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'There are several ways to build a `tf.data.Dataset` object: from a JavaScript
+    array, from a CSV file, or from a data-generating function. Building a dataset
+    that streams from a remote CSV file can be done in one line of JavaScript.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`tf.data.Dataset` objects have a chainable API that makes it easy and convenient
+    to shuffle, filter, batch, map, and perform other operations commonly needed in
+    a machine-learning application.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`tf.data.Dataset` accesses data in a lazy streaming fashion. This makes working
+    with large remote datasets simple and efficient but comes at the cost of working
+    with asynchronous operations.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`tf.Model` objects can be trained directly from a `tf.data.Dataset` using their
+    `fitDataset()` method.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Auditing and cleaning data requires time and care, but it is a required step
+    for any machine-learning system you intend to put to practical use. Detecting
+    and managing problems like skew, missing data, and outliers at the data-processing
+    stage will end up saving debugging time during the modeling stage.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Data augmentation can be used to expand the dataset to include programmatically
+    generated pseudo-examples. This can help the model to cover known invariances
+    that were underrepresented in the original dataset.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL

@@ -1,0 +1,2228 @@
+- en: 'Chapter 2\. Getting started: Simple linear regression in TensorFlow.js'
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '*This chapter covers*'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A minimal example of a neural network for the simple machine-learning task of
+    linear regression
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Tensors and tensor operations
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Basic neural network optimization
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Nobody likes to wait, and it’s especially annoying to wait when we don’t know
+    how long we’ll have to wait for. Any user experience designer will tell you that
+    if you can’t hide the delay, then the next best thing is to give the user a reliable
+    estimate of the wait time. Estimating expected delays is a prediction problem,
+    and the TensorFlow.js library can be used to build an accurate download-time prediction,
+    sensitive to the context and user, enabling us to build clear, reliable experiences
+    that respect the user’s time and attention.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this chapter, using a simple download-time prediction problem as our motivating
+    example, we will introduce the main components of a complete machine-learning
+    model. We will cover tensors, modeling, and optimization from a practical point
+    of view so that you can build intuitions about what they are, how they work, and
+    how to use them appropriately.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A complete understanding of the internals of deep learning—the type a dedicated
+    researcher would build over years of study—requires familiarity with many mathematical
+    subjects. For the deep-learning practitioner, however, expertise with linear algebra,
+    differential calculus, and the statistics of high-dimensional spaces is helpful
+    but not necessary, even to build complex, high-performance systems. Our goal in
+    this chapter, and throughout this book, is to introduce technical topics as necessary—using
+    code, rather than mathematical notation, when possible. We aim to convey an intuitive
+    understanding of the machinery and its purpose without requiring domain expertise.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '2.1\. Example 1: Predicting the duration of a download using TensorFlow.js'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Let’s jump right in! We will construct a bare-minimum neural network that uses
+    the TensorFlow.js library (sometimes shortened to tfjs) to predict download times
+    given the size of the download. Unless you already have experience with TensorFlow.js
+    or similar libraries, you won’t understand everything about this first example
+    right away, and that’s fine. Each subject introduced here will be covered in detail
+    in the coming chapters, so don’t worry if some parts look arbitrary or magical
+    to you! We’ve got to start somewhere. We will begin by writing a short program
+    that accepts a file size as input and outputs a predicted time to download the
+    file.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '2.1.1\. Project overview: Duration prediction'
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: When studying a machine-learning system for the first time, you may be intimidated
+    by the variety of new concepts and lingo. Therefore, it’s helpful to look at the
+    entire workflow first. The general outline of this example is illustrated in [figure
+    2.1](#ch02fig01), and it is a pattern that we will see repeated across our examples
+    in this book.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 2.1\. Overview of the major steps involved in the download-time prediction
+    system, our first example
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](02fig01_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'First, we will access our training data. In machine learning, data can be read
+    from disk, downloaded over the network, generated, or simply hard-coded. In this
+    example, we take the last approach because it is convenient, and we are dealing
+    with only a small amount of data. Second, we will convert the data into tensors,
+    so they can be fed to our model. The next step is creating a model, which, as
+    we saw in [chapter 1](kindle_split_011.html#ch01), is akin to designing an appropriate
+    trainable function: a function mapping input data to things we are trying to predict.
+    In this case, the input data and the prediction targets are both numbers. Once
+    our model and data are available, we will then train the model, monitoring its
+    reported metrics as it goes. Finally, we will use the trained model to make predictions
+    on data we haven’t seen yet and measure the model’s accuracy.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We will proceed through each of these phases with copy-and-paste runnable code
+    snippets and explanations of both the theory and the tools.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.1.2\. A note on code listings and console interactions
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: Code in this book will be presented in two formats. The first format, the code
+    *listing*, presents structural code that you will find in the referenced code
+    repositories. Each listing has a title and a number. For example, [listing 2.1](#ch02ex01)
+    contains a very short HTML snippet that you could copy verbatim into a file—for
+    example, /tmp/tmp.html—on your computer and then open in your web browser at file:///tmp/tmp.html,
+    though it won’t do much by itself.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The second format of code is the *console interaction*. These more informal
+    blocks are intended to convey example interactions at a JavaScript REPL,^([[1](#ch02fn1)])
+    such as the browser’s JavaScript console (Cmd-Opt-J, Ctrl+Shift+J, or F12 in Chrome,
+    but your browser/OS may be different). Console interactions are indicated with
+    a preceding greater-than sign, like what we see in Chrome or Firefox, and their
+    outputs are presented on the next line, just as in the console. For example, the
+    following interaction creates an array and prints the value. The output you see
+    at your JavaScript console may be slightly different, but the gist should be the
+    same:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ¹
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Read-eval-print-loop, also known as an interactive interpreter or shell. The
+    REPL allows us to interact actively with our code to interrogate variables and
+    test functions.
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: The best way to test, run, and learn from the code listings in this book is
+    to clone the referenced repositories and then play with them. During the development
+    of this book, we made frequent use of CodePen as a simple, interactive, shareable
+    repository ([http://codepen.io](http://codepen.io)). For example, [listing 2.1](#ch02ex01)
+    is available for you to play with at codepen.io/tfjs-book/pen/VEVMbx. When you
+    navigate to the CodePen, it should run automatically. You should be able to see
+    output printed to the console. Click Console at bottom left to open the console.
+    If the CodePen doesn’t run automatically, try making a small, inconsequential
+    change, such as adding a space to the end, to kick-start it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The listings from this section are available in this CodePen collection: codepen
+    .io/collection/Xzwavm/. CodePen works well where there is a single JavaScript
+    file, but our larger and more structured examples are kept in GitHub repositories,
+    which you will see in later examples. For this example, we recommend reading through
+    this section and then playing with the associated CodePens in order.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.1.3\. Creating and formatting the data
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: Let’s estimate how long it will take to download a file on a machine, given
+    only its size in MB. We’ll first use a pre-created dataset, but, if you’re motivated,
+    you can create a similar dataset, modeling your own system’s network statistics.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 2.1\. Hard-coding the training and test data (from CodePen 2-a)
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the previous HTML code listing, we’ve chosen to explicitly include the `<script>`
+    tags, illustrating how to load the most recent version of the TensorFlow.js library
+    using the `@latest` suffix (at the time of writing, this code ran with tfjs 0.13.5).
+    We will go into more detail later about different ways to import TensorFlow.js
+    into your application, but going forward, the `<script>` tags will be assumed.
+    The first script loads the TensorFlow package and defines the symbol `tf`, which
+    provides a way to refer to names in TensorFlow. For example, `tf.add()` refers
+    to the TensorFlow add operation, which adds two tensors. Going forward, we will
+    assume that the `tf` symbol is loaded and available in the global namespace by,
+    for example, sourcing the TensorFlow.js script as previously.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Listing 2.1](#ch02ex01) creates two constants, `trainData` and `testData`,
+    each representing 20 samples of how long it took to download a file (`timeSec`)
+    and the size of that file (`sizeMB`). The elements in `sizeMB` and those in `timeSec`
+    have one-to-one correspondence. For example, the first element of `sizeMB` in
+    `trainData` is 0.080 MB, and downloading that file took 0.135 seconds—that is,
+    the first element of `timeSec`—and so forth. Our goal in this example will be
+    to estimate `timeSec`, given just `sizeMB`. In this first example, we are creating
+    the data directly by hard-coding it in our code. This approach is expedient for
+    this simple example but will become unwieldy very quickly when the size of the
+    dataset grows. Future examples will illustrate how to stream data from external
+    storage or over the network.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Back to the data. From the plot in [figure 2.2](#ch02fig02), we can see that
+    there is a very predictable, if imperfect, relationship between the size and download
+    time. Data in real life is noisy, but it looks like we should be able to make
+    a pretty good linear estimate of the duration given the file size. Judging by
+    eye, the duration should be about 0.1 seconds when the file size is zero and then
+    grow at about 0.07 seconds for each additional MB. Recall from [chapter 1](kindle_split_011.html#ch01)
+    that each input-output pair is sometimes called an *example*. The output is often
+    referred to as the *target*, while the elements of the input are often called
+    the *features*. In our case here, each of our 40 examples has exactly one feature,
+    `sizeMB`, and a numeric target, `timeSec`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 2.2\. Measured download duration versus file size. If you are interested,
+    at this point, in how to create plots like this, the code is listed in CodePen
+    [codepen.io/tfjs-book/pen/dgQVze](http://codepen.io/tfjs-book/pen/dgQVze).
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](02fig02_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: In [listing 2.1](#ch02ex01), you might have noticed that the data is split into
+    two subsets, namely `trainData` and `testData`. `trainData` is the training set.
+    It contains the examples the model will be trained on. `testData` is the test
+    set. We will use it to judge how well the model is trained after the training
+    is complete. If we trained and evaluated using the exact same data, it would be
+    like taking a test after having already seen the answers. In the most extreme
+    case, the model could theoretically memorize the `timeSec` value for each `sizeMB`
+    in the training data—not a very good learning algorithm. The result would not
+    be a good judge of future performance because it is unlikely that the values of
+    the future input features will all be exactly the same as the ones the model has
+    been trained on.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Therefore, the workflow will be as follows. First we’ll fit the neural network
+    on the training data to make accurate predictions of `timeSec` given `sizeMB`.
+    Then, we’ll ask the network to produce predictions for `sizeMB` using the testing
+    data, and we’ll measure how close those predictions are to `timeSec`. But first,
+    we’ll have to convert this data into a format that TensorFlow.js will understand,
+    and this will be our first example usage of tensors. The code in [listing 2.2](#ch02ex02)
+    shows the first usage of functions under the `tf.*` namespace you will see in
+    this book. Here, we see methods for converting data stored in raw JavaScript data
+    structures into tensors.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Although the usage is pretty straightforward, those readers who wish to gain
+    a firmer grounding in these APIs should read [appendix B](kindle_split_030.html#app02),
+    which covers not only tensor-creation functions such as `tf.tensor2d()`, but also
+    functions that perform operations transforming and combining tensors, and patterns
+    of how common real-world data types, such as images and videos, are conventionally
+    packed into tensors. We do not dive deeply into the low-level API in the main
+    text because the material is somewhat dry and not tied to specific example problems.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 2.2\. Converting data into tensors (from CodePen 2-b)
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** The [20, 1] here is the tensor’s “shape.” More will be explained later,
+    but here this shape means we want to interpret the list of numbers as 20 samples,
+    where each sample is 1 number. If the shape is obvious from, for example, the
+    structure of the data array, this argument can be left out.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'In general, all current machine-learning systems use tensors as their basic
+    data structure. Tensors are fundamental to the field—so fundamental that TensorFlow
+    and TensorFlow.js are named after them. A quick reminder from [chapter 1](kindle_split_011.html#ch01):
+    at its core, a tensor is a container for data—almost always numerical data. So,
+    it can be thought of as a container for numbers. You may already be familiar with
+    vectors and matrices, which are 1D and 2D tensors, respectively. Tensors are a
+    generalization of matrices to an arbitrary number of dimensions. The number of
+    dimensions and size of each dimension is called the tensor’s *shape*. For instance,
+    a 3 × 4 matrix is a tensor with shape `[3, 4]`. A vector of length 10 is a 1D
+    tensor with shape `[10]`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the context of tensors, a dimension is often called an *axis*. In TensorFlow.js,
+    tensors are the common representation that lets components communicate and work
+    with each other, whether on CPU, GPU, or other hardware. We will have more to
+    say about tensors and their common use cases as the need arises, but for now,
+    let’s continue with our prediction project.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.1.4\. Defining a simple model
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: In the context of deep learning, the function from input features to targets
+    is known as a *mode**l*. The model function takes features, runs a computation,
+    and produces predictions. The model we are building here is a function that takes
+    a file size as input and outputs durations (see [figure 2.2](#ch02fig02)). In
+    deep-learning parlance, sometimes we use *network* as a synonym for model. Our
+    first model will be an implementation of *linear regression*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Regression*, in the context of machine learning, means that the model will
+    output real-valued numbers and attempt to match the training targets; this is
+    opposed to classification, which outputs choices from a set of options. In a regression
+    task, a model that outputs numbers closer to the target is better than a model
+    that outputs numbers farther away. If our model predicts that a 1 MB file will
+    take about 0.15 seconds, that’s better (as we can see from [figure 2.2](#ch02fig02))
+    than if our model predicts that a 1 MB file will take about 600 seconds.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Linear regression is a specific type of regression in which the output, as a
+    function of the input, can be illustrated as a straight line (or, by analogy,
+    a flat plane in a higher-dimensional space when there are multiple input features).
+    An important property of models is that they are *tunable*. This means that the
+    input-output computation can be adjusted. We use this property to tune the model
+    to better “fit” the data. In the linear case, the model input-output relationship
+    is always a straight line, but we can adjust the slope and y-intercept.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s build our first network to get a feel for this.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 2.3\. Constructing a linear regression model (from CodePen 2-c)
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The core building block of neural networks is the *layer*, a data-processing
+    module that you can think of as a tunable function from tensors to tensors. Here,
+    our network consists of a single dense layer. This layer has a constraint on the
+    shape of the input tensor, as defined by the parameter `inputShape: [1]`. Here,
+    it means that the layer is expecting input in the form of a 1D tensor with exactly
+    one value. The output from the dense layer is always a 1D tensor for each example,
+    but the size of that dimension is controlled by the `units` configuration parameter.
+    In this case, we want just one output number because we are trying to predict
+    exactly one number, namely the `timeSec`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'At its core, the dense layer is a tunable multiply-add between each input and
+    each output. Since there is only one input and one output, this model is the simple
+    `y = m * x + b` linear equation you may recall from high school math. The dense
+    layer internally calls `m` the *kernel* and `b` the *bias*, as illustrated in
+    [figure 2.3](#ch02fig03). In this case, we have constructed a linear model for
+    the relation between the input (`sizeMB`) and the output (`timeSec`):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: Figure 2.3\. An illustration of our simple linear-regression model. The model
+    has exactly one layer. The model’s tunable parameters (or weights), the kernel
+    and bias, are shown within the dense layer.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](02fig03_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'There are four terms in this equation. Two of them are fixed as far as model
+    training is concerned: the values of `sizeMB` and `timeSec` are determined by
+    the training data (see [listing 2.1](#ch02ex01)). The other two terms, the kernel
+    and bias, are the model’s parameters. Their values are randomly chosen when the
+    model is created. Those random values will not give good predictions of download
+    duration. In order for decent predictions to happen, we must search for good values
+    of the kernel and bias by allowing the model to learn from data. This search is
+    the *training process*.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To find a good setting for the kernel and bias (collectively, the *weights*)
+    we need two things:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A measure that tells us how well we are doing at a given setting of the weights
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A method to update the weights’ values so that next time we will do better than
+    we currently are doing, according to the measure previously mentioned
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This brings us to the next step in solving the linear-regression problem. To
+    make the network ready for training, we need to pick the measure and the update
+    method, which correspond to the two required items listed previously. This is
+    done as part of what TensorFlow.js calls the *model compilation* step, which takes
+  prefs: []
+  type: TYPE_NORMAL
+- en: A *loss function*—An error measurement. This is how the network measures its
+    performance on the training data and steers itself in the right direction. Lower
+    loss is better. As we train, we should be able to plot the loss over time and
+    see it going down. If our model trains for a long while, and the loss is not decreasing,
+    it could mean that our model is not learning to fit the data. Over the course
+    of this book, you will learn to debug problems like this.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: An *optimizer*—The algorithm by which the network will update its weights (kernel
+    and bias, in this case) based on the data and the loss function.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The exact purpose of the loss function and the optimizer, and how to make good
+    choices for them, will be explored thoroughly throughout the next couple of chapters.
+    But for now, the following choices will do.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Listing 2.4\. Configuring training options: model compilation (from CodePen
+    2-c)'
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We call the `compile` method on our model, specifying `''sgd''` as our optimizer
+    and `''meanAbsoluteError''` as our loss. `''meanAbsoluteError''` means that our
+    loss function will calculate how far our predictions are from the targets, take
+    their absolute values (making them all positive), and then return the average
+    of those values:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: For example, given
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: then,
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: If our model makes very bad predictions that are very far from the targets,
+    then the `meanAbsoluteError` will be very large. In contrast, the best we could
+    possibly do is to get every prediction exactly right, in which case the difference
+    between our model output and the targets would be zero, and therefore the loss
+    (the `meanAbsoluteError`) would be zero.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `sgd` in [listing 2.4](#ch02ex04) stands for *stochastic gradient descent*,
+    which we will describe a bit more in [section 2.2](#ch02lev1sec2). Briefly, it
+    means that we will use calculus to determine what adjustments we should make to
+    the weights in order to reduce the loss; then we will make those adjustments and
+    repeat the process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Our model is now ready to be fit to our training data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.1.5\. Fitting the model to the training data
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: Training a model in TensorFlow.js is done by calling the model’s `fit()` method.
+    We fit the model to the training data. Here, we pass in the `sizeMB` tensor as
+    our input and the `timeSec` tensor as our desired output. We also pass in a configuration
+    object with an `epochs` field that specifies that we would like to go through
+    our training data exactly 10 times. In deep learning, each iteration through the
+    complete training set is called an *epoch*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 2.5\. Fitting a linear regression model (from CodePen 2-c)
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `fit()` method can often be long-running, lasting for seconds or minutes.
+    Therefore, we utilize the *async/await* feature of ES2017/ES8 so that this function
+    can be used in a way that does not block the main UI thread when running in the
+    browser. This is similar to other potentially long-running functions in JavaScript,
+    such as `async fetch`. Here, we wait for the `fit()` call to finish before going
+    on, using the Immediately Invoked Async Function Expression^([[2](#ch02fn2)])
+    pattern, but future examples will train in the background while doing other work
+    in the foreground thread.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ²
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: For more on Immediately Invoked Function Expressions, see [http://mng.bz/RPOZ](http://mng.bz/RPOZ).
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Once our model has completed fitting, we will want to see whether it worked.
+    Crucially, we will evaluate the model on data that was not used during training.
+    This theme of separating test data from training data (and hence avoiding training
+    on the test data) is something that will come up over and over in this book. It
+    is an important part of the machine-learning workflow that you should internalize.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The model’s `evaluate()` method calculates the loss function as applied to
+    the provided example features and targets. It is similar to the `fit()` method
+    in that it calculates the same loss, but `evaluate()` does not update the model’s
+    weights. We use `evaluate()` to estimate the quality of the model on the test
+    data, so as to get an idea about how the model would perform in the future application:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Here, we see that the loss, averaged across the test data, is about 0.318\.
+    Given that, by default, models are trained from a random initial state, you will
+    get a different value. Another way to say the same thing is that the mean absolute
+    error (MAE) of this model is just over 0.3 seconds. Is this good? Is it better
+    than just estimating a constant? One good constant we could choose is the average
+    delay. Let’s see what kind of error that would get, using TensorFlow.js’s support
+    for mathematical operations on tensors. First, we’ll compute the average download
+    time, calculated over our training set:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Next, let’s calculate the `meanAbsoluteError` by hand. MAE is simply the average
+    value of how far our prediction was from the actual value. We’ll use `tf.sub()`
+    to calculate the difference between the test targets and our (constant) prediction
+    and `tf.abs()` to take the absolute value (since sometimes we’ll be too low and
+    other times too high), and then take the average with `tf.mean`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: See [info box 2.1](#ch02sb01) for how to perform the same computation using
+    the concise chaining API.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '|  |'
+  prefs: []
+  type: TYPE_TB
+- en: '**Tensor chaining API**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In addition to the standard API, in which tensor functions are available under
+    the `tf` namespace, most tensor functions are also available from the tensor objects
+    themselves, allowing you to write in a chaining style if you prefer. The following
+    code is functionally identical to the `meanAbsoluteError` computation in the main
+    text:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: '|  |'
+  prefs: []
+  type: TYPE_TB
+- en: 'It seems that the average delay is about 0.295 seconds and that always guessing
+    the average value gives a better estimate than our network does. This means our
+    model’s accuracy is even worse than that of a commonsense, trivial approach! Can
+    we do better? It’s possible that we haven’t trained for enough epochs. Remember
+    that during training, the values of the kernel and bias are updated step-by-step.
+    In this case, each epoch is a step. If the model is trained only for a small number
+    of epochs (steps), the parameter values may not have a chance to get close to
+    the optimum. Let’s train our model a few more cycles and evaluate again:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** Be sure to wait for the promise returned from model.fit to resolve
+    before executing model.evaluate.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Much better! It seems we were previously *underfitting*, meaning our model hadn’t
+    been adapted enough to the training data. Now our estimates are within 0.05 seconds,
+    on average. We are four times more accurate than naively guessing the mean. In
+    this book, we will offer guidance about how to avoid underfitting, as well as
+    the more insidious problem of *overfitting*, where the model is tuned *too much*
+    to the training data and doesn’t generalize well to data it hasn’t seen!
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.1.6\. Using our trained model to make predictions
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'OK, great! We now have a model that can make accurate predictions of download
+    time given an input size, but how do we use it? The answer is the model’s `predict()`
+    method:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here, we see that our model predicts that a 10,000 MB file download will take
+    about 718 seconds. Note that we didn’t have any examples in our training data
+    near this size. In general, extrapolating to values well outside the training
+    data is very risky, but with a problem this simple, it may be accurate . . . so
+    long as we don’t run into new complications with memory buffers, input-output
+    connectivity, and so on. It would be better if we could collect more training
+    data in this range.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We see also that we needed to wrap our input variables into an appropriately
+    shaped tensor. In [listing 2.3](#ch02ex03), we defined the `inputShape` to be
+    `[1]`, so the model expects each example to have that shape. Both `fit()` and
+    `predict()` work with multiple examples at a time. To provide `n` samples, we
+    stack them together into a single input tensor, which thus must have the shape
+    `[n, 1]`. If we had forgotten, and instead provided a tensor with the wrong shape
+    to the model, we would have gotten a shape error, like the following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: Watch out for this type of shape mismatch because it is a very common type of
+    error!
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.1.7\. Summary of our first example
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: For this small example, it’s possible to illustrate the model’s result. [Figure
+    2.4](#ch02fig04) shows the model’s output (`timeSec`) as a function of the input
+    (`sizeMB`) for the models at four points in the process, beginning with the underfit
+    one at 10 epochs and the converged one. We see that the converged model closely
+    fits the data. If you are interested, at this point, in exploring how to plot
+    data like that in [figure 2.4](#ch02fig04), please visit the CodePen at [codepen.io/tfjs-book/pen/VEVMMd](http://codepen.io/tfjs-book/pen/VEVMMd).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 2.4\. The linear model fit after training for 10, 20, 100, and 200 epochs
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](02fig04_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: This concludes our first example. You just saw how you can build, train, and
+    evaluate a TensorFlow.js model in very few lines of JavaScript code (see [listing
+    2.6](#ch02ex06)). In the next section, we’ll go a bit deeper into what’s going
+    on inside of `model.fit`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 2.6\. Model definition, training, evaluation, and prediction
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: '2.2\. Inside Model.fit(): Dissecting gradient descent from example 1'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: In the previous section, we built a simple model and fit it to some training
+    data, showing that we could make reasonably accurate predictions of download time
+    given the file size. It isn’t the most impressive neural network, but it works
+    in precisely the same way as the larger, much more complicated systems we’ll be
+    building. We saw that fitting it for 10 epochs wasn’t very good, but fitting it
+    for 200 epochs produced a quality model.^([[3](#ch02fn3)]) Let’s go into a bit
+    more detail to understand exactly what happens under the hood when the model is
+    trained.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ³
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Note that for a simple linear model like this one, simple, efficient, closed-form
+    solutions exist. However, this optimization method will continue to work even
+    for the more complicated models we introduce later.
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: 2.2.1\. The intuitions behind gradient-descent optimization
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: Recall that our simple, one-layer model is fitting a linear function `f(input)`,
+    defined as
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: where the kernel and bias are tunable parameters (the weights) of the dense
+    layer. These weights contain the information learned by the network from exposure
+    to the training data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Initially, these weights are filled with small random values (a step called
+    *random initialization*). Of course, there’s no reason to expect that `kernel
+    * input + bias` will yield anything useful when the kernel and bias are random.
+    Using our imagination, we can picture how the value of the MAE will change across
+    different choices of these parameters. We expect that the loss will be low when
+    they approximate the slope and intercept of the line we perceive in [figure 2.4](#ch02fig04),
+    and that the loss will get worse as the parameters describe very different lines.
+    This concept—the loss as a function of all tunable parameters—is known as the
+    *loss surface*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Since this is a tiny example, and we just have two tunable parameters and a
+    single target, it’s possible to illustrate the loss surface as a 2D contour plot,
+    as [figure 2.5](#ch02fig05) shows. This loss surface has a nice bowl shape, with
+    a global minimum at the bottom of the bowl representing the best parameter settings.
+    In general, however, the loss surface of a deep-learning model is much more complex
+    than this one. It will have many more than two dimensions and could have many
+    local minima—that is, points that are lower than anything nearby but not the lowest
+    overall.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Figure 2.5\. The loss surface illustrates loss, shown against the model’s tunable
+    parameters, as a contour plot. With this birds-eye view, we see that a choice
+    of `{bias: 0.08, kernel: 0.07}` (marked with a white X) would be a reasonable
+    choice for low loss. Rarely do we have the luxury of being able to test *all*
+    the parameter settings to build a map like this, but if we did, optimization would
+    be very easy; just pick the parameters corresponding to the lowest loss!'
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](02fig05_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'We see that this loss surface is shaped like a bowl, with the best (lowest)
+    value somewhere around `{bias: 0.08, kernel: 0.07}`. This fits the geometry of
+    the line implied by our data, where the download time is about 0.10 seconds, even
+    when the file size is near zero. Our model’s random initialization starts us at
+    a random parameter setting, analogous to a random location on this map, from which
+    we calculate our initial loss. Next, we gradually adjust the parameters based
+    on a feedback signal. This gradual adjustment, also called *training*, is the
+    “learning” in “machine learning.” This happens within a *training loop*—illustrated
+    in [figure 2.6](#ch02fig06).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 2.6\. A flowchart illustrating the training loop, which updates the model
+    via gradient descent
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](02fig06_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: '[Figure 2.6](#ch02fig06) illustrates how the training loop iterates through
+    these steps as long as necessary:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Draw a *batch* of training samples `x` and corresponding targets `y_true`. A
+    batch is simply a number of input examples put together as a tensor. The number
+    of examples in a batch is called the *batch size*. In practical deep learning,
+    it is often set to be a power of 2, such as 128 or 256\. Examples are batched
+    together to take advantage of the GPU’s parallel processing power and to make
+    the calculated values of the gradients more stable (see [section 2.2.2](#ch02lev2sec9)
+    for details).
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Run the network on `x` (a step called the *forward pass*) to obtain predictions
+    `y_pred`.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Compute the loss of the network on the batch, a measure of the mismatch between
+    `y_true` and `y_pred`. Recall that the loss function is specified when `model.compile()`
+    is called.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Update all the weights (parameters) in the network in a way that slightly reduces
+    the loss on this batch. The detailed updates to the individual weights are managed
+    by the optimizer, another option we specified during the `model.compile()` call.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: If you can lower your loss at every step, you will eventually end up with a
+    network with low loss on the training data. The network has “learned” to map its
+    inputs to correct targets. From afar, it may look like magic, but when reduced
+    to these elementary steps, it turns out to be simple.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The only difficult part is step 4: how can you determine which weights should
+    be increased, which should be decreased, and by how much? We could simply guess
+    and check, and only accept updates that actually reduce the loss. Such an algorithm
+    might work for a simple problem like this one, but it would be very slow. For
+    larger problems, when we are optimizing millions of weights, the likelihood of
+    randomly selecting a good direction becomes vanishingly small. A much better approach
+    is to take advantage of the fact that all operations used in the network are *differentiable*
+    and to compute the *gradient* of the loss with regard to the network’s parameters.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'What is a gradient? Instead of defining it precisely (which requires some calculus),
+    we can describe it intuitively as the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*A direction such that if you move the weights by a tiny bit in that direction,
+    you will increase the loss function the fastest, among all possible directions*'
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: 'Even though this definition is not overly technical, there is still a lot to
+    unpack, so let’s try to break it down:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, the gradient is a vector. It has the same number of elements as the weights
+    do. It represents a direction in the space of all choices of the weight values.
+    If the weights of your model consist of two numbers, as is the case in our simple
+    linear-regression network, then the gradient is a 2D vector. Deep-learning models
+    often have thousands or millions of dimensions, and the gradients of these models
+    are vectors (directions) with thousands or millions of elements.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Second, the gradient depends on current weight values. In other words, different
+    weight values will yield different gradients. This is clear from [figure 2.5](#ch02fig05),
+    in which the direction that descends most quickly depends on where you are on
+    the loss surface. On the left edge, we must go right. Near the bottom, we must
+    go up, and so on.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Finally, the mathematical definition of a gradient specifies a direction along
+    which the loss function *increases*. Of course, when training neural networks,
+    we want the loss to *decrease*. This is why we must move the weights in the direction
+    *opposite* the gradient.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Consider, by way of analogy, a hike in a mountain range. Imagine we wish to
+    travel to a place with the lowest altitude. In this analogy, we can change our
+    altitude by moving in any direction defined by the east-west and north-south axes.
+    We should interpret the first bullet point as saying that the gradient of our
+    altitude is the direction most steeply upward given the slope under our feet.
+    The second bullet is somewhat obvious, stating that the direction most steeply
+    upward depends on our current position. Finally, if we wish to go to a low altitude,
+    we should take steps in the direction *opposite* the gradient.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This training process is aptly named *gradient descent*. Remember in [listing
+    2.4](#ch02ex04), when we specified our model optimizer with the configuration
+    `optimizer: ''sgd''`? The gradient-descent portion of stochastic gradient descent
+    should now be clear. The “stochastic” part just means we draw random samples from
+    the training data during each gradient-descent step for efficiency, as opposed
+    to using every training data sample at every step. Stochastic gradient descent
+    is simply a modification of gradient descent for computational efficiency.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We now have tools for a more complete explanation of how optimization works,
+    and why 200 epochs were better than 10 for our download-time estimation model.
+    [Figure 2.7](#ch02fig07) illustrates how the gradient-descent algorithm follows
+    a path down our loss surface to find a weight setting that fits our training data
+    nicely. The contour plot in panel A of [figure 2.7](#ch02fig07) shows the same
+    loss surface as before, zoomed in a bit and now overlaid with the path followed
+    by the gradient-descent algorithm. The path begins at the *random initialization*—a
+    random place on the image. We have to pick somewhere random to start since we
+    don’t know the optimum beforehand! Several other points of interest are called
+    out along the path, illustrating the positions corresponding to the underfit and
+    the well-fit models. Panel B of [figure 2.7](#ch02fig07) shows a plot of the model
+    loss as a function of the step, highlighting the analogous points of interest.
+    Panel C illustrates the models using the weights as snapshots at the steps highlighted
+    in B.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Figure 2.7\. Panel A: taking 200 moderate steps using gradient descent guides
+    the parameter settings to the local optimum. Annotations highlight the starting
+    weights and values after 20, 100, and 200 epochs. Panel B: a plot of the loss
+    as a function of the epoch, highlighting the loss at the same points. Panel C:
+    the function from `sizeMB` to `timeSec`, embodied by the fitted model after 10,
+    20, 100, and 200 epochs of training, repeated here for you to easily compare the
+    loss surface position and model output. See [codepen.io/tfjs-book/pen/JmerMM](http://codepen.io/tfjs-book/pen/JmerMM)
+    to play with this code.'
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](02fig07_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Our simple linear-regression model is the only model in this book where we
+    will have the luxury to visualize the gradient-descent process this vividly. But
+    when we encounter more complex models later, keep in mind that the essence of
+    gradient descent remains the same: it’s just iteratively stepping down the slope
+    of a complicated, high-dimensional surface, hoping that we will end up at a place
+    with very low loss.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In our initial effort, we used the default step size (determined by the *default
+    learning rate*), but in looping over our limited data only 10 times, there weren’t
+    enough steps to reach the optimum; 200 steps were enough. In general, how do you
+    know how to set the learning rate, or how to know when training is done? There
+    are some helpful rules of thumb, which we will cover over the course of this book,
+    but there is no hard-and-fast rule that will always keep you out of trouble. If
+    we use too small a learning rate and end up with *too small* a step, we won’t
+    reach the optimum parameters within a reasonable amount of time. Conversely, if
+    we use too large a learning rate and therefore *too big* of a step, we will completely
+    skip over the minimum and may even end up with higher loss than the place we left.
+    This will cause our model’s parameters to oscillate wildly around the optimum
+    instead of approaching it quickly in a straightforward way. [Figure 2.8](#ch02fig08)
+    illustrates what happens when our gradient step is too large. In more extreme
+    cases, large learning rates will cause the parameter values to diverge and go
+    to infinity, which will in turn generate NaN (not-a-number) values in the weights,
+    completely ruining your model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 2.8\. When the learning rate is too high, the gradient step will be too
+    large, and the new parameters may be worse than the old ones. This could lead
+    to oscillating behavior or some other instability resulting in infinities or NaNs.
+    You can try increasing the learning rate in the CodePen code to 0.5 or higher
+    to see this behavior.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](02fig08_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: '2.2.2\. Backpropagation: Inside gradient descent'
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: In the previous section, we explained how the step size of weight updates affects
+    the process of gradient descent. However, we haven’t discussed how the *directions*
+    of the updates are computed. The directions are critical to the neural network’s
+    learning process. They are determined by the gradients with respect to the weights,
+    and the algorithm for computing the gradients is called *backpropagation*. Invented
+    in the 1960s, backpropagation is one of the foundations of neural networks and
+    deep learning. In this section, we will use a simple example to show how backpropagation
+    works. Note that this section is for readers who wish to get an understanding
+    of backpropagation. It is not necessary if you only wish to apply the algorithm
+    using TensorFlow.js, because these mechanisms are all hidden nicely under the
+    `tf.Model.fit()` API; you may skip this section and continue reading at [section
+    2.3](#ch02lev1sec3).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Consider the simple model linear model
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'where `x` is the input feature and `y’` is the predicted output, and `v` is
+    the only weight parameter of the model to be updated during backpropagation. Suppose
+    we are using the squared error as the loss function; we then have the following
+    relation between `loss`, `v`, `x`, and `y` (the actual target value):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Let’s assume the following concrete values: the two inputs are `x = 2` and
+    `y = 5`, and the weight value is `v = 0`. The loss can then be calculated as 25\.
+    This is shown step-by-step in [figure 2.9](#ch02fig09). Each gray square in panel
+    A represents an input (that is, the `x` and the `y`). Each white box is an operation.
+    There are a total of three operations. The edges connecting the operations (and
+    the one that connects the tunable weight `v` with the first operation) are labeled
+    `e[1]`, `e[2]`, and `e[3]`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Figure 2.9\. Illustrating the backpropagation algorithm through a simple linear
+    model with only one updatable weight (`v`). Panel A: forward pass on the model—the
+    loss value is calculated from the weight (`v`) and the inputs (`x` and `y`). Panel
+    B: backward pass—the gradient of loss with respect to `v` is calculated step-by-step,
+    from the loss to `v`.'
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](02fig09_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'An important step of backpropagation is to determine the following quantity:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Assuming everything else (*`x` *and* `y` *in this case) stays the same, how
+    much change in the loss value will we get if* `v` *is increased by a unit amount?*'
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: 'This quantity is referred to as *the gradient of loss with respect to* `v`.
+    Why do we need this gradient? Because once we have it, we can alter `v` in the
+    direction *opposite* to it, so we can get a decrease in the loss value. Note that
+    we do not need the gradient of loss with respect to `x` or `y`, because `x` and
+    `y` don’t need to be updated: they are the input data and are fixed.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This gradient is computed step-by-step, starting from the loss value and going
+    back toward the variable `v`, as illustrated in panel B of [figure 2.9](#ch02fig09).
+    The direction in which the computation is carried out is the reason why this algorithm
+    is called “backpropagation.” Let’s walk through the steps. Each of the following
+    steps corresponds to an arrow in the figure:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: At the edge labeled `loss`, we start from a gradient value of 1\. This is making
+    the trivial point, “a unit increase in `loss` corresponds to a unit increase in
+    `loss` itself.”
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'At the edge labeled `e[3]`, we calculate the gradient of loss with respect
+    to unit change of the current value at `e[3]`. Because the intervening operation
+    is a square, and from basic calculus we know that the derivative (gradient in
+    the one-variable case) of `(e[3])²` with respect to `e[3]` is `2 * e[3]`, we get
+    a gradient value of `2 * -5 = -10`. The value `-`10 is multiplied with the gradient
+    from before (that is, 1) to obtain the gradient on edge `e[3]`: `-`10\. This is
+    the amount of increase in loss we’ll get if `e[3]` is increased by 1\. As you
+    may have observed, the rule that we use to go from the gradient of the loss with
+    respect to one edge to the one with respect to the next edge is to multiply the
+    previous gradient with the gradient calculated locally at the current node. This
+    rule is sometimes referred to as the *chain rule*.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: At edge `e[2]`, we calculate the gradient of `e[3]` with respect to `e[2]`.
+    Because this is a simple `add` operation, the gradient is simply 1, regardless
+    of the other input value (`-y`). Multiplying this 1 with the gradient on edge
+    `e[3]`, we get the gradient on edge `e[2]`, that is, `-`10.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'At edge `e[1]`, we calculate the gradient of `e[2]` with respect to `e[1]`.
+    The operation here is a multiplication between `x` and `v`, that is, `x * v`.
+    So, the gradient of `e[2]` with respect to `e[1]` (that is, with respect to `v`)
+    is `x`, or 2\. The value of 2 is multiplied with the gradient on edge `e[2]` to
+    get the final gradient: `2 * -10 = -20`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Up to this point, we have obtained the gradient of loss with respect to `v:`
+    it is `-`20\. In order to apply gradient descent, we need to multiply the negative
+    of this gradient with the learning rate. Suppose the learning rate is 0.01\. Then
+    we get a gradient update of
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This is the update we will apply to `v` in this step of training:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: As you can see, because we have `x = 2` and `y = 5`, and the function to be
+    fit is `y’ = v * x,` the optimal value of `v` is `5/2 = 2.5`. After one step of
+    training, the value of `v` changes from 0 to 0.2\. In other words, the weight
+    `v` gets a little closer to the desired value. It will get closer and closer in
+    subsequent training steps (ignoring any noise in the training data), which will
+    be based on the same backpropagation algorithm previously described.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The prior example is made intentionally simple so that it’s easy to follow.
+    Even though the example captures the essence of backpropagation, the backpropagation
+    that happens in actual neural network training is different from it in the following
+    aspects:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Instead of providing a simple training example (`x = 2` and `y = 5`, in our
+    case), usually a batch of many input examples are provided simultaneously. The
+    loss value used to derive the gradient is an arithmetic mean of the loss values
+    for all the individual examples.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The variables being updated generally have many more elements. So, instead of
+    doing a simple, one-variable derivative as we just did, matrix calculus is often
+    involved.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Instead of having to calculate the gradient for only one variable, multiple
+    variables are generally involved. [Figure 2.10](#ch02fig10) shows an example,
+    which is a slightly more complex linear model with two variables to optimize.
+    In addition to `k`, the model has a bias term: `y’ = k * x + b`. Here, there are
+    two gradients to compute, one for `k` and one for `b`. Both paths of backpropagation
+    start from the loss. They share some common edges and form a tree-like structure.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Figure 2.10\. Schematic drawing showing backpropagation from loss to two updatable
+    weights (`k` and `b`).
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](02fig10_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Our treatment of backpropagation in this section is a casual and high-level
+    one. If you wish to gain a deeper understanding of the math and algorithms of
+    backpropagation, refer to the links in [info box 2.2](#ch02sb02).
+  prefs: []
+  type: TYPE_NORMAL
+- en: At this point, you should have a pretty good understanding of what happens when
+    fitting a simple model to training data, so let’s put away our tiny download-time
+    prediction problem and use TensorFlow.js to tackle something a bit more challenging.
+    In the next section, we’ll build a model to accurately predict the price of real
+    estate from multiple input features simultaneously.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '|  |'
+  prefs: []
+  type: TYPE_TB
+- en: '**Further reading on gradient descent and backpropagation**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The differential calculus behind optimizing neural networks is definitely interesting
+    and gives insight into how these algorithms behave; but beyond the basics, it
+    is definitely *not* a requirement for the machine-learning practitioner, in the
+    same way that understanding the intricacies of the TCP/IP protocol is useful but
+    not critical to understanding how to build a modern web application. We invite
+    the curious reader to explore the excellent resources here to build a deeper understanding
+    of the mathematics of gradient-based optimization in networks:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Backpropagation demo scrollytelling illustration: [http://mng.bz/2J4g](http://mng.bz/2J4g)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Stanford CS231 lecture 4 course notes on backpropagation: [http://cs231n.github.io/optimization-2/](http://cs231n.github.io/optimization-2/)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Andrej Karpathy’s “Hacker’s Guide to Neural Nets:” [http://karpathy.github.io/neuralnets/](http://karpathy.github.io/neuralnets/)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '|  |'
+  prefs: []
+  type: TYPE_TB
+- en: 2.3\. Linear regression with multiple input features
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: In our first example, we had just one input feature, `sizeMB`, with which to
+    predict our target, `timeSec`. A much more common scenario is to have multiple
+    input features, to not know exactly which ones are the most predictive and which
+    are only loosely related to the target, and to use them all simultaneously and
+    let the learning algorithm sort it out. In this section, we will tackle this more
+    complicated problem.
+  prefs: []
+  type: TYPE_NORMAL
+- en: By the end of this section, you will
+  prefs: []
+  type: TYPE_NORMAL
+- en: Understand how to build a model that takes in and learns from multiple input
+    features.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Use Yarn, Git, and the standard JavaScript project packaging structure to build
+    and run a web app with machine learning.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Know how to normalize data to stabilize the learning process.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Get a feel for using `tf.Model.fit()` callbacks to update a web UI while training.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 2.3.1\. The Boston Housing Prices dataset
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: The Boston Housing Prices dataset^([[4](#ch02fn4)]) is a collection of 500 simple
+    real-estate records collected in and around Boston, Massachusetts, in the late
+    1970s. It has been used as a standard dataset for introductory statistics and
+    machine-learning problems for decades. Each independent record in the dataset
+    includes numeric measurements of a Boston neighborhood, including, for example,
+    the typical size of homes, how far the region is from the closest highway, whether
+    the area has waterfront property, and so on. [Table 2.1](#ch02table01) provides
+    the precise ordered list of features, along with the average value of each feature.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ⁴
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: David Harrison and Daniel Rubinfeld, “Hedonic Housing Prices and the Demand
+    for Clean Air,” *Journal of Environmental Economics and Management*, vol. 5, 1978,
+    pp. 81–102, [http://mng.bz/1wvX](http://mng.bz/1wvX).
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Table 2.1\. Features of the Boston-housing dataset
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '| Index | Feature short name | Feature description | Mean value | Range (max
+    – min) |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- | --- | --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 0 | CRIM | Crime rate | 3.62 | 88.9 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 1 | ZN | Proportion of residential land zoned for lots over 25,000 sq. ft.
+    | 11.4 | 100 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 2 | INDUS | Proportion of nonretail business acres (industry) in town | 11.2
+    | 27.3 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 3 | CHAS | Whether or not the area is next to the Charles River | 0.0694
+    | 1 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 4 | NOX | Nitric oxide concentration (parts per 10 million) | 0.555 | 0.49
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 5 | RM | Average number of rooms per dwelling | 6.28 | 5.2 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 6 | AGE | Portion of owner-occupied units built before 1940 | 68.6 | 97.1
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 7 | DIS | Weighted distances to five Boston employment centers | 3.80 | 11.0
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 8 | RAD | Index of accessibility to radial highways | 9.55 | 23.0 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 9 | TAX | Tax rate per US$10,000 | 408.0 | 524.0 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 10 | PTRATIO | Pupil-teacher ratio | 18.5 | 9.40 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 11 | LSTAT | Percentage of working males without a high school education
+    | 12.7 | 36.2 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 12 | MEDV | Median value of owner-occupied homes in units of $1,000 | 22.5
+    | 45 |'
+  prefs: []
+  type: TYPE_TB
+- en: In this section, we will build, train, and evaluate a learning system to estimate
+    the median value of the house prices in a neighborhood (MEDV) given all the input
+    features from the neighborhood. You can imagine it as a system for estimating
+    the price of real estate from measurable neighborhood properties.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.3.2\. Getting and running the Boston-housing project from GitHub
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: Because this problem is a bit larger than the download-time prediction example
+    and has more moving pieces, we will begin by providing the solution in the form
+    of a working code repository, and then guide you through it. If you are already
+    an expert in the Git source-control workflow and npm/Yarn package management,
+    you may want to just skim this subsection quickly. More about basic JavaScript
+    project structure is provided in [info box 2.3](#ch02sb03).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We will begin by cloning the project repository from its source on GitHub^([[5](#ch02fn5)])
+    to get a copy of the HTML, JavaScript, and configuration files required for the
+    project. Except the simplest ones, which are hosted on CodePen, all the examples
+    in this book are collected within one of two Git repositories and then separated
+    by directory within the repository. The two repositories are tensorflow/tfjs-examples
+    and tensorflow/tfjs-models, both hosted at GitHub. The following commands will
+    clone the repository we need for this example locally and change the working directory
+    to the Boston-housing prediction project:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ⁵
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: The examples in this book are open source and are hosted at [github.com](http://github.com)
+    and [codepen.io](http://codepen.io). If you would like a refresher on how to use
+    Git source-control tooling, GitHhub has a well-made tutorial beginning at [https://help.github.com/articles/set-up-git](https://help.github.com/articles/set-up-git).
+    If you see a mistake or would like to help by clarifying something, you are welcome
+    to send in fixes via GitHub pull requests.
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: '|  |'
+  prefs: []
+  type: TYPE_TB
+- en: '**Basic JavaScript project structure of examples used in this book**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The standard project structure we will be using for the examples in this book
+    includes three important types of files. The first is HTML. The HTML files we
+    will be using will be bare bones and serve mostly as a basic structure to hold
+    a few components. Typically, there will be just one HTML file, titled index.html,
+    which will include a few `div` tags, perhaps a few UI elements, and a source tag
+    to pull in the JavaScript code, such as index.js.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The JavaScript code will usually be modularized into several files in order
+    to promote good readability and style. In the case of this Boston-housing project,
+    code dealing with updating visual elements resides in ui.js, and code for downloading
+    the data is in data.js. Both are referenced via `import` statements from index.js.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The third important file type we will be working with is the metadata package
+    .json file, a requirement from the npm package manager ([www.npmjs.com](http://www.npmjs.com)).
+    If you haven’t worked with npm or Yarn before, we recommend skimming the npm “getting
+    started” documentation at [https://docs.npmjs.com/about-npm](https://docs.npmjs.com/about-npm)
+    and becoming familiar enough to be able to build and run the example code. We
+    will be using Yarn as our package manager ([https://yarnpkg.com/en/](https://yarnpkg.com/en/)),
+    but you should be able to substitute npm for Yarn if it better suits your needs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Inside the repository, take note of the following important files:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*index.html*—The root HTML file, which provides the DOM root and calls to the
+    JavaScript scripts'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*index.js*—The root JavaScript file, which loads the data, defines the model
+    and the training loop, and specifies the UI elements'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*data.js*—Implementation of the structures necessary for downloading and accessing
+    the Boston-housing dataset'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*ui.js*—Implementation of the UI hooks for connecting UI elements to actions;
+    specification of the plot configuration'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*normalization.js*—Numeric routines for, for example, subtracting the mean
+    from the data'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*package.json*—Standard npm package definition describing which dependencies
+    are necessary for building and running this demo (such as TensorFlow.js!)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Note that we do not follow the standard practice of putting HTML files and JavaScript
+    files in type-specific subdirectories. This pattern, while best practice for larger
+    repositories, obscures more than it clarifies for smaller examples like we will
+    be using for this book or those you can find at [github.com/tensorflow/tfjs-examples](http://github.com/tensorflow/tfjs-examples).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '|  |'
+  prefs: []
+  type: TYPE_TB
+- en: 'To run the demo, use Yarn:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: This should open a new tab in your browser pointing to a port on `localhost`,
+    which will run the example. If your browser doesn’t automatically react, you can
+    navigate to the URL output on the command line. Clicking the button labeled Train
+    Linear Regressor will trigger the routine to build a linear model and fit it to
+    the Boston-housing data, and then output an animated graph of the loss on the
+    training and testing datasets after each epoch, as [figure 2.11](#ch02fig11) illustrates.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 2.11\. The Boston-housing linear-regression example from tfjs-examples
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](02fig11_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: The rest of this section will go through the important points in the construction
+    of this Boston-housing linear-regression web app demo. We will first review how
+    the data is collected and processed so as to work with TensorFlow.js. We will
+    then focus on the construction, training, and evaluation of the model; and, finally,
+    we will show how to use the model for live predictions on the web page.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.3.3\. Accessing the Boston-housing data
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'In our first project, in [listing 2.1](#ch02ex01), we hard-coded our data as
+    JavaScript arrays and converted it into tensors using the `tf.tensor2d` function.
+    Hard-coding is fine for a little demo but clearly doesn’t scale to larger applications.
+    In general, JavaScript developers will find that their data is located in some
+    serialized format at some URL (which may be local). For instance, the Boston-housing
+    data is publicly and freely available in CSV format from the Google Cloud at the
+    following URLs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://storage.googleapis.com/tfjs-examples/multivariate-linear-regression/data/train-data.csv](https://storage.googleapis.com/tfjs-examples/multivariate-linear-regression/data/train-data.csv)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[https://storage.googleapis.com/tfjs-examples/multivariate-linear-regression/data/train-target.csv](https://storage.googleapis.com/tfjs-examples/multivariate-linear-regression/data/train-target.csv)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[https://storage.googleapis.com/tfjs-examples/multivariate-linear-regression/data/test-data.csv](https://storage.googleapis.com/tfjs-examples/multivariate-linear-regression/data/test-data.csv)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[https://storage.googleapis.com/tfjs-examples/multivariate-linear-regression/data/test-target.csv](https://storage.googleapis.com/tfjs-examples/multivariate-linear-regression/data/test-target.csv)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The data has been presplit by randomly assigning samples into training and testing
+    portions. About two-thirds of the samples are in the training split, and the remaining
+    one-third are reserved for independently evaluating the trained model. Additionally,
+    for each split, the target feature has been separated into a CSV file apart from
+    the other features, resulting in the four file names listed in [table 2.2](#ch02table02).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Table 2.2\. File names by split and contents for the Boston-housing dataset
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '|   |   | Features (12 numbers) | Target (1 number) |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- | --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| **Train-test split** | **Training** | train-data.csv | train-target.csv |'
+  prefs: []
+  type: TYPE_TB
+- en: '|   | **Testing** | test-data.csv | test-target.csv |'
+  prefs: []
+  type: TYPE_TB
+- en: In order to pull these into our application, we will need to be able to download
+    this data and convert it into a tensor of the appropriate type and shape. The
+    Boston-housing project defines a class `BostonHousingDataset` in data.js for this
+    purpose. This class abstracts away the dataset streaming operation, providing
+    an API to retrieve the raw data as numeric matrices. Internally, the class uses
+    the public open source Papa Parse library ([www.papaparse.com](http://www.papaparse.com))
+    to stream and parse the remote CSV files. Once the file has been loaded and parsed,
+    the library returns an array of arrays of numbers. It is then converted into a
+    tensor using the same API as in the first example, as per the following listing,
+    a slightly trimmed-down sample from `index.js focused on the relevant bits.`
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 2.7\. Converting the Boston-housing data to tensors in index.js
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: 2.3.4\. Precisely defining the Boston-housing problem
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: Now that we have access to our data in the form we want it, it is a good time
+    to clarify our task more precisely. We said we would like to predict the MEDV
+    from the other fields, but how will we decide if we’re doing a good job? How can
+    we distinguish a good model from an even better one?
+  prefs: []
+  type: TYPE_NORMAL
+- en: The metric we used in our first example, `meanAbsoluteError`, counts all mistakes
+    equally. If there were only 10 samples, and we made predictions for all 10, and
+    we were exactly correct on 9 of them but off by 30 on the 10th sample, the `meanAbsoluteError`
+    would be 3 (because 30/10 is 3). If, instead, our predictions were off by 3 on
+    each and every sample, the `meanAbsoluteError` would still be 3\. This “equality
+    of mistakes” principle might seem like the only obviously correct choice, but
+    there are good reasons for picking loss metrics other than `meanAbsoluteError`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Another option is to weight large errors more than small errors. We could, instead
+    of taking the average value of the absolute error, take the average value of the
+    *squared* error.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Continuing the case study with the 10 samples, this mean squared error (MSE)
+    approach sees a lower loss in being off by 3 on every example (10 × 3² = 90) than
+    being off by 30 on just one example (1 × 30² = 900). Because of the sensitivity
+    to large mistakes, squared error can be more sensitive to sample outliers than
+    absolute error. An optimizer fitting models to minimize MSE will prefer models
+    that systematically make small mistakes over models that occasionally give very
+    bad estimates. Obviously, both error measures would prefer models that make no
+    mistakes at all! However, if your application might be sensitive to very incorrect
+    outliers, MSE could be a better choice than MAE. There are other technical reasons
+    why you might select MSE or MAE, but they aren’t important at this moment. In
+    this example, we will use MSE for variety, but MAE would also suffice.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Before we continue, we should find a baseline estimate of the loss. If we don’t
+    know the error from a very simple estimate, then we are not equipped to evaluate
+    it from a more complicated model. We will use the average real-estate price as
+    a stand-in for our “best naive guess” and calculate what the error would be from
+    always guessing that value.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 2.8\. Calculating baseline loss of guessing the mean price
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** Calculates the average price'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***2*** Calculates the mean squared error on the test data. The sub(), pow,
+    and mean() calls are the steps of calculating the mean squared error.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***3*** Prints out the value of the loss'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Because TensorFlow.js optimizes its computation by scheduling on the GPU, tensors
+    might not always be accessible to the CPU. The calls to `dataSync` in [listing
+    2.8](#ch02ex08) tell TensorFlow.js to finish computing the tensor and pull the
+    value from the GPU into the CPU, so it can be printed out or otherwise shared
+    with a non-TensorFlow operation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When executed, the code in [listing 2.8](#ch02ex08) yields the following at
+    the console:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: This tells us that the naive error rate is approximately 85.58\. If we were
+    to build a model that always output 22.77, this model would achieve an MSE of
+    85.58 on the test data. Again, notice that we calculate the metric on the training
+    data and evaluate it on the test data to avoid unfair bias.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The average *squared* error is 85.58, so we should take the square root to get
+    the average error. The square root of 85.58 is about 9.25\. Thus, we can say that
+    we expect our (constant) estimate to be off (above or below) by about 9.25 on
+    average. Since the values, as per [table 2.1](#ch02table01), are in thousands
+    of US dollars, estimating a constant means we will be off by about US$9,250\.
+    If this were good enough for our application, we could stop here! The wise machine-learning
+    practitioner knows when to avoid unnecessary complexity. Let’s assume that our
+    price estimator application needs to be closer than this. We will proceed by fitting
+    a linear model to our data to see if we can achieve a better MSE than 85.58.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.3.5\. A slight diversion into data normalization
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: Looking at the Boston-housing features, we see a broad range of values. NOX
+    ranges between 0.4 and 0.9, while TAX goes from 180 to 711\. To fit a linear regression,
+    the optimizer will be attempting to find a weight for each feature such that the
+    sum of the features times the weights will approximately equal the housing price.
+    Recall that to find these weights, the optimizer is hunting around, following
+    a gradient in the weight space. If some features are scaled very differently from
+    others, then certain weights will be much more sensitive than others. A very small
+    move in one direction will change the output more than a very large move in a
+    different direction. This can cause instability and makes it difficult to fit
+    the model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To counteract this, we will first *normalize* our data. This means that we will
+    scale our features so that they have zero mean and unit standard deviation. This
+    type of normalization is common and may also be referred to as *standard transformation*
+    or *z-score normalization*. The algorithm for doing this is simple—we first calculate
+    the mean of each feature and subtract it from the original value so that the feature
+    has an average value of zero. We then calculate the feature’s standard deviation
+    with the mean value subtracted and do a division by that. In pseudo-code,
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: For instance, when the feature is `[10, 20, 30, 40]`, the normalized version
+    would be approximately `[-1.3, -0.4, 0.4, 1.3]`, which clearly has a mean of zero;
+    by eye, the standard deviation is about one. In the Boston-housing example, the
+    normalization code is factored out into a separate file, normalization.js, the
+    contents of which are in [listing 2.9](#ch02ex09). Here, we see two functions,
+    one to calculate the mean and standard deviation from a provided rank-2 tensor
+    and the other to normalize a tensor given the provided precalculated mean and
+    standard deviation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Listing 2.9\. Data normalization: zero mean, unit standard deviation'
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Let’s dig into these functions a little. The function `determineMeanAndStddev`
+    takes as input `data`, which is a rank-2 tensor. By convention, the first dimension
+    is the *samples* dimension: each index corresponds to an independent, unique sample.
+    The second dimension is the *feature* dimension: its 12 elements corresponds to
+    the 12 input features (like CRIM, ZN, INDUS, and so on). Since we want to calculate
+    the mean of each feature independently, we call'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `0` in this call means that the mean is to be taken over the 0th-index (first)
+    dimension. Recall that `data` is a rank-2 tensor and thus has two dimensions (or
+    axes). The first axis, the “batch” axis, is the sample dimension. As we move from
+    the first to the second to the third element along that axis, we refer to different
+    samples, or, in our case, different pieces of real estate. The second dimension
+    is the feature dimension. As we move from the first to the second element in this
+    dimension, we are referring to different features, such as CRIM, ZN, and INDUS,
+    from [table 2.1](#ch02table01). When we take the mean along axis 0, we are taking
+    the average over the sample direction. The result is a rank-1 tensor with only
+    the features axis remaining. We have the mean of each feature. If, instead, we
+    took the mean over axis 1, we would still get a rank-1 tensor, but the remaining
+    axis would be the sample dimension. The values would correspond to the mean value
+    of each piece of real estate, which wouldn’t make sense for our application. Be
+    careful when working with your axes that you are making your calculations in the
+    right direction, as this is a common source of errors.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Sure enough, if we set a breakpoint^([[6](#ch02fn6)]) here, we can use the
+    JavaScript console to explore the calculated mean values, and we see mean values
+    pretty close to what we calculated for the entire dataset. This means that our
+    training sample was representative:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ⁶
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: 'The instructions for setting a breakpoint in Chrome are here: [http://mng.bz/rPQJ](http://mng.bz/rPQJ).
+    If you need instructions for breakpoints in Firefox, Edge, or another browser,
+    you may simply search for “how to set a breakpoint” using your favorite search
+    engine.'
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In the next line, we subtract (using `tf.sub`) the mean from our data to obtain
+    a centered version of the data:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: If you weren’t paying 100% attention, this line might have hidden a delightful
+    little piece of magic. You see, `data` is a rank-2 tensor with shape `[333, 12]`,
+    while `dataMean` is a rank-1 tensor with shape `[12]`. In general, it is not possible
+    to subtract two tensors with different shapes. However, in this case, TensorFlow
+    uses broadcasting to expand the shape of the second tensor by, in effect, repeating
+    it 333 times, doing exactly what the user intended without making them spell it
+    out. This usability win comes in handy, but sometimes the rules for which shapes
+    are compatible for broadcasting can be a little confusing. If you are interested
+    in the details of broadcasting, dive right into [info box 2.4](#ch02sb04).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The next few lines of the `determineMeanAndStddev` function hold no new surprises:
+    `tf.square()` multiplies each element by itself, while `tf.sqrt()` takes the square
+    root of the elements. The detailed API for each method is documented at the TensorFlow.js
+    API reference, [https://js.tensorflow.org/api/latest/](https://js.tensorflow.org/api/latest/).
+    The documentation page also has live, editable widgets that allow you to explore
+    how the functions work with your own parameter values, as illustrated in [figure
+    2.12](#ch02fig12).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 2.12\. The TensorFlow.js API documentation at [js.tensorflow.org](http://js.tensorflow.org)
+    allows you to explore and interact with the TensorFlow API right within the documentation.
+    This makes it simple and fast to understand functional uses and tricky edge cases.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](02fig12_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'In this example, we’ve written our code prioritizing the clarity of the exposition,
+    but the `determineMeanAndStddev` function can be expressed much more concisely:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: You should be able to see that TensorFlow allows us to express quite a lot of
+    numerical computation without much boilerplate code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '|  |'
+  prefs: []
+  type: TYPE_TB
+- en: '**Broadcasting**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Consider a tensor operation like `C = tf.someOperation(A, B)`, where `A` and
+    `B` are tensors. When possible, and if there’s no ambiguity, the smaller tensor
+    will be broadcast to match the shape of the larger tensor. Broadcasting consists
+    of two steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Axes (called *broadcast axes*) are added to the smaller tensor to match the
+    rank of the larger tensor.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The smaller tensor is repeated alongside these new axes to match the full shape
+    of the larger tensor.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: In terms of implementation, no new tensor is actually created because that would
+    be terribly inefficient. The repetition operation is entirely virtual—it happens
+    at the algorithmic level rather than the memory level. But thinking of the smaller
+    tensor being repeated along the new axis is a helpful mental model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'With broadcasting, you can generally apply two-tensor, element-wise operations
+    if one tensor has shape `(a, b, ..., n, n + 1, ... m)` and the other has shape
+    `(n, n + 1, ... , m)`. The broadcasting will then automatically happen for axis
+    `a` through `n - 1`. For instance, the following example applies the element-wise
+    `maximum` operation on two random tensors of different shapes via broadcasting:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** x is a random tensor with shape [64, 3, 11, 9].'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***2*** y is a random tensor with shape [11, 9].'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***3*** The output z has shape [64, 3, 11, 9] like x.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '|  |'
+  prefs: []
+  type: TYPE_TB
+- en: 2.3.6\. Linear regression on the Boston-housing data
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'Our data is normalized, and we have done the due diligence data work to calculate
+    a reasonable baseline—the next step is to build and fit a model to see if we can
+    outperform the baseline. In [listing 2.10](#ch02ex10), we define a linear-regression
+    model like we did in [section 2.1](#ch02lev1sec1) (from index.js). The code is
+    remarkably similar; the only difference we see from the download-time prediction
+    model is in the `inputShape` configuration, which now accepts vectors of length
+    12 instead of 1\. The single dense layer still has `units: 1`, indicating that
+    a single number is the output.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 2.10\. Defining a linear-regression model for Boston-housing
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: Recall that after our model is defined, but before we begin training, we must
+    specify the loss and optimizer via a call to `model.compile`. In [listing 2.11](#ch02ex11),
+    we see that the `'meanSquaredError'` loss is specified and that the optimizer
+    is using a customized learning rate. In our previous example, the optimizer parameter
+    was set to the string `'sgd'`, but now it is `tf.train.sgd(LEARNING_RATE)`. This
+    factory function will return an object representing the stochastic gradient descent
+    optimization algorithm, but parameterized with our custom learning rate. This
+    is a common pattern in TensorFlow.js, borrowed from Keras, and you will see it
+    adopted for many configurable options. For standard, well-known default parameters,
+    a string sentinel value can substitute for the required object type, and TensorFlow.js
+    will substitute the string for the required object with good default parameters.
+    In this case, `'sgd'` would be replaced with `tf.train.sgd(0.01)`. When additional
+    customizations are necessary, the user can build the object via the factory function
+    and provide the required custom value. This allows code to be concise in most
+    cases but allows the power user to override default behaviors when needed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 2.11\. Model compilation for Boston-housing (from index.js)
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now we can train our model with the training dataset. In [listings 2.12](#ch02ex12)
+    through [2.14](#ch02ex14), we’ll use some additional features of the `model.fit()`
+    call, but essentially it’s doing the same thing as in [figure 2.6](#ch02fig06).
+    At each step, it selects a number of new samples from the features (`tensors.trainFeatures`)
+    and targets (`tensors.trainTarget`), calculates the loss, and then updates the
+    internal weights to reduce that loss. The process will repeat for `NUM_EPOCHS`
+    complete passes through the training data and will select `BATCH_SIZE` samples
+    at each step.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 2.12\. Training our model on the Boston-housing data
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the Boston-housing web app, we illustrate a graph of the training loss as
+    the model trains. This requires using the `model.fit()` callback feature to update
+    the UI. The `model.fit()` callback API allows the user to provide callback functions,
+    which will be executed at specific events. The complete list of callback triggers,
+    as of version 0.12.0, is `onTrainBegin`, `onTrainEnd`, `onEpochBegin`, `onEpochEnd`,
+    `onBatchBegin`, and `onBatchEnd`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 2.13\. Callbacks in `model.fit()`
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: One last new customization introduced here is to make use of validation data.
+    Validation is a machine-learning concept worth a bit of explanation. In the earlier
+    downloading-time example, we separated our training data from our testing data
+    because we wanted an unbiased estimate of how our model will perform on new, unseen
+    data. Typically what happens, though, is that there is another split called *validation
+    data*. Validation data is separate from both the training data and the testing
+    data. What is validation data used for? The machine-learning engineer will see
+    the result on the validation data and use that result to change certain configurations
+    of the model^([[7](#ch02fn7)]) in order to improve the accuracy on the validation
+    data. This is all well and good. However, if this cycle is done enough times,
+    then we are in effect tuning on the validation data. If we use the same validation
+    data to evaluate the model’s final accuracy, the result of the final evaluation
+    will no longer be generalizable, in the sense that the model has already seen
+    the data, and the result of the evaluation isn’t guaranteed to reflect how the
+    model will perform on unseen data in the future. This is the purpose of separating
+    validation out from testing data. The idea is that we will fit our model on the
+    training data and adjust its hyperparameters based on assessments on the validation
+    data. When we are all done and satisfied with the process, we will evaluate the
+    model just one time on the testing data for a final, generalizable estimate of
+    performance.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ⁷
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Examples of those configurations include the number of layers in the model,
+    the sizes of the layers, the type of optimizer and learning rate to use during
+    training, and so forth. They are referred to as the model’s *hyperparameters*,
+    which we will cover in greater detail in [section 3.1.2](kindle_split_014.html#ch03lev2sec2)
+    of the next chapter.
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: 'Let’s summarize what the training, validation, and testing sets are and how
+    to use them in TensorFlow.js. Not all projects will make use of all three types
+    of data. Frequently, quick explorations or research projects will use only training
+    and validation data and not reserve a set of “pure” data for the test. While less
+    rigorous, this is sometimes the best use of limited resources:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Training data*—For fitting the model weights with gradient descent'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Usage in TensorFlow.js*: Typically, training data is employed using the main
+    arguments (`x` and `y`) for calls to `Model.fit(x, y, config)`.'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Validation data*—For selecting the model structure and hyperparameters'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Usage in TensorFlow.js*: `Model.fit()` has two ways of specifying validation
+    data, both as parameters to the `config` argument. If you, the user, have explicit
+    data to use for validation, this may be specified as `config.validationData`.
+    If, instead, you wish the framework to split some of the training data off and
+    use it as validation data, specify the fraction to use in `config.validationSplit`.
+    The framework will take care to not use the validation data to train the model,
+    so there is no overlap.'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Testing data*—For a final, unbiased estimate of model performance'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Usage in TensorFlow.js*: Evaluation data is exposed to the system by passing
+    it in as the `x` and `y` arguments to `Model.evaluate(x, y, config)`.'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'In [listing 2.14](#ch02ex14), validation loss is calculated along with training
+    loss. The `validationSplit: 0.2` field instructs the `model.fit()` machinery to
+    select the last 20% of the training data to use as validation data. This data
+    will not be used for training (it does not affect gradient descent).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 2.14\. Including validation data in `model.fit()`
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: Training this model to 200 epochs takes approximately 11 seconds in the browser
+    on a modern laptop. We can now evaluate the model on our test set to see if it’s
+    any better than the baseline. The next listing shows how to use `model.evaluate()`
+    to collect the performance of the model on our reserved test data and then call
+    into our custom UI routines to update the view.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 2.15\. Evaluating our model on the test data and updating the UI (from
+    index.js)
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here, `model.evaluate()` returns a scalar (recall, a rank-0 tensor) containing
+    the loss computed over the test set.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Because of the randomness involved in gradient descent, you might get different
+    results, but the following results are typical:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Final train-set loss: 21.9864'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Final validation-set loss: 31.1396'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Test-set loss: 25.3206'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Baseline loss: 85.58'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: We see from this that our final, unbiased estimate of our error is about 25.3,
+    which is much better than our naive baseline of 85.6\. Recall that our error is
+    being calculated using `meanSquaredError`. Taking the square root, we see that
+    the baseline estimate was typically off by more than 9.2, while the linear model
+    is off by only about 5.0\. Quite a large improvement! If we were the only ones
+    in the world with access to this info, we could be the best Boston real-estate
+    investors in 1978! Unless, somehow, someone were able to build an even more accurate
+    estimate . . .
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you have let your curiosity get ahead of you and clicked Train Neural Network
+    Regressor, you already know that *much* better estimates are possible. In the
+    next chapter, we will introduce nonlinear deep models to show how such feats are
+    possible.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.4\. How to interpret your model
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Now that we’ve trained our model, and it’s able to make reasonable predictions,
+    it’s natural to wonder what it has learned. Is there any way to peek inside the
+    model to see how it understands the data? When the model predicts a specific price
+    for an input, is it possible for you to find an understandable explanation for
+    why it comes up with that value? For the general case of large deep networks,
+    model understanding—also known as model interpretability—is still an area of active
+    research, filling many posters and talks at academic conferences. But for this
+    simple linear-regression model, it is quite simple.
+  prefs: []
+  type: TYPE_NORMAL
+- en: By the end of this section, you will
+  prefs: []
+  type: TYPE_NORMAL
+- en: Be able to extract the learned weights from a model.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Be able to interpret those weights and weigh them against your intuitions for
+    what the weights *should* be.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 2.4.1\. Extracting meaning from learned weights
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'The simple linear model we built in [section 2.3](#ch02lev1sec3) contains 13
+    learned parameters, contained in a kernel and a bias, just like our first linear
+    model in [section 2.1.3](#ch02lev2sec3):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: The values of the kernel and bias are both learned while fitting the model.
+    In contrast to the *scalar* linear function learned in [section 2.1.3](#ch02lev2sec3),
+    here, the features and the kernel are both *vectors*, and the “`·`” sign indicates
+    the *inner product*, a generalization of scalar multiplication to vectors. The
+    inner product, also known as the *dot product*, is simply the sum of the products
+    of the matching elements. The pseudo-code in [listing 2.16](#ch02ex16) defines
+    the inner product more precisely.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We should take from this that there is a relationship between the elements of
+    the features and the elements of the kernel. For each individual feature element,
+    such as “Crime rate” and “Nitric oxide concentration,” as listed in [table 2.1](#ch02table01),
+    there is an associated learned number in the kernel. Each value tells us something
+    about what the model has learned about this feature and how the feature influences
+    the output.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 2.16\. Inner product pseudo-code
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: For instance, if the model learns that `kernel[i]` is positive, it means that
+    the output will be larger if the `feature[i]` value is larger. Vice versa, if
+    the model learns that `kernel[j]` is negative, then a larger value of `feature[j]`
+    reduces the predicted output. A learned value that is very small in magnitude
+    indicates that the model believes the associated feature has little impact on
+    the prediction, whereas a learned value with a large magnitude indicates that
+    the model places a heavy emphasis on the feature, and small changes in the feature
+    value will have a comparatively large impact on the prediction.^([[8](#ch02fn8)])
+  prefs: []
+  type: TYPE_NORMAL
+- en: ⁸
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Note that comparing magnitudes in this way is only possible if the features
+    have been normalized, as we have done for the Boston-housing dataset.
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: To make this concrete, the top five feature values, by absolute value, are printed
+    in [figure 2.13](#ch02fig13) for one run in the output area of the Boston-housing
+    example. Subsequent runs may learn different values due to the randomness of the
+    initialization. We can see that the values are negative for features we would
+    expect to reflect negatively on the price of real estate, such as the rate at
+    which local residents drop out of school and the distance of the real estate to
+    desirable working locations. Learned weights are positive for features we would
+    expect to correlate directly with the price, such as the number of rooms in the
+    property.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 2.13\. Ranked by absolute value, these are the top five weights learned
+    in one run of the linear model on the Boston-housing prediction problem. Note
+    the negative values for features that you would expect to reflect negatively on
+    the price of housing.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](02fig13.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 2.4.2\. Extracting internal weights from the model
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: The modular structure of the learned model makes it easy to extract the relevant
+    weights; we can access them directly, but there are a few API levels that need
+    to be reached through in order to get the raw values. It’s important to keep in
+    mind that, since the value may be on the GPU, and interdevice communication is
+    costly, requesting such values is asynchronous. The boldface code in [listing
+    2.17](#ch02ex17) is an addition to the `model.fit` callbacks, extending [listing
+    2.14](#ch02ex14) to illustrate the learned weights after each epoch. We will walk
+    through the API calls step-by-step.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Given the model, we first wish to access the correct layer. This is easy because
+    there is only one layer in this model, so we can get a handle to it at `model.layers[0]`.
+    Now that we have the layer, we can access the internal weights with `getWeights()`,
+    which returns an array of the weights. For the case of a dense layer, this will
+    always contain two weights, the kernel and the bias, in that order. Thus, we can
+    access the correct tensor at
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now that we have the right tensor, we can access its contents with a call to
+    its `data()` method. Due to the asynchronous nature of GPU ↔ CPU communication,
+    `data()` is asynchronous and returns a promise of the tensor’s value, not the
+    actual value. In [listing 2.17](#ch02ex17), a callback passed to the `then()`
+    method of the promise binds the tensor values to a variable called `kernelAsArr`.
+    If the `console.log()` statement is uncommented, statements like the following,
+    listing the values of the kernel, are logged to the console once per each epoch:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE44]'
+  prefs: []
+  type: TYPE_PRE
+- en: Listing 2.17\. Accessing internal model values
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE45]'
+  prefs: []
+  type: TYPE_PRE
+- en: 2.4.3\. Caveats on interpretability
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: The weights in [figure 2.13](#ch02fig13) tell a story. As a human reader, you
+    might look at this and say that the model has learned that the “Number of rooms
+    per house” feature positively correlates with the price output or that the real-estate
+    AGE feature, which is not listed due to its lower absolute magnitude, is of lower
+    importance than those first five features. Because of the way our minds like to
+    tell stories, it is common to take this too far and imagine these numbers say
+    more than the evidence supports. For instance, one way that this sort of analysis
+    can fail is if two input features are strongly correlated.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Consider a hypothetical example in which the same feature is included twice,
+    perhaps by accident. Call them FEAT1 and FEAT2. Imagine the weights learned for
+    the two features are 10 and –5\. You might be inclined to say that increasing
+    FEAT1 leads to larger outputs, while FEAT2 does the opposite. However, since the
+    features are equivalent, the model would output the exact same values if the weights
+    were reversed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Another caveat to be aware of is the difference between correlation and causality.
+    Imagine a simple model in which we wish to predict how hard it is raining outside
+    from how wet our roof is. If we had a measure of roof wetness, we could probably
+    make a prediction of how much rain there had been in the past hour. We could not,
+    however, splash water on the sensor to make it rain!
+  prefs: []
+  type: TYPE_NORMAL
+- en: Exercises
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The hard-coded time estimation problem in [section 2.1](#ch02lev1sec1) was selected
+    because the data is roughly linear. Other datasets will have different loss surfaces
+    and dynamics during fitting. You may want to try substituting your own data here
+    to explore how the model reacts. You may need to play with the learning rate,
+    initialization, or normalization to get the model to converge to something interesting.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: In [section 2.3.5](#ch02lev2sec14), we spent some time describing why normalization
+    is important and how to normalize the input data to have zero mean and unit variance.
+    You should be able to modify the example to remove the normalization and see that
+    the model no longer trains. You should also be able to modify the normalization
+    routine to have, for example, a mean of something other than 0 or a standard deviation
+    that is lower, but not as low. Some normalizations will work, and some will lead
+    to a model that never converges.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'It is well known that some features of the Boston Housing Prices dataset are
+    more *predictive* of the target than others. Some of the features are merely noise
+    in the sense that they don’t carry useful information for predicting housing prices.
+    If we were to remove all but one feature, which feature should we keep? What if
+    we were to keep two features: how can we select which ones? Play with the code
+    in the Boston-housing example to explore this.'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Describe how gradient descent allows for the optimization of a model by updating
+    weights in a better-than-random way.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The Boston-housing example prints out the top five weights by absolute magnitude.
+    Try modifying the code to print out the features associated with small weights.
+    Can you imagine why those weights are small? If someone were to ask you why those
+    weights were what they were, what could you tell them? What sorts of cautions
+    would you tell that person about how to interpret the values?
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: It is simple to build, train, and evaluate a simple machine-learning model in
+    five lines of JavaScript using TensorFlow.js.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Gradient descent, the basic algorithm structure behind deep learning, is conceptually
+    simple and really just means repeatedly updating model parameters in small steps
+    in the calculated direction that would most improve the model fit.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A model’s loss surface illustrates how well the model fits for a grid of parameter
+    values. The loss surface is not generally calculable because of the high-dimensionality
+    of the parameter space, but it’s illustrative to think about and gives intuition
+    to how machine learning works.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A single dense layer is sufficient to solve some simple problems and can achieve
+    reasonable performance on a real-estate pricing problem.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL

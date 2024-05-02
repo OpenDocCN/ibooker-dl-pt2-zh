@@ -1,0 +1,197 @@
+- en: 'B.3\. Memory management in TensorFlow.js: tf.dispose() and tf.tidy()'
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'In TensorFlow.js, if you deal directly with tensor objects, you need to perform
+    memory management on them. In particular, a tensor needs to be disposed after
+    creation and use, or it will continue to occupy the memory allocated for it. If
+    undisposed tensors become too many in number or too large in their total size,
+    they will eventually cause the browser tab to run out of WebGL memory or cause
+    the Node.js process to run out of system or GPU memory (depending on whether the
+    CPU or GPU version of tfjs-node is being used). TensorFlow.js does not perform
+    automatic garbage collection of user-created tensors.^([[5](#app02fn5)]) This
+    is because JavaScript does not support object finalization. TensorFlow.js provides
+    two functions for memory management: `tf.dispose()` and `tf.tidy()`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ⁵
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: However, the tensors created inside TensorFlow.js functions and object methods
+    are managed by the library itself, so you don’t need to worry about wrapping calls
+    to such functions or methods in `tf.tidy()`. Examples of such functions include
+    `tf.confusionMatrix()`, `tf.Model.predict()`, and `tf.Model.fit()`.
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: 'For example, consider an example in which you perform repeated inference on
+    a TensorFlow.js model using a `for` loop:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** Loads a pretrained model from the web'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***2*** Creates a dummy input tensor'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***3*** Checks the number of currently allocated tensors'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The output will look like
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: As you can see in the console log, every time `model.predict()` is called, it
+    generates an additional tensor, which doesn’t get disposed after the iteration
+    ends. If the `for` loop is allowed to run for enough iterations, it will eventually
+    cause an out-of-memory error. This is because the output tensor `y` is not disposed
+    properly, leading to a tensor memory leak. There are two ways to fix this memory
+    leak.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the first approach, you can call `tf.dispose()` on the output tensor when
+    it is no longer needed:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** Disposes the output tensor after its use'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'In the second approach, you can wrap the body of the `for` loop with `tf.tidy()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** tf.tidy() automatically disposes all tensors created within the function
+    passed to it except the tensors that are returned by the function.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'With either approach, you should see the number of allocated tensors become
+    constant over the iterations, indicating that there is no tensor memory leak anymore.
+    Which approach should you prefer? In general, you should use `tf.tidy()` (the
+    second approach), because it gets rid of the need to keep track of what tensors
+    to dispose. `tf.tidy()` is a smart function that disposes all tensors created
+    within the anonymous function passed to it as the argument (except those that
+    are returned by the function—more on that later), even for the tensors not bound
+    to any JavaScript objects. For example, suppose we modify the previous inference
+    code slightly in order to obtain the index of the winning class using `argMax()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When this code runs, you will see that instead of leaking one tensor per iteration,
+    it leaks two:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: Why are two tensors leaked per iteration? Well, the line
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'generates two new tensors. The first is the output of `model.predict()`, and
+    the second is the return value of `argMax()`. Neither of the tensors is bound
+    to any JavaScript object. They are used immediately after creation. The two tensors
+    are “lost” in the sense that there are no JavaScript objects you can use to refer
+    to them. Hence, `tf.dispose()` cannot be used to clean up the two tensors. However,
+    `tf.tidy()` can still be used to fix the memory leak, as it performs bookkeeping
+    on new tensors regardless of whether they are bound to JavaScript objects:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** tf.tidy() automatically disposes tensors created in the body of an
+    anonymous function passed to it as the argument, even when those tensors are not
+    bound to JavaScript objects'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The example usages of `tf.tidy()` operate on functions that do not return any
+    tensors. If the function returns tensors, you do not want them to be disposed
+    because they need to be used afterward. This situation is encountered frequently
+    when you write custom tensor operations by using the basic tensor operations provided
+    by TensorFlow.js. For example, suppose we want to write a function that calculates
+    the normalized value of the input tensor—that is, a tensor with the mean subtracted
+    and the standard deviation scaled to 1:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'What is the problem with this implementation?^([[6](#app02fn6)]) In terms of
+    memory management, it leaks a total of three tensors: 1) the mean, 2) the SD,
+    and 3) a more subtle one: the return value of the `sub()` call. To fix the memory
+    leak, we wrap the body of the function with `tf.tidy()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ⁶
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: There are other problems with this implementation. For instance, it doesn’t
+    perform sanity checks on the input tensor to make sure it has at least two elements
+    so SD won’t be zero, which would lead to division by zero and infinite results.
+    But those problems are not directly related to the discussion here.
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Here, `tf.tidy()` does three things for us:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: It automatically disposes the tensors that are created in the anonymous function
+    but not returned by it, including all three leaks mentioned. We have seen this
+    in the previous examples.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: It detects that the output of the `div()` call is returned by the anonymous
+    function and hence will forward it to its own return value.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In the meantime, it will avoid disposing that particular tensor, so it can be
+    used outside the `tf.tidy()` call.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'As we can see, `tf.tidy()` is a smart and powerful function for memory management.
+    It is used extensively in the TensorFlow.js code base itself. You will also see
+    it many times throughout the examples in this book. However, it has the following
+    important limitation: the anonymous function passed to `tf.tidy()` as the argument
+    must *not* be async. If you have some async code that requires memory management,
+    you should use `tf.dispose()` and keep track of the to-be-disposed tensors manually
+    instead. In such cases, you can use `tf.memory().numTensor` to check the number
+    of leaked tensors. A good practice is to write unit tests that assert on the absence
+    of memory leaks.'
+  prefs: []
+  type: TYPE_NORMAL

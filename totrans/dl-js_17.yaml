@@ -1,0 +1,2412 @@
+- en: Chapter 9\. Deep learning for sequences and text
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '*This chapter covers*'
+  prefs: []
+  type: TYPE_NORMAL
+- en: How sequential data differs from nonsequential data
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Which deep-learning techniques are suitable for problems that involve sequential
+    data
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: How to represent text data in deep learning, including with one-hot encoding,
+    multi-hot encoding, and word embedding
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: What RNNs are and why they are suitable for sequential problems
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: What 1D convolution is and why it is an attractive alternative to RNNs
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The unique properties of sequence-to-sequence tasks and how to use the attention
+    mechanism to solve them
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'This chapter focuses on problems involving sequential data. The essence of
+    sequential data is the ordering of its elements. As you may have realized, we’ve
+    dealt with sequential data before. Specifically, the Jena-weather data we introduced
+    in [chapter 7](kindle_split_019.html#ch07) is sequential. The data can be represented
+    as an array of arrays of numbers. Order certainly matters for the outer array
+    because the measurements come in over time. If you reverse the order of the outer
+    array—for instance, a rising air-pressure trend becomes a falling one—it has completely
+    different implications if you are trying to predict future weather. Sequential
+    data is everywhere in life: stock prices, electrocardiogram (ECG) readings, strings
+    of characters in software code, consecutive frames of a video, and sequences of
+    actions taken by a robot. Contrast those with nonsequential data such as the iris
+    flowers in [chapter 3](kindle_split_014.html#ch03): it doesn’t matter if you alter
+    the order of the four numeric features (sepal and petal length and width).^([[1](#ch09fn1)])'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ¹
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Convince yourself that this is indeed the case in exercise 1 at the end of the
+    chapter.
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: The first part of the chapter will introduce a fascinating type of model we
+    mentioned in [chapter 1](kindle_split_011.html#ch01)—RNNs, or recurrent neural
+    networks, which are designed specifically to learn from sequential data. We will
+    build the intuition for what special features of RNNs make these models sensitive
+    to the ordering of elements and the information it bears.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The second part of the chapter will talk about a special kind of sequential
+    data: text, which is perhaps the most ubiquitous sequential data (especially in
+    the web environment!). We will start by examining how text is represented in deep
+    learning and how to apply RNNs on such representations. We will then move on to
+    1D convnets and talk about why they are also powerful at processing text and how
+    they can be attractive alternatives to RNNs for certain types of problems.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the last part of the chapter, we will go a step further and explore sequence-based
+    tasks that are slightly more complex than predicting a number or a class. In particular,
+    we will venture into sequence-to-sequence tasks, which involve predicting an output
+    sequence from an input one. We will use an example to illustrate how to solve
+    basic sequence-to-sequence tasks with a new model architecture called the *attention
+    mechanism*, which is becoming more and more important in the field of deep-learning-based
+    natural language processing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: By the end of this chapter, you should be familiar with common types of sequential
+    data in deep learning, how they are presented as tensors, and how to use TensorFlow.js
+    to write basic RNNs, 1D convnets, and attention networks to solve machine-learning
+    tasks involving sequential data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The layers and models you will see in this chapter are among the most complex
+    in this book. This is the cost that comes with their enhanced capacity for sequential-learning
+    tasks. You may find some of them hard to grasp the first time you read about them,
+    even though we strive to present them in a fashion that’s as intuitive as possible,
+    with the help of diagrams and pseudo-code. If that’s the case, try playing with
+    the example code and working through the exercises provided at the end of the
+    chapter. In our experience, the hands-on experience makes it much easier to internalize
+    complex concepts and architectures like the ones that appear in this chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '9.1\. Second attempt at weather prediction: Introducing RNNs'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The models we built for the Jena-weather problem in [chapter 8](kindle_split_020.html#ch08)
+    threw away the order information. In this section, we will tell you why that’s
+    the case and how we can bring the order information back by using RNNs. This will
+    allow us to achieve superior prediction accuracies in the temperature-prediction
+    task.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 9.1.1\. Why dense layers fail to model sequential order
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: Since we described the Jena-weather dataset in detail in the previous chapter,
+    we will go over the dataset and the related machine-learning task only briefly
+    here. The task involves predicting the temperature 24 hours from a certain moment
+    in time by using readings from 14 weather instruments (such as temperature, air
+    pressure, and wind speed) over a 10-day period leading up to the moment. The instrument
+    readings are taken at regular intervals of 10 minutes, but we downsample them
+    by a factor of 6 to once per hour for the sake of manageable model size and training
+    time. So, each training example comes with a feature tensor of shape `[240, 14]`,
+    where 240 is the number of time steps over the 10-day period, and 14 is the number
+    of different weather-instrument readings.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When we tried a linear-regression model and an MLP on the task in the previous
+    chapter, we flattened the 2D input features to 1D by using a `tf.layers.flatten`
+    layer (see [listing 8.2](kindle_split_020.html#ch08ex02) and [figure 8.2](kindle_split_020.html#ch08fig02)).
+    The flattening step was necessary because both the linear regressor and the MLP
+    used dense layers to handle the input data, and dense layers require the input
+    data to be 1D for each input example. This means that the information from all
+    the time steps is mixed together in a way that erases the significance of which
+    step comes first and which one next, which time step follows which other one,
+    how far apart two time steps are, and so forth. In other words, it doesn’t matter
+    how we order the 240 time steps when we flatten the 2D tensor of shape `[240,
+    14]` into the 1D tensor of shape `[3360]` as long as we are consistent between
+    training and inference. You can confirm this point experimentally in exercise
+    1 at the end of this chapter. But from a theoretical point of view, this lack
+    of sensitivity to the order of data elements can be understood in the following
+    way. At the core of a dense layer is a set of linear equations, each of which
+    multiplies every input feature value [*x*[1], *x*[2], …, *x[n]*] with a tunable
+    coefficient from the kernel [*k*[1], *k*[2], …, *k[n]*]:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: equation 9.1\.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](09eqa01.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: '[Figure 9.1](#ch09fig01) provides a visual representation of how a dense layer
+    works: the paths leading from the input elements to the output of the layer are
+    graphically symmetric with one another, reflecting the mathematical symmetry in
+    [equation 9.1](#ch09equ01). The symmetry is *undesirable* when we deal with sequential
+    data because it renders the model blind to the order among the elements.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 9.1\. The internal architecture of a dense layer. The multiplication
+    and addition performed by a dense layer is symmetric with respect to its inputs.
+    Contrast this with a simpleRNN layer ([figure 9.2](#ch09fig02)), which breaks
+    the symmetry by introducing step-by-step computation. Note that we assume the
+    input has only four elements and omit the bias terms for simplicity. Also, we
+    show the operations for only one output unit of the dense layer. The remaining
+    units are represented as the stack of obscured boxes in the background.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](09fig01_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'In fact, there is an easy way to show that our dense-layer-based approach (the
+    MLPs, even with regularization) did not provide a very good solution to the temperature-prediction
+    problem: comparing its accuracy with the accuracy we can obtain from a commonsense,
+    non-machine-learning approach.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: What is the commonsense approach we are speaking of? Predict the temperature
+    as the last temperature reading in the input features. To put this simply, just
+    pretend that the temperature 24 hours from now will be the same as the temperature
+    right now! This approach makes “gut sense” because we know from everyday experience
+    that the temperature tomorrow tends to be close to the temperature today (that
+    is, at exactly the same time of day). It is a very simple algorithm and gives
+    a reasonable guess that should beat all other similarly simple algorithms (such
+    as predicting the temperature as the temperature from 48 hours ago).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The jena-weather directory of tfjs-examples that we used in [chapter 8](kindle_split_020.html#ch08)
+    provides a command for you to assess the accuracy of this commonsense approach:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `yarn train-rnn` command calls the script train-rnn.js and performs computation
+    in the Node.js-based backend environment.^([[2](#ch09fn2)]) We will come back
+    to this mode of operation when we explore RNNs shortly. The command should give
+    you the following screen output:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ²
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: The code that implements this commonsense, non-machine-learning approach is
+    in the function named `getBaselineMeanAbsoluteError()` in jena-weather/models.js.
+    It uses the `forEachAsync()` method of the `Dataset` object to iterate through
+    all batches of the validation subset, compute the MAE loss for each batch, and
+    accumulate all the losses to obtain the final loss.
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: So, the simple non-machine-learning approach yields a mean absolute prediction
+    error of about 0.29 (in normalized terms), which is about equal to (if not slightly
+    better than) the best validation error we got from the MLP in [chapter 8](kindle_split_020.html#ch08)
+    (see [figure 8.4](kindle_split_020.html#ch08fig04)). In other words, the MLP,
+    with or without regularization, wasn’t able to beat the accuracy from the commonsense
+    baseline method reliably!
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Such observations are not uncommon in machine learning: it’s not always easy
+    for machine learning to beat a commonsense approach. In order to beat it, the
+    machine-learning model sometimes needs to be carefully designed or tuned through
+    hyperparameter optimization. Our observation also underlines how important it
+    is to create a non-machine-learning baseline for comparison when working on a
+    machine-learning problem. We certainly want to avoid wasting all the effort on
+    building a machine-learning algorithm that can’t even beat a much simpler and
+    computationally cheaper baseline! Can we beat the baseline in the temperature-prediction
+    problem? The answer is yes, and we will rely on RNNs to do that. Let’s now take
+    a look at how RNNs capture and process sequential order.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 9.1.2\. How RNNs model sequential order
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: Panel A of [figure 9.2](#ch09fig02) shows the internal structure of an RNN layer
+    by using a short, four-item sequence. There are several variants of RNN layers
+    out there, and the diagram shows the simplest variant, which is referred to as
+    simpleRNN and is available in TensorFlow.js as the `tf.layers.simpleRNN()` factory
+    function. We will talk about more complicated RNN variants later in this chapter,
+    but for now we will focus on simpleRNN.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 9.2\. The “unrolled” (panel A) and “rolled” (panel B) representations
+    of the internal structure of simpleRNN. The rolled view (panel B) represents the
+    same algorithm as the unrolled one, albeit in a more succinct form. It illustrates
+    simpleRNN’s sequential processing of input data in a more concise fashion. In
+    the rolled representation in panel B, the connection that goes back from output
+    (*y*) into the model itself is the reason why such layers are called *recurrent*.
+    As in [figure 9.1](#ch09fig01), we display only four input elements and omit the
+    bias terms for simplicity.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](09fig02_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: The diagram shows how the time slices of the input (*x*[1], *x*[2], *x*[3],
+    …) are processed step-by-step. At each step, *x[i]* is processed by a function
+    (*f*()), represented as the rectangular box at the center of the diagram. This
+    yields an output (*y[i]*) that gets combined with the next input slice (*x[i]*[+1])
+    as the input to the *f*() at the next step. It is important to note that even
+    though the diagram shows four separate boxes with function definitions in them,
+    they in fact represent the same function. This function (*f*()) is called the
+    *cell* of the RNN layer. It is used in an iterative fashion during the invocation
+    of the RNN layer. Therefore, an RNN layer can be viewed as “an RNN cell wrapped
+    in a `for` loop.”^([[3](#ch09fn3)])
+  prefs: []
+  type: TYPE_NORMAL
+- en: ³
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Quote attributed to Eugene Brevdo.
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: 'Comparing the structure of simpleRNN and that of the dense layer ([figure 9.1](#ch09fig01)),
+    we can see two major differences:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: SimpleRNN processes the input elements (time steps) one step at a time. This
+    reflects the sequential nature of the inputs, something a dense layer can’t do.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'In simpleRNN, the processing at every input time step generates an output (*y[i]*).
+    The output from a previous time step (for example, *y*[1]) is used by the layer
+    when it processes the next time step (such as *x*[2]). This is the reason behind
+    the “recurrent” part of the name RNN: the output from previous time steps flows
+    back and becomes an input for later time steps. Recurrence doesn’t happen in layer
+    types such as dense, conv2d, and maxPooling2d. Those layers don’t involve output
+    information flowing back and hence are referred to as *feedforward* layers.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Due to these unique features, simpleRNN breaks the symmetry between the input
+    elements. It is sensitive to the order of the input elements. If you reorder the
+    elements of a sequential input, the output will be altered as a result. This distinguishes
+    simpleRNN from a dense layer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Panel B of [figure 9.2](#ch09fig02) is a more abstract representation of simpleRNN.
+    It is referred to as a *rolled* RNN diagram, versus the *unrolled* diagram in
+    panel A, because it “rolls” all time steps into a single loop. The rolled diagram
+    corresponds nicely to a `for` loop in programming languages, which is actually
+    how simpleRNN and other types of RNNs are implemented under the hood in TensorFlow.js.
+    But instead of showing the real code, let’s look at the much shorter pseudo-code
+    for simpleRNN in the following listing, which you can view as the implementation
+    of the simpleRNN architecture shown in [figure 9.2](#ch09fig02). This will help
+    you focus on the essence of how the RNN layer works.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 9.1\. Pseudo-code for the internal computation of simpleRNN
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** y corresponds to the y in [figure 9.2](#ch09fig02). The state is initialized
+    to zeros in the beginning.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***2*** x corresponds to the x in [figure 9.2](#ch09fig02). The for loop iterates
+    over all time steps of the input sequence.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***3*** W and U are the weight matrices for the input and the state (that is,
+    the output that loops back and becomes the recurrent input), respectively. This
+    is also where the output for time step i becomes the state (recurrent input) for
+    time step i + 1.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In [listing 9.1](#ch09ex01), you can see that the output at time step `i` becomes
+    the “state” for the next time step (next iteration). *State* is an important concept
+    for RNNs. It is how an RNN “remembers” what happened in the steps of the input
+    sequence it has already seen. In the `for` loop, this memory state gets combined
+    with future input steps and becomes the new memory state. This gives the simpleRNN
+    the ability to react to the same input element differently depending on what elements
+    have appeared in the sequence before. This type of memory-based sensitivity is
+    at the heart of sequential processing. As a simple example, if you are trying
+    to decode Morse code (made of dots and dashes), the meaning of a dash depends
+    on the sequence of dots and dashes that go before (and after) it. As another example,
+    in English, the word *last* can have completely different meanings depending on
+    what words go before it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: SimpleRNN is appropriately named because its output and state are the same thing.
+    Later, we will explore more complex and powerful RNN architectures. Some of these
+    have output and state as two separate things; others even have multiple states.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Another thing worth noting about RNNs is that the `for` loop enables them to
+    process input sequences made of an arbitrary number of input steps. This is something
+    that can’t be done through flattening a sequential input and feeding it to a dense
+    layer because a dense layer can only take a fixed input shape.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Furthermore, the `for` loop reflects another important property of RNNs: *parameter
+    sharing*. What we mean by this is the fact that the same weight parameters (`W`
+    and `U`) are used in all time steps. The alternative is to have a unique value
+    of `W` (and `U`) for every time step. That would be undesirable because 1) it
+    limits the number of time steps that can be processed by the RNN, and 2) it leads
+    to a dramatic increase in the number of tunable parameters, which will increase
+    the amount of computation and the likelihood of overfitting during training. Therefore,
+    the RNN layers are similar to conv2d layers in convnets in that they use parameter
+    sharing to achieve efficient computation and protect against overfitting—although
+    the recurrent and conv2d layers achieve parameter sharing in different ways. While
+    conv2d layers exploit the translational invariance along spatial dimensions, RNN
+    layers exploit translational invariance along the *time* dimension.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Figure 9.2](#ch09fig02) shows what happens in a simpleRNN during inference
+    time (the forward pass). It doesn’t show how the weight parameters (`W` and `U`)
+    are updated during training (the backward pass). However, the training of RNNs
+    follows the same backpropagation rules that we introduced in [section 2.2.2](kindle_split_013.html#ch02lev2sec9)
+    ([figure 2.8](kindle_split_013.html#ch02fig08))—that is, starting from the loss,
+    backtracking the list of operations, taking their derivatives, and accumulating
+    gradient values through them. Mathematically, the backward pass on a recurrent
+    network is basically the same as that on a feedforward one. The only difference
+    is that the backward pass of an RNN layer goes backwards in time, on an unrolled
+    graph like the one in panel A of [figure 9.2](#ch09fig02). This is why the process
+    of training RNNs is sometimes referred to as *backpropagation through time* (BPTT).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: SimpleRNN in action
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: That’s enough abstract musing about simpleRNN and RNNs in general. Let’s now
+    look at how to create a simpleRNN layer and include it in a model object, so we
+    can use it to predict temperatures more accurately than before. The code in [listing
+    9.2](#ch09ex02) (excerpted from jena-weather/train-rnn.js) is how this is done.
+    For all the internal complexity of the simpleRNN layer, the model itself is fairly
+    simple. It has only two layers. The first one is simpleRNN, configured to have
+    32 units. The second one is a dense layer that uses the default linear activation
+    to generate continuous numerical predictions for the temperature. Note that because
+    the model starts with an RNN, it is no longer necessary to flatten the sequential
+    input (compare this with [listing 8.3](kindle_split_020.html#ch08ex03) in the
+    previous chapter, when we created MLPs for the same problem). In fact, if we put
+    a flatten layer before the simpleRNN layer, an error would be thrown because RNN
+    layers in TensorFlow.js expect their inputs to be at least 3D (including the batch
+    dimension).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 9.2\. Creating a simpleRNN-based model for the temperature-prediction
+    problem
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** The hard-coded unit count of the simpleRNN layer is a value that works
+    well, determined through hand-tuning of the hyperparameter.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***2*** The first layer of the model is a simpleRNN layer. There is no need
+    to flatten the sequential input, which has a shape of [null, 240, 14].'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***3*** We end the model with a dense layer with a single unit and the default
+    linear activation for the regression problem.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'To see the simpleRNN model in action, use the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: The RNN model is trained in the backend environment using tfjs-node. Due to
+    the amount of computation involved in the BPTT-based RNN training, it would be
+    much harder and slower, if not impossible, to train the same model in the resource-restricted
+    browser environment. If you have a CUDA environment set up properly, you can add
+    the `--gpu` flag to the command to get a further boost in training speed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `--logDir` flag in the previous command causes the model-training process
+    to log the loss values to the specified directory. You can load and plot the loss
+    curves in the browser using a tool called TensorBoard. [Figure 9.3](#ch09fig03)
+    is a screenshot from TensorBoard. At the level of JavaScript code, this is achieved
+    by configuring the `tf.LayersModel.fit()` call with a special callback that points
+    to the log directory. [Info box 9.1](#ch09sb01) contains further information on
+    how this is done.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 9.3\. MAE loss curves from the simpleRNN model built for the Jena-temperature-prediction
+    problem. This chart is a screenshot from TensorBoard serving the logs from the
+    Node.js-based training of the simpleRNN model.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](09fig03_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: '|  |'
+  prefs: []
+  type: TYPE_TB
+- en: '**Using the TensorBoard callbacks to monitor long-running model training in
+    Node.js**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In [chapter 8](kindle_split_020.html#ch08), we introduced callbacks from the
+    tfjs-vis library that help you monitor `tf.LayersModel.fit()` calls in the browser.
+    However, tfjs-vis is a browser-only library and is not applicable to Node.js.
+    By default, `tf.LayersModel.fit()` in tfjs-node (or tfjs-node-gpu) renders progress
+    bars and displays loss and timing metrics in the terminal. While this is lightweight
+    and informative, text and numbers are often a less intuitive and less visually
+    appealing way to monitor long-running model training than a GUI. For example,
+    small changes in the loss value over an extensive period of time, which is often
+    what we are looking for during late stages of model training, are much easier
+    to spot in a chart (with properly set scales and grids) than in a body of text.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Luckily, a tool called *TensorBoard* can help us in the backend environment.
+    TensorBoard was originally designed for TensorFlow (Python), but tfjs-node and
+    tfjs-node-gpu can write data in a compatible format that can be ingested by TensorBoard.
+    To log loss and metric values to TensorBoard from a `tf.LayersModel.fit()` or
+    `tf.LayersModel.fitDataset()` call, follow this pattern:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: These calls will write the loss values, along with any metrics configured during
+    the `compile()` call, to the directory /path/to/my/logdir. To view the logs in
+    the browser,
+  prefs: []
+  type: TYPE_NORMAL
+- en: Open a separate terminal.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Install TensorBoard with the following command (unless it’s already installed):
+    `pip install tensorboard`'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Start the backend server of TensorBoard, and point it to the log directory
+    specified during the callback creation: `tensorboard --logdir /path/to/my/logdir`'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: In the web browser, navigate to the http:// URL displayed by the TensorBoard
+    process. Then the loss and metric charts such as those shown in [figures 9.3](#ch09fig03)
+    and [9.5](#ch09fig05) will appear in the beautiful web UI of TensorBoard.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '|  |'
+  prefs: []
+  type: TYPE_TB
+- en: 'The text summary of the simpleRNN model created by [listing 9.2](#ch09ex02)
+    looks like the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: It has significantly fewer weight parameters than the MLP we used before (1,537
+    versus 107,585, or a reduction by a factor of 70), but it achieves a lower validation
+    MAE loss (that is, more accurate predictions) than the MLP during training (0.271
+    versus 0.289). This small but solid reduction in the temperature-prediction error
+    highlights the power of parameter sharing based on temporal invariance and the
+    advantages of RNNs in learning from sequence data like the weather data we are
+    dealing with.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You might have noticed that even though simpleRNN involves a relatively small
+    number of weight parameters, its training and inference take much longer compared
+    to feedforward models such as MLP. This is a major shortcoming of RNNs, one in
+    which it is impossible to parallelize the operations over the time steps. Such
+    parallelization is not achievable because subsequent steps depend on the state
+    values computed in previous steps (see [figure 9.2](#ch09fig02) and the pseudo-code
+    in [listing 9.1](#ch09ex01)). If we use the Big-O notation, the forward pass on
+    an RNN takes an O(*n*) amount of time, where *n* is the number of input time steps.
+    The backward pass (BPTT) takes another O(*n*) amount of time. The input future
+    of the Jena-weather problem consists of a large number of (240) time steps, which
+    leads to the slow training time seen previously. This is the main reason why we
+    train the model in tfjs-node instead of in the browser.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This situation of RNNs is in contrast to feedforward layers such as dense and
+    conv2d. In those layers, computation can be parallelized among the input elements
+    because the operation on one element does not depend on the result from another
+    input element. This allows such feedforward layers to take less than O(*n*) time
+    (in some cases close to O(1)) to execute their forward and backward passes with
+    the help of GPU acceleration. In [section 9.2](#ch09lev1sec2), we will explore
+    some more parallelizable sequential modeling approaches such as 1D convolution.
+    However, it is still important to be familiar with RNNs because they are sensitive
+    to sequential positions in a way that 1D convolution isn’t (more on that later).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Gated recurrent unit: A more sophisticated type of RNN'
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: 'SimpleRNN isn’t the only recurrent layer available in TensorFlow.js. There
+    are two others: Gated Recurrent Unit (GRU^([[4](#ch09fn4)])) and LSTM (which you’ll
+    recall stands for Long Short-Term Memory^([[5](#ch09fn5)])). In most practical
+    use cases, you’ll probably want to use one of these two. SimpleRNN is too simplistic
+    for most real problems, despite the fact that it is computationally much cheaper
+    and has an easier-to-understand internal mechanism than GRU and LSTM. There is
+    a major issue with simpleRNN: although it is theoretically able to retain at time
+    `t` information about inputs seen many time steps before, such long-term dependencies
+    are hard to learn in practice.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ⁴
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Kyunghyun Cho et al., “Learning Phrase Representations using RNN Encoder-Decoder
+    for Statistical Machine Translation,” 2014, [https://arxiv.org/abs/1406.1078](https://arxiv.org/abs/1406.1078).
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ⁵
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Sepp Hochreiter and Jürgen Schmidhuber, “Long Short-Term Memory,” *Neural Computation*,
+    vol. 9, no. 8, 1997, pp. 1735–1780.
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: 'This is due to the *vanishing-gradient problem*, an effect similar to what
+    is observed in feedforward networks that are many layers deep: As you keep adding
+    layers to a network, the size of the gradients backpropagated from the loss function
+    to the early layers gets smaller and smaller. Henceforth, the updates to the weights
+    get smaller and smaller, to the point where the network eventually becomes untrainable.
+    For RNNs, the large number of time steps plays the role of the many layers in
+    this problem. GRU and LSTM are RNNs designed to solve the vanishing-gradient problem,
+    and GRU is the simpler of the two. Let’s look at how GRU does that.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Compared to simpleRNN, GRU has a more complex internal structure. [Figure 9.4](#ch09fig04)
+    shows a rolled representation of a GRU’s internal structure. Compared with the
+    same rolled representation of simpleRNN (panel B of [figure 9.2](#ch09fig02)),
+    it contains more nuts and bolts. The input (*x*) and the output/state (referred
+    to as *h* by the convention in the RNN literature) pass through *four* equations
+    to give rise to the new output/state. Compare this with simpleRNN, which involves
+    only *one* equation. This complexity is also reflected in the pseudo-code in [listing
+    9.3](#ch09ex03), which can be viewed as an implementation of the mechanisms of
+    [figure 9.4](#ch09fig04). We omit the bias terms in the pseudo-code for simplicity.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 9.4\. A rolled representation of the GRU cell, a more complex and powerful
+    RNN layer type than simpleRNN. This is a rolled representation, comparable to
+    panel B of [figure 9.2](#ch09fig02). Note that we omit the bias terms in the equations
+    for simplicity. The dashed lines indicate feedback connections from the output
+    of the GRU cell (*h*) to the same cell in subsequent time steps.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](09fig04_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Listing 9.3\. Pseudo-code for a GRU layer
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** This is the h in [figure 9.4](#ch09fig04). As in simpleRNN, the state
+    is initialized to zero in the beginning.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***2*** This for loop iterates over all time steps of the input sequence.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***3*** z is called the update gate.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***4*** r is called the reset gate.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***5*** h_prime is the temporary state of the current state.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***6*** h_prime (current temporary state) and h (previous state) are combined
+    in a weighted fashion (z being the weight) to form the new state.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Of all the internal details of GRU, we highlight the two most important ones:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: GRU makes it easy to carry information across many time steps. This is achieved
+    by the intermediate quantity *z*, which is referred to as the *update gate*. Because
+    of the update gate, GRU can learn to carry the same state across many time steps
+    with minimal changes. In particular, in the equation (1 - *z*) · *h* + *z* · *h*',
+    if the value of *z* is 0, then the state *h* will simply be copied from the current
+    time step to the next. The ability to perform wholesale carrying like this is
+    an important part of how GRU combats the vanishing-gradient problem. The reset
+    gate *z* is calculated as a linear combination of the input *x* and the current
+    state *h*, followed by a sigmoid nonlinearity.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: In addition to the update gate *z*, another “gate” in GRU is the so-called *reset
+    gate*, *r*. Like the update gate *z*, *r* is calculated as a sigmoid nonlinearity
+    operating on a linear combination of the input and the current state `h`. The
+    reset gate controls how much of the current state to “forget.” In particular,
+    in the equation tanh(*W* · *x* `+` *r* · *U* · *h*`)`, if the value of *r* becomes
+    0, then the effect of the current state *h* gets erased; and if (1 - *z*`)` in
+    the downstream equation is close to zero as well, then the influence of the current
+    state *h* on the next state will be minimized. So, *r* and *z* work together to
+    enable the GRU to learn to forget the history, or a part of it, under the appropriate
+    conditions. For instance, suppose we’re trying to classify a movie review as positive
+    or negative. The review may start by saying “this movie is pretty enjoyable,”
+    but halfway through the review, it then reads “however, the movie isn’t as good
+    as other movies based on similar ideas.” At this point, the memory regarding the
+    initial praise should be largely forgotten, because it is the later part of the
+    review that should weigh more in determining the final sentiment-analysis result
+    of this review.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: So, that’s a very rough and high-level outline of how GRU works. The important
+    thing to remember is that the internal structure of GRU allows the RNN to learn
+    when to carry over old state and when to update the state with information from
+    the inputs. This learning is embodied by updates to the tunable weights, *W[z]*,
+    *U[z]*, *W[r]*, *W[r]*, *W*, and *U* (in addition to the omitted bias terms).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Don’t worry if you don’t follow all the details right away. At the end of the
+    day, the intuitive explanation for GRU we wrote in the last couple of paragraphs
+    doesn’t matter that much. It is not the human engineer’s job to understand how
+    a GRU processes sequential data at a very detailed level, just like it is not
+    the human engineer’s job to understand the fine-grained details of how a convnet
+    converts an image input to output class probabilities. The details are found by
+    the neural network in the hypothesis space delineated by the RNN’s structure data
+    through the data-driven training process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To apply GRU on our temperature-prediction problem, we construct a TensorFlow.js
+    model that contains a GRU layer. The code we use to do this (excerpted from jena-weather/train-rnn.js.)
+    looks almost identical to what we used for the simpleRNN model ([listing 9.2](#ch09ex02)).
+    The only difference is the type of the model’s first layer (GRU versus simpleRNN).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 9.4\. Creating a GRU model for the Jena-temperature-prediction problem
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** The hard-coded unit count is a number that works well, discovered through
+    hand-tuning of the hyperparameter.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***2*** The first layer of the model is a GRU layer.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***3*** The model ends with a dense layer with a single unit and the default
+    linear activation for the regression problem.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: To start training the GRU model on the Jena-weather dataset, use
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[Figure 9.5](#ch09fig05) shows the training and validation loss curves obtained
+    with the GRU model. It gets a best validation error of approximately 0.266, which
+    beats the one we got from the simpleRNN model in the previous section (0.271).
+    This reflects the greater capacity of GRU in learning sequential patterns compared
+    to simpleRNN. There are indeed sequential patterns hidden in the weather-instrument
+    readings that can help improve the accuracy of predicting the temperature; this
+    information is picked up by GRU but not simpleRNN. This comes at the cost of greater
+    training time. For example, on one of our machines, the GRU model trains at a
+    speed of 3,000 ms/batch, as compared to the simpleRNN’s 950 ms/batch.^([[6](#ch09fn6)])
+    But if the goal is to predict temperature as accurately as possible, this cost
+    will most likely be worth it.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ⁶
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: These performance numbers are obtained from tfjs-node running on the CPU backend.
+    If you use tfjs-node-gpu and the CUDA GPU backend, you’ll get approximately proportionate
+    speedups for both model types.
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Figure 9.5\. The loss curves from training a GRU model on the temperature-prediction
+    problem. Compare this with the loss curves from the simpleRNN model ([figure 9.3](#ch09fig03)),
+    and notice the small but real reduction in the best validation loss achieved by
+    the GRU model.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](09fig05_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 9.2\. Building deep-learning models for text
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The weather-prediction problem we just studied dealt with sequential numerical
+    data. But the most ubiquitous kinds of sequential data are probably text instead
+    of numbers. In alphabet-based languages such as English, text can be viewed as
+    either a sequence of characters or a sequence of words. The two approaches are
+    suitable for different problems, and we will use both of them for different tasks
+    in this section. The deep-learning models for text data we’ll introduce in the
+    following sections can perform text-related tasks such as
+  prefs: []
+  type: TYPE_NORMAL
+- en: Assigning a sentiment score to a body of text (for instance, whether a product
+    review is positive or negative)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Classifying a body of text by its topic (for example, whether a news article
+    is about politics, finance, sports, health, weather, or miscellaneous)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Converting a text input into a text output (for instance, for standardization
+    of format or machine translation)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Predicting the upcoming parts of a text (for example, smart suggestion features
+    of mobile input methods)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This list is just a very small subset of interesting machine-learning problems
+    that involve text, which are systematically studied in the field of natural language
+    processing. Although we will only scratch the surface of neural-network-based
+    natural language processing techniques in this chapter, the concepts and examples
+    introduced here should give you a good starting point for further exploration
+    (see the “[Materials for further reading](#ch09lev1sec4)” section at the end of
+    this chapter).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Keep in mind that none of the deep neural networks in this chapter truly understand
+    text or language in a human sense. Rather, these models can map the statistical
+    structure of text to a certain target space, whether it is a continuous sentiment
+    score, a multiclass-classification result, or a new sequence. This turns out to
+    be sufficient for solving many practical, text-related tasks. Deep learning for
+    natural language processing is nothing more than pattern recognition applied to
+    characters and words, in much the same way that deep-learning-based computer vision
+    ([chapter 4](kindle_split_015.html#ch04)) is pattern recognition applied to pixels.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Before we dive into the deep neural networks designed for text, we need to first
+    understand how text is represented in machine learning.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '9.2.1\. How text is represented in machine learning: One-hot and multi-hot
+    encoding'
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: Most of the input data we’ve encountered in this book so far is continuous.
+    For example, the petal length of an iris flower varies continuously in a certain
+    range; the weather-instrument readings in the Jena-weather dataset are all real
+    numbers. These values are represented straightforwardly as float-type tensors
+    (floating-point numbers). However, text is different. Text data comes in as a
+    string of characters or words, not real numbers. Characters and words are discrete.
+    For instance, there is no such thing as a letter between “j” and “k” in the same
+    sense as there is a number between 0.13 and 0.14\. In this sense, characters and
+    words are similar to classes in multiclass classification (such as the three iris-flower
+    species or the 1,000 output classes of MobileNet). Text data needs to be turned
+    into vectors (arrays of numbers) before it can be fed into deep-learning models.
+    This conversion process is called *text vectorization*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: There are multiple ways to vectorize text. *One-hot encoding* (as we’ve introduced
+    in [chapter 3](kindle_split_014.html#ch03)) is one of the options. In English,
+    depending on where you draw the line, there are about 10,000 most frequently used
+    words. We can collect these 10,000 words and form a *vocabulary*. The unique words
+    in the vocabulary may be sorted in a certain order (for example, descending order
+    of frequency) so that any given word can be given an integer index.^([[7](#ch09fn7)])
+    Then every English word can be represented as a length-10,000 vector, in which
+    only the element that corresponds to the index is 1, and all remaining elements
+    are 0\. This is the *one-hot vectorization* of the word. Panel A of [figure 9.6](#ch09fig06)
+    presents this graphically.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ⁷
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: 'An obvious question is: what if we get a rare word that falls out of the 10,000-word
+    vocabulary? This is a practical problem that any text-oriented deep-learning algorithm
+    is faced with. In practice, we solve this problem by adding a special item called
+    *OOV* to the vocabulary. OOV stands for *out-of-vocabulary*. So, all rare words
+    that do not belong to the vocabulary are lumped together in that special item
+    and will have the same one-hot encoding or embedding vector. More sophisticated
+    techniques have multiple OOV buckets and use a hash function to assign rare words
+    to those buckets.'
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Figure 9.6\. One-hot encoding (vectorization) of a word (panel A) and of a sentence
+    as a sequence of words (panel B). Panel C shows a simplified, multi-hot encoding
+    of the same sentence as in panel B. It is a more succinct and scalable representation
+    of the sequence, but it discards the order information. For the sake of visualization,
+    we assume that the size of the vocabulary is only 14. In reality, the vocabulary
+    size of English words used in deep learning is much larger (on the order of thousands
+    or tens of thousands, for example, 10,000).
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](09fig06_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: What if we have a sentence instead of a single word? We can get the one-hot
+    vectors for all the words that make up the sentence and put them together to form
+    a 2D representation of the words of the sentence (see panel B of [figure 9.6](#ch09fig06)).
+    This approach is simple and unambiguous. It perfectly preserves the information
+    about what words appear in the sentence and in what order.^([[8](#ch09fn8)]) However,
+    when text gets long, the size of the vector may get so big that it is no longer
+    manageable. For instance, a sentence in English contains about 18 words on average.
+    Given that our vocabulary has a size of 10,000, it takes 180,000 numbers to represent
+    just a single sentence, which already takes a much larger space than the sentence
+    itself. This is not to mention that some text-related problems deal with paragraphs
+    or whole articles, which have many more words and will cause the size of the representation
+    and the amount of computation to explode.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ⁸
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: This assumes there are no OOV words.
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: 'One way to deal with this problem is to include all the words in a single vector
+    so that each element in the vector represents whether the corresponding word has
+    appeared in the text. Panel C of [figure 9.6](#ch09fig06) illustrates. In this
+    representation, multiple elements of the vector can have the value 1\. This is
+    why people sometimes refer to it as *multi-hot encoding*. Multi-hot encoding has
+    a fixed length (the size of the vocabulary) regardless of how long the text is,
+    so it solves the size-explosion problem. But this comes at the cost of losing
+    the order information: we can’t tell from the multi-hot vector which words come
+    first and which words come next. For some problems, this might be okay; for others,
+    this is unacceptable. There are more sophisticated representations that take care
+    of the size-explosion problem while preserving the order information, which we
+    will explore later in this chapter. But first, let’s look at a concrete, text-related
+    machine-learning problem that can be solved to a reasonable accuracy using the
+    multi-hot approach.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 9.2.2\. First attempt at the sentiment-analysis problem
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'We will use the Internet Movie Database (IMDb) dataset in our first example
+    of applying machine learning to text. The dataset is a collection of approximately
+    25,000 textual movie reviews on [imdb.com](http://imdb.com), each of which has
+    been labeled as positive or negative. The machine-learning task is binary classification:
+    that is, whether a given movie review is positive or negative. The dataset is
+    balanced (50% positive reviews and 50% negative ones). Just like what you expect
+    from online reviews, the examples vary in word length. Some of them are as short
+    as 10 words, while others can be as long as 2,000 words. The following is an example
+    of what a typical review looks like. This example is labeled as negative. Punctuation
+    is omitted in the dataset:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*the mother in this movie is reckless with her children to the point of neglect
+    i wish i wasn’t so angry about her and her actions because i would have otherwise
+    enjoyed the flick what a number she was take my advise and fast forward through
+    everything you see her do until the end also is anyone else getting sick of watching
+    movies that are filmed so dark anymore one can hardly see what is being filmed
+    as an audience we are impossibly involved with the actions on the screen so then
+    why the hell can’t we have night vision*'
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: The data is divided into a training set and an evaluation set, both of which
+    are automatically downloaded from the web and written to your tmp directory when
+    you issue a model-training command such as
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: If you examine sentiment/data.js carefully, you can see that the data files
+    it downloads and reads do not contain the actual words as character strings. Instead,
+    the words are represented as 32-bit integers in those files. Although we won’t
+    cover the data-loading code in that file in detail, it’s worthwhile to call out
+    a part that performs the multi-hot vectorization of the sentences, shown in the
+    next listing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 9.5\. Multi-hot vectorization of sentences from the `loadFeatures()`
+    function
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** Creates a TensorBuffer instead of a tensor because we will be setting
+    its element values next. The buffer starts from all-zero.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***2*** Iterates over all examples, each of which is a sentence'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***3*** Each sequence (sentence) is an array of integers.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***4*** Skips out-of-vocabulary (OOV) words for multi-hot encoding'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***5*** Sets the corresponding index in the buffer to 1\. Note that every index
+    i may have multiple wordIndex values set to 1, hence the multi-hot encoding.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The multi-hot-encoded features are represented as a 2D tensor of shape `[numExamples,
+    numWords]`, where `numWords` is the size of the vocabulary (10,000 in this case).
+    This shape isn’t affected by the length of the individual sentences, which makes
+    this a simple vectorization paradigm. The targets loaded from the data files have
+    a shape of `[numExamples, 1]` and contain the negative and positive labels represented
+    as 0s and 1s, respectively.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The model that we apply to the multi-hot data is an MLP. In fact, with the sequential
+    information lost with the multi-hot encoding, there is no way to apply an RNN
+    model to the data even if we wanted to. We will talk about RNN-based approaches
+    in the next section. The code that creates the MLP model is from the `buildModel()`
+    function in sentiment/train.js, with simplification, and looks like the following
+    listing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 9.6\. Building an MLP model for the multi-hot-encoded IMDb movie reviews
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** Adds two hidden dense layers with relu activation to enhance the representational
+    power'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***2*** The input shape is the size of the vocabulary due to the multi-hot
+    vectorization we are dealing with here.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***3*** Uses sigmoid activation for the output layer to suit the binary-classification
+    task'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: By running the `yarn train multihot --maxLen 500` command, you can see that
+    the model achieves a best validation accuracy of approximately 0.89\. This accuracy
+    is okay, and is significantly higher than chance (0.5). This shows that it is
+    possible to achieve a reasonable degree of accuracy in this sentiment-analysis
+    problem by looking at just what words appear in the review. For example, words
+    such as *enjoyable* and *sublime* are associated with positive reviews, and words
+    such as *sucks* and *bland* are associated with negative ones with a relatively
+    high degree of reliability. Of course, there are plenty of scenarios in which
+    looking just at what words there are will be misleading. As a contrived example,
+    understanding the true meaning of a sentence like “Don’t get me wrong, I hardly
+    disagree this is an excellent film” requires taking into account sequential information—not
+    only what the words are but also in what order they appear. In the next section,
+    we will show that by using a text vectorization that doesn’t discard the sequential
+    information and a model that can utilize the sequential information, we can beat
+    this baseline accuracy. Let’s now look at how word embeddings and 1D convnets
+    work.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '9.2.3\. A more efficient representation of text: Word embeddings'
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: What is *word embedding*? Just like one-hot encoding ([figure 9.6](#ch09fig06)),
+    word embedding is a way to represent a word as a vector (a 1D tensor in TensorFlow.js).
+    However, word embeddings allow the values of the vector’s elements to be trained,
+    instead of hard-coded according to a rigid rule such as the word-to-index map
+    in one-hot encoding. In other words, when a text-oriented neural network uses
+    word embedding, the embedding vectors become trainable weight parameters of the
+    model. They are updated through the same backpropagation rule as all other weight
+    parameters of the model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This situation is illustrated schematically in [figure 9.7](#ch09fig07). The
+    layer type in TensorFlow.js that allows you to perform word embedding is `tf.layer.embedding()`.
+    It contains a trainable weight matrix of shape `[vocabularySize, embeddingDims]`,
+    where `vocabularySize` is the number of unique words in the vocabulary and `embeddingDims`
+    is the user-selected dimensionality of the embedding vectors. Every time you are
+    given a word, say *the*, you find the corresponding row in the embedding matrix
+    using a word-to-index lookup table, and that row is the embedding vector for your
+    word. Note that the word-to-index lookup table is not part of the embedding layer;
+    it is maintained as a separate entity from the model (see [listing 9.9](#ch09ex09),
+    for example).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 9.7\. A schematic illustration of how an embedding matrix works. Each
+    row of the embedding matrix corresponds to a word in the vocabulary, and each
+    column is an embedding dimension. The values of the embedding matrix’s elements,
+    represented as shades of gray in the diagram, are chosen at random.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](09fig07_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'If you have a sequence of words, like a sentence as shown in [figure 9.7](#ch09fig07),
+    you repeat this lookup process for all the words in the correct sequential order
+    and stack the resulting embedding vectors into a 2D tensor of shape `[sequenceLength,`
+    `embeddingDims]`, where `sequenceLength` is the number of words in the sentence.^([[9](#ch09fn9)])
+    What if there are repeating words in the sentence (such as the word *the* in the
+    example in [figure 9.7](#ch09fig07))? It doesn’t matter: just let the same embedding
+    vector appear repeatedly in the resulting 2D tensor.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ⁹
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: This multiword embedding lookup process can be done effectively using the `tf.gather()`
+    method, which is how the embedding layer in TensorFlow.js is implemented under
+    the hood.
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: 'Word embedding gives us the following benefits:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: It addresses the size problem with one-hot encodings. `embeddingDims` is usually
+    much smaller than `vocabularySize`. For example, in the 1D convnet we are about
+    to use on the IMDb dataset, `vocabularySize` is 10,000, and `embeddingDims` is
+    128\. So, with a 500-word review from the IMDb dataset, representing the example
+    requires 500 * 128 = 64k float numbers, instead of 500 * 10,000 = 5M numbers,
+    as in one-hot encoding—a much more economical vectorization.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'By not being opinionated about how to order the words in the vocabulary and
+    by allowing the embedding matrix to be trained via backpropagation just like all
+    other neural network weights, word embeddings can learn semantic relations between
+    words. Words with similar meanings should have embedding vectors that are closer
+    in the embedding space. For example, words with similar meanings, such as *very*
+    and *truly* should have vectors that are closer together than words that are more
+    different in meaning, such as *very* and *barely*. Why should this be the case?
+    An intuitive way to understand it is to realize the following: suppose you replace
+    a number of words in a movie-review input with words with similar meaning; a well-trained
+    network ought to output the same classification result. This could happen only
+    if the embedding vectors for each pair of words, which are the input to the downstream
+    part of the model, are close to each other.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Also, the fact that the embedding space has multiple dimensions (for example,
+    128) should allow the embedding vectors to capture different aspects of words.
+    For example, there can be a dimension that represents part of speech, along which
+    an adjective like *fast* is closer to another adjective (such as *warm*) than
+    to a noun (such as *house*). There might be another dimension that encodes the
+    gender aspect of a word, one along which a word like *actress* is closer to another
+    feminine-meaning word (such as *queen*) than to a masculine-meaning one (such
+    as *actor*). In the next section (see [info box 9.2](#ch09sb02)), we will show
+    you a way to visualize the word embeddings and explore their interesting structures
+    after they emerge from training an embedding-based neural network on the IMDb
+    dataset.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[Table 9.1](#ch09table01) gives a more succinct summary of the differences
+    between one-/multi-hot encoding and word embedding, the two most frequently used
+    paradigms for word vectorization.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Table 9.1\. Comparing two paradigms of word vectorization: one-hot/multi-hot
+    encoding and word embedding'
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '|   | One-hot or multi-hot encoding | Word embedding |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Hard-coded or learned? | Hard-coded. | Learned: the embedding matrix is a
+    trainable weight parameter; the values often reflect the semantic structure of
+    the vocabulary after training. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Sparse or dense? | Sparse: most elements are zero; some are one. | Dense:
+    elements take continuously varying values. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Scalability | Not scalable to large vocabularies: the size of the vector
+    is proportional to the size of the vocabulary. | Scalable to large vocabularies:
+    the embedding size (number of embedding dimensions) doesn’t have to increase with
+    the number of words in the vocabulary. |'
+  prefs: []
+  type: TYPE_TB
+- en: 9.2.4\. 1D convnets
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'In [chapter 4](kindle_split_015.html#ch04), we showed the key role played by
+    2D convolutional layers in deep neural networks for image inputs. conv2d layers
+    learn to represent local features in small 2D patches in images. The idea of convolution
+    can be extended to sequences. The resulting algorithm is called *1D convolution*
+    and is available through the `tf.layers.conv1d()` function in TensorFlow.js. The
+    ideas underlying conv1d and conv2d are the same: they are both trainable extractors
+    of translationally invariant local features. For instance, a conv2d layer may
+    become sensitive to corner patterns of a certain orientation and of a certain
+    color change after training on an image task, while a conv1d layer may become
+    sensitive to a pattern of “a negative verb followed by a praising adjective” after
+    training on a text-related task.^([[10](#ch09fn10)])'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ^(10)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: As you might have guessed, there is indeed 3D convolution, and it is useful
+    for deep-learning tasks that involve 3D (volumetric) data, such as certain types
+    of medical images and geological data.
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: '[Figure 9.8](#ch09fig08) illustrates how a conv1d layer works in greater detail.
+    Recall from [figure 4.3](kindle_split_015.html#ch04fig03) in [chapter 4](kindle_split_015.html#ch04)
+    that a conv2d layer involves sliding a kernel over all possible locations in the
+    input image. The 1D convolution algorithm also involves sliding a kernel, but
+    is simpler because the sliding movement happens in only one dimension. At each
+    sliding position, a slice of the input tensor is extracted. The slice has the
+    length `kernelSize` (a configuration field for the conv1d layer), and in the case
+    of this example, it has a second dimension equal to the number of embedding dimensions.
+    Then a *dot* (multiply-and-add) operation is performed between the input slice
+    and the kernel of the conv1d layer, which yields a single slice of the output
+    sequence. This operation is repeated for all valid sliding positions until the
+    full output is generated. Like the input tensor of the conv1d layer, the full
+    output is a sequence, albeit with a different length (determined by the input
+    sequence length, the `kernelSize`, and other configurations of the conv1d layer)
+    and a different number of feature dimensions (determined by the `filters` configuration
+    of the conv1d layer). This makes it possible to stack multiple conv1d layers to
+    form a deep 1D convnet, just as stacking multiple conv2d layers is a frequently
+    used trick in 2D convnets.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 9.8\. Schematic illustration of how 1D convolution (`tf.layers.conv1d()`)
+    works. For the sake of simplicity, only one input example is shown (on the left
+    side of the image). We suppose that the input sequence has a length of 12 and
+    the conv1d layer has a kernel size of 5\. At each sliding window position, a length-5
+    slice of the input sequence is extracted. The slice is dot-multiplied with the
+    kernel of the conv1d layer, which generates one slide of the output sequence.
+    This is repeated for all possible sliding-window positions, which gives rise to
+    the output sequence (on the right side of the diagram).
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](09fig08_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Sequence truncation and padding
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: 'Now that we have conv1d in our arsenal for text-oriented machine learning,
+    are we ready to train a 1D convnet on the IMDb data? Not quite yet. There is one
+    more thing to explain: truncating and padding of sequences. Why do we need to
+    do truncation and padding? TensorFlow.js models require the inputs to `fit()`
+    to be a tensor, and a tensor must have a concrete shape. Therefore, although our
+    movie reviews don’t have a fixed length (recall that they vary between 10 and
+    2,400 words), we have to pick a specific length as the second dimension of the
+    input feature tensor (`maxLen`), so that the full shape of the input tensor is
+    `[numExamples, maxLen]`. No such problem existed when we used multi-hot encoding
+    in the previous section because tensors from multi-hot encoding had a second tensor
+    dimension unaffected by sequence length.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The considerations that go into choosing the value of `maxLen` are as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: It should be long enough to capture the useful part of most of the reviews.
+    If we choose `maxLen` to be 20, it will perhaps be so short that it will cut out
+    the useful part for most reviews.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: It should not be so large that a majority of the reviews are much shorter than
+    that length, because that would lead to a waste of memory and computation time.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The trade-off of the two leads us to pick a value of 500 words per review (at
+    maximum) for this example. This is specified in the flag `--maxLen` in the command
+    for training the 1D convnet:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Once the `maxLen` is chosen, all the review examples must be molded into this
+    particular length. In particular, the ones that are longer are truncated; the
+    ones that are shorter are padded. This is what the function `padSequences()` does
+    ([listing 9.7](#ch09ex07)). There are two ways to truncate a long sequence: cut
+    off the beginning part (the `''pre''` option in [listing 9.7](#ch09ex07)) or the
+    ending part. Here, we use the former approach, based on the reasoning that the
+    ending part of a movie review is more likely to contain information relevant to
+    the sentiment than the beginning part. Similarly, there are two ways to pad a
+    short sequence to the desired length: adding the padding character (`PAD_CHAR`)
+    before (the `''pre''` option in [listing 9.7](#ch09ex07)) or after the sentence.
+    Here, we arbitrarily choose the former option as well. The code in this listing
+    is from sentiment/sequence_utils.js.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 9.7\. Truncating and padding a sequence as a step of loading text features
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** Loops over all the input sequences'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***2*** This particular sequence is longer than the prescribed length (maxLen):
+    truncate it to that length.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***3*** There are two ways to truncate a sequence: cut off the beginning (''pre'')
+    or the end'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***4*** The sequence is shorter than the prescribed length: it needs to be
+    padded.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***5*** Generates the padding sequence'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***6*** Like truncation, there are two ways to pad the sublength sequence:
+    from the beginning (''pre'') or from behind.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***7*** Note: if the length of seq is exactly maxLen, it will be returned without
+    change.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Building and running a 1D convnet on the IMDb dataset
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: Now we have all the pieces ready for the 1D convnet; let’s put them together
+    and see if we can get a higher accuracy on the IMDb sentiment-analysis task. The
+    code in [listing 9.8](#ch09ex08) creates our 1D convnet (excerpted from sentiment/train.js,
+    with simplification). The summary of the resulting `tf.Model` object is shown
+    after that.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 9.8\. Building a 1D convnet for the IMDb problem
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** The model begins with an embedding layer, which turns the input integer
+    indices into the corresponding word vectors.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***2*** The embedding layer needs to know the size of the vocabulary. Without
+    this, it can’t determine the size of the embedding matrix.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***3*** Adds a dropout layer to combat overfitting'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***4*** Here comes the conv1D layer.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***5*** The globalMaxPool1d layer collapses the time dimension by extracting
+    the maximum element value in each filter. The output is ready for the upcoming
+    dense layers (MLP).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***6*** Adds a two-layer MLP at the top of the model'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'It is helpful to look at the JavaScript code and the text summary together.
+    There are a few things worth calling out here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The model has a shape of `[null, 500]`, where `null` is the undetermined batch
+    dimension (the number of examples) and 500 is the maximally allowed word length
+    of each review (`maxLen`). The input tensor contains the truncated and padded
+    sequences of integer word indices.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The first layer of the model is an embedding layer. It turns the word indices
+    into their corresponding word vectors, which leads to a shape of `[null, 500,
+    128]`. As you can see, the sequence length (500) is preserved, and the embedding
+    dimension (128) is reflected as the last element of the shape.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The layer that follows the embedding layer is a conv1d layer—the core part of
+    this model. It is configured to have a kernel size of 5, a default stride size
+    of 1, and “valid” padding. As a result, there are 500 – 5 + 1 = 496 possible sliding
+    positions along the sequence dimension. This leads to a value of 496 in the second
+    element of the output shape (`[null, 496, 250]`). The last element of the shape
+    (250) reflects the number of filters the conv1d layer is configured to have.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The globalMaxPool1d layer that follows the conv1d layer is somewhat similar
+    to the maxPooling2d layer we’ve seen in image convnets. However, it does a more
+    dramatic pooling, one in which all elements along the sequence dimension are collapsed
+    to a single maximum value. This leads to the output shape of `[null,` `250]`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Now that the tensor has a 1D shape (ignoring the batch dimension), we can build
+    two dense layers on top of it to form an MLP as the top of the entire model.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Start training the 1D convnet with the command `yarn train --maxLen 500 cnn`.
+    After two to three training epochs, you can see the model reach a best validation
+    accuracy of about 0.903, which is a small but solid gain relative to the accuracy
+    we got from the MLP based on the multi-hot vectorization (0.890). This reflects
+    the sequential order information that our 1D convnet managed to learn but that
+    was impossible to learn by the multi-hot MLP.
+  prefs: []
+  type: TYPE_NORMAL
+- en: So how does a 1D convnet capture sequential order? It does this through its
+    convolutional kernel. The dot product of the kernel is sensitive to the ordering
+    of the elements. For example, if an input consists of five words, *I like it so
+    much*, the 1D convolution will output one particular value; however, if the order
+    of the words is altered to be *much so I like it*, it will cause a different output
+    from the 1D convolution, even though the set of elements is exactly the same.
+  prefs: []
+  type: TYPE_NORMAL
+- en: However, it needs to be pointed out that a conv1d layer by itself is not able
+    to learn sequential patterns beyond its kernel size. For instance, suppose the
+    ordering of two far-apart words affects the meaning of the sentence; a conv1d
+    layer with a kernel size smaller than the distance won’t be able to learn the
+    long-range interaction. This is an aspect in which RNNs such as GRU and LSTM outshine
+    1D convolution.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'One way in which 1D convolution can ameliorate this shortcoming is to go deep—namely,
+    stacking up multiple conv1d layers so that the “receptive field” of the higher-level
+    conv1d layers is large enough to capture such long-range dependencies. However,
+    in many text-related machine-learning problems, such long-range dependencies don’t
+    play important roles, so that using a 1D convnet with a small number of conv1d
+    layers suffices. In the IMDb sentiment example, you can try training an LSTM-based
+    model based on the same `maxLen` value and embedding dimensions as the 1D convnet:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: Notice that the best validation accuracy from the LSTM (similar to but slightly
+    more complex that GRU; see [figure 9.4](#ch09fig04)) is about the same as that
+    from the 1D convnet. This is perhaps because long-range interactions between words
+    and phrases don’t matter a lot for this body of movie reviews and the sentiment-classification
+    task.
+  prefs: []
+  type: TYPE_NORMAL
+- en: So, you can see that 1D convnets are an attractive alternative to RNNs for this
+    type of text problem. This is especially true considering the much lower computational
+    cost of 1D convnets compared to that of RNNs. From the `cnn` and `lstm` commands,
+    you can see that training the 1D convnet is about six times as fast as training
+    the LSTM model. The slower performance of LSTM and RNNs is related to their step-by-step
+    internal operations, which cannot be parallelized; convolutions are amenable to
+    parallelization by design.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '|  |'
+  prefs: []
+  type: TYPE_TB
+- en: '**Using the Embedding Projector to visualize learned embedding vectors**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](f0318_01_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Visualizing the trained word embeddings from the 1D convnet using t-SNE dimension
+    reduction in the Embedding Projector
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Do any interesting structures emerge in the word embeddings of the 1D convnet
+    after training? To find this out, you can use the optional flag `--embeddingFilesPrefix`
+    of the `yarn train` command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This command will generate two files:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: /tmp/imdb_embed_vectors.tsv—A tab-separated-values file for the numeric values
+    of the word embeddings. Each line contains the embedding vector from a word. In
+    our case, there are 10,000 lines (our vocabulary size), and each line contains
+    128 numbers (our embedding dimensions).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: /tmp/imdb_embed_labels.tsv—A file consisting of the word labels that correspond
+    to the vectors in the previous file. Each line is a word.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'These files can be uploaded to the Embedding Projector ([https://projector.tensorflow.org](https://projector.tensorflow.org))
+    for visualization (see the previous figure). Because our embedding vectors reside
+    in a high-dimensional (128D) space, it is necessary to reduce their dimensionality
+    to three or fewer dimensions so that they can be understood by a human. The Embedding
+    Projector tool provides two algorithms for dimension reduction: t-distributed
+    stochastic neighbor embedding (t-SNE) and principal component analysis (PCA),
+    which we won’t discuss in detail. But briefly, these methods map the high-dimensional
+    embedding vectors to 3D while ensuring minimal loss in the relations between the
+    vectors. t-SNE is the more sophisticated and computationally more intensive method
+    between the two. The visualization it produces is shown in the figure.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Each dot in the dot cloud corresponds to a word in our vocabulary. Move your
+    mouse cursor around and hover it above the dots to see what words they correspond
+    to. Our embedding vectors, trained on the smallish sentiment-analysis dataset,
+    already show some interesting structure related to the semantics of the words.
+    In particular, one end of the dot cloud contains a large proportion of words that
+    appear frequently in positive movie reviews (such as *excellent*, *inspiring*,
+    and *delightful*), while the opposite end contains many negative-sounding words
+    (*sucks*, *gross*, and *pretentious*). More interesting structures may emerge
+    from training larger models on larger text datasets, but this small example already
+    gives you a hint of the power of the wordembedding method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Because word embeddings are an important part of text-oriented deep neural networks,
+    researchers have created pretrained word embeddings that machine-learning practitioners
+    can use out-of-the-box, forgoing the need to train their own word embeddings as
+    we did in our IMDb convnet example. One of the best known pretrained wordembedding
+    sets is GloVe (for Global Vectors) by the Stanford Natural Language Processing
+    Group (see [https://nlp.stanford.edu/projects/glove/](https://nlp.stanford.edu/projects/glove/)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: The advantage of using pretrained word embeddings such as GloVe is two-fold.
+    First, it reduces the amount of computation during training because the embedding
+    layer doesn’t need to be trained further and hence can simply be frozen. Second,
+    pretrained embeddings such as GloVe are trained from billions of words and hence
+    are much higher-quality than what would be possible by training on a small dataset,
+    such as the IMDb dataset here. In these senses, the role played by pretrained
+    word embeddings in natural language processing problems is similar to the role
+    of pretrained deep convnet bases (such as MobileNet, which we saw in [chapter
+    5](kindle_split_016.html#ch05)) in computer vision.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '|  |'
+  prefs: []
+  type: TYPE_TB
+- en: Using the 1D convnet for inference in a web page
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: In sentiment/index.js, you can find the code that deploys the model trained
+    in Node.js to use at the client side. To see the client-side app in action, run
+    the command `yarn watch` just like in most other examples in this book. The command
+    will compile the code, start a web server, and automatically pop open a browser
+    tab to display the index.html page. In the page, you can click a button to load
+    the trained model via HTTP requests and use the loaded model to perform sentiment
+    analysis on movie reviews in a text box. The movie review sample in the text box
+    is editable, so you can make arbitrary edits to it and observe how that affects
+    the binary prediction in real time. The page comes with two stock example reviews
+    (a positive one and a negative one) that you may use as the starting point of
+    your fiddling. The loaded 1D convnet runs fast enough that it can generate the
+    sentiment score on the fly as you type in the text box.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The core of the inference code is straightforward (see [listing 9.9](#ch09ex09),
+    from sentiment/index.js), but there are several interesting things to point out:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The code converts all the input text to lowercase, discards punctuation, and
+    erases extra whitespace before converting the text to word indices. This is because
+    the vocabulary we use contains only lowercase words.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Out-of-vocabulary words—words that fall outside the vocabulary—are represented
+    with a special word index (`OOV_INDEX`). These include rare words and typos.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The same `padSequences()` function that we used for training (see [listing
+    9.7](#ch09ex07)) is used here to make sure that the tensor input to the model
+    has the correct length. This is achieved through truncation and padding, as we’ve
+    seen previously. This is an example of a benefit of using TensorFlow.js for machine-learning
+    tasks like this: you get to use the same data-preprocessing code for the backend
+    training environment and the frontend serving environment, reducing the risk of
+    data skew (see [chapter 6](kindle_split_018.html#ch06) for a more in-depth discussion
+    of the risks of skew).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Listing 9.9\. Using the trained 1D convnet for inference in the frontend
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** Converts to lowercase; removes punctuation and extra whitespace from
+    the input text'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***2*** Maps all the words to word indices. this.wordIndex has been loaded
+    from a JSON file.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***3*** Words that fall out of the vocabulary are represented as a special
+    word index: OOV_INDEX.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***4*** Truncates long reviews and pads short ones to the desired length'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***5*** Converts the data to a tensor representation, so it can be fed into
+    the model'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***6*** Keeps track of how much time is spent on the model’s inference'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***7*** The actual inference (forward pass on the model) happens here.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 9.3\. Sequence-to-sequence tasks with attention mechanism
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'In the Jena-weather and IMDb sentiment examples, we showed how to predict a
+    single number or a class from an input sequence. However, some of the most interesting
+    sequential problems involve generating an *output sequence* based on an input
+    one. These types of tasks are aptly named *sequence-to-sequence* (or seq2seq,
+    for short) tasks. There is a great variety of seq2seq tasks, of which the following
+    list is just a small subset:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Text summarization*—Given an article that may contain tens of thousands of
+    words, generate a succinct summary of it (for example, in 100 or fewer words).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Machine translation*—Given a paragraph in one language (such as English),
+    generate a translation of it in another (such as Japanese).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Word prediction for autocompletion*—Given a few first words in a sentence,
+    predict what words will come after them. This is useful for autocompletion and
+    suggestion in email apps and UIs for search engines.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Music composition*—Given a leading sequence of musical notes, generate a melody
+    that begins with those notes.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Chat bots*—Given a sentence entered by a user, generate a response that fulfills
+    some conversational goal (for instance, a certain type of customer support or
+    simply chatting for fun).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The *attention mechanism*^([[11](#ch09fn11)]) is a powerful and popular method
+    for seq2seq tasks. It is often used in conjunction with RNNs. In this section,
+    we will show how we can use attention and LSTMs to solve a simple seq2seq task,
+    namely, converting a myriad of calendar-date formats into a standard date format.
+    Even though this is an intentionally simple example, the knowledge you’ll gain
+    from it applies to more complex seq2seq tasks like the ones listed previously.
+    Let’s first formulate the date-conversion problem.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ^(11)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: See Alex Graves, “Generating Sequences with Recurrent Neural Networks, submitted
+    4 Aug. 2013, [https://arxiv.org/abs/1308.0850](https://arxiv.org/abs/1308.0850);
+    and Dzmitry Bahdanau, Kyunghyun Cho, and Yoshua Bengio, “Neural Machine Translation
+    by Jointly Learning to Align and Translate,” submitted 1 Sept. 2014, [https://arxiv.org/abs/1409.0473](https://arxiv.org/abs/1409.0473).
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: 9.3.1\. Formulation of the sequence-to-sequence task
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: If you are like us, you have been confused (or even mildly annoyed) by the large
+    number of possible ways to write calendar dates, especially if you have traveled
+    to different countries. Some people prefer to use the month-day-year order, some
+    adopt the day-month-year order, and still others use the year-month-day order.
+    Even within the same order, there are variations with regard to whether the month
+    is written as a word (January), an abbreviation (Jan), a number (1), or a zero-padded
+    two-digit number (01). The options for the day include whether you prepad it with
+    a zero and whether you write it as an ordinal number (4th versus 4). As for the
+    year, you can write the full four digits or only the last two. What’s more, the
+    year, month, and day parts can be concatenated with spaces, commas, periods, or
+    slashes, or they may be concatenated without any intervening characters at all!
+    All these options come together in a combinatorial way, which gives rise to at
+    least a few dozen ways to write the same date.
+  prefs: []
+  type: TYPE_NORMAL
+- en: So, it will be nice to have an algorithm that can take a calendar-date string
+    in these formats as the input, and output the corresponding date string in the
+    ISO-8601 format (for instance, 2019-02-05). We could solve this problem in a non-machine-learning
+    way by writing a traditional program. But given the large number of possible formats,
+    this is a somewhat cumbersome and time-consuming task, and the resulting code
+    can easily reach hundreds of lines. Let’s try a deep-learning approach—in particular,
+    with an LSTM-based attention encoder-decoder architecture.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To limit the scope of this example, we start from the 18 commonly seen date
+    formats shown by the following examples. Note that all these are different ways
+    to write the same date:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: Of course, there are other date formats.^([[12](#ch09fn12)]) But adding support
+    for additional formats will basically be a repetitive task once the foundation
+    of the model training and inference has been laid. We leave the part of adding
+    more input date formats as an exercise for you at the end of this chapter (exercise
+    3).
+  prefs: []
+  type: TYPE_NORMAL
+- en: ^(12)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: 'Another thing you might have noticed is that we use a set of date formats without
+    any ambiguity. If we included both MM/DD/YYYY and DD/MM/YYYY in our set of formats,
+    then there would be ambiguous date strings: that is, ones that can’t be interpreted
+    with certainty. For instance, the string “01/02/2019” can be interpreted as either
+    as January 2, 2019 or February 1, 2019.'
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: 'First, let’s get the example running. Like the sentiment-analysis example earlier,
+    this example consists of a training part and an inference part. The training part
+    runs in the backend environment using tfjs-node or tfjs-node-gpu. To kick off
+    the training, use the following commands:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To perform the training using a CUDA GPU, use the `--gpu` flag with the `yarn
+    train` command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: The training runs for two epochs by default, which should be sufficient to bring
+    the loss value close to zero and the conversion accuracy close to perfect. In
+    the sample inference results printed at the end of the training job, most, if
+    not all, of the results should be correct. These inference samples are drawn from
+    a test set that is nonoverlapping with the training set. The trained model is
+    saved to the relative path dist/model and will be used during the browser-based
+    inference stage. To bring up the inference UI, use
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the web page that pops up, you can type dates into the Input Date String
+    text box, hit Enter, and observe how the output date string changes accordingly.
+    In addition, the heatmap with different shades displays the attention matrix used
+    during the conversion (see [figure 9.9](#ch09fig09)). The attention matrix contains
+    some interesting information and is central to this seq2seq model. It’s especially
+    amenable to interpretation by humans. You should get yourself familiar with it
+    by playing with it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 9.9\. The attention-based encoder-decoder for date conversion at work,
+    with the attention matrix for the particular input-output pair displayed at the
+    bottom-right
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](09fig09_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Let’s take the result shown in [figure 9.9](#ch09fig09) as an example. The
+    output of the model (`"2034-07-18"`) correctly translates the input date (`"JUL
+    18, 2034"`). The rows of the attention matrix correspond to the input characters
+    (`"J"`, `"U"`, `"L"`, `" "`, and so forth), while the columns correspond to the
+    output characters (`"2"`, `"0"`, `"3"`, and so forth). So, each element of the
+    attention matrix indicates how much attention is paid to the corresponding input
+    character when the corresponding output character is generated. The higher the
+    element’s value, the more attention is paid. For instance, look at the fourth
+    column of the last row: that is, the one that corresponds to the last input character
+    (`"4"`) and the fourth output character (`"4"`). It has a relatively high value,
+    as indicated by the color scale. This makes sense because the last digit of the
+    year part of the output should indeed depend primarily on the last digit of the
+    year part in the input string. By contrast, other elements in that column have
+    lower values, which indicates that the generation of the character `"4"` in the
+    output string did not use much information from other characters of the input
+    string. Similar patterns can be seen in the month and day parts of the output
+    string. You are encouraged to experiment with other input date formats and see
+    how the attention matrix changes.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 9.3.2\. The encoder-decoder architecture and the attention mechanism
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: This section helps you develop intuition for how the encoder-decoder architecture
+    solves the seq2seq problem and what role the attention mechanism plays in it.
+    An in-depth discussion of the mechanisms is presented alongside with the code
+    in the following deep-dive section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Up to this point, all the neural networks we’ve seen output a single item.
+    For a regression network, the output is just a single number; for a classification
+    network, it’s a single probability distribution over a number of possible categories.
+    But the date-conversion problem we are faced with is different: instead of predicting
+    a single item, we need to predict a number of them. Specifically, we need to predict
+    exactly 10 characters for the ISO-8601 date format. How should we achieve this
+    using a neural network?'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The solution is to create a network that outputs a sequence of items. In particular,
+    since the output sequence is made of discrete symbols from an “alphabet” with
+    exactly 11 items (0 through 9, as well as the hyphen), we let the output tensor
+    shape of the network have a 3D shape: `[numExamples, OUTPUT_LENGTH, OUTPUT_VOCAB_
+    SIZE]`. The first dimension (`numExamples`) is the conventional example dimension
+    that enables batch processing like all other networks we’ve seen in this book.
+    `OUTPUT_ LENGTH` is 10—that is, the fixed length of the output date string in
+    the ISO-8601 format. `OUTPUT_VOCAB_SIZE` is the size of the output vocabulary
+    (or more accurately, “output alphabet”), which includes the digits 0 through 9
+    and the hyphen (-), in addition to a couple of characters with special meanings
+    that we’ll discuss later.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: So that covers the model’s output. How about the model’s inputs? It turns out
+    the model takes *two* inputs instead of one. The model can be divided roughly
+    into two parts, the encoder and the decoder, as is shown schematically in [figure
+    9.10](#ch09fig10). The first input of the model goes into the encoder part. It
+    is the input date string itself, represented as a sequence of character indices
+    of shape `[numExamples, INPUT_LENGTH]`. `INPUT_LENGTH` is the maximum possible
+    length among the supported input date formats (which turns out to be 12). Inputs
+    shorter than that length are padded with zeros at the end. The second input goes
+    into the decoder part of the model. It is the conversion result shifted to the
+    right by one time step, and it has a shape of `[numExamples, OUTPUT_LENGTH]`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 9.10\. How the encoder-decoder architecture converts an input date string
+    into an output one. `ST` is the special starting token for the decoder’s input
+    and output. Panels A and B show the first two steps of the conversion, respectively.
+    After the first conversion step, the first character in the output (`"2"`) is
+    generated. After the second step, the second character (`"0"`) is generated. The
+    remaining steps follow the same pattern and are hence omitted.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](09fig10_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Wait, the first input makes sense because it’s the input date string, but why
+    does the model take the conversion result as an additional input? Isn’t that meant
+    to be the *out**put* of the model? The key lies in the shifting of the conversion
+    result. Note that the second input is *not* exactly the conversion result. Instead,
+    it is a time-delayed version of the conversion result. The time delay is by exactly
+    one step. For example, if during training, the desired conversion result is `"2034-07-18"`,
+    then the second input to the model will be `"<ST>2034-07-1"`, where `<ST>` is
+    a special start-of-sequence symbol. This shifted input lets the decoder be aware
+    of the output sequence that has been generated so far. It makes it easier for
+    the decoder to keep track of where it is in the conversion process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This is analogous to how humans speak. When you put a thought into words, your
+    mental effort is spent on two things: the concept itself and what you’ve said
+    so far. The latter part is important to ensure coherent, complete, and nonrepetitive
+    speech. Our model works in a similar fashion: to generate every output character,
+    it uses the information from both the input date string and the output characters
+    that have been generated so far.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The time-delaying of the conversion result works during the training phase
+    because we already know what the correct conversion result is. But how does it
+    work during inference? The answer can be seen in the two panels of [figure 9.10](#ch09fig10):
+    we generate the output characters one by one.^([[13](#ch09fn13)]) As panel A of
+    the figure shows, we start by sticking an `ST` symbol at the beginning of the
+    decoder’s input. Through one step of inference (one `Model.predict()` call), we
+    obtain a new output item (the `"2"` in the panel). This new output item is then
+    appended to the decoder input. Then the next step of conversion ensues. It sees
+    the newly generated output character `"2"` in the decoder input (see panel B of
+    [figure 9.10](#ch09fig10)). This step involves another `Model.predict()` call
+    and generates a new output character (`"0"`), which is again appended to the decoder
+    input. This process repeats until the desired length of the output (10 in this
+    case) is reached. Notice that the output doesn’t include the `ST` item, so it
+    can be used directly as the final output of the entire algorithm.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ^(13)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: The code that implements the step-by-step conversion algorithm is the function
+    `runSeq2SeqInference()` in date-conversion-attention/model.js.
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: The role of the attention mechanism
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: The role of the attention mechanism is to enable each output character to “attend”
+    to the correct characters in the input sequence. For example, the `"7"` part of
+    the output string `"2034-07-18"` should attend to the `"JUL"` part of the input
+    date string. This is again analogous to how humans generate language. For instance,
+    when we translate a sentence from language A to language B, each word in the output
+    sentence is usually determined by a small number of words from the input sentence.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This may seem like a no-brainer: it’s hard to imagine what other approaches
+    might work better. But the introduction of the attention mechanism introduced
+    by deep-learning researchers around 2014–2015 was a major advancement in the field.
+    To understand the historical reason behind this, look at the arrow that connects
+    the Encoder box with the Decoder box in panel A of [figure 9.10](#ch09fig10).
+    This arrow represents the last output of an LSTM in the encoder part of the model,
+    which is passed to an LSTM in the decoder part of the model as its initial state.
+    Recall that the initial state of RNNs is typically all-zero (for example, the
+    simpleRNN we used in [section 9.1.2](#ch09lev2sec2)); however, TensorFlow.js allows
+    you to set the initial state of an RNN to any given tensor value of the correct
+    shape. This can be used as a way to pass upstream information to an LSTM. In this
+    case, the encoder-to-decoder connection uses this mechanism to let the decoder
+    LSTM access the encoded input sequence.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: However, the initial state is an entire input sequence packed into a single
+    vector. It turns out that this representation is a little too condensed for the
+    decoder to unpack, especially for longer and more complex sequences (such as the
+    sentences seen in typical machine-translation problems). This is where the attention
+    mechanism comes into play.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The attention mechanism expands the “field of view” available to the decoder.
+    Instead of using just the encoder’s final output, the attention mechanism accesses
+    the entire sequence of the encoder’s output. At each step of the conversion process,
+    the mechanism attends to specific time steps in the encoder’s output sequence
+    in order to decide what output character to generate. For example, the first conversion
+    step may pay attention to the first two input characters, while the second conversion
+    step pays attention to the second and third input characters, and so forth (see
+    [figure 9.10](#ch09fig10) for a concrete example of such an attention matrix).
+    Just like all weight parameters of the neural network, an attention model *learns*
+    the way in which it allocated attention, instead of hard-coding a policy. This
+    makes the model flexible and powerful: it can learn to attend to different parts
+    of the input sequence depending on both the input sequence itself and what has
+    been generated in the output sequence so far.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is as far as we can go in talking about the encoder-decoder mechanism without
+    looking at the code or opening the black boxes that are the encoder, decoder,
+    and attention mechanism. If this treatment sounds too high-level or too vague
+    to you, read the next section, where we’ll dive a little deeper into the nuts
+    and bolts of the model. This is worth the mental effort for those who wish to
+    get a deeper understanding of the attention-based encoder-decoder architecture.
+    To motivate you to read it, realize that the same architecture underlies systems
+    such as state-of-the-art machine-translation models (Google Neural Machine Translation,
+    or GNMT), even though these production models employ more layers of LSTMs and
+    are trained on much larger amounts of data than the simple date-conversion model
+    we are dealing with here.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 9.3.3\. Deep dive into the attention-based encoder-decoder model
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: '[Figure 9.11](#ch09fig11) expands the boxes in [figure 9.10](#ch09fig10) and
+    provides a more detailed view of their internal structures. It is most illustrative
+    to view it in conjunction with the code that builds the model: `createModel()`
+    function in date-conversion-attention/model.js. We’ll next walk through the important
+    aspects of the code.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 9.11\. Deep dive into the attention-based encoder-decoder model. You
+    can think of this figure as an expanded view of the encoder-decoder architecture
+    outlined in [figure 9.10](#ch09fig10), with finer-grained details depicted.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](09fig11_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'First, we define a couple of constants for the embedding and LSTM layers in
+    the encoder and decoder:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The model we will construct takes two inputs, so we must use the functional
+    model API instead of the sequential API. We start from the model’s symbolic inputs
+    for the encoder input and the decoder input, respectively:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: The encoder and decoder both apply an embedding layer on their respective input
+    sequences. The code for the encoder looks like
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This is similar to the embedding layers we used in the IMDb sentiment problem,
+    but it embeds characters instead of words. This shows that the embedding method
+    is not limited to words. In fact, it is flexible enough to be applied on any finite,
+    discrete set, such as music genres, articles on a news website, airports in a
+    country, and so forth. The `maskZero: true` configuration of the embedding layer
+    instructs the downstream LSTM to skip steps with all-zero values. This saves unnecessary
+    computation on sequences that have already ended.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'LSTM is an RNN type we haven’t covered in detail yet. We won’t go into its
+    internal structure here. It suffices to say that it is similar to GRU ([figure
+    9.4](#ch09fig04)) in that it addresses the vanishing-gradient problem by making
+    it easier to carry a state over multiple time steps. Chris Olah’s blog post “Understanding
+    LSTM Networks,” for which a pointer is provided in “[Materials for further reading](#ch09lev1sec4)”
+    at the end of the chapter, presents an excellent review and visualization of the
+    structure and mechanisms of LSTMs. Our encoder LSTM is applied on the character-embedding
+    vectors:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `returnSequences:` `true` configuration lets the output of the LSTM be a
+    sequence of output vectors instead of the default output of a single vector that’s
+    the final output (as we did in the temperature-prediction and sentiment-analysis
+    models). This step is required by the downstream attention mechanism.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `GetLastTimestepLayer` layer that follows the encoder LSTM is a custom-defined
+    layer:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: It simply slices the time-sequence tensor along the time dimension (the second
+    dimension) and outputs the last time step. This allows us to send the final state
+    of the encoder LSTM to the decoder LSTM as its initial state. This connection
+    is one of the ways in which the decoder gets information about the input sequence.
+    This is illustrated in [figure 9.11](#ch09fig11) with the arrow that connects
+    *h*[12] in the green encoder block to the decoder LSTM layer in the blue decoder
+    block.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The decoder part of the code begins with an embedding layer and an LSTM layer
+    reminiscent of the encoder’s topology:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the last line of this code snippet, notice how the final state of the encoder
+    is used as the initial state of the decoder. In case you wonder why the symbolic
+    tensor `encoderLast` is repeated in the last line of code here, it is because
+    an LSTM layer contains two states, unlike the one-state structure we’ve seen in
+    simpleRNN and GRU.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The additional, and more powerful, way in which the decoder gets a view at
+    the input sequences is, of course, the attention mechanism. The attention is a
+    dot product (element-by-element product) between the encoder LSTM’s output and
+    the decoder LSTM’s output, followed by a softmax activation:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: The encoder LSTM’s output has a shape of `[null, 12, 64]`, where 12 is the input
+    sequence’s length and 64 is the LSTM’s size. The decoder LSTM’s output has a shape
+    of `[null, 10, 64]`, where 10 is the output sequence’s length and 64 is the LSTM’s
+    size. A dot product between the two is performed along the last (LSTM features)
+    dimension, which gives rise to a shape of `[null, 10, 12]` (that is, `[null, inputLength,
+    outputLength]`). The softmax applied on the dot product turns the values into
+    probability scores, which are guaranteed to be positive and sum to 1 along each
+    column of the matrix. This is the attention matrix that’s central to our model.
+    Its value is what’s visualized in the earlier [figure 9.9](#ch09fig09).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The attention matrix is then applied on the sequential output from the encoder
+    LSTM. This is how the conversion process learns to pay attention to different
+    elements of the input sequence (in its encoded form) at each step. The result
+    of applying the attention on the encoder’s output is called the *context*:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The context has a shape of `[null,` `10,` `64]` (that is, `[null,` `outputLength,`
+    `lstmUnits]`). It is concatenated with the decoder’s output, which also has a
+    shape of `[null, 10, 64]`. So, the result of the concatenation has a shape of
+    `[null, 10, 128]`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`decoderCombinedContext` contains the feature vectors that go into the final
+    stage of the model, namely, the stage that generates the output characters.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The output characters are generated using an MLP that contains one hidden layer
+    and a softmax output layer:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: Thanks to the `timeDistributed` layer, all steps share the same MLP. The `timeDistributed`
+    layer takes a layer and calls it repeatedly over all steps along the time dimension
+    (that is, the second dimension) of its input. This converts the input feature
+    shape of `[null, 10, 128]` to `[null, 10, 13]`, where 13 corresponds to the 11
+    possible characters of the ISO-8601 date format, as well as the 2 special characters
+    (padding and start-of-sequence).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'With all the pieces in place, we assemble them together into a `tf.Model` object
+    with two inputs and one output:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To prepare for training, we call the `compile()` method with a categorical
+    cross-entropy loss function. The choice of this loss function is based on the
+    fact that the conversion problem is essentially a classification problem—at each
+    time step, we choose a character from the set of all possible characters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: At inference time, an `argMax()` operation is applied on the model’s output
+    tensor to obtain the winning output character. At every step of the conversion,
+    the winning output character is appended to the decoder’s input, so the next conversion
+    step can use it (see the arrow on the right end of [figure 9.11](#ch09fig11)).
+    As we mentioned before, this iterative process eventually yields the entire output
+    sequence.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Materials for further reading
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Chris Olah, “Understanding LSTM Networks,” blog, 27 Aug. 2015, [http://mng.bz/m4Wa](http://mng.bz/m4Wa).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Chris Olah and Shan Carter, “Attention and Augmented Recurrent Neural Networks,”
+    Distill, 8 Sept. 2016, [https://distill.pub/2016/augmented-rnns/](https://distill.pub/2016/augmented-rnns/).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Andrej Karpathy, “The Unreasonable Effectiveness of Recurrent Neural Networks,”
+    blog, 21 May 2015, [http://mng.bz/6wK6](http://mng.bz/6wK6).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Zafarali Ahmed, “How to Visualize Your Recurrent Neural Network with Attention
+    in Keras,” Medium, 29 June 2017, [http://mng.bz/6w2e](http://mng.bz/6w2e).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In the date-conversion example, we described a decoding technique based on `argMax()`.
+    This approach is often referred to as the *greedy decoding* technique because
+    it extracts the output symbol of the highest probability at every step. A popular
+    alternative to the greedy-decoding approach is *beam-search* decoding, which examines
+    a larger range of possible output sequences in order to determine the best one.
+    You can read more about it from Jason Brownlee, “How to Implement a Beam Search
+    Decoder for Natural Language Processing,” 5 Jan. 2018, [https://machinelearningmastery.com/beam-search-decoder-natural-language-processing/](https://machinelearningmastery.com/beam-search-decoder-natural-language-processing/).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Stephan Raaijmakers, *Deep Learning for Natural Language Processing*, Manning
+    Publications, in press, [www.manning.com/books/deep-learning-for-natural-language-processing](http://www.manning.com/books/deep-learning-for-natural-language-processing).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Exercises
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Try rearranging the order of the data elements for various nonsequential data.
+    Confirm that such reordering has no effect on the loss-metric values (for example,
+    accuracy) of the modeling (beyond random fluctuation caused by random initialization
+    of the weight parameters). You can do this for the following two problems:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: In the iris-flower example (from [chapter 3](kindle_split_014.html#ch03)), rearrange
+    the order of the four numeric features (petal length, petal width, sepal length,
+    and sepal width) by making changes to the line
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_PRE
+- en: in the iris/data.js file of the tfjs-examples repo. In particular, alter the
+    order of the four elements in `data[indices[i]]`. This can be done through calls
+    to the `slice()` and `concat()` methods of the JavaScript array. Note that the
+    order rearrangement ought to be the same for all examples. You may write a JavaScript
+    function to perform the reordering.
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: In the linear regressor and MLP that we developed for the Jena-weather problem,
+    try reordering the 240 time steps *and* the 14 numeric features (weather-instrument
+    measurements). Specifically, you can achieve this by modifying the `nextBatchFn()`
+    function in jena-weather/data.js. The line where it is the easiest to implement
+    the reordering is
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_PRE
+- en: where you can map the index `exampleRow` to a new value using a function that
+    performs a fixed permutation and map `exampleCol` in a similar manner.
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: The 1D convnet we built for the IMDb sentiment analysis consisted of only one
+    conv1d layer (see [listing 9.8](#ch09ex08)). As we discussed, stacking more conv1d
+    layers on top of it may give us a deeper 1D convnet capable of capturing order
+    information over a longer span of words. In this exercise, practice modifying
+    the code in the `buildModel()` function of sentiment/train.js. The goal is to
+    add another conv1d layer after the existing one, retrain the model, and observe
+    if there is any improvement in its classification accuracy. The new conv1d layer
+    may use the same number of filters and kernel size as the existing one. Also,
+    read the output shapes in the summary of the modified model and make sure you
+    understand how the `filters` and `kernelSize` parameters lead to the output shape
+    of the new conv1d layer.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'In the date-conversion-attention example, try adding a couple more input date
+    formats. Following are the new formats you can choose from, sorted in order of
+    increasing coding difficulty. You can also come up with your own date formats:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'The YYYY-MMM-DD format: for example, “2012-MAR-08” or “2012-MAR-18.” Depending
+    on whether single-digit day numbers are prepadded with a zero (as in 12/03/2015),
+    this can actually be two different formats. However, regardless of the padding,
+    the maximum length of this format is less than 12, and all the possible characters
+    are already in the `INPUT_VOCAB` in date-conversion-attention/date_format.js.
+    Therefore, all it takes is to add a function or two to the file, and those functions
+    can be modeled after existing ones, such as `dateTupleToMMMSpaceDDSpaceYY()`.
+    Make sure you add the new function(s) to the `INPUT_FNS` array in the file, so
+    they can be included in the training. As a best practice, you should also add
+    unit tests for your new date-format functions to date-conversion-attention/date_format_test.js.'
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: A format with ordinal numbers as the day part, such as “Mar 8th, 2012.” Note
+    that this is the same as the existing `dateTupleToMMMSpaceDDComma-SpaceYYYY()`
+    format, except that the day number is suffixed with the ordinal suffices (`"st"`,
+    `"nd"`, and `"th"`). Your new function should include the logic to determine the
+    suffix based on the day value. In addition, you need to revise the `INPUT_LENGTH`
+    constant in date_format_test.js to a larger value because the maximum possible
+    length of the date string in this format exceeds the current value of 12\. Furthermore,
+    the letters `"t"` and `"h"` need to be added to `INPUT_VOCAB`, as they do not
+    appear in any of the three-letter month strings.
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Now consider a format with the full English name of the month spelled out, such
+    as “March 8th, 2012.” What is the maximum possible length of the input date string?
+    How should you change `INPUT_VOCAB` in date_format.js accordingly?
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: By virtue of being able to extract and learn information contained in the sequential
+    order of things, RNNs can outperform feedforward models (for example, MLPs) in
+    tasks that involve sequential input data. We see this through the example of applying
+    simpleRNN and GRU to the temperature-prediction problem.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'There are three types of RNNs available from TensorFlow.js: simpleRNN, GRU,
+    and LSTM. The latter two types are more sophisticated than simpleRNN in that they
+    use a more complex internal structure to make it possible to carry memory state
+    over many time steps, which mitigates the vanishing-gradient problem. GRU is computationally
+    less intensive than LSTM. In most practical problems, you’ll probably want to
+    use GRU and LSTM.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: When building neural networks for text, the text inputs need to be represented
+    as vectors of numbers first. This is called text vectorization. Most frequently
+    used methods of text vectorization include one-hot and multi-hot encoding, as
+    well as the more powerful embedding method.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In word embedding, each word is represented as a nonsparse vector, of which
+    the element values are learned through backpropagation, just like all other weight
+    parameters of the neural network. The function in TensorFlow.js that performs
+    embedding is `tf.layers.embedding()`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: seq2seq problems are different from sequence-based regression and classification
+    problems in that they involve generating a new sequence as the output. RNNs can
+    be used (together with other layer types) to form an encoder-decoder architecture
+    to solve seq2seq problems.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In seq2seq problems, the attention mechanism enables different items of the
+    output sequence to selectively depend on specific elements of the input sequence.
+    We demonstrate how to train an attention-based encoder-decoder network to solve
+    a simple date-conversion problem and visualize the attention matrix during inference.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL

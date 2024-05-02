@@ -1,0 +1,2363 @@
+- en: Chapter 11\. Basics of deep reinforcement learning
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '*This chapter covers*'
+  prefs: []
+  type: TYPE_NORMAL
+- en: How reinforcement learning differs from the supervised learning discussed in
+    the previous chapters
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The basic paradigm of reinforcement learning: agent, environment, action, and
+    reward, and the interactions between them'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The general ideas behind two major approaches to solving reinforcement-learning
+    problems: policy-based and value-based methods'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Up to this point in this book, we have focused primarily on a type of machine
+    learning called *supervised learning*. In supervised learning, we train a model
+    to give us the correct answer given an input. Whether it’s assigning a class label
+    to an input image ([chapter 4](kindle_split_015.html#ch04)) or predicting future
+    temperature based on past weather data ([chapters 8](kindle_split_020.html#ch08)
+    and [9](kindle_split_021.html#ch09)), the paradigm is the same: mapping a static
+    input to a static output. The sequence-generating models we visited in [chapters
+    9](kindle_split_021.html#ch09) and [10](kindle_split_022.html#ch10) were slightly
+    more complicated in that the output is a sequence of items instead of a single
+    item. But those problems can still be reduced to one-input-one-output mapping
+    by breaking the sequences into steps.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this chapter, we will look at a very different type of machine learning called
+    *reinforcement learning* (RL). In RL, our primary concern is not a static output;
+    instead, we train a model (or an *agent* in RL parlance) to take actions in an
+    environment with the goal of maximizing a metric of success called a *reward*.
+    For example, RL can be used to train a robot to navigate the interior of a building
+    and collect trash. In fact, the environment doesn’t have to be a physical one;
+    it can be any real or virtual space that an agent takes actions in. The chess
+    board is the environment in which an agent can be trained to play chess; the stock
+    market is the environment in which an agent can be trained to trade stocks. The
+    generality of the RL paradigm makes it applicable to a wide range of real-world
+    problems ([figure 11.1](#ch11fig01)). Also, some of the most spectacular advances
+    in the deep-learning revolution involve combining the power of deep learning with
+    RL. These include bots that can beat Atari games with superhuman skill and algorithms
+    that can beat world champions at the games of Go and chess.^([[1](#ch11fn1)])
+  prefs: []
+  type: TYPE_NORMAL
+- en: ¹
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: David Silver et al., “Mastering Chess and Shogi by Self-Play with a General
+    Reinforcement Learning Algorithm,” submitted 5 Dec. 2017, [https://arxiv.org/abs/1712.01815](https://arxiv.org/abs/1712.01815).
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: 'Figure 11.1\. Example real-world applications of reinforcement learning. Top
+    left: Solving board games such as chess and Go. Top right: algorithmic trading
+    of stocks. Bottom left: automated resource management in data centers. Bottom
+    right: control and action planning in robotics. All images are free license and
+    downloaded from [www.pexels.com](http://www.pexels.com).'
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](11fig01a_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: The fascinating topic of RL differs from the supervised-learning problems we
+    saw in the previous chapters in some fundamental ways. Unlike learning input-output
+    mappings in supervised learning, RL is about discovering optimal decision-making
+    processes by interacting with an environment. In RL, we are not given labeled
+    training datasets; instead, we are given different types of environments to explore.
+    In addition, time is an indispensable and foundational dimension in RL problems,
+    unlike in many supervised-learning problems, which either lack a time dimension
+    or treat time more or less like a spatial dimension. As a result of RL’s unique
+    characteristics, this chapter will involve a vocabulary and way of thinking very
+    different from the previous chapters. But don’t worry. We will use simple and
+    concrete examples to illustrate the basic concepts and approaches. In addition,
+    our old friends, deep neural networks and their implementations in TensorFlow.js,
+    will still be with us. They will form an important pillar (albeit not the only
+    one!) of the RL algorithms that we’ll encounter in this chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: By the end of the chapter, you should be familiar with the basic formulation
+    of RL problems, understand the basic ideas underlying two commonly used types
+    of neural networks in RL (policy networks and Q-networks), and know how to train
+    such networks using the API of TensorFlow.js.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 11.1\. The formulation of reinforcement-learning problems
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '[Figure 11.2](#ch11fig02) lays out the major components of an RL problem. The
+    agent is what we (the RL practitioners) have direct control over. The agent (such
+    as a robot collecting trash in a building) interacts with the environment in three
+    ways:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: At each step, the agent takes an *action*, which changes the state of the environment.
+    In the context of our trash-collecting robot, for instance, the set of actions
+    to choose from may be `{go forward, go backward, turn left, turn right, grab trash,
+    dump trash into container}`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Once in a while, the environment provides the agent with a *reward*, which can
+    be understood in anthropomorphic terms as a measurement of instantaneous pleasure
+    or fulfillment. But in more abstract terms, a reward (or rather, a sum of rewards
+    over time, as we’ll see later) is a number that the agent tries to maximize. It
+    is an important numeric value that guides RL algorithms in a way similar to how
+    loss values guide supervised-learning algorithms. A reward can be positive or
+    negative. In the example of our trash-collecting robot, a positive reward can
+    be given when a bag of trash is dumped successfully into the robot’s trash container.
+    In addition, a negative reward should be given when the robot knocks over a trash
+    can, bumps into people or furniture, or dumps trash outside its container.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Apart from the reward, the agent can observe the state of the environment through
+    another channel, namely, *observation*. This can be the full state of the environment
+    or only the part of it visible to the agent, possibly distorted through a certain
+    imperfect channel. For our trash-collecting robot, observations are the streams
+    of images and signals from cameras and various types of sensors on its body.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Figure 11.2\. A schematic diagram of the basic formulation of RL problems. At
+    each time step, an agent selects an action from the set of possible actions, which
+    causes a change in the state of the environment. The environment provides the
+    agent with a reward according to its current state and the action selected. The
+    state of the environment is fully or partially observed by the agent, which will
+    use that state to make decisions about future actions.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](11fig01_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: The formulation just defined is somewhat abstract. Let’s look at some concrete
+    RL problems and get a sense of the range of possibilities the formulation encompasses.
+    In this process, we will also glance at the taxonomy of all the RL problems out
+    there. First let’s consider actions. The space from which the agent can choose
+    its actions can be discrete or continuous. For example, RL agents that play board
+    games usually have discrete action spaces because in such problems, there are
+    only a finite set of moves to choose from. However, an RL problem that involves
+    controlling a virtual humanoid robot to walk bipedally^([[2](#ch11fn2)]) involves
+    a continuous action space because torques on the joints are continuous-varying
+    quantities. The example problems we’ll cover in this chapter will be about discrete
+    action spaces. Note that in some RL problems, continuous action spaces can be
+    turned into discrete ones through discretization. For example, DeepMind’s StarCraft
+    II game agent divides the high-resolution 2D screen into coarser rectangles to
+    determine where to move units or launch attacks.^([[3](#ch11fn3)])
+  prefs: []
+  type: TYPE_NORMAL
+- en: ²
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: 'See the Humanoid environment in OpenAI Gym: [https://gym.openai.com/envs/Humanoid-v2/](https://gym.openai.com/envs/Humanoid-v2/).'
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ³
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: 'Oriol Vinyals et al., “StarCraft II: A New Challenge for Reinforcement Learning,”
+    submitted 16 Aug. 2017, [https://arxiv.org/abs/1708.04782](https://arxiv.org/abs/1708.04782).'
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Rewards, which play a centric role in RL problems, also show variations. First,
+    some RL problems involve only positive rewards. For example, as we’ll see shortly,
+    an RL agent whose goal is to balance a pole on a moving cart gets only positive
+    rewards. It gets a small positive reward for every time step it keeps the pole
+    standing. However, many RL problems involve a mix of positive and negative rewards.
+    Negative rewards can be thought of as “penalties” or “punishment.” For instance,
+    an agent that learns to shoot a basketball at the hoop should receive positive
+    rewards for goals and negative ones for misses.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Rewards can also vary in the frequency of occurrence. Some RL problems involve
+    a continuous flow of rewards. Take the aforementioned cart-pole problem, for example:
+    as long as the pole is still standing, the agent receives a (positive) reward
+    at each and every time step. On the other hand, consider a chess-playing RL agent—the
+    reward comes only at the end, when the outcome of the game (win, lose, or draw)
+    is determined. There are also RL problems between these two extremes. For instance,
+    our trash-collecting robot may receive no reward at all in the steps between two
+    successful trash dumps—that is, when it’s just moving from place A to place B.
+    Also, an RL agent trained to play the Atari game Pong doesn’t receive a reward
+    at every step (frame) of the video game; instead, it is rewarded positively once
+    every few steps, when the bat it controls hits the ball and bounces back toward
+    the opponent. The example problems we’ll visit in this chapter contain a mix of
+    RL problems with high and low reward frequencies of occurrence.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Observation is another important factor in RL problems. It is a window through
+    which the agent can glance at the state of the environment and form a basis on
+    which to make decisions apart from any reward. Like actions, observations can
+    be discrete (such as in a board or card game) or continuous (as in a physical
+    environment). One question you might want to ask is why our RL formulation separates
+    observation and reward into two entities, even though they can both be viewed
+    as feedback provided by the environment to the agent. The answer is conceptual
+    clarity and simplicity. Although the reward can be regarded as an observation,
+    it is what the agent ultimately “cares” about. Observation may contain both relevant
+    and irrelevant information, which the agent needs to learn to filter and make
+    smart use of.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Some RL problems reveal the entire state of the environment to the agent through
+    observation, while others make available only parts of their states. Examples
+    of the first kind include board games such as chess and Go. For the latter kind,
+    good examples are card games like poker, in which you cannot see your opponent’s
+    hand, as well as stock trading. Stock prices are determined by many factors, such
+    as the internal operations of the companies and the mindset of other stock traders
+    on the market. But very few of these states are directly observable by the agent.
+    As a result, the agent’s observations are limited to the moment-by-moment history
+    of stock prices, perhaps in addition to publicly available information such as
+    financial news.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This discussion sets up the playground in which RL happens. An interesting
+    thing worth pointing out about this formulation is that the flow of information
+    between the agent and the environment is bidirectional: the agent acts on the
+    environment; the environment, in turn, provides the agent with rewards and state
+    information. This distinguishes RL from supervised learning, in which the flow
+    of information is largely unidirectional: the input contains enough information
+    for an algorithm to predict the output, but the output doesn’t act on the input
+    in any significant way.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Another interesting and unique fact about RL problems is that they must happen
+    along the time dimension in order for the agent-environment interaction to consist
+    of multiple rounds or steps. Time can be either discrete or continuous. For instance,
+    RL agents that solve board games usually operate on a discrete time axis because
+    such games are played out in discrete turns. The same applies to video games.
+    However, an RL agent that controls a physical robotic arm to manipulate objects
+    is faced with a continuous time axis, even though it may still choose to take
+    actions at discrete points in time. In this chapter, we will focus on discrete-time
+    RL problems.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This theoretical discussion of RL should be enough for now. In the next section,
+    we will start exploring some actual RL problems and algorithms hands-on.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '11.2\. Policy networks and policy gradients: The cart-pole example'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The first RL problem we’ll solve is a simulation of a physical system in which
+    a cart carrying a pole moves on a one-dimensional track. Aptly named the *cart-pole*
+    problem, it was first proposed by Andrew Barto, Richard Sutton, and Charles Anderson
+    in 1983.^([[4](#ch11fn4)]) Since then, it has become a benchmark problem for control-systems
+    engineering (somewhat analogous to the MNIST digit-recognition problem for supervised
+    learning), owing to its simplicity and well-formulated physics and math, as well
+    as to the fact that it is not entirely trivial to solve. In this problem, the
+    agent’s goal is to control the movement of a cart by exerting leftward or rightward
+    forces in order to keep a pole standing in balance for as long as possible.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ⁴
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Andrew G. Barto, Richard S. Sutton, and Charles W. Anderson, “Neuronlike Adaptive
+    Elements that Can Solve Difficult Learning Control Problems,” *IEEE Transactions
+    on Systems, Man, and Cybernetics*, Sept./Oct. 1983, pp. 834–846, [http://mng.bz/Q0rG](http://mng.bz/Q0rG).
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: 11.2.1\. Cart-pole as a reinforcement-learning problem
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: Before going further, you should play with the cart-pole example to get an intuitive
+    understanding of the problem. The cart-pole problem is simple and lightweight
+    enough that we perform the simulation and training entirely in the browser. [Figure
+    11.3](#ch11fig03) offers a visual depiction of the cart-pole problem, which you
+    can find in the page opened by the `yarn watch` command. To checkout and run the
+    example, use
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Figure 11.3\. Visual rendering of the cart-pole problem. Panel A: four physical
+    quantities (cart position *x*, cart velocity *x*′, pole tilt angle θ, and pole
+    angular velocity θ′) make up the environment state and observation. At each time
+    step, the agent may choose a leftward-force action or a rightward-force one, which
+    will change the environment state accordingly. Panels B and C: the two conditions
+    that will cause a game to end—either the cart goes too much to the left or to
+    the right (B) or the pole tilts too much from the upright position (C).'
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](11fig02_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Click the Create Model button and then the Train button. You should then see
+    an animation at the bottom of the page showing an untrained agent performing the
+    cart-pole task. Since the agent’s model has its weights initialize random values
+    (more on the model later), it will perform quite poorly. All time steps from the
+    beginning of a game to the end are sometimes referred to collectively as an *episode*
+    in RL terminology. We will use the terms *game* and *episode* interchangeably
+    here.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As panel A in [figure 11.3](#ch11fig03) shows, the position of the cart along
+    the track at any time step is captured by a variable called *x*. Its instantaneous
+    velocity is denoted *x*'. In addition, the tilt angle of the pole is captured
+    by another variable called θ. The angular velocity of the pole (how fast θ changes
+    and in what direction) is denoted θ'. Together, the four physical quantities (*x*,
+    *x*', θ, and θ') are completely observed by the agent at every step and constitute
+    the observation part of this RL problem.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The simulation ends when either of two conditions is met:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The value of *x* goes out of a prespecified bound, or, in physical terms, the
+    cart bumps into one of the walls on the two ends of the track (panel B in [figure
+    11.3](#ch11fig03)).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The absolute value of θ exceeds a certain threshold, or, in physical terms,
+    the pole tilts too much away from the upright position (panel C in [figure 11.3](#ch11fig03)).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The environment also terminates an episode after the 500th simulation step.
+    This prevents the game from lasting too long (which can happen once the agent
+    gets very good at the game through learning). This upper bound on the number of
+    steps is adjustable in the UI. Until the game ends, the agent gets a reward of
+    a unit (`1`) at every step of the simulation. Therefore, in order to achieve a
+    higher cumulative reward, the agent needs to find a way to keep the pole standing.
+    But how does the agent control the cart-pole system? This brings us to the action
+    part of this RL problem.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As the Force arrows in panel A of [figure 11.3](#ch11fig03) show, the agent
+    is limited to two possible actions at every step: exerting a force to the left
+    or to the right on the cart. The agent must choose one of the two force directions.
+    The magnitude of the force is fixed. Once the force is exerted, the simulation
+    will enact a set of mathematical equations to compute the next state (new values
+    of *x*, *x*'', θ, and θ'') of the environment. The details involve familiar Newtonian
+    mechanics. We won’t cover the detailed equations, as understanding them is not
+    essential here, but they are available in the cart-pole/cart_pole.js file under
+    the cart-pole directory if you are interested.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Likewise, the code that renders the cart-pole system in an HTML canvas can
+    be found in cart-pole/ui.js. This code underlines an advantage of writing RL algorithms
+    in JavaScript (in particular, in TensorFlow.js): the UI and the learning algorithm
+    can be conveniently written in the same language and be tightly integrated with
+    each other. This facilitates the visualization and intuitive understanding of
+    the problem and speeds up the development process. To summarize the cart-pole
+    problem, we can describe it in the canonical RL formulation (see [table 11.1](#ch11table01)).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Table 11.1\. Describing the cart-pole problem in the canonical RL formulation
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '| Abstract RL concept | Realization in the cart-pole problem |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Environment | A cart carrying a pole and moving on a one-dimensional track.
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Action | (Discrete) Binary choice between a leftward force and a rightward
+    one at each step. The magnitude of the force is fixed. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Reward | (Frequent and positive-only) For each step of the game episode,
+    the agent receives a fixed reward (1). The episode ends as soon as the cart hits
+    a wall at one end of the track, or the pole tilts too much from the upright position.
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Observation | (Complete state, continuous) At each step, the agent can access
+    the full state of the cart-pole system, including the cart position (*x*) and
+    velocity (*x*''), in addition to the pole tilt angle (θ) and angular velocity
+    (θ''). |'
+  prefs: []
+  type: TYPE_TB
+- en: 11.2.2\. Policy network
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'Now that the cart-pole RL problem is laid out, let’s look at how to solve it.
+    Historically, control theorists have devised ingenious solutions to this problem.
+    Their solutions are based on the underlying physics of this system.^([[5](#ch11fn5)])
+    That’s *not* how we will approach the problem in this book. In the context of
+    this book, doing that would be somewhat analogous to writing heuristics to parse
+    edges and corners in MNIST images in order to classify the digits. Instead, we
+    will ignore the physics of the system and let our agent learn through repeated
+    trial and error. This jibes with the spirit of the rest of this book: instead
+    of hard-coding an algorithm or manually engineering features based on human knowledge,
+    we design an algorithm that allows the model to learn on its own.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ⁵
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: 'If you are interested in the traditional, non-RL approach to the cart-pole
+    problem and are not scared of the math, you can read the open courseware of a
+    control-theory course at MIT by Russ Tedrake: [http://mng.bz/j5lp](http://mng.bz/j5lp).'
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: How can we let the agent decide the action (leftward versus rightward force)
+    to take at each step? Given the observations available to the agent and the decision
+    the agent has to make at every step, this problem can be reformulated as a simple
+    input-output mapping problem like the ones in supervised learning. A natural solution
+    is to build a neural network to select an action based on the observation. This
+    is the basic idea behind the *policy network*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This neural network takes a length-4 observation vector (*x*, *x*', θ, and θ')
+    and outputs a number that can be translated into a left-versus-right decision.
+    The network architecture is similar to the binary classifier we built for the
+    phishing websites in [chapter 3](kindle_split_014.html#ch03). Abstractly, at each
+    step, we will look at the environment and use our network to decide which action
+    to take. By letting our network play a number of rounds, we will collect some
+    data with which to evaluate those decisions. Then, we will invent a way to assign
+    quality to those decisions so that we can adjust the weights of our network so
+    that it will make decisions more like the “good” ones and less like the “bad”
+    ones in the future.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The details of this system are different from our previous classifier work
+    in the following aspects:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The model is invoked many times in the course of a game episode (at every time
+    step).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The model’s output (the output from the Policy Network box in [figure 11.4](#ch11fig04))
+    is logits instead of probability scores. The logits are subsequently converted
+    into probability scores through a sigmoid function. The reason we don’t include
+    the sigmoid nonlinearity directly in the last (output) layer of the policy network
+    is that we need the logits for training, as we’ll see shortly.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Figure 11.4\. How the policy network fits into our solution to the cart-pole
+    problem. The policy network is a TensorFlow.js model that outputs the probability
+    of the leftward-force action by using the observation vector (*x*, *x*′, θ, and
+    θ′) as the input. The probability is converted to an actual action through random
+    sampling.
+  prefs:
+  - PREF_IND
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](11fig03_alt.jpg)'
+  prefs:
+  - PREF_IND
+  type: TYPE_IMG
+- en: The probability output by the sigmoid function must be converted to a concrete
+    action (left versus right). This is done through the random-sampling `tf.multinomial()`
+    function call. Recall that we used `tf.multinomial()` in the lstm-text-generation
+    example in [chapter 10](kindle_split_022.html#ch10), when we sampled the next
+    character using softmax probabilities over letters of the alphabet to sample the
+    next character. The situation here is slightly simpler because there are only
+    two choices.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The last point has deeper implications. Consider the fact that we *could* convert
+    the output of the `tf.sigmoid()` function directly into an action by applying
+    a threshold (for example, selecting the left action when the network’s output
+    is greater than 0.5 and the right action otherwise). Why do we prefer the more
+    complicated random-sampling approach with `tf.multinomial()` over this simpler
+    approach? The answer is that we *want* the randomness that comes with `tf.multinomial()`.
+    In the early phase of the training, the policy network is clueless about how to
+    select the direction of the force because its weights are initialized randomly.
+    By using random sampling, we encourage it to try random actions and see which
+    ones work better. Some of the random trials will end up being bad, while others
+    will give good results. Our algorithm will remember the good choices and make
+    more of them in the future. But these good choices won’t become available unless
+    the agent is allowed to try randomly. If we had chosen the deterministic threshold
+    approach, the model would be stuck with its initial choices.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This brings us to a classical and important topic in RL called *exploration
+    versus exploitation*. *Exploration* refers to random tries; it is the basis on
+    which good actions are discovered by the RL agent. *Exploitation* means making
+    the optimal solutions that the agent has learned in order to maximize the reward.
+    The two are incompatible with each other. Finding a good balance between them
+    is critical to designing working RL algorithms. In the beginning, we want to explore
+    a diverse array of possible strategies, but as we converge on better strategies,
+    we want to fine-tune those strategies. So, there is generally a gradual ramping
+    down of exploration with training in many algorithms. In the cart-pole problem,
+    the ramping is implicit in the `tf.multinomial()` sampling function because it
+    gives more and more deterministic outcomes when the model’s confidence level increases
+    with training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Listing 11.1](#ch11ex01) (excerpted from cart-pole/index.js) shows the TensorFlow.js
+    calls that create the policy network. The code in [listing 11.2](#ch11ex02) (also
+    excerpted from cart-pole/index.js) converts the policy network’s output into the
+    agent’s action, in addition to returning the logits for training purposes. Compared
+    to the supervised-learning models we encountered in the previous chapters, the
+    model-related code here is not much different.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: However, what’s fundamentally different here is the fact that we don’t have
+    a set of labeled data that can be used to teach the model which action choices
+    are good and which are bad. If we had such a dataset, we could simply call `fit()`
+    or `fitDataset()` on the policy network in order to solve the problem, like we
+    did for the models in the previous chapters. But the fact is that we don’t, so
+    the agent has to figure out which actions are good by playing the game and looking
+    at the rewards it gets. In other words, it has to “learn swimming by swimming,”
+    a key feature of RL problems. Next, we’ll look at how that’s done in detail.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Listing 11.1\. Policy network MLP: selecting actions based on observations'
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** hiddenLayerSize controls the sizes of all the policy network’s layers
+    except the last one (output layer).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***2*** inputShape is needed only for the first layer.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***3*** The last layer is hard-coded to have one unit. The single output number
+    will be converted to a probability of selecting the leftward-force action.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Listing 11.2\. Getting the logits and actions from the output of the policy
+    network
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** Converts the logits to the probability values of the leftward action'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***2*** Calculates the probability values for both actions, as they are required
+    by tf.multinomial()'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***3*** Randomly samples actions based on the probability values. The four
+    arguments are probability values, number of samples, random seed (unused), and
+    a flag that indicates that the probability values are normalized.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '11.2.3\. Training the policy network: The REINFORCE algorithm'
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: Now the key question becomes how to calculate which actions are good and which
+    are bad. If we can answer this question, we’ll be able to update the weights of
+    the policy network to make it more likely to pick the good actions in the future,
+    in a way similar to supervised learning. What quickly comes to mind is that we
+    can use the reward to measure how good the actions are. But the cart-pole problem
+    involves rewards that 1) always have a fixed value (`1`) and 2) happen at every
+    step as long as the episode hasn’t ended. So, we can’t simply use the step-by-step
+    reward as a metric, or we’ll end up labeling all actions as equally good. We need
+    to take into account how long each episode lasts.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A naive approach is to sum all the rewards in an episode, which gives us the
+    length of the episode. But can the sum be a good assessment of the actions? It
+    is not hard to realize that it won’t work. The reason is the steps at the end
+    of an episode. Suppose in a long episode, the agent balances the cart-pole system
+    quite well all the way until near the end, when it makes a few bad choices that
+    cause the episode to finally end. The naive summing approach will assign equally
+    good assessment to the bad actions at the end and the good ones from before. Instead,
+    we want to assign higher scores to the actions in the early and middle parts of
+    the episode and assign lower ones to the actions near the end.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This brings us to the idea of *reward discounting*, a simple but important idea
+    in RL that the value of a certain step should equal the immediate reward plus
+    the reward that is expected for the future. The future reward may be equally as
+    important as the immediate reward, or it may be less important. The relative balance
+    can be quantified with a discounting factor called γ (gamma). γ is usually set
+    to a value close to but slightly less than 1, such as 0.95 or 0.99\. We write
+    this in a mathematical equation as
+  prefs: []
+  type: TYPE_NORMAL
+- en: equation 11.1\.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](11fig04.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: In [equation 11.1](#ch11equ01), *v[i]* is the total discounted reward of the
+    state at step *i*, which can be understood as the value of that particular state.
+    It is equal to the immediate reward given to the agent at that step (*r[i]*),
+    plus the reward from the next step (*r[i]*[+1]) discounted by γ, plus a further
+    discounted reward from two steps later, and so forth, up to the end of the episode
+    (step *N*).
+  prefs: []
+  type: TYPE_NORMAL
+- en: To illustrate reward discounting, we show how this equation transforms our original
+    rewards to a more useful value metric in [figure 11.5](#ch11fig05). The top plot
+    in panel A displays the original rewards from all four steps from a short episode.
+    The bottom plot shows the discounted rewards (based on [equation 11.1](#ch11equ01)).
+    Panel B shows the original and discounted total rewards from a longer episode
+    (length = 20) for comparison. From the two panels, we can see that the discounted
+    total reward value is higher in the beginning and lower at the end, which makes
+    sense because we want to assign lower values to actions toward the end of an episode,
+    which causes the game to end. Also, the values at the beginning and middle parts
+    of the longer episode (panel B) are higher than those at the beginning of the
+    shorter one (panel A). This also makes intuitive sense because we want to assign
+    higher values to the actions that lead to longer episodes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Figure 11.5\. Panel A: applying reward discounting ([equation 11.1](#ch11equ01))
+    on rewards from an episode with four steps. Panel B: same as panel A, but from
+    an episode with 20 steps (that is, five times longer than the one in panel A).
+    As a result of the discounting, higher values are assigned to the actions in the
+    beginning of each episode compared to the actions near the end.'
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](11eqa01_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: The reward-discounting equation gives us a set of values that make more sense
+    than the naive summing before. But we are still faced with the question of how
+    to use these discounted reward values to train the policy network. For that, we
+    will use an algorithm called REINFORCE, invented by Ronald Williams in 1992.^([[6](#ch11fn6)])
+    The basic idea behind REINFORCE is to adjust the weights of the policy network
+    to make it more likely to make good choices (choices assigned higher discounted
+    rewards) and less likely to make bad choices (the ones assigned lower discounted
+    rewards).
+  prefs: []
+  type: TYPE_NORMAL
+- en: ⁶
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Ronald J. Williams, “Simple Statistical Gradient-Following Algorithms for Connectionist
+    Reinforcement Learning,” *Machine Learning*, vol. 8, nos. 3–4, pp. 229–256, [http://mng.bz/WOyw](http://mng.bz/WOyw).
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: To this end, we need to calculate the direction in which to change the parameters
+    to make an action more likely given the observation inputs. This is done with
+    the code in [listing 11.3](#ch11ex03) (excerpted from cart-pole/index.js). The
+    function `getGradientsAndSaveActions()` is invoked at every step of the game.
+    It compares the logits (unnormalized probability scores) and the actual action
+    selected at the step and returns the gradient of the discrepancy between the two
+    with respect to the policy network’s weights. This may sound complicated, but
+    intuitively, it’s fairly straightforward. The returned gradient tells the policy
+    network how to change its weights so as to make the choices more like the choices
+    that were actually selected. The gradients, together with the rewards from the
+    training episodes, form the basis of our RL method. This is why this method belongs
+    to the family of RL algorithms called *policy gradients*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 11.3\. Comparing logits and actual actions to obtain gradients for weights
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** getLogitsAndActions() is defined in [listing 11.2](#ch11ex02).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***2*** The sigmoid cross-entropy loss quantifies the discrepancy between the
+    actual action made during the game and the policy network’s output logits.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***3*** Calculates the gradient of the loss with respect to the policy network’s
+    weights'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'During training, we let the agent play a number of games (say, *N* games) and
+    collect all the discounted rewards according to [equation 11.1](#ch11equ01), as
+    well as the gradients from all the steps. Then, we combine the discounted rewards
+    and gradients by multiplying the gradients with a normalized version of the discounted
+    rewards. The reward normalization here is an important step. It linearly shifts
+    and scales all the discounted rewards from the *N* games so that they have an
+    overall mean value of 0 and overall standard deviation of 1\. An example of applying
+    this normalization on the discounted rewards is shown in [figure 11.6](#ch11fig06).
+    It illustrates the normalized, discounted rewards from a short episode (length
+    = 4) and a longer one (length = 20). From this figure, it should be clear what
+    steps are favored by the REINFORCE algorithm: they are the actions made in the
+    early and middle parts of longer episodes. By contrast, all the steps from the
+    shorter (length-4) episode are assigned *negative* values. What does a negative
+    normalized reward mean? It means that when it is used to update the policy network’s
+    weights later, it will steer the network *away* from making a similar choice of
+    actions given similar state inputs in the future. This is in contrast to a positive
+    normalized reward, which will steer the policy network *toward* choosing similar
+    actions given similar inputs in the future.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 11.6\. Normalizing the discounted rewards from the two episodes with
+    lengths 4 (panel A) and 20 (panel B). We can see that the normalized, discounted
+    rewards have the highest values at the beginning of the length-20 episode. The
+    policy gradient method will use these discounted reward values to update the weights
+    of the policy network, which will make the network less likely to make the action
+    choices that resulted in the bad rewards in the first case (length = 4) and more
+    likely to make the choices that resulted in the good rewards in the beginning
+    part of the second case (length = 20) (given the same state inputs as before,
+    that is).
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](11fig05_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: The code for the normalization of the discounted rewards, and using it to scale
+    the gradients, is somewhat tedious but not complicated. It is in the `scaleAndAverageGradients()`
+    function in cart-pole/index.js, which is not listed here for the sake of brevity.
+    The scaled gradients are used to update the policy network’s weights. With the
+    weights updated, the policy network will output higher logits for the actions
+    from the steps assigned higher discounted rewards and lower logits for the actions
+    from the steps assigned lower ones.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'That is basically how the REINFORCE algorithm works. The core training logic
+    of the cart-pole example, which is based on REINFORCE, is shown in [listing 11.4](#ch11ex04).
+    It is a reiteration of the steps described previously:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Invoke the policy network to get logits based on current agent observation.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Randomly sample an action based on the logits.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Update the environment using the sampled action.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Remember the following for updating weights later (step 7): the logits and
+    the selected action, as well as the gradients of the loss function with respect
+    to the policy network’s weights. These gradients are referred to as *policy gradients*.'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Receive a reward from the environment, and remember it for later (step 7).
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Repeat steps 1–5 until `numGames` episodes are completed.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Once all `numGames` episodes have ended, discount and normalize the rewards
+    and use the results to scale the gradients from step 4\. Then update the policy
+    network’s weights using the scaled gradients. (This is where the policy network’s
+    weights get updated.)
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: (Not shown in [listing 11.4](#ch11ex04)) Repeat steps 1–7 `numIterations` times.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Compare these steps with the code in the listing (excerpted from cart-pole/index.js)
+    to make sure you can see the correspondence and follow the logic.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 11.4\. Cart-pole example’s training loop implementing the REINFORCE
+    algorithm
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** Loops over specified number of episodes'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***2*** Randomly initializes a game episode'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***3*** Loops over steps of the game'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***4*** Keeps track of the gradients from every step for later REINFORCE training'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***5*** The agent takes an action in the environment.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***6*** As long as the game hasn’t ended, the agent receives a unit reward
+    per step.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***7*** Discounts and normalizes the rewards (key step of REINFORCE)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***8*** Updates the policy network’s weights using the scaled gradients from
+    all steps'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: To see the REINFORCE algorithm in action, specify 25 epochs on the demo page
+    and click the Train button. By default, the state of the environment is displayed
+    in real time during training so that you can see repeated tries by the learning
+    agent. To speed up the training, uncheck the Render During Training check box.
+    Twenty-five epochs of training will take a few minutes on a reasonably up-to-date
+    laptop and should be sufficient to achieve ceiling performance (500 steps per
+    game episode in the default setting). [Figure 11.7](#ch11fig07) shows a typical
+    training curve, which plots the average episode length as a function of the training
+    iteration. Notice that the training progress shows some dramatic fluctuation,
+    with the mean number of steps changing in a nonmonotonic and highly noisy fashion
+    over the iterations. This type of fluctuation is not uncommon in RL training jobs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 11.7\. A curve showing the average number of steps the agent survives
+    in the cart-pole episodes as a function of the number of training iterations.
+    The perfect score (500 steps in this case) is attained at around iteration 20\.
+    This result is obtained with a hidden layer size of 128\. The highly nonmonotonic
+    and fluctuating shape of the curve is not uncommon among RL problems.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](11fig06_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: After the training completes, click the Test button, and you should see the
+    agent do a good job keeping the cart-pole system balanced over many steps. Since
+    the testing phase doesn’t involve a maximum number of steps (500 by default),
+    it is possible that the agent can keep the episode going for over 1,000 steps.
+    If it continues too long, you can click the Stop button to terminate the simulation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To wrap up this section, [figure 11.8](#ch11fig08) recapitulates the formulation
+    of the problem and the role of the REINFORCE policy-gradient algorithm. All major
+    parts of the solution are depicted in this figure. At each step, the agent uses
+    a neural network called the *policy network* to estimate the likelihood that the
+    leftward action (or, equivalently, the rightward one) is the better choice. This
+    likelihood is converted into an actual action through a random sampling process
+    that encourages the agent to explore early on and obeys the certainty of the estimates
+    later. The action drives the cart-pole system in the environment, which in turn
+    provides the agent with rewards until the end of the episode. This process repeats
+    a number of episodes, during which the REINFORCE algorithm remembers the reward,
+    the action, and the policy network’s estimate at every step. When it’s time for
+    REINFORCE to update the policy network, it distinguishes good estimates from the
+    network from bad ones through reward discounting and normalization, and then uses
+    the results to nudge the network’s weights in the direction of making better estimates
+    in the future. This process iterates a number of times until the end of the training
+    (for instance, when the agent reaches a threshold performance).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 11.8\. A schematic diagram illustrating the REINFORCE algorithm-based
+    solution to the cart-pole problem. This diagram is an expanded view of the diagram
+    in [figure 11.4](#ch11fig04).
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](11fig07_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'All the elegant technical details aside, let’s take a step back and look at
+    the bigger picture of RL embodied in this example. The RL-based approach has clear
+    advantages over non-machine-learning methods such as traditional control theory:
+    the generality and the economy of human effort. In cases where the system has
+    complex or unknown characteristics, the RL approach may be the only viable solution.
+    If the characteristics of the system change over time, we won’t have to derive
+    new mathematical solutions from scratch: we can just re-run the RL algorithm and
+    let the agent adapt itself to the new situation.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The disadvantage of the RL approach, which is still an unsolved question in
+    the field of RL research, is that it requires many repeated trials in the environment.
+    In the case of the cart-pole example, it took about 400 game episodes to reach
+    the target level of proficiency. Some traditional, non-RL approaches may require
+    no trial at all. Implement the control-theory-based algorithm, and the agent should
+    be able to balance the pole from episode 1\. For a problem like cart-pole, RL’s
+    hunger for repeated trials is not a major problem because the computer simulation
+    of the environment is simple, fast, and cheap. However, in more realistic problems,
+    such as self-driving cars and object-manipulating robot arms, this problem of
+    RL becomes a more acute and pressing challenge. No one can afford crashing a car
+    or breaking a robotic arm hundreds or thousands of times in order to train an
+    agent, not to mention the prohibitively long time it would take to run the RL
+    training algorithm in such real-world problems.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This concludes our first RL example. The cart-pole problem has some special
+    characteristics that don’t hold in other RL problems. For example, many RL environments
+    don’t provide a positive reward to the agent at every step. In some situations,
+    the agent may need to make dozens of decisions, if not more, before it can be
+    rewarded positively. In the gaps between the positive rewards, there may be no
+    reward, or there may be only negative rewards (it can be argued that many real-world
+    endeavors, such as studying, exercising, and investing, are like that!). In addition,
+    the cart-pole system is “memoryless” in the sense that the dynamics of the system
+    don’t depend on what the agent did in the past. Many RL problems are more complex
+    than that, in that the agent’s action changes certain aspects of the environment.
+    The RL problem we’ll study in the next section will show both sparse positive
+    rewards and an environment that changes with action history. To tackle the problem,
+    we’ll introduce another useful and popular RL algorithm, called *deep* *Q-learning*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '11.3\. Value networks and Q-learning: The snake game example'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: We will use the classic action game called *snake* as our example problem to
+    cover deep Q-learning. As we did in the last section, we’ll first describe the
+    RL problem and the challenge it poses. In doing so, we’ll also discuss why policy
+    gradients and REINFORCE won’t be very effective on this problem.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 11.3.1\. Snake as a reinforcement-learning problem
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: First appearing in 1970s arcade games, snake has become a well-known video game
+    genre. The snake-dqn directory in tfjs-examples contains a JavaScript implementation
+    of a simple variant of it. You can check out the code with
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the web page opened by the `yarn watch` command, you can see a board of the
+    snake game. You can load a pretrained and hosted deep Q-network (DQN) model and
+    observe it play the game. Later, we’ll talk about how you can train such a model
+    from scratch. For now, you should be able to get an intuitive sense of how this
+    game works through observing. In case you aren’t already familiar with the snake
+    game, its settings and rules can be summarized as follows.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, all actions happen in a 9 × 9 grid world (see an example in [figure
+    11.9](#ch11fig09)). The world (or board) can made be larger, but 9 × 9 is the
+    default size in our example. There are three types of squares on the board: the
+    snake, the fruit, and the empty space. The snake is represented by blue squares,
+    except the head, which is colored orange with a semicircle representing the snake’s
+    mouth. The fruit is represented by a green square with a circle inside. The empty
+    squares are white. The game happens in steps—or, in video game terminology, *frames*.
+    At each frame, the agent must choose from three possible actions for the snake:
+    go straight, turn left, or turn right (staying put is not an option). The agent
+    is rewarded positively when the head of the snake comes into contact with a fruit
+    square, in which case the fruit square will disappear (get “eaten” by the snake),
+    and the length of the snake will increase by one at the tail. A new fruit will
+    appear in one of the empty squares. The agent will be rewarded negatively if it
+    doesn’t eat a fruit at a step. The game terminates (the snake “dies”) when the
+    head of the snake goes out of bounds (as in panel B of [figure 11.9](#ch11fig09))
+    or runs into its own body (as in panel C).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Figure 11.9\. The snake game: a grid world in which the player controls a snake
+    to eat fruit. The snake’s “goal” is to eat as many fruits as possible through
+    an efficient movement pattern (panel A). The length of the snake grows by 1 every
+    time a fruit is eaten. The game ends (the snake “dies”) as soon as the snake goes
+    out of bounds (panel B) or bumps into its own body (panel C). Note that in panel
+    B, the snake’s head reaches the edge position, and then an upward motion (a go-straight
+    action) ensues that causes the game to terminate. Simply reaching the edge squares
+    with the snake’s head won’t result in termination. Eating every fruit leads to
+    a large positive reward. Moving one square without eating a fruit incurs a negative
+    reward that is smaller in magnitude. Game termination (the snake dying) also incurs
+    a negative reward.'
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](11fig08_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: One key challenge in the snake game is the snake’s growth. If not for this rule,
+    the game would be much simpler. Simply navigate the snake to the fruit over and
+    over, and there’s no limit to the reward the agent can get. With the length-growth
+    rule, however, the agent must learn to avoid bumping into its own body, which
+    gets harder as the snake eats more fruit and grows longer. This is the nonstatic
+    aspect of the snake RL problem that the cart-pole environment lacks, as we mentioned
+    at the end of the last section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Table 11.2](#ch11table02) describes the snake problem in the canonical RL
+    formulation. Compared with the formulation of the cart-pole problem ([table 11.1](#ch11table01)),
+    the biggest difference is in the reward structure. In the snake problem, the positive
+    rewards (+10 for each fruit eaten) come infrequently—that is, only after a number
+    of negative rewards due to the movement the snake needs to reach the fruit. Given
+    the size of the board, two positive rewards may be spaced out by as much as 17
+    steps even if the snake moves in the most efficient manner. The small negative
+    reward is a penalty that encourages the snake to move in a more straightforward
+    path. Without this penalty, the snake can move in a meandering and indirect way
+    and still receive the same rewards, which will make the gameplay and training
+    process unnecessarily long. This sparse and complex reward structure is also the
+    main reason why the policy gradient and REINFORCE method will not work well on
+    this problem. The policy-gradient method works better when the rewards are frequent
+    and simple, as in the cart-pole problem.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Table 11.2\. Describing the snake-game problem in the canonical RL formulation
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '| Abstract RL concept | Realization in the snake problem |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Environment | A grid world that contains a moving snake and a self-replenishing
+    fruit. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Action | (Discrete) Ternary choice: go straight, turn left, or turn right.
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Reward | (Frequent, mixed positive negative rewards)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Eating fruit—Large positive reward (+10)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Moving without eating fruit—Small negative reward (–0.2)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Dying—Large negative reward (–10)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '|'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| Observation | (Complete state, discrete) At each step, the agent can access
+    the full state of the game: that is, what is in every square of the board. |'
+  prefs: []
+  type: TYPE_TB
+- en: The JavaScript API of snake
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: 'Our JavaScript implementation of snake can be found in the file snake-dqn/snake_
+    game.js. We will describe only the API of the `SnakeGame` class and spare you
+    the implementation details, which you can study at your own pleasure if they are
+    of interest to you. The constructor of the `SnakeGame` class has the following
+    syntax:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here, the size parameters of the board, `height` and `width`, have default values
+    of 9\. `numFruits` is the number of fruits present on the board at any given time;
+    it has a default value of 1\. `initLen`, the initial length of the snake, defaults
+    to 2.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `step()` method exposed by the `game` object allows the caller to play
+    one step in the game:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The argument to the `step()` method represents the action: 0 for going straight,
+    1 for turning left, and 2 for turning right. The return of the `step()` value
+    has the following fields:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`state`—The new state of the board immediately after the action, represented
+    as a plain JavaScript object with two fields:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`s`—The squares occupied by the snake, as an array of `[x, y]` coordinates.
+    The elements of this array are ordered such that the first element corresponds
+    to the head and the last element to the tail.'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`f`—The `[x, y]` coordinates of the square(s) occupied by the fruit(s).Note
+    that this representation of the game state is designed to be efficient, which
+    is necessitated by the Q-learning algorithm’s storage of a large number (for example,
+    tens of thousands) of such state objects, as we will soon see. An alternative
+    is to use an array or nested array to record the status of every square of the
+    board, including the empty ones. This would be much less space-efficient.'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`reward`—The reward given to the snake at the step, immediately after the action
+    takes place. This is a single number.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`done`—A Boolean flag indicating whether the game is over immediately after
+    the action takes place.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`fruitEaten`—A Boolean flag indicating whether a fruit was eaten by the snake
+    in the step as a result of the action. Note that this field is partly redundant
+    with the `reward` field because we can infer from `reward` whether a fruit was
+    eaten. It is included for simplicity and to decouple the exact values of the rewards
+    (which may be tunable hyperparameters) from the binary event of fruit eaten versus
+    fruit not eaten.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: As we will see later, the first three fields (`state`, `reward`, and `done`)
+    will play important roles in the Q-learning algorithm, while the last field (`fruitEaten`)
+    is mainly for monitoring.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 11.3.2\. Markov decision process and Q-values
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'To explain the deep Q-learning algorithm we will apply on the snake problem,
+    it is necessary to first go a little abstract. In particular, we will introduce
+    the *Markov decision process* (MDP) and its underlying math at a basic level.
+    Don’t worry: we’ll use simple and concrete examples and tie the concepts to the
+    snake problem we have at hand.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'From the viewpoint of MDP, the history of an RL environment is a sequence of
+    transitions through a finite set of discrete states. In addition, the transitions
+    between the states follow a particular type of rule:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*The state of the environment at the next step is determined completely by
+    the state and the action taken by the agent at the current step.*'
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: 'The key is that the next state depends on *only* two things: the current state
+    and the action taken, and nothing more. In other words, MDP assumes that your
+    history (how you got to your current state) is irrelevant to deciding what you
+    should do next. It is a powerful simplification that makes the problem more tractable.
+    What is a *non-Markov decision process*? That would be a case in which the next
+    state depends on not only the current state and the current action but also the
+    states or actions at earlier steps, potentially going all the way back to the
+    beginning of the episode. In the non-Markov scenario, the math would be much more
+    complex, and a much greater amount of computational resources would be required
+    to solve the math.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The MDP requirement makes intuitive sense for a lot of RL problems. A game of
+    chess is a good example of this. At any step of the game, the board configuration
+    (plus which player’s turn it is) fully characterizes the game state and provides
+    all the information the player needs for calculating the next move. In other words,
+    it is possible to resume a chess game from the board configuration without knowing
+    the previous moves. (Incidentally, this is why newspapers can post chess puzzles
+    in a very space-efficient way.) Video games such as snake are also consistent
+    with the MDP formulation. The positions of the snake and the fruit on the board
+    fully characterize the game state and are all it takes to resume the game from
+    that point or for the agent to decide the next action.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Even though problems such as chess and snake are fully compatible with MDP,
+    they each involve an astronomical number of possible states. In order to present
+    MDP in an intuitive and visual fashion, we need a simpler example. In [figure
+    11.10](#ch11fig10), we show a very simple MDP problem in which there are only
+    seven possible states and two possible agent actions. The transition between the
+    states is governed by the following rules:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The initial state is always *s*[1].
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: From state s[1], if the agent takes action *a*[1], the environment will enter
+    state *s*[2]. If the agent takes action *a*[2], the environment will enter state
+    *s*[3].
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: From each of the states *s*[2] and *s*[3], the transition into the next state
+    follows a similar set of bifurcating rules.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'States *s*[4], *s*[5], *s*[6], and *s*[7] are terminal states: if any of the
+    states is reached, the episode ends.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Figure 11.10\. A very simple concrete example of the Markov decision process
+    (MDP). States are represented as gray circles labeled with *s[n]*, while actions
+    are represented as gray circles labeled with *a[m]*. The reward associated with
+    each state transition caused by an action is labeled with *r* = *x*.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](11fig09_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: So, each episode in this RL problem lasts exactly three steps. How should the
+    agent in this RL problem decide what action to take at the first and second steps?
+    Given that we are dealing with an RL problem, the question makes sense only if
+    the rewards are considered. In MDP, each action not only causes a state transition
+    but also leads to a reward. In [figure 11.10](#ch11fig10), the rewards are depicted
+    as the arrows that connect actions with the next states, labeled with `r = <reward_value>`.
+    The agent’s goal is, of course, to maximize the total reward (discounted by a
+    factor). Now imagine we are the agent at the first step. Let’s examine the thought
+    process through which we’ll decide which of *a*[1] or *a*[2] is the better choice.
+    Let’s suppose the reward discount factor (γ) has a value of 0.9.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The thought process goes like this. If we pick action *a*[1], we will get an
+    immediate reward of –3 and transition to state *s*[2]. If we pick action *a*[2],
+    we will get an immediate reward of 3 and transition to state *s*[3]. Does that
+    mean *a*[2] is a better choice because 3 is greater than –3? The answer is no,
+    because 3 and –3 are just the immediate rewards, and we haven’t taken into account
+    the rewards from the following steps. We should look at the *best possible* outcome
+    from each of *s*[2] and *s*[3]. What is the best outcome from *s*[2]? It is the
+    outcome engendered by action *a*[2], which gives a reward of 11\. That leads to
+    the best discounted reward we can expect if we take the action *a*[1] from state
+    *s*[1]:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| Best reward from state *s*[1] taking action *a*[1] | = immediate reward +
+    discounted future reward |'
+  prefs: []
+  type: TYPE_TB
+- en: '|   | = –3 + γ * 10 |'
+  prefs: []
+  type: TYPE_TB
+- en: '|   | = –3 + 0.9 * 10 |'
+  prefs: []
+  type: TYPE_TB
+- en: '|   | = 6 |'
+  prefs: []
+  type: TYPE_TB
+- en: Similarly, the best outcome from state *s*[3] is if we take action *a*[1], which
+    gives us a reward of –4\. Therefore, if we take action *a*[2] from state *s*[1],
+    the best discounted reward for us is
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| Best reward from state *s*[1] taking action *a*[2] | = immediate reward +
+    discounted future reward |'
+  prefs: []
+  type: TYPE_TB
+- en: '|   | = 3 + γ * –4 |'
+  prefs: []
+  type: TYPE_TB
+- en: '|   | = 3 + 0.9 * –4 |'
+  prefs: []
+  type: TYPE_TB
+- en: '|   | = 0.6 |'
+  prefs: []
+  type: TYPE_TB
+- en: The discounted rewards we calculated here are examples of what we refer to as
+    a *Q-values*. A Q-value is the expected total cumulative reward (with discounting)
+    for an action at a given state. From these Q-values, it is clear that *a*[1] is
+    the better choice at state *s*[1]—a different conclusion from what we’d reach
+    if we considered only the immediate reward caused by the first action. Exercise
+    3 at the end of the chapter guides you through the Q-value calculation for more
+    realistic scenarios of MDP that involve stochasticity.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The example thought process described may seem trivial. But it leads us to an
+    abstraction that plays a central role in Q-learning. A Q-value, denoted *Q*(*s*,
+    *a*), is a function of the current state (*s*) and the action (*a*). In other
+    words, *Q*(*s*, *a*) is a function that maps a state-action pair to the estimated
+    value of taking the particular action at the particular state. This value is farsighted,
+    in the sense that it accounts for best future rewards, under the assumption of
+    optimal actions at all future steps.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Thanks to its farsightedness, *Q*(*s*, *a*) `is all we need to decide on the
+    best action at any given state. In particular, given that we know what *Q*(*s*,
+    *a*) is, the best action is the one that gives us the highest Q-value among all
+    possible actions:`
+  prefs: []
+  type: TYPE_NORMAL
+- en: equation 11.2\.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](11fig10_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: where *N* is the number of all possible actions. If we have a good estimate
+    of *Q*(*s*, *a*), we can simply follow this decision process at every step, and
+    we’ll be guaranteed to get the highest possible cumulative reward. Therefore,
+    the RL problem of finding the best decision-making process is reduced to learning
+    the function *Q*(*s*, *a*). This is why this learning algorithm is called Q-learning.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s stop for a moment and look at how Q-learning differs from the policy-gradient
+    method we saw in the cart-pole problem. Policy gradient is about predicting the
+    best action; Q-learning is about predicting the values of all possible actions
+    (Q-values). While policy gradient tells us which action to choose directly, Q-learning
+    requires an additional “pick-the-maximum” step and is hence slightly more indirect.
+    The benefit afforded by this indirection is that it makes it easier to form a
+    connection between the rewards and values of successive steps, which facilitates
+    learning in problems that involve sparse positive rewards like snake.
+  prefs: []
+  type: TYPE_NORMAL
+- en: What are the connections between rewards and values of successive steps? We
+    have already gotten a glimpse of this when solving the simple MDP problem in [figure
+    11.10](#ch11fig10). This connection can be written mathematically as
+  prefs: []
+  type: TYPE_NORMAL
+- en: equation 11.3\.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](11eqa02_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: where *s*[next] is the state we’ll reach after choosing action `a` from state
+    *s[i]*. This equation, known as the *Bellman equation*,^([[7](#ch11fn7)]) is an
+    abstraction for how we got the numbers 6 and –0.6 for the actions *a*[1] and *a*[2]
+    in the simple earlier example. In plain words, the equation says
+  prefs: []
+  type: TYPE_NORMAL
+- en: ⁷
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Attributed to American applied mathematician Richard E. Bellman (1920–1984).
+    See his book *Dynamic Programming*, Princeton University Press, 1957.
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: '*The Q-value of taking action a at state s[i] is a sum of two terms:*'
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: '*The immediate reward due to `a, and`*'
+  prefs:
+  - PREF_BQ
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '*The best possible Q-value from that next state multiplied by a discounting
+    factor (“best” in the sense of optimal choice of action at the next state)*'
+  prefs:
+  - PREF_BQ
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'The Bellman equation is what makes Q-learning possible and is therefore important
+    to understand. The programmer in you will immediately notice that the Bellman
+    equation ([equation 11.3](#ch11equ03)) is recursive: all the Q-values on the right-hand
+    side of the equation can be expanded further using the equation itself. The example
+    in [figure 11.10](#ch11fig10) we worked through ends after two steps, while real
+    MDP problems usually involve a much larger number of steps and states, potentially
+    even containing cycles in the state-action-transition graph. But the beauty and
+    power of the Bellman equation is that it allows us to turn the Q-learning problem
+    into a supervised learning problem, even for large state spaces. We’ll explain
+    why that’s the case in the next section.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 11.3.3\. Deep Q-network
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: Hand-crafting the function *Q*(*s*, *a*) can be difficult, so we will instead
+    let the function be a deep neural network (the DQN mentioned earlier in the section)
+    and train its parameters. This DQN receives an input tensor that represents the
+    complete state of the environment—that is, the snake board configuration—which
+    is available to the agent as the observation. As [figure 11.11](#ch11fig11) shows,
+    the tensor has a shape `[9, 9, 2]` (excluding the batch dimension). The first
+    two dimensions correspond to the height and width of the game board. Hence, the
+    tensor can be viewed as a bitmap representation of all squares on the board. The
+    last dimension (2) is two channels that represent the snake and the fruit, respectively.
+    In particular, the snake is encoded in the first channel, with the head labeled
+    as 2 and the body labeled as 1\. The fruit is encoded in the second channel, with
+    a value 1\. In both channels, empty squares are represented by 0s. Note that these
+    pixel values and the number of channels are more or less arbitrary. Other value
+    arrangements (such as 100 for the snake’s head and 50 for the snake’s body, or
+    separating the snake’s head and body into two channels) will likely also work,
+    as long as they keep the three types of entities (snake head, snake body, and
+    fruit) distinct.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 11.11\. How the snake game’s board state is represented as a 3D tensor
+    of shape `[9, 9, 2]`
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](11eqa03_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Note that this tensor representation of the game state is much less space-efficient
+    than the JSON representation consisting of the fields `s` and `f` that we described
+    in the previous section, because it always includes all the squares of the board
+    regardless of how long the snake is. This inefficient representation is used only
+    when we use back-propagation to update the DQN’s weights. In addition, only a
+    small number (`batchSize`) of game states are present in this way at any given
+    time, due to the batch-based training paradigm we will soon visit.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The code that converts an efficient representation of the board state into the
+    kind of tensors illustrated in [figure 11.11](#ch11fig11) can be found in the
+    `getStateTensor()` function in snake-dqn/snake_game.js. This function will be
+    used a lot during the DQN’s training, but we omit its details here because it
+    is just mechanically assigning values to the elements of a tensor buffer based
+    on where the snake and fruit are.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You might have noticed that this `[height, width, channel]` input format is
+    exactly what convnets are designed to process. The DQN we use is of the familiar
+    convnet architecture. The code that defines the topology of the DQN can be found
+    in [listing 11.5](#ch11ex05) (excerpted from snake-dqn/dqn.js, with some error-checking
+    code removed for clarity). As the code and the diagram in [figure 11.12](#ch11fig12)
+    show, the network consists of a stack of conv2d layers followed by an MLP. Additional
+    layers including batchNormalization and dropout are inserted to increase the generalization
+    power of the DQN. The output of the DQN has a shape of `[3]` (excluding the batch
+    dimension). The three elements of the output are the predicted Q-values of the
+    corresponding actions (turn left, going straight, and turn right). Thus our model
+    of *Q*(*s*, *a*) is a neural network that takes a state as the input and outputs
+    the Q-values for all possible actions given that state.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 11.12\. A schematic illustration of the DQN that we use as an approximation
+    to the function *Q*(*s*, *a*) for the snake problem. In the “Online DQN” box,
+    “BN” stands for BatchNormalization.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](11fig11_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Listing 11.5\. Creating the DQN for the snake problem
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** The DQN has a typical convnet architecture: it begins with a stack
+    of conv2d layers.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***2*** The input shape matches the tensor representation of the agent’s observation,
+    as shown in [figure 11.11](#ch11fig11).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***3*** batchNormalization layers are added to counter overfitting and improve
+    generalization'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***4*** The MLP portion of the DQN begins with a flatten layer.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***5*** Like batchNormalization, the dropout layer is added to counter overfitting.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Let’s pause for a moment and think about why it makes sense to use a neural
+    network as the function *Q*(*s*, *a*) in this problem. The snake game has a discrete
+    state space, unlike the continuous state space in the cart-pole problem, which
+    consisted of four floating-point numbers. Therefore, the *Q*(*s*, *a*) function
+    could in principle be implemented as a lookup table—that is, one that maps every
+    single possible combination of board configuration and action into a value of
+    *Q*. So why do we prefer a DQN over such a lookup table? The reason: there are
+    far too many possible board configurations with even the relatively small board
+    size (9 × 9),^([[8](#ch11fn8)]) which leads to two major shortcomings of the lookup
+    table approach. First, the system RAM is unable to hold such a huge lookup table.
+    Second, even if we manage to build a system with sufficient RAM, it will take
+    a prohibitively long time for the agent to visit all the states during RL. The
+    DQN addresses the first (memory space) problem thanks to its moderate size (about
+    1 million parameters). It addresses the second (state-visit time) problem because
+    of neural networks’ generalization power. As we’ve seen ample evidence for in
+    the previous chapters, a neural network doesn’t need to see all the possible inputs;
+    it learns to interpolate between training examples through generalization. Therefore,
+    by using DQN, we kill two birds with one stone.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ⁸
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: A back-of-the-envelope calculation leads to the rough estimate that the number
+    of possible board configurations is on the order of at least 10^(15), even if
+    we limit the snake length to 20\. For example, consider the particular snake length
+    of 20\. First, pick a location for the head of the snake, for which there are
+    9 * 9 = 81 possibilities. Then there are four possible locations for the first
+    segment of the body, followed by three possible locations for the second segment,
+    and so forth. Of course, in some body-pose configurations, there will be fewer
+    than three possibilities, but that shouldn’t significantly alter the order of
+    magnitude. Hence, we can estimate the number of possible body configurations of
+    a length-20 snake to be approximately 81 * 4 * 3^(18) ≈ 10^(12). Considering that
+    there are 61 possible fruit locations for each body configuration, the estimate
+    for possible joint snake-fruit configurations goes up to 10^(14). Similar estimations
+    can be applied to shorter snake lengths, from 2 to 19\. Summing all the estimated
+    numbers from the lengths from 2 to 20 gives us the order of magnitude of 10^(15).
+    Video games such as Atari 2600 games involve a much larger number of pixels compared
+    to the number of squares on our snake board, and are therefore even less amenable
+    to the lookup-table approach. This is one of the reasons why DQNs are a suitable
+    technique for solving such video games using RL, as demonstrated in the landmark
+    2015 paper by DeepMind’s Volodymyr Mnih and colleagues.
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: 11.3.4\. Training the deep Q-network
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'Now we have a DQN that estimates the Q-values of all three possible actions
+    at every step of the snake game. To achieve the greatest possible cumulative reward,
+    all we have to do is run the DQN using the observation at every step and pick
+    the action with the highest Q-value. Are we done yet? No, because the DQN is not
+    trained yet! Without proper training, the DQN will contain only randomly initialized
+    weights, and the actions it gives us will be no better than random guesses. Now
+    the snake RL problem has been reduced to the question of how to train the DQN,
+    a topic we’ll cover in this section. The process is somewhat involved. But don’t
+    worry: we’ll use plenty of diagrams, accompanied by code excerpts, to spell out
+    the training algorithm step-by-step.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Intuition behind the deep Q-network’s training
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: We will train our DQN by pressuring it to match the Bellman equation. If all
+    goes well, this means that our DQN will reflect both the immediate rewards and
+    the optimal discounted future rewards.
+  prefs: []
+  type: TYPE_NORMAL
+- en: How can we do that? What we will need is many samples of input-output pairs,
+    the input being the state and action actually taken and the output being the “correct”
+    (target) value of Q. Computing samples of input requires the current state *s[i]*
+    and the action we took at that state, *a[j]*, both of which are directly available
+    in the game history. Computing the target value of Q requires the immediate reward
+    *r[i]* and the next state *s[i]*[+1], which are also available from game history.
+    We can use *r[i]* and *s[i]*[+1] to compute the target Q-value by applying the
+    Bellman equation, the details of which will be covered shortly. We will then calculate
+    the difference between Q-value predicted by the DQN and the target Q-value from
+    the Bellman equation and call that our loss. We will reduce the loss (in a least-squares
+    sense) using standard backpropagation and gradient descent. The machinery making
+    this possible and efficient is somewhat complicated, but the intuition is rather
+    straightforward. We want an estimate of the Q function so we can make good decisions.
+    We know our estimate of Q must match the environmental rewards and the Bellman
+    equation, so we will use gradient descent to make it so. Simple!
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Replay memory: A rolling dataset for the DQN’s training'
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: 'Our DQN is a familiar convnet implemented as an instance of `tf.LayersModel`
+    in TensorFlow.js. With regard to how to train it, the first thing that comes to
+    mind is to call its `fit()` or `fitDataset()` method. However, we can’t use that
+    usual approach here because we don’t have a labeled dataset that contains observed
+    states and the corresponding Q-values. Consider this: before the DQN is trained,
+    there is no way to know the Q-values. If we had a method that gave us the true
+    Q-values, we would just use it in our Markov decision process and be done with
+    it. So, if we confine ourselves to the traditional supervised-learning approach,
+    we will face a chicken-and-egg problem: without a trained DQN, we can’t estimate
+    the Q-values; without a good estimate of Q-values, we can’t train the DQN. The
+    RL algorithm we are about to introduce will help us solve this chicken-and-egg
+    problem.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Specifically, our method is to let the agent play the game randomly (at least
+    initially) and remember what happened at every step of the game. The random-play
+    part is easily achieved using a random-number generator. The remembering part
+    is achieved with a data structure known as *replay memory*. [Figure 11.13](#ch11fig13)
+    illustrates how the replay memory works. It stores five items for every step of
+    the game:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*s[i]*, observation of the current state at step *i* (the board configuration).'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '*a[i]*, action actually performed at the current step (selected either by the
+    DQN as depicted in [figure 11.12](#ch11fig12) or through random selection).'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '*r[i]*, the immediate reward received at this step.'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '*d[i]*, a Boolean flag indicating whether the game ends immediately after the
+    current step. From this, you can see the fact that the replay memory is not just
+    for a single episode of the game. Instead, it concatenates the results from multiple
+    game episodes. Once a previous game is over, the training algorithm simply starts
+    a new one and keeps appending the new records to the replay memory.'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '*s[i]*[+1], the observation from the next step if *d[i]* is false. (If *d[i]*
+    is true, a null is stored as the placeholder.)'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Figure 11.13\. The replay memory used during the training of the DQN. Five pieces
+    of data are pushed to the end of the replay memory at every step. These data are
+    sampled during the DQN’s training.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](11fig12_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'These pieces of data will go into the backpropagation-based training of the
+    DQN. The replay memory can be thought of as a “dataset” for the DQN’s training.
+    However, it’s different from the kind of datasets in supervised learning, in the
+    sense that it keeps getting updated as the training goes on. The replay memory
+    has a fixed length *M* (*M* = 10,000 by default in the example code). When a record
+    (*s[i]*, *a[i]*, *r[i]*, *d[i]*, *s[i]*[+1]) is pushed to its end after a new
+    game step, an old record is popped out from its beginning, which maintains a fixed
+    replay-memory length. This ensures that the replay memory keeps track of what
+    happened in the most recent *M* steps of the training, in addition to avoiding
+    out-of-memory problems. It is beneficial to always train the DQN using the latest
+    game records. Why? Consider the following: once the DQN has been trained for a
+    while and starts to “get the hang of” the game, we won’t want to teach it using
+    old game records like the ones from the beginning of the training because those
+    may contain naive moves that are no longer relevant or conducive to the further
+    training of the network.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The code that implements the replay memory is very simple and can be found
+    in the file snake-dqn/replay_memory.js. We won’t describe the details of the code,
+    except its two public methods, `append()` and `sample()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`append()` allows the caller to push a new record to the end of the replay
+    memory.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`sample(batchSize)` selects `batchSize` records from the replay memory randomly.
+    The records are sampled completely uniformly and will in general include records
+    from multiple different episodes. The `sample()` method will be used to extract
+    training batches during the calculation of the loss function and the subsequent
+    backpropagation, as we will see shortly.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The epsilon-greedy algorithm: Balancing exploration and exploitation'
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: An agent that keeps trying random things will stumble onto some good moves (eat
+    a fruit or two in a snake game) by pure luck. This is useful for kickstarting
+    the agent’s early learning process. In fact, it is the only way because the agent
+    is never told the rules of the game. But if the agent keeps behaving randomly,
+    it won’t make it very far in the learning process, both because random choices
+    lead to accidental deaths and because some advanced states can be achieved only
+    through streaks of good moves.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is the manifestation of the exploration-versus-exploitation dilemma in
+    the snake game. We’ve seen this dilemma in the cart-pole example, where the policy-gradient
+    method addresses the problem thanks to the gradual increase in the determinism
+    of the multinomial `sampling with training. In the snake game, we do not have
+    this luxury because our action selection is based not on `tf.multinomial()` but
+    on selecting the maximum Q-value among the actions. The way in which we address
+    the dilemma is by parameterizing the randomness of the action-selection process
+    and gradually reducing the parameter of randomness. In particular, we use the
+    so-called *epsilon-greedy policy*. This policy can be expressed in pseudo-code
+    as`
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: This logic is applied at every step of the training. The larger the value of
+    epsilon (the closer it is to 1), the more likely the action will be chosen at
+    random. Conversely, a smaller value of epsilon (closer to 0) leads to a higher
+    probability of choosing the action based on the Q-values predicted by the DQN.
+    Choosing actions at random can be viewed as exploring the environment (“epsilon”
+    stands for “exploration”), while choosing actions to maximize the Q-value is referred
+    to as *greedy*. Now you understand where the name *epsilon-greedy* comes from.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As shown in [listing 11.6](#ch11ex06), the actual TensorFlow.js code that implements
+    the epsilon-greedy algorithm in the snake-dqn example has a close one-to-one correspondence
+    with the previous pseudo-code. This code is excerpted from snake-dqn/agent.js.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 11.6\. The part of snake-dqn code that implements the epsilon-greedy
+    algorithm
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** Exploration: picks actions randomly'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***2*** Represents the game state as a tensor'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***3*** Greedy policy: gets predicted Q-values from the DQN and finds the index
+    of the action that corresponds to the highest Q-value'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The epsilon-greedy policy balances the early need for exploration and later
+    need for stable behavior. It does so through gradually ramping down the value
+    of epsilon from a relative large value to a value close to (but not exactly) zero.
+    In our snake-dqn example, epsilon is ramped down in a linear fashion from 0.5
+    to 0.01 over the first 1 × 105 steps of the training. Note that we don’t decrease
+    the epsilon all the way to zero because we need a moderate degree of exploration
+    even at advanced stages of the agent’s training in order to help the agent discover
+    smart new moves. In RL problems based on the epsilon-greedy policy, the initial
+    and final values of epsilon are tunable hyperparameters, and so is the time course
+    of epsilon’s down-ramping.
+  prefs: []
+  type: TYPE_NORMAL
+- en: With the backdrop of our deep Q-learning algorithm set by the epsilon-greedy
+    policy, next let’s examine the details of how the DQN is trained.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Extracting predicted Q-values
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: 'Although we are using a new approach to attack the RL problem, we still want
+    to mold our algorithm into supervised learning because that will allow us to use
+    the familiar backpropagation approach to update the DQN’s weights. Such a formulation
+    requires three things:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Predicted Q-values.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: “True” Q-values. Note that the word “true” is in quotes here because there isn’t
+    really a way to obtain the ground truths for Q-values. These values are merely
+    the best estimates of *Q*(*s*, *a*) that we can come up with at a given stage
+    of the training algorithm. For this reason, we’ll refer to them as the target
+    Q-values instead.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A loss function that takes the predicted and target Q-values and outputs a number
+    that quantifies the mismatch between the two.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In this subsection, we’ll look at how the predicted Q-values can be obtained
+    from the replay memory. The following two subsections will talk about how to obtain
+    the target Q-values and the loss function. Once we have all three, our snake RL
+    problem will basically become a straightforward backpropagation problem.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Figure 11.14](#ch11fig14) illustrates how the predicted Q-values are extracted
+    from the replay memory in a step of the DQN’s training. The diagram should be
+    viewed in conjunction with the implementing code in [listing 11.7](#ch11ex07)
+    to facilitate understanding.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 11.14\. How the predicted Q-values are obtained from the replay memory
+    and the online DQN. This is the first of the two parts that go into the supervised-learning
+    portion of the DQN training algorithm. The result of this workflow, `actionQs`—that
+    is, the Q-values predicted by the DQN—is one of the two arguments that will go
+    into the calculation of the MSE loss together with `targetQs`. See [figure 11.15](#ch11fig15)
+    for the workflow in which `targetQs` is calculated.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](11fig13_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: In particular, we sample `batchSize` (`N = 128` by default) records randomly
+    from the replay memory. As described before, each record has five items. For the
+    purpose of getting the predicted Q-values, we need only the first two. The first
+    items, consisting of the *N* state observations, are converted together into a
+    tensor. This batched observation tensor is processed by the online DQN, which
+    gives the predicted Q-values (`qs` in both the diagram and the code). However,
+    `qs` includes the Q-values for not only the actually selected actions but also
+    the nonselected ones. For our training, we want to ignore the Q-values for the
+    nonselected actions because there isn’t a way to know their target Q-values. This
+    is where the second replay-memory item comes in.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The second items contain the actually selected actions. They are formatted
+    into a tensor representation (`actionTensor` in the diagram and code). `actionTensor`
+    is then used to select the elements of `qs` that we want. This step, illustrated
+    in the box labeled Select Actual Actions in the diagram, is achieved using three
+    TensorFlow.js functions: `tf.oneHot()`, `mul()`, and `sum()` (see the last line
+    in [listing 11.7](#ch11ex07)). This is slightly more complex than slicing a tensor
+    because different actions can be selected at different game steps. The code in
+    [listing 11.7](#ch11ex07) is excerpted from the `SnakeGameAgent.trainOnReplayBatch()`
+    method in snake-dqn/agent.js, with minor omissions for clarity.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 11.7\. Extracting a batch of predicted Q-values from the replay memory
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** Gets a batch of batchSize randomly chosen game records from the replay
+    memory'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***2*** The first element of every game record is the agent’s state observation
+    (see [figure 11.13](#ch11fig13)). It is converted from a JSON object into a tensor
+    by the getStateTensor() function (see [figure 11.11](#ch11fig11)).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***3*** The second element of the game record is the actually selected action.
+    It’s represented as a tensor as well.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***4*** The apply() method is similar to the predict() method, but the “training:
+    true” flag is specified explicitly to enable backpropagation.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***5*** We use tf.oneHot(), mul(), and sum() to isolate the Q-values for only
+    the actually selected actions and discard the ones for the actions not selected.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: These operations give us a tensor called `actionQs`, which has a shape of `[N]`,
+    `N` being the batch size. This is the predicted Q-value that we sought—that is,
+    the predicted *Q*(*s*, *a*) for the state *s* we were in and the action *a* we
+    actually took. Next, we’ll examine how the target Q-values are obtained.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Extracting target Q-values: Using the Bellman equation'
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: 'It is slightly more involved to obtain the target Q-values than the predicted
+    ones. This is where the theoretical Bellman equation will be put to practical
+    use. Recall that the Bellman equation describes the Q-value of a state-action
+    pair in terms of two things: 1) the immediate reward and 2) the maximum Q-value
+    available from the next step’s state (discounted by a factor). The former is easy
+    to obtain. It is directly available as the third item of the replay memory. The
+    `rewardTensor` in [figure 11.15](#ch11fig15) illustrates this schematically.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 11.15\. How the target Q-values (`targetQs`) are obtained from the replay
+    memory and the target DQN. This figure shares the replay-memory and batch-sampling
+    parts with [figure 11.14](#ch11fig14). It should be examined in conjunction with
+    the code in [listing 11.8](#ch11ex08). This is the second of the two parts that
+    goes into the supervised-learning portion of the DQN training algorithm. `targetQs`
+    plays a role similar to the truth labels in supervised-learning problems seen
+    in the previous chapters (for example, known true labels in the MNIST examples
+    or known true future temperature values in the Jena-weather example). The Bellman
+    equation plays a critical role in the calculation of `targetQs`. Together with
+    the target DQN, the equation allows us to calculate the values of `targetQs` through
+    forming a connection between the Q-values of the current step and the Q-values
+    of the ensuing step.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](11fig14_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: To calculate the latter (maximum next-step Q-value), we need the state observation
+    from the next step. Luckily, the next-step observation is stored in the replay
+    memory as the fifth item. We take the next-step observation of the randomly sampled
+    batch, convert it to a tensor, and run it through a copy of the DQN called the
+    *target DQN* (see [figure 11.15](#ch11fig15)). This gives us the estimated Q-values
+    for the next-step states. Once we have these, we perform a `max()` call along
+    the last (actions) dimension, which leads to the maximum Q-values achievable from
+    the next-step state (represented as `nextMaxQTensor` in [listing 11.8](#ch11ex08)).
+    Following the Bellman equation, this maximum value is multiplied by the discount
+    factor (γ in [figure 11.15](#ch11fig15) and `gamma` in [listing 11.8](#ch11ex08))
+    and combined with the immediate reward, which yields the target Q-values (`targetQs`
+    in both the diagram and the code).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that the next-step Q-value exists only when the current step is not the
+    last step of a game episode (that is, it doesn’t cause the snake to die). If it
+    is, then the right-hand side of the Bellman equation will include only the immediate-reward
+    term, as shown in [figure 11.15](#ch11fig15). This corresponds to the `doneMask`
+    tensor in [listing 11.8](#ch11ex08). The code in this listing is excerpted from
+    the `SnakeGameAgent.trainOnReplayBatch()` method in snake-dqn/agent.js, with minor
+    omissions for clarity.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 11.8\. Extracting a batch of target (“true”) Q-values from the replay
+    memory
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** The third item of a replay record contains the immediate reward value.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***2*** The fifth item of a record contains the next-state observation. It’s
+    transformed into a tensor representation.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***3*** The target DQN is used on the next-state tensor, which yields the Q-values
+    for all actions at the next step.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***4*** Uses the max() function to extract the highest possible reward at the
+    next step. This is on the right-hand side of the Bellman equation.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***5*** doneMask has the value 0 for the steps that terminate the game and
+    1 for other steps.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***6*** Uses the Bellman equation to calculate the target Q-values.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: As you may have noticed, an important trick in the deep Q-learning algorithm
+    here is the use of two instances of DQNs. They are called the *online* DQN and
+    the *target* DQN, respectively. The online DQN is responsible for calculating
+    the predicted Q-values (see [figure 11.14](#ch11fig14) in the previous subsection).
+    It is also the DQN that we use to choose the snake’s action when the epsilon-greedy
+    algorithm decides on the greedy (no-exploration) approach. This is why it’s called
+    the “online” network. By contrast, the target DQN is used only to calculate the
+    target Q-values, as we’ve just seen. This is why it’s called the “target” DQN.
+    Why do we use two DQNs instead of one? To break up undesirable feedback loops,
+    which can cause instabilities in the training process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The online DQN and target DQN are created by the same `createDeepQNetwork()`
+    function ([listing 11.5](#ch11ex05)). They are two deep convnets with identical
+    topologies. Therefore, they have exactly the same set of layers and weights. The
+    weight values are copied from the online DQN to the target one periodically (every
+    1,000 steps in the default setting of snake-dqn). This keeps the target DQN up-to-date
+    with the online DQN. Without this synchronization, the target DQN will go out-of-date
+    and hamper the training process by producing poor estimates of the best next-step
+    Q-values in the Bellman equation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Loss function for Q-value prediction and backpropagation
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: With both predicted and target Q-values at hand, we use the familiar `meanSquaredError`
+    loss function to compute the discrepancy between the two ([figure 11.16](#ch11fig16)).
+    At this point, we’ve managed to turn our DQN training process into a regression
+    problem, not unlike previous examples such as Boston-housing and Jena-weather.
+    The error signal from the `meanSquareError` loss drives the backpropagation; the
+    resulting weight updates are used to update the online DQN.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 11.16\. Putting the `actionQs` and `targetQs` together in order to calculate
+    the online DQN’s `meanSquaredError` prediction error and thereby use backpropagation
+    to update its weights. Most parts of this diagram have already been shown in [figures
+    11.12](#ch11fig12) and [11.13](#ch11fig13). The newly added parts are the `meanSquaredError`
+    loss function and the backpropagation step based on it, located in the bottom-right
+    part of the diagram.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](11fig15_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: The schematic diagram in [figure 11.16](#ch11fig16) includes parts we’ve already
+    shown in [figures 11.12](#ch11fig12) and [11.13](#ch11fig13). It puts those parts
+    together and adds the new boxes and arrows for the `meanSquaredError` loss and
+    the backpropagation based on it (see the bottom-right of the diagram). This completes
+    the full picture of the deep Q-learning algorithm we use to train our snake-game
+    agent.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The code in [listing 11.9](#ch11ex09) has a close correspondence with the diagram
+    in [figure 11.16](#ch11fig16). It is the `trainOnReplayBatch()` method of the
+    `SnakeGameAgent` class in snake-dqn/agent.js, which plays a central role in our
+    RL algorithm. The method defines a loss function that calculates the `meanSquaredError`
+    between the predicted and target Q-values. It then calculates the gradients of
+    the `meanSquaredError` with respect to the online DQN’s weights using the `tf.variableGrads()`
+    function ([appendix B](kindle_split_030.html#app02), section B.4 contains a detailed
+    discussion of TensorFlow.js’s gradient-computing functions such as `tf.variableGrads()`).
+    The calculated gradients are used to update the DQN’s weights with the help of
+    an optimizer. This nudges the online DQN in the direction of making more accurate
+    estimates of the Q-values. Repeated over millions of iterations, this leads to
+    a DQN that can guide the snake to a decent performance. For the following listing,
+    the part of the code responsible for calculating the target Q-values (`targetQs`)
+    has already been shown in [listing 11.8](#ch11ex08).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 11.9\. The core function that trains the DQN
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** Gets a random batch of examples from the replay buffe'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***2*** lossFunction returns a scalar and will be used for backpropagation.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***3*** The predicted Q-values'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***4*** The target Q-values calculated by applying the Bellman equation'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***5*** Uses MSE as a measure of the discrepancy between the predicted and
+    target Q-values'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***6*** Calculates the gradient of lossFunction with respect to weights of
+    the online DQN'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***7*** Updates the weights using the gradients through an optimizer'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'That’s it for the internal details of the deep Q-learning algorithm. The training
+    based on this algorithm can be started with the following command in the Node.js
+    environment:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Add the `--gpu` flag to the command to speed up the training if you have a
+    CUDA-enabled GPU. This `--logDir` flag lets the command log the following metrics
+    to the TensorBoard log directory during training: 1) the running average of the
+    cumulative rewards from the 100 most recent game episodes (`cumulativeReward100`);
+    2) the running average of the number of fruits eaten in the 100 most recent episodes
+    (`eaten100`); 3) the value of the exploration parameter (`epsilon`); and 4) the
+    training speed in number of steps per second (`framesPerSecond`). These logs can
+    be viewed by launching TensorBoard with the following commands and navigating
+    to the HTTP URL of the TensorBoard frontend (by default: http://localhost:6006):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[Figure 11.17](#ch11fig17) shows a set of typical log curves from the training
+    process. As seen frequently in RL training, the `cumulativeReward100` and `eaten100`
+    curves both show fluctuation. After a few hours of training, the model is able
+    to reach a best `cumulativeReward100` of 70–80 and a best `eaten100` of about
+    12.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 11.17\. Example logs from a snake-dqn training process in tfjs-node.
+    The panels show 1) `cumulativeReward100`, a moving average of the cumulative reward
+    obtained in the most recent 100 games; 2) `eaten100`, a moving average of the
+    number of fruits eaten in the most recent 100 games; 3) `epsilon`, the value of
+    epsilon, from which you can see the time course of the epsilon-greedy policy;
+    and 4) `framesPerSecond`, a measure of the training speed.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](11fig16_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: The training script also saves the model to the relative path ./models/dqn every
+    time a new best `cumulativeReward100` value has been achieved. The saved model
+    is served from the web frontend when the `yarn watch` command is invoked. The
+    frontend displays the Q-values predicted by the DQN at every step of the game
+    (see [figure 11.18](#ch11fig18)). The epsilon-greedy policy used during training
+    is replaced with the “always-greedy” policy during the post-training gameplay.
+    The action that corresponds to the highest Q-value (for example, 33.9 for going
+    straight in [figure 11.18](#ch11fig18)) is always chosen as the snake’s action.
+    This gives you an intuitive understanding of how the trained DQN plays the game.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 11.18\. The Q-values estimated by a trained DQN are displayed as numbers
+    and overlaid as different shades of green in the game’s frontend.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](11fig17.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: There are a couple of interesting observations from the snake’s behavior. First,
+    the number of fruits actually eaten by the snake in the frontend demo (~18) is
+    on average greater than the `eaten100` curve from the training logs (~12). This
+    is because of the removal of the epsilon-greedy policy, which abolishes random
+    actions in the gameplay. Recall that epsilon is maintained as a small but nonzero
+    value throughout the late stage of the DQN’s training (see the third panel of
+    [figure 11.17](#ch11fig17)). The random actions caused by this lead to premature
+    deaths occasionally, and this is the cost of exploratory behavior. Second, the
+    snake has developed an interesting strategy of going to the edges and corners
+    of the board before approaching the fruit, even when the fruit is located near
+    the center of the board. This strategy is effective in helping the snake reduce
+    the likelihood of bumping into itself when its length is moderately large (for
+    example, in the range of 10–18). This is not bad, but it is not perfect either
+    because there are smarter strategies that the snake hasn’t developed. For example,
+    the snake frequently traps itself in a circle when its length gets above 20\.
+    This is as far as the algorithm in the snake-dqn can take us. To improve the snake
+    agent further, we need to tweak the epsilon-greedy algorithm to encourage the
+    snake to explore better moves when its length is long.^([[9](#ch11fn9)]) In the
+    current algorithm, the degree of exploration is too low once the snake grows to
+    a length that calls for skillful maneuvering around its own body.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ⁹
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: For example, see [https://github.com/carsonprindle/OpenAIExam2018](https://github.com/carsonprindle/OpenAIExam2018).
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: This concludes our tour of the DQN technique for RL. Our algorithm is modeled
+    after the 2015 paper “Human-Level Control through Deep Reinforcement Learning,”^([[10](#ch11fn10)])
+    in which researchers at DeepMind demonstrated for the first time that combining
+    the power of deep neural networks and RL enables machines to solve many Atari
+    2600-style video games. The snake-dqn solution we’ve demonstrated is a simplified
+    version of DeepMind’s algorithm. For instance, our DQN looks at the observation
+    from only the current step, while DeepMind’s algorithm combines the current observation
+    with observations from the previous several steps as the input to the DQN. But
+    our example captures the essence of the groundbreaking technique—namely, using
+    a deep convnet as a powerful function approximator to estimate the state-dependent
+    values of actions, and training it using MDP and the Bellman equation. Subsequent
+    feats by RL researchers, such as conquering the games of Go and chess, are based
+    on a similar wedding between deep neural networks and traditional non-deep-learning
+    RL methods.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ^(10)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Volodymyr Mnih et al., “Human-Level Control through Deep Reinforcement Learning,”
+    *Nature*, vol. 518, 2015, pp. 529–533, [www.nature.com/articles/nature14236/](http://www.nature.com/articles/nature14236/).
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Materials for further reading
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Richard S. Sutton and Andrew G. Barto, *Reinforcement Learning: An Introduction*,
+    A Bradford Book, 2018.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'David Silver’s lecture notes on reinforcement learning at University College
+    London: [http://www0.cs.ucl.ac.uk/staff/d.silver/web/Teaching.html](http://www0.cs.ucl.ac.uk/staff/d.silver/web/Teaching.html).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Alexander Zai and Brandon Brown, *Deep Reinforcement Learning in Action*, Manning
+    Publications, in press, [www.manning.com/books/deep-reinforcement-learning-in-action](http://www.manning.com/books/deep-reinforcement-learning-in-action).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Maxim Laplan, *Deep Reinforcement Learning Hands-On: Apply Modern RL Methods,
+    with Deep Q-networks, Value Iteration, Policy Gradients, TRPO, AlphaGo Zero, and
+    More*, Packt Publishing, 2018.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Exercises
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: In the cart-pole example, we used a policy network consisting of a hidden dense
+    layer with 128 units, as it was the default setting. How does this hyperparameter
+    affect the policy-gradient-based training? Try changing it to a small value such
+    as 4 or 8 and comparing the resulting learning curve (mean steps per game versus
+    iteration curve) with the one from the default hidden-layer size. What does that
+    tell you about the relation between model capacity and its effectiveness in estimating
+    the best action?
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: We mentioned that one of the advantages of using machine learning to solve a
+    problem like cart-pole is the economy of human effort. Specifically, if the environment
+    unexpectedly changes, we don’t need to figure out *how* it has really changed
+    and rework the physical equations. Instead, we can just let the agent re-learn
+    the problem on its own. Prove to yourself that this is the case by following these
+    steps. First, make sure that the cart-pole example is launched from source code
+    and not the hosted web page. Train a working cart-pole policy network using the
+    regular approach. Second, edit the value of `this.gravity` in cart-pole/cart_pole.js
+    and change it to a new value (say, 12, if you want to pretend that we’ve moved
+    the cart-pole setup to an exoplanet with a higher gravity than Earth!). Launch
+    the page again, load the policy network you’ve trained in the first step, and
+    test it. Can you confirm that it performs significantly worse than before, just
+    because of the gravity change? Finally, train the policy network a few more iterations.
+    Can you see the policy getting better at the game again (adapting to the new environment)?
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: (Exercise on MDP and Bellman equation) The example of MDP we presented in [section
+    11.3.2](#ch11lev2sec5) and [figure 11.10](#ch11fig10) was simple in the sense
+    that it was fully deterministic because there is no randomness in the state transitions
+    and the associated rewards. But many real-world problems are better described
+    as stochastic (random) MDPs. In a stochastic MDP, the state the agent will end
+    up in and the reward it will get after taking an action follows a probabilistic
+    distribution. For instance, as [figure 11.19](#ch11fig19) shows, if the agent
+    takes action *A*[1] at state *S*[1], it will end up in state *S*[2] with a probability
+    of 0.5 and in state *S*[3] with a probability of 0.5\. The rewards associated
+    with the two state transitions are different. In such stochastic *MDPs*, the agent
+    must take into account the randomness by calculating the *expected* future reward.
+    The expected future reward is a weighted average of all possible rewards, with
+    weights being the probabilities. Can you apply this probabilistic approach and
+    estimate the Q-values for *a*[1] and *a*[2] at *s*[1] in the figure? Based on
+    the answer, is *a*[1] or *a*[2] the better action at state s1?
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Figure 11.19\. The diagram for the MDP in the first part of exercise 3
+  prefs:
+  - PREF_IND
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](11fig18.jpg)'
+  prefs:
+  - PREF_IND
+  type: TYPE_IMG
+- en: Now let’s look at a slightly more complicated stochastic MDP, one that involves
+    more than one step (see [figure 11.20](#ch11fig20)). In this slightly more complex
+    case, you need to apply the recursive Bellman equation in order to take into account
+    the best possible future rewards after the first action, which are themselves
+    stochastic. Note that sometimes the episode ends after the first step, and sometimes
+    it will last another step. Can you decide which action is better at *s*[1]? For
+    this problem, you can use a reward discount factor of 0.9.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Figure 11.20\. The diagram for the MDP in the second part of exercise 3
+  prefs:
+  - PREF_IND
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](11fig19_alt.jpg)'
+  prefs:
+  - PREF_IND
+  type: TYPE_IMG
+- en: In the snake-dqn example, we used the epsilon-greedy policy to balance the needs
+    for exploration and exploitation. The default setting decreases epsilon from an
+    initial value of 0.5 to a final value of 0.01 and holds it there. Try changing
+    the final epsilon value to a large value (such as 0.1) or a smaller one (such
+    as 0), and observe the effects on how well the snake agent learns. Can you explain
+    the resulting difference in terms of the role epsilon plays?
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: As a type of machine learning, RL is about learning to make optimal decisions.
+    In an RL problem, an agent learns to select actions in an environment to maximize
+    a metric called the *cumulative reward*.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Unlike supervised learning, there are no labeled training datasets in RL. Instead,
+    the agent must learn what actions are good under different circumstances by trying
+    out random actions.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'We explored two commonly used types of RL algorithms: policy-based methods
+    (using the cart-pole example) and Q-value-based methods (using the snake example).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A policy is an algorithm by which the agent picks an action based on the current
+    state observation. A policy can be encapsulated in a neural network that takes
+    state observation as its input and produces an action selection as its output.
+    Such a neural network is called a *policy network*. In the cart-pole problem,
+    we used policy gradients and the REINFORCEMENT method to update and train a policy
+    network.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Unlike the policy-based methods, Q-learning uses a model called *Q-network*
+    to estimate the values of actions under a given observed state. In the snake-dqn
+    example, we demonstrated how a deep convnet can serve as the Q-network and how
+    it can be trained by using the MDP assumption, the Bellman equation, and a construct
+    called *replay* *memory*.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL

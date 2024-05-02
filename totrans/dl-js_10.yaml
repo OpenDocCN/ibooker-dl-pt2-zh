@@ -1,0 +1,2151 @@
+- en: 'Chapter 3\. Adding nonlinearity: Beyond weighted sums'
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '*This chapter covers*'
+  prefs: []
+  type: TYPE_NORMAL
+- en: What nonlinearity is and how nonlinearity in hidden layers of a neural network
+    enhances the network’s capacity and leads to better prediction accuracies
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: What hyperparameters are and methods for tuning them
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Binary classification through nonlinearity at the output layer, introduced with
+    the phishing-website-detection example
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Multiclass classification and how it differs from binary classification, introduced
+    with the iris-flower example
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In this chapter, you’ll build on the groundwork laid in [chapter 2](kindle_split_013.html#ch02)
+    to allow your neural networks to learn more complicated mappings, from features
+    to labels. The primary enhancement we will introduce is *nonlinearity*—a mapping
+    between input and output that isn’t a simple weighted sum of the input’s elements.
+    Nonlinearity enhances the representational power of neural networks and, when
+    used correctly, improves the prediction accuracy in many problems. We will illustrate
+    this point by continuing to use the Boston-housing dataset. In addition, this
+    chapter will introduce a deeper look at *over-* and *underfitting* to help you
+    train models that not only perform well on the training data but also achieve
+    good accuracy on data that the models haven’t seen during training, which is what
+    ultimately counts in terms of models’ quality.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '3.1\. Nonlinearity: What it is and what it is good for'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Let’s pick up where we left off with the Boston-housing example from the last
+    chapter. Using a single dense layer, you saw trained models leading to MSEs corresponding
+    to misestimates of roughly US$5,000\. Can we do better? The answer is yes. To
+    make a better model for the Boston-housing data, we add one more dense layer to
+    it, as shown by the following code listing (from index.js of the Boston-housing
+    example).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 3.1\. Defining a two-layer neural network for the Boston-housing problem
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** Specifies how the kernel values should be initialized; see [section
+    3.1.2](#ch03lev2sec2) for a discussion of how this is chosen through hyperparameter
+    optimization.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***2*** Adds a hidden layer'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***3*** Prints a text summary of the model’s topology'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: To see this model in action, first run the `yarn && yarn watch` command as mentioned
+    in [chapter 2](kindle_split_013.html#ch02). Once the web page is open, click the
+    Train Neural Network Regressor (1 Hidden Layer) button in the UI in order to start
+    the model’s training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The model is a two-layer network. The first layer is a dense layer with 50 units.
+    It is also configured to have custom activation and a kernel initializer, which
+    we will discuss in [section 3.1.2](#ch03lev2sec2). This layer is a *hidden* layer
+    because its output is not directly seen from outside the model. The second layer
+    is a dense layer with the default activation (the linear activation) and is structurally
+    the same layer we used in the pure linear model from [chapter 2](kindle_split_013.html#ch02).
+    This layer is an *output* layer because its output is the model’s final output
+    and is what’s returned by the model’s `predict()` method. You may have noticed
+    that the function name in the code refers to the model as a *multilayer perceptron*
+    (MLP). This is an oft-used term that describes neural networks that 1) have a
+    simple topology without loops (what’s referred to as *feedforward neural networks*)
+    and 2) have at least one hidden layer. All the models you will see in this chapter
+    meet this definition.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `model.summary()` call in [listing 3.1](#ch03ex01) is new. It is a diagnostic/reporting
+    tool that prints the topology of TensorFlow.js models to the console (either in
+    the browser’s developer tool or to the standard output in Node.js). Here’s what
+    the two-layer model generated:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: The key information in the summary includes
+  prefs: []
+  type: TYPE_NORMAL
+- en: The names and types of the layers (first column).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The output shape for each layer (second column). These shapes almost always
+    contain a null dimension as the first (batch) dimension, representing undetermined
+    and variable batch size.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The number of weight parameters for each layer (third column). This is a count
+    of all the individual numbers that make up the layer’s weights. For layers with
+    more than one weight, this is a sum across all the weights. For instance, the
+    first dense layer in this example contains two weights: a kernel of shape `[12,
+    50]` and a bias of shape `[50]`, leading to `12 * 50 + 50 = 650` parameters.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The total number of the model’s weight parameters (at the bottom of the summary),
+    followed by a breakdown of how many of the parameters are trainable and how many
+    are nontrainable. The models we’ve seen so far contain only trainable parameters,
+    which belong to the model weights that are updated when `tf.Model.fit()` is called.
+    We will discuss nontrainable weights when we talk about transfer learning and
+    model fine-tuning in [chapter 5](kindle_split_016.html#ch05).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The `model.summary()` output of the purely linear model from [chapter 2](kindle_split_013.html#ch02)
+    is as follows. Compared with the linear model, our two-layer model contains about
+    54 times as many weight parameters. Most of the additional weights come from the
+    added hidden layer:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: Because the two-layer model contains more layers and weight parameters, its
+    training and inference consumes more computation resources and time. Is this added
+    cost worth the gain in accuracy? When we train this model for 200 epochs, we end
+    up with final MSEs on the test set that fall into the range of 14–15 (variability
+    due to randomness of initialization), as compared to a test-set loss of approximately
+    25 from the linear model. Our new model ends up with a misestimate of US$3,700–$3,900
+    versus the approximately $5,000 misestimates we saw with the purely linear attempts.
+    This is a significant improvement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 3.1.1\. Building the intuition for nonlinearity in neural networks
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'Why does the accuracy improve? The key is the model’s enhanced complexity,
+    as [figure 3.1](#ch03fig01) shows. First, there is an additional layer of neurons,
+    which is the hidden layer. Second, the hidden layer contains a nonlinear *activation
+    function* (as specified by `activation: ''sigmoid''` in the code), which is represented
+    by the square boxes in panel B of [figure 3.1](#ch03fig01). An activation function^([[1](#ch03fn1)])
+    is an element-by-element transform. The sigmoid function is a “squashing” nonlinearity,
+    in the sense that it “squashes” all real values from –infinity to +infinity into
+    a much smaller range (0 to +1, in this case). Its mathematical equation and plot
+    are shown in [figure 3.2](#ch03fig02). Let’s take the hidden dense layer as an
+    example. Suppose the result of the matrix multiplication and addition with the
+    bias is a 2D tensor consisting of the following array of random values:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ¹
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: The term *activation function* originated from the study of biological neurons,
+    which communicate with each other through *action potentials* (voltage spikes
+    on their cell membranes). A typical biological neuron receives inputs from a number
+    of upstream neurons via contact points called *synapses*. The upstream neurons
+    fire action potentials at different rates, which leads to the release of neurotransmitters
+    and opening or closing of ion channels at the synapses. This in turn leads to
+    variation in the voltage on the recipient neuron’s membrane. This is not unlike
+    the kind of weighted sum seen for a unit in the dense layer. Only when the potential
+    exceeds a certain threshold will the recipient neuron actually produce action
+    potentials (that is, be “activated”) and thereby affect the state of downstream
+    neurons. In this sense, the activation function of a typical biological neuron
+    is somewhat similar to the relu function ([figure 3.2](#ch03fig02), right panel),
+    which consists of a “dead zone” below a certain threshold of the input and increases
+    linearly with the input above the threshold (at least up to a certain saturation
+    level, which is not captured by the relu function).
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: Figure 3.1\. The linear-regression model (panel A) and two-layer neural network
+    (panel B) created for the Boston-housing dataset. For the sake of clarity, we
+    reduced the number of input features from 12 to 3 and the number of the hidden
+    layer’s units from 50 to 5 in panel B. Each model has only a single output unit
+    because the models solve a univariate (one-targetnumber) regression problem. Panel
+    B illustrates the nonlinear (sigmoid) activation of the model’s hidden layer.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](03fig01_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: The final output of the dense layer is then obtained by calling the sigmoid
+    (`S`) function on each of the 50 elements individually, giving
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: Why is this function called *nonlinear*? Intuitively, the plot of the activation
+    function is not a straight line. For example, sigmoid is a curve ([figure 3.2](#ch03fig02),
+    left panel), and relu is a concatenation of two line segments ([figure 3.2](#ch03fig02),
+    right panel). Even though sigmoid and relu are nonlinear, one of their properties
+    is that they are smooth and differentiable at every point, which makes it possible
+    to perform backpropagation^([[2](#ch03fn2)]) through them. Without this property,
+    it wouldn’t be possible to train a model with layers that contain this activation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ²
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: See [section 2.2.2](kindle_split_013.html#ch02lev2sec9) if you need a refresher
+    on backpropagation.
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: 'Figure 3.2\. Two frequently used nonlinear activation functions for deep neural
+    networks. Left: the sigmoid function ``S(x) = 1 / (1 + e ^ -x)`. Right: the rectified
+    linear unit (relu) function `relu(x) = {0:x < 0, x:x >= 0}``'
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](03fig02_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Apart from the sigmoid function, a few other types of differentiable nonlinear
+    functions are used frequently in deep learning. These include relu and hyperbolic
+    tangent (or tanh). We will describe them in detail when we encounter them in subsequent
+    examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Nonlinearity and model capacity
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: Why does nonlinearity improve the accuracy of our model? Nonlinear functions
+    allow us to represent a more diverse family of input-output relations. Many relations
+    in the real world are approximately linear, such as the download-time problem
+    we saw in the last chapter. But many others are not. It is easy to conceive examples
+    of nonlinear relations. Consider the relation between a person’s height and their
+    age. Height varies roughly linearly with age only up to a certain point, where
+    it bends and plateaus. As another totally reasonable scenario, house prices can
+    vary in a negative fashion with the neighborhood crime rate only if the crime
+    rate is within a certain range. A purely linear model, like the one we developed
+    in the last chapter, cannot accurately model this type of relation, while sigmoid
+    nonlinearity is much better suited to model this relation. Of course, the crime-rate-house-price
+    relation is more like an inverted (decreasing) sigmoid function than the original,
+    increasing one in the left panel of [figure 3.2](#ch03fig02). But our neural network
+    has no issue modeling this relation because the sigmoid activation is preceded
+    and followed by linear functions with tunable weights.
+  prefs: []
+  type: TYPE_NORMAL
+- en: But by replacing the linear activation with a nonlinear one like sigmoid, do
+    we lose the ability to learn any linear relations that might be present in the
+    data? Luckily, the answer is no. This is because part of the sigmoid function
+    (the part close to the center) is fairly close to being a straight line. Other
+    frequently used nonlinear activations, such as tanh and relu, also contain linear
+    or close-to-linear parts. If the relations between certain elements of the input
+    and those of the output are approximately linear, it is entirely possible for
+    a dense layer with a nonlinear activation to learn the proper weights and biases
+    to utilize the near-linear parts of the activation function. Hence, adding nonlinear
+    activation to a dense layer leads to a net gain in the breadth of input-output
+    relations it can learn.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Furthermore, nonlinear functions are different from linear ones in that cascading
+    nonlinear functions lead to richer sets of nonlinear functions. Here, *cascading*
+    refers to passing the output of one function as the input to another. Suppose
+    there are two linear functions,
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: and
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Cascading the two functions amounts to defining a new function `h`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: As you can see, `h` is still a linear function. It just has a different kernel
+    (slope) and a different bias (intercept) from those of `f1` and `f2`. The slope
+    is now `(k2 * k1)`, and the bias is now `(k2 * b1 + b2)`. Cascading any number
+    of linear functions always results in a linear function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'However, consider a frequently used nonlinear activation function: relu. In
+    the bottom part of [figure 3.3](#ch03fig03), we illustrate what happens when you
+    cascade two relu functions with linear scaling. By cascading two scaled relu functions,
+    we get a function that doesn’t look like relu at all. It has a new shape (something
+    of a downward slope flanked by two flat sections in this case). Further cascading
+    the step function with other relu functions will give an even more diverse set
+    of functions, such as a “window” function, a function consisting of multiple windows,
+    functions with windows stacked on top of wider windows, and so on (not shown in
+    [figure 3.3](#ch03fig03)). There is a remarkably rich range of function shapes
+    that you can create by cascading nonlinearities such as relu (one of the most
+    commonly used activation functions). But what does this have to do with neural
+    networks? In essence, neural networks are cascaded functions. Each layer of a
+    neural network can be viewed as a function, and the stacking of layers amounts
+    to cascading these functions to form a more complex function that is the neural
+    network itself. This should make it clear why including nonlinear activation functions
+    increases the range of input-output relations the model is capable of learning.
+    This also gives you an intuitive understanding behind the oft-used trick of “adding
+    more layers to a deep neural network” and why it often (but not always!) leads
+    to models that can fit the dataset better.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 3.3\. Cascading linear functions (top) and nonlinear functions (bottom).
+    Cascading linear functions always leads to linear functions, albeit with new slopes
+    and intercepts. Cascading nonlinear functions (such as relu in this example) leads
+    to nonlinear functions with novel shapes, such as the “downward step” function
+    in this example. This exemplifies why nonlinear activations and the cascading
+    of them in neural networks leads to enhanced representational power (that is,
+    capacity).
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](03fig03_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: The range of input-output relations a machine-learning model is capable of learning
+    is often referred to as the model’s *capacity*. From the prior discussion about
+    nonlinearity, we can see that a neural network with hidden layers and nonlinear
+    activation functions has a greater capacity compared to a linear regressor. This
+    explains why our two-layer network achieves a superior test-set accuracy compared
+    to the linear-regression model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You might ask, since cascading nonlinear activation functions leads to greater
+    capacity (as in the bottom part of [figure 3.3](#ch03fig03)), can we get a better
+    model for the Boston-housing problem by adding more hidden layers to the neural
+    network? The `multiLayerPerceptronRegressionModel2Hidden()` function in index.js,
+    which is wired to the button titled Train Neural Network Regressor (2 Hidden Layers),
+    does exactly that. See the following code excerpt (from index.js of the Boston-housing
+    example).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 3.2\. Defining a three-layer neural network for the Boston-housing problem
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** Adds the first hidden layer'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***2*** Adds another hidden layer'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***3*** Prints a text summary of the model’s topology'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'In the `summary()` printout (not shown), you can see that the model contains
+    three layers—that is, one more than the model in [listing 3.1](#ch03ex01). It
+    also has a significantly larger number of parameters: 3,251 as compared to 701
+    in the two-layer model. The extra 2,550 weight parameters are due to the inclusion
+    of the second hidden layer, which consists of a kernel of shape `[50, 50]` and
+    a bias of shape `[50]`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Repeating the model training a number of times, we can get a sense of the range
+    of the final test-set (that is, evaluation) MSE of the three-layer networks: roughly
+    10.8–13.4\. This corresponds to a misestimate of $3,280–$3,660, which beats that
+    of the two-layer network ($3,700–$3,900). So, we have again improved the prediction
+    accuracy of our model by adding nonlinear hidden layers and thereby enhancing
+    its capacity.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Avoiding the fallacy of stacking layers without nonlinearity
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: Another way to see the importance of the nonlinear activation for the improved
+    Boston-housing model is to remove it from the model. [Listing 3.3](#ch03ex03)
+    is the same as [listing 3.1](#ch03ex01), except that the line that specifies the
+    sigmoid activation function is commented out. Removing the custom activation causes
+    the layer to have the default linear activation. Other aspects of the model, including
+    the number of layers and weight parameters, don’t change.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 3.3\. A two-layer neural network without nonlinear activation
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** Disables the nonlinear activation function'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: How does this change affect the model’s learning? As you can find out by clicking
+    the Train Neural Network Regressor (1 Hidden Layer) button again in the UI, the
+    MSE on the test goes up to about 25, as compared with the 14–15 range when the
+    sigmoid activation was included. In other words, the two-layer model without the
+    sigmoid activation performs about the same as the one-layer linear regressor!
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This confirms our reasoning about cascading linear functions. By removing the
+    nonlinear activation from the first layer, we end up with a model that is a cascade
+    of two linear functions. As we have demonstrated before, the result is another
+    linear function without any increase in the model’s capacity. Thus, it is no surprise
+    that we end up with about the same accuracy as the linear model. This brings up
+    a common “gotcha” in building multilayer neural networks: *be sure to include
+    nonlinear activations in the hidden layers*. Failing to do so results in wasted
+    computation resources and time, with potential increases in numerical instability
+    (observe the wigglier loss curves in panel B of [figure 3.4](#ch03fig04)). Later,
+    we will see that this applies not only to dense but also to other layer types,
+    such as convolutional layers.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 3.4\. Comparing the training results with (panel A) and without (panel
+    B) the sigmoid activation. Notice that removing the sigmoid activation leads to
+    higher final loss values on the training, validation, and evaluation sets (a level
+    comparable to the purely linear model from before) and to less smooth loss curves.
+    Note that the y-axis scales are different between the two plots.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](03fig04_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Nonlinearity and model interpretability
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: 'In [chapter 2](kindle_split_013.html#ch02), we showed that once a linear model
+    was trained on the Boston-housing dataset, we could examine its weights and interpret
+    its individual parameters in a reasonably meaningful way. For example, the weight
+    that corresponds to the “average number of rooms per dwelling” feature had a positive
+    value, and the weight that corresponds to the “crime rate” feature had a negative
+    value. The signs of such weights reflect the expected positive or negative relation
+    between house price and the respective features. Their magnitudes also hint at
+    the relative importance assigned to the various features by the model. Given what
+    you just learned in this chapter, a natural question is: with a nonlinear model
+    containing one or more hidden layers, is it still possible to come up with an
+    understandable and intuitive interpretation of its weight values?'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The API for accessing weight values is exactly the same between a nonlinear
+    model and a linear model: you just use the `getWeights()` method on the model
+    object or its constituent layer objects. Take the MLP in [listing 3.1](#ch03ex01),
+    for example—you can insert the following line after the model training is done
+    (right after the `model.fit()` call):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This line prints the value of the kernel of the first layer (that is, the hidden
+    layer). This is one of the four weight tensors in the model, the other three being
+    the hidden layer’s bias and the output layer’s kernel and bias. One thing to notice
+    about the printout is that it has a larger size than the kernel we saw when printing
+    the kernel of the linear model:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: This is because the hidden layer consists of 50 units, which leads to a weight
+    size of `[18, 50]`. This kernel has 900 individual weight parameters, as compared
+    to the `12 + 1 = 13` parameters in the linear model’s kernel. Can we assign a
+    meaning to each of the individual weight parameters? In general, the answer is
+    no. This is because there is no easily identifiable meaning to any of the 50 outputs
+    from the hidden layer. These are the dimensions of high-dimensional space created
+    so that the model can learn (automatically discover) nonlinear relations in it.
+    The human mind is not very good at keeping track of nonlinear relations in such
+    high-dimensional spaces. In general, it is very difficult to write down a few
+    sentences in layman’s terms to describe what each of the hidden layer’s units
+    does or to explain how it contributes to the final prediction of the deep neural
+    network.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Also, realize that the model here has only one hidden layer. The relations become
+    even more obscure and harder to describe when there are multiple hidden layers
+    stacked on top of each other (as is the case in the model defined in [listing
+    3.2](#ch03ex02)). Even though there are research efforts to find better ways to
+    interpret the meaning of deep neural networks’ hidden layers,^([[3](#ch03fn3)])
+    and progress is being made for some classes of models,^([[4](#ch03fn4)]) it is
+    fair to say that deep neural networks are harder to interpret compared to shallow
+    neural networks and certain types of nonneural network machine-learning models
+    (such as decision trees). By choosing a deep model over a shallow one, we are
+    essentially trading some interpretability for greater model capacity.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ³
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: 'Marco Tulio Ribeiro, Sameer Singh, and Carlos Guestrin, “Local Interpretable
+    Model-Agnostic Explanations (LIME): An Introduction,” O’Reilly, 12 Aug. 2016,
+    [http://mng.bz/j5vP](http://mng.bz/j5vP).'
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ⁴
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Chris Olah et al., “The Building Blocks of Interpretability,” Distill, 6 Mar.
+    2018, [https://distill.pub/2018/building-blocks/](https://distill.pub/2018/building-blocks/).
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: 3.1.2\. Hyperparameters and hyperparameter optimization
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'Our discussion of the hidden layers in [listings 3.1](#ch03ex01) and [3.2](#ch03ex02)
+    has been focusing on the nonlinear activation (sigmoid). However, other configuration
+    parameters for this layer are also important for ensuring a good training result
+    from this model. These include the number of units (50) and the kernel’s `''leCunNormal''`
+    initialization. The latter is a special way to generate the random numbers that
+    go into the kernel’s initial value based on the size of the input. It is distinct
+    from the default kernel initializer (`''glorotNormal''`), which uses the sizes
+    of both the input and output. Natural questions to ask are: Why use this particular
+    custom kernel initializer instead of the default one? Why use 50 units (instead
+    of, say, 30)? These choices are made to ensure a best-possible or close-to-best-possible
+    good model quality through trying out various combinations of parameters repeatedly.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Parameters such as number of units, kernel initializers, and activation are
+    *hyperparameters* of the model. The name “hyperparameters” signifies the fact
+    that these parameters are distinct from the model’s weight parameters, which are
+    updated automatically through backpropagation during training (that is, `Model.fit()`
+    calls). Once the hyperparameters have been selected for a model, they do not change
+    during the training process. They often determine the number and size of the weight
+    parameters (for instance, consider the `units` field for a dense layer), the initial
+    values of the weight parameters (consider the `kernelInitializer` field), and
+    how they are updated during training (consider the `optimizer` field passed to
+    `Model.compile()`). Therefore, they are on a level higher than the weight parameters.
+    Hence the name “hyperparameter.”
+  prefs: []
+  type: TYPE_NORMAL
+- en: Apart from the sizes of the layers and the type of weight initializers, there
+    are many other types of hyperparameters for a model and its training, such as
+  prefs: []
+  type: TYPE_NORMAL
+- en: The number of dense layers in a model, like the ones in [listings 3.1](#ch03ex01)
+    and [3.2](#ch03ex02)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: What type of initializer to use for the kernel of a dense layer
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Whether to use any weight regularization (see [section 8.1](kindle_split_020.html#ch08lev1sec1))
+    and, if so, the regularization factor
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Whether to include any dropout layers (see [section 4.3.2](kindle_split_015.html#ch04lev2sec9),
+    for example) and, if so, the dropout rate
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The type of optimizer used for training (such as `'sgd'` versus `'adam'`; see
+    [info box 3.1](#ch03sb01))
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: How many epochs to train the model for
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The learning rate of the optimizer
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Whether the learning rate of the optimizer should be decreased gradually as
+    training progresses and, if so, at what rate
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The batch size for training
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The last five examples listed are somewhat special in that they are not related
+    to the architecture of the model per se; instead, they are configurations of the
+    model’s training process. Nonetheless, they affect the outcome of the training
+    and hence are treated as hyperparameters. For models consisting of more diverse
+    types of layers (such as convolutional and recurrent layers, discussed in [chapters
+    4](kindle_split_015.html#ch04), [5](kindle_split_016.html#ch05), and [9](kindle_split_021.html#ch09)),
+    there are even more potentially tunable hyperparameters. Therefore, it is clear
+    why even a simple deep-learning model may have dozens of tunable hyperparameters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The process of selecting good hyperparameter values is referred to as *hyperparameter
+    optimization* or *hyperparameter tuning*. The goal of hyperparameter optimization
+    is to find a set of parameters that leads to the lowest validation loss after
+    training. Unfortunately, there is currently no definitive algorithm that can determine
+    the best hyperparameters given a dataset and the machine-learning task involved.
+    The difficulty lies in the fact that many of the hyperparameters are discrete,
+    so the validation loss value is not differentiable with respect to them. For example,
+    the number of units in a dense layer and the number of dense layers in a model
+    are integers; the type of optimizer is a categorical parameter. Even for the hyperparameters
+    that are continuous and against which the validation loss is differentiable (for
+    example, regularization factors), it is usually too computationally expensive
+    to keep track of the gradients with respect to those hyperparameters during training,
+    so it is not really feasible to perform gradient descent in the space of such
+    hyperparameters. Hyperparameter optimization remains an active area of research,
+    one which deep-learning practitioners should pay attention to.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Given the lack of a standard, out-of-the-box methodology or tool for hyperparameter
+    optimization, deep-learning practitioners often use the following three approaches.
+    First, if the problem at hand is similar to a well-studied problem (say, any of
+    the examples you can find in this book), you can start with applying a similar
+    model on your problem and “inherit” the hyperparameters. Later, you can search
+    in a relatively small hyperparameter space around that starting point.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Second, practitioners with sufficient experience might have intuition and educated
+    guesses about what may be reasonably good hyperparameters for a given problem.
+    Even such subjective choices are almost never optimal—they form good starting
+    points and can facilitate subsequent fine-tuning.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Third, for cases in which there are only a small number of hyperparameters to
+    optimize (for example, fewer than four), we can use grid search—that is, exhaustively
+    iterating over a number of hyperparameter combinations, training a model to completion
+    for each of them, recording the validation loss, and taking the hyperparameter
+    combination that yields the lowest validation loss. For example, suppose the only
+    two hyperparameters to tune are 1) the number of units in a dense layer and 2)
+    the learning rate; you might select a set of units (`{10, 20, 50, 100, 200}`)
+    and a set of learning rates (`{1e-5, 1e-4, 1e-3, 1e-2}`) and perform a cross of
+    the two sets, which leads to a total of `5 * 4 = 20` hyperparameter combinations
+    to search over. If you were to implement the grid search yourself, the pseudo-code
+    might look something like the following listing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 3.4\. Pseudo-code for a simple hyperparameter grid search
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: How are the ranges of these hyperparameters selected? Well, there is another
+    place deep learning cannot provide a formal answer. These ranges are usually based
+    on the experience and intuition of the deep-learning practitioner. They may also
+    be constrained by computation resources. For example, a dense layer with too many
+    units may cause the model to be too slow to train or to run during inference.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Oftentimes, there are a larger number of hyperparameters to optimize over, to
+    the extent that it becomes computationally too expensive to search over the exponentially
+    increasing number of hyperparameter combinations. In such cases, you should use
+    more sophisticated methods than grid search, such as random search^([[5](#ch03fn5)])
+    and Bayesian^([[6](#ch03fn6)]) methods.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ⁵
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: James Bergstra and Yoshua Bengio, “Random Search for Hyper-Parameter Optimization,”
+    *Journal of Machine Learning Research*, vol. 13, 2012, pp. 281–305, [http://mng.bz/WOg1](http://mng.bz/WOg1).
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ⁶
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Will Koehrsen, “A Conceptual Explanation of Bayesian Hyperparameter Optimization
+    for Machine Learning, *Towards Data Science*, 24 June 2018, [http://mng.bz/8zQw](http://mng.bz/8zQw).
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: '3.2\. Nonlinearity at output: Models for classification'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The two examples we’ve seen so far have both been regression tasks in which
+    we try to predict a numeric value (such as the download time or the average house
+    price). However, another common task in machine learning is classification. Some
+    classification tasks are *binary classification*, wherein the target is the answer
+    to a yes/no question. The tech world is full of this type of problem, including
+  prefs: []
+  type: TYPE_NORMAL
+- en: Whether a given email is or isn’t spam
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Whether a given credit-card transaction is legitimate or fraudulent
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Whether a given one-second-long audio sample contains a specific spoken word
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Whether two fingerprint images match each other (come from the same person’s
+    same finger)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Another type of classification problem is a *multiclass-classification* task,
+    for which examples also abound:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Whether a news article is about sports, weather, gaming, politics, or other
+    general topics
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Whether a picture is a cat, dog, shovel, and so on
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Given stroke data from an electronic stylus, determining what a handwritten
+    character is
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In the scenario of using machine learning to play a simple Atari-like video
+    game, determining in which of the four possible directions (up, down, left, and
+    right) the game character should go next, given the current state of the game
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 3.2.1\. What is binary classification?
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: We’ll start with a simple case of binary classification. Given some data, we
+    want a yes/no decision. For our motivating example, we’ll talk about the Phishing
+    Website dataset.^([[7](#ch03fn7)]) The task is, given a collection of features
+    about a web page and its URL, predicting whether the web page is used for *phishing*
+    (masquerading as another site with the aim to steal users’ sensitive information).
+  prefs: []
+  type: TYPE_NORMAL
+- en: ⁷
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Rami M. Mohammad, Fadi Thabtah, and Lee McCluskey, “Phishing Websites Features,”
+    [http://mng.bz/E1KO](http://mng.bz/E1KO).
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: 'The dataset contains 30 features, all of which are binary (represented as the
+    values –1 and 1) or ternary (represented as –1, 0, and 1). Rather than listing
+    all the individual features like we did for the Boston-housing dataset, here we
+    present a few representative features:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`HAVING_IP_ADDRESS`—Whether an IP address is used as an alternative to a domain
+    name (binary value: `{-1, 1}`)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`SHORTENING_SERVICE`—Whether it is using a URL shortening service or not (binary
+    value: `{1, -1}`)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`SSLFINAL_STATE`—Whether 1) the URL uses HTTPS and the issuer is trusted, 2)
+    it uses HTTPS but the issuer is not trusted, or 3) no HTTPS is used (ternary value:
+    `{-1, 0, 1}`)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The dataset consists of approximately 5,500 training examples and an equal number
+    of test examples. In the training set, approximately 45% of the examples are positive
+    (truly phishing web pages). The percentage of positive examples is about the same
+    in the test set.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is just about the easiest type of dataset to work with—the features in
+    the data are already in a consistent range, so there is no need to normalize their
+    means and standard deviations as we did for the Boston-housing dataset. Additionally,
+    we have a large number of training examples relative to both the number of features
+    and the number of possible predictions (two—yes or no). Taken as a whole, this
+    is a good sanity check that it’s a dataset we can work with. If we wanted to spend
+    more time investigating our data, we might do pairwise feature-correlation checks
+    to know if we have redundant information; however, this is something our model
+    can tolerate.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Since our data looks similar to what we used (post-normalization) for Boston-housing,
+    our starting model is based on the same structure. The example code for this problem
+    is available in the website-phishing folder of the tfjs-examples repo. You can
+    check out and run the example as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: Listing 3.5\. Defining a binary-classification model for phishing detection
+    (from index.js)
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: This model has a lot of similarities to the multilayer network we built for
+    the Boston-housing problem. It starts with two hidden layers, and both of them
+    use the sigmoid activation. The last (output) has exactly 1 unit, which means
+    the model outputs a single number for each input example. However, a key difference
+    here is that the last layer of our model for phishing detection has a sigmoid
+    activation instead of the default linear activation as in the model for Boston-housing.
+    This means that our model is constrained to output numbers between only 0 and
+    1, which is unlike the Boston-housing model, which might output any float number.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Previously, we have seen sigmoid activations for hidden layers help increase
+    model capacity. But why do we use sigmoid activation at the output of this new
+    model? This has to do with the binary-classification nature of the problem we
+    have at hand. For binary classification, we generally want the model to produce
+    a guess of the probability for the positive class—that is, how likely it is that
+    the model “thinks” a given example belongs to the positive class. As you may recall
+    from high school math, a probability is always a number between 0 and 1\. By having
+    the model always output an estimated probability value, we get two benefits:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: It captures the degree of support for the assigned classification. A sigmoid
+    value of 0.5 indicates complete uncertainty, wherein either classification is
+    equally supported. A value of 0.6 indicates that while the system predicts the
+    positive classification, it’s only weakly supported. A value of 0.99 means the
+    model is quite certain that the example belongs to the positive class, and so
+    forth. Hence, we make it easy and straightforward to convert the model’s output
+    into a final answer (for instance, just threshold the output at a given value,
+    say 0.5). Now imagine how hard it would be to find such a threshold if the range
+    of the model’s output may vary widely.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: We also make it easier to come up with a differentiable loss function, which,
+    given the model’s output and the true binary target labels, produces a number
+    that is a measure of how much the model missed the mark. For the latter point,
+    we will elaborate more when we examine the actual binary cross entropy used by
+    this model.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: However, the question is how to force the output of the neural network into
+    the range of `[0, 1]`. The last layer of a neural network, which is often a dense
+    layer, performs matrix multiplication (`matMul`) and bias addition (`biasAdd`)
+    operations with its input. There are no intrinsic constraints in either the `matMul`
+    or the `biasAdd` operation that guarantee a `[0, 1]` range in the result. Adding
+    a squashing nonlinearity like sigmoid to the result of `matMul` and `biasAdd`
+    is a natural way to achieve the `[0, 1]` range.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Another aspect of the code in [listing 3.5](#ch03ex05) that’s new to you is
+    the type of optimizer: `''adam''`, which is different from the `''sgd''` optimizer
+    used in previous examples. How is `adam` different from `sgd`? As you may recall
+    from [section 2.2.2](kindle_split_013.html#ch02lev2sec9) in the last chapter,
+    the `sgd` optimizer always multiplies the gradients obtained through backpropagation
+    with a fixed number (its learning rate times –1) in order to calculate the updates
+    to the model’s weights. This approach has some drawbacks, including slow convergence
+    toward the loss minimum when a small learning rate is chosen and “zigzag” paths
+    in the weight space when the shape of the loss (hyper)surface has certain special
+    properties. The `adam` optimizer aims at addressing these shortcomings of `sgd`
+    by using a multiplication factor that varies with the history of the gradients
+    (from earlier training iterations) in a smart way. Moreover, it uses different
+    multiplication factors for different model weight parameters. As a result, `adam`
+    usually leads to better convergence and less dependence on the choice of learning
+    rate compared to `sgd` over a range of deep-learning model types; hence it is
+    a popular choice of optimizer. The TensorFlow.js library provides a number of
+    other optimizer types, some of which are also popular (such as `rmsprop`). The
+    table in [info box 3.1](#ch03sb01) gives a brief overview of them.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '|  |'
+  prefs: []
+  type: TYPE_TB
+- en: '**Optimizers supported by TensorFlow.js**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The following table summarizes the APIs of the most frequently used types of
+    optimizers in TensorFlow.js, along with a simple, intuitive explanation for each
+    of them.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Commonly used optimizers and their APIs in TensorFlow.js**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| Name | API (string) | API (function) | Description |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- | --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Stochastic gradient descent (SGD) | ''sgd'' | tf.train.sgd | The simplest
+    optimizer, always using the learning rate as the multiplier for gradients |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Momentum | ''momentum'' | tf.train.momentum | Accumulates past gradients
+    in a way such that the update to a weight parameter gets faster when past gradients
+    for the parameter line up more in the same direction and gets slower when they
+    change a lot in direction |'
+  prefs: []
+  type: TYPE_TB
+- en: '| RMSProp | ''rmsprop'' | tf.train.rmsprop | Scales the multiplication factor
+    differently for different weight parameters of the model by keeping track of a
+    recent history of each weight gradient’s root-meansquare (RMS) value; hence its
+    name |'
+  prefs: []
+  type: TYPE_TB
+- en: '| AdaDelta | ''adadelta'' | tf.train.adadelta | Scales the learning rate for
+    each individual weight parameter in a way similar to RMSProp |'
+  prefs: []
+  type: TYPE_TB
+- en: '| ADAM | ''adam'' | tf.train.adam | Can be understood as a combination of the
+    adaptive learning rate approach of AdaDelta and the momentum method |'
+  prefs: []
+  type: TYPE_TB
+- en: '| AdaMax | ''adamax'' | tf.train.adamax | Similar to ADAM, but keeps track
+    of the magnitudes of gradients using a slightly different algorithm |'
+  prefs: []
+  type: TYPE_TB
+- en: An obvious question is which optimizer you should use given the machine-learning
+    problem and model you are working on. Unfortunately, there is no consensus in
+    the field of deep learning yet (which is why TensorFlow.js provides all the optimizers
+    listed in the previous table!). In practice, you should start with the popular
+    ones, including `adam` and `rmsprop`. Given sufficient time and computation resources,
+    you can also treat the optimizer as a hyperparameter and find the choice that
+    gives you the best training result through hyperparameter tuning (see [section
+    3.1.2](#ch03lev2sec2)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '|  |'
+  prefs: []
+  type: TYPE_TB
+- en: '3.2.2\. Measuring the quality of binary classifiers: Precision, recall, a-
+    accuracy, and ROC curves'
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: In a binary-classification problem, we emit one of two values—0/1, yes/no, and
+    so on. In a more abstract sense, we’ll talk about the positives and negatives.
+    When our network makes a guess, it is either right or wrong, so we have four possible
+    scenarios for the actual label of the input example and the output of the network,
+    as [table 3.1](#ch03table01) shows.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Table 3.1\. The four types of classification results in a binary classification
+    problem
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '|   |   | Prediction |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '|   |   | Positive | Negative |'
+  prefs: []
+  type: TYPE_TB
+- en: '|   | Positive | True positive (TP) | False negative (FN) |'
+  prefs: []
+  type: TYPE_TB
+- en: '|   | Negative | False positive (FP) | True negative (TN) |'
+  prefs: []
+  type: TYPE_TB
+- en: The true positives (TPs) and true negatives (TNs) are where the model predicted
+    the correct answer; the false positives (FPs) and false negatives (FNs) are where
+    the model got it wrong. If we fill in the four cells with counts, we get a *confusion
+    matrix*; [table 3.2](#ch03table02) shows a hypothetical one for our phishing-detection
+    problem.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Table 3.2\. The confusion matrix from a hypothetical binary classification problem
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '|   |   | Prediction |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '|   |   | Positive | Negative |'
+  prefs: []
+  type: TYPE_TB
+- en: '|   | Positive | 4 | 2 |'
+  prefs: []
+  type: TYPE_TB
+- en: '|   | Negative | 1 | 93 |'
+  prefs: []
+  type: TYPE_TB
+- en: In our hypothetical results from our phishing examples, we see that we correctly
+    identified four phishing web pages, missed two, and had one false alarm. Let’s
+    now look at the different common metrics for expressing this performance.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Accuracy* is the simplest metric. It quantifies what percentage of the examples
+    are classified correctly:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: In our particular example,
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: Accuracy is an easy-to-communicate and easy-to-understand concept. However,
+    it can be misleading—often in a binary-classification task, we don’t have equal
+    distributions of positive and negative examples. We’re often in a situation where
+    there are considerably fewer positive examples than there are negative ones (for
+    example, most links aren’t phishing, most parts aren’t defective, and so on).
+    If only 5 in 100 links are phishing, our network could always predict false and
+    get 95% accuracy! Put that way, accuracy seems like a very bad measure for our
+    system. High accuracy always sounds good but is often misleading. It’s a good
+    thing to monitor but would be a very bad thing to use as a loss function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The next pair of metrics attempts to capture the subtlety missing in accuracy—*precision*
+    and *recall*. In the discussion that follows, we’re also typically thinking about
+    problems in which a positive implies further action is required—a link is highlighted,
+    a post is flagged for manual review—while a negative indicates the status quo.
+    These metrics focus on the different types of “wrong” that our prediction could
+    be.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Precision* is the ratio of positive predictions made by the model that are
+    actually positive:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: With our numbers from the confusion matrix, we’d calculate
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: Like accuracy, it is usually possible to game precision. You can make your model
+    very conservative in emitting positive predictions, for example, by labeling only
+    the input examples with very high sigmoid output (say >0.95, instead of the default
+    >0.5) as positive. This will usually cause the precision to go up, but doing so
+    will likely cause the model to miss many actual positive examples (labeling them
+    as negative). The last cost is captured by the metric that often goes with and
+    complements precision, namely recall.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Recall* is the ratio of actual positive examples that are classified by the
+    model as positive:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: With the example data, we get a result of
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: Of all the positives in the sample set, how many did the model find? It will
+    normally be a conscious decision to accept a higher false alarm rate to lower
+    the chance of missing something. To game this metric, you’d simply declare all
+    examples as positives; because false positives don’t enter into the equation,
+    you can score 100% recall at the cost of decreased precision.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As we can see, it’s fairly easy to craft a system that scores very well on accuracy,
+    recall, or precision. In real-world binary-classification problems, it’s often
+    difficult to get both good precision and recall at the same time. (If it were
+    easy to do so, you’d have a simple problem and probably wouldn’t need to use machine
+    learning in the first place.) Precision and recall are about tuning the model
+    in the tricky places where there is a fundamental uncertainty about what the correct
+    answer should be. You’ll see more nuanced and combined metrics, such as *Precision
+    at X% Recall*, X being something like 90%—what is the precision if we’re tuned
+    to find at least X% of the positives? For example, in [figure 3.5](#ch03fig05),
+    we see that after 400 epochs of training, our phishing-detection model is able
+    to achieve a precision of 96.8% and a recall of 92.9% when the model’s probability
+    output is thresholded at 0.5.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Figure 3.5\. An example result from a round of training the model for phishing
+    web page detection. Pay attention to the various metrics at the bottom: precision,
+    recall, and FPR. The area under the curve (AUC) is discussed in [section 3.2.3](#ch03lev2sec5).'
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](03fig05_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: As we have briefly alluded to, an important realization is that the threshold
+    applied on the sigmoid output to pick out positive predictions doesn’t have to
+    be exactly 0.5\. In fact, depending on the circumstances, it might be better to
+    set it to a value above 0.5 (but below 1) or to one below 0.5 (but above 0). Lowering
+    the threshold makes the model more liberal in labeling inputs as positive, which
+    leads to higher recall but likely lower precision. On the other hand, raising
+    the threshold causes the model to be more cautious in labeling inputs as positive,
+    which usually leads to higher precision but likely lower recall. So, we can see
+    that there is a trade-off between precision and recall, and this trade-off is
+    hard to quantify with any one of the metrics we’ve talked about so far. Luckily,
+    the rich history of research into binary classification has given us better ways
+    to quantify and visualize this trade-off relation. The ROC curve that we will
+    discuss next is a frequently used tool of this sort.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '3.2.3\. The ROC curve: Showing trade-offs in binary classification'
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: ROC curves are used in a wide range of engineering problems that involve binary
+    classification or the detection of certain types of events. The full name, *receiver
+    operating characteristic*, is a term from the early age of radar. Nowadays, you’ll
+    almost never see the expanded name. [Figure 3.6](#ch03fig06) is a sample ROC curve
+    for our application.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 3.6\. A set of sample ROCs plotted during the training of the phishing-detection
+    model. Each curve is for a different epoch number. The curves show gradual improvement
+    in the quality of the binary-classification model as the training progresses.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](03fig06_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: As you may have noticed in the axis labels in [figure 3.6](#ch03fig06), ROC
+    curves are not exactly made by plotting the precision and recall metrics against
+    each other. Instead, they are based on two slightly different metrics. The horizontal
+    axis of an ROC curve is a *false positive rate* (FPR), defined as
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: The vertical axis of an ROC curve is the *true positive rate* (TPR), defined
+    as
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: TPR has exactly the same definition as recall; it is just a different name for
+    the same metric. However, FPR is something new. Its denominator is a count of
+    all the cases in which the actual class of the example is negative; its numerator
+    is a count of all false positive cases. In other words, FPR is the ratio of actually
+    negative examples that are erroneously classified as positive, which is the probability
+    of something commonly referred to as a *false alarm*. [Table 3.3](#ch03table03)
+    summarizes the most common metrics you will encounter in a binary-classification
+    problem.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Table 3.3\. Commonly seen metrics for a binary-classification problem
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '| Name of metric | Definition | How it is used in ROCs or precision/recall
+    curves |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Accuracy | (#TP + #TN) / (#TP + #TN + # FP + #FN) | (Not used by ROCs) |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Precision | #TP / (#TP + #FP) | The vertical axis of a precision/recall curve
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Recall/sensitivity/true positive rate (TPR) | #TP / (#TP + #FN) | The vertical
+    axis of an ROC curve (as in [figure 3.6](#ch03fig06)), or the horizontal axis
+    of a precision/recall curve |'
+  prefs: []
+  type: TYPE_TB
+- en: '| False positive rate (FPR) | #FP / (#FP + #TN) | The horizontal axis of an
+    ROC curve (see [figure 3.6](#ch03fig06)) |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Area under the curve (AUC) | Calculated through numerical integration under
+    the ROC curve; see [listing 3.7](#ch03ex07) for an example | (Not used by ROCs
+    but is instead calculated from ROCs) |'
+  prefs: []
+  type: TYPE_TB
+- en: The seven ROC curves in [figure 3.6](#ch03fig06) are made at the beginning of
+    seven different training epochs, from the first epoch (epoch 001) to the last
+    (epoch 400). Each one of them is created based on the model’s predictions on the
+    test data (not the training data). [Listing 3.6](#ch03ex06) shows the details
+    of how this is done with the `onEpochBegin` callback of the `Model.fit()` API.
+    This approach allows you to perform interesting analysis and visualization on
+    the model in the midst of a training call without needing to write a `for` loop
+    or use multiple `Model.fit()` calls.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 3.6\. Using callback to render ROC curves in the middle of model training
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** Draws ROC every few epochs'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The body of the function `drawROC()` contains the details of how an ROC is
+    made (see [listing 3.7](#ch03ex07)). It does the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Varies the threshold on the sigmoid output (probabilities) of the neural network
+    to get different sets of classification results
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: For each classification result, uses it in conjunction with the actual labels
+    (targets) to calculate the TPR and FPR
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Plots the TPRs against the FPRs to form the ROC curve
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: As [figure 3.6](#ch03fig06) shows, in the beginning of the training (epoch 001),
+    as the model’s weights are initialized randomly, the ROC curve is very close to
+    a diagonal line connecting the point (0, 0) with the point (1, 1). This is what
+    random guessing looks like. As the training progresses, the ROC curves are pushed
+    up more and more toward the top-left corner—a place where the FPR is close to
+    0, and the TPR is close to 1\. If we focus on any given level of FPR, such as
+    0.1, we see a monotonic increase in the corresponding TPR value as we move further
+    along in the training. In plain words, this means that as the training goes on,
+    we can achieve a higher and higher level of recall (TPR) if we are pinned to a
+    fixed level of false alarm (FPR).
+  prefs: []
+  type: TYPE_NORMAL
+- en: The “ideal” ROC is a curve bent so much toward the top-left corner that it becomes
+    a γ^([[8](#ch03fn8)]) shape. In this scenario, you can get 100% TPR and 0% FPR,
+    which is the “Holy Grail” for any binary classifier. However, with real problems,
+    we can only improve the model to push the ROC curve ever closer to the top-left
+    corner—the theoretical ideal at the top-left can never be achieved.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ⁸
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: The Greek letter gamma.
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Based on this discussion of the shape of the ROC curve and its implications,
+    we can see that it is possible to quantify how good an ROC curve is by looking
+    at the area under it—that is, how much of the space in the unit square is enclosed
+    by the ROC curve and the x-axis. This is called the *area under the curve* (AUC)
+    and is computed by the code in [listing 3.7](#ch03ex07) as well. This metric is
+    better than precision, recall, and accuracy in the sense that it takes into account
+    the trade-off between false positives and false negatives. The ROC for random
+    guessing (the diagonal line) has an AUC of 0.5, while the γ-shaped ideal ROC has
+    an AUC of 1.0\. Our phishing-detection model reaches an AUC of 0.981 after training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 3.7\. The code for calculating and rendering an ROC curve and the AUC
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** A manually selected set of probability thresholds'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***2*** Converts the probability into predictions through thresholding'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***3*** falsePositiveRate() calculates the false positive rate by comparing
+    the predictions and actual targets. It is defined in the same file.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***4*** Accumulates to area for AUC calculation'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Apart from visualizing the characteristics of a binary classifier, the ROC also
+    helps us make sensible decisions about how to select the probability threshold
+    in real-world situations. For example, imagine that we are a commercial company
+    developing the phishing detector as a service. Do we want to do one of the following?
+  prefs: []
+  type: TYPE_NORMAL
+- en: Make the threshold relatively low because missing a real phishing website will
+    cost us a lot in terms of liability or lost contracts.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Make the threshold relatively high because we are more averse to the complaints
+    filed by users whose normal websites are blocked because the model classifies
+    them as phishy.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Each threshold value corresponds to a point on the ROC curve. When we increase
+    the threshold gradually from 0 to 1, we move from the top-right corner of the
+    plot (where FPR and TPR are both 1) to the bottom-left corner of the plot (where
+    FPR and TPR are both 0). In real engineering problems, the decision of which point
+    to pick on the ROC curve is always based on weighing opposing real-life costs
+    of this sort, and it may vary for different clients and at different stages of
+    business development.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Apart from the ROC curve, another commonly used visualization of binary classification
+    is the *precision-recall curve* (sometimes called a P/R curve, mentioned briefly
+    in [table 3.3](#ch03table03)). Unlike the ROC curve, a precision-recall plots
+    precision against recall. Since precision-recall curves are conceptually similar
+    to ROC curves, we won’t delve into them here.
+  prefs: []
+  type: TYPE_NORMAL
+- en: One thing worth pointing out in [listing 3.7](#ch03ex07) is the use of `tf.tidy()`.
+    This function ensures that the tensors created within the anonymous function passed
+    to it as arguments are disposed of properly, so they won’t continue to occupy
+    WebGL memory. In the browser, TensorFlow.js can’t manage the memory of tensors
+    created by the user, primarily due to a lack of object finalization in JavaScript
+    and a lack of garbage collection for the WebGL textures that underlie TensorFlow.js
+    tensors. If such intermediate tensors are not cleaned up properly, a WebGL memory
+    leak will happen. If such memory leaks are allowed to continue long enough, they
+    will eventually result in WebGL out-of-memory errors. [Section 1.3](kindle_split_011.html#ch01lev1sec3)
+    of [appendix B](kindle_split_030.html#app02) contains a detailed tutorial on memory
+    management in TensorFlow.js. There are also exercises on this topic in section
+    1.5 of [appendix B](kindle_split_030.html#app02). If you plan to define custom
+    functions by composing TensorFlow.js functions, you should study these sections
+    carefully.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '3.2.4\. Binary cross entropy: The loss function for binary classification'
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'So far, we have talked about a few different metrics that quantify different
+    aspects of how well a binary classifier is performing, such as accuracy, precision,
+    and recall ([table 3.3](#ch03table03)). But we haven’t talked about an important
+    metric, one that is differentiable and can generate gradients that support the
+    model’s gradient-descent training. This is the `binaryCrossentropy` that we saw
+    briefly in [listing 3.5](#ch03ex05) and haven’t explained yet:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'First off, you might ask, why can’t we simply take accuracy, precision, recall,
+    or perhaps even AUC and use it as the loss function? After all, these metrics
+    are understandable. Also, in the regression problems we’ve seen previously, we
+    used MSE, a fairly understandable metric, as the loss function for training directly.
+    The answer is that none of these binary classification metrics can produce the
+    gradients we need for training. Take the accuracy metric, for example: to see
+    why it is not gradient-friendly, realize the fact that calculating accuracy requires
+    determining which of the model’s predictions are positive and which are negative
+    (see the first row in [table 3.3](#ch03table03)). In order to do that, it is necessary
+    to apply a *thresholding function*, which converts the model’s sigmoid output
+    into binary predictions. Here is the crux of the problem: although the thresholding
+    function (or *step function* in more technical terms) is differentiable almost
+    everywhere (“almost” because it is not differentiable at the “jumping point” at
+    0.5), the derivative is always exactly zero (see [figure 3.7](#ch03fig07))! What
+    happens if you try to do backpropagation through this thresholding function? Your
+    gradients will end up being all zeros because at some point, upstream gradient
+    values need to be multiplied with these all-zero derivatives from the step function.
+    Put more simply, if accuracy (or precision, recall, AUC, and so on) is chosen
+    as the loss, the flat sections of the underlying step function make it impossible
+    for the training procedure to know where to move in the weight space to decrease
+    the loss value.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 3.7\. The step function used to convert the probability output of a binary-classification
+    model is differentiable almost everywhere. Unfortunately, the gradient (derivative)
+    at every differentiable point is exactly zero.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](03fig07_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Therefore, using accuracy as the loss function doesn’t allow us to calculate
+    useful gradients and hence prevents us from getting meaningful updates to the
+    weights of the model. The same limitation applies to metrics including precision,
+    recall, FPR, and AUC. While these metrics are useful for humans to understand
+    the behavior of a binary classifier, they are useless for these models’ training
+    process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The loss function that we use for a binary classification task is *binary cross
+    entropy*, which corresponds to the `'binaryCrossentropy'` configuration in our
+    phishing-detection model code ([listings 3.5](#ch03ex05) and [3.6](#ch03ex06)).
+    Algorithmically, we can define binary cross entropy with the following pseudo-code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 3.8\. The pseudo-code for the binary cross-entropy loss function^([[9](#ch03fn9)])
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: ⁹
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: The actual code for `binaryCrossentropy` needs to guard against cases in which
+    `prob` or `1 – prob` is exactly zero, which would lead to infinity if the value
+    is passed directly to the `log` function. This is done by adding a very small
+    positive number (such as `1e-6`, commonly referred to as “epsilon” or a “fudge
+    factor”) to `prob` and `1 - prob` before passing them to the log function.
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: In this pseudo-code, `truthLabel` is a number that takes the 0–1 values and
+    indicates whether the input example has a negative (0) or positive (1) label in
+    reality. `prob` is the probability of the example belonging to the positive class,
+    as predicted by the model. Note that unlike `truthLabel`, `prob` is expected to
+    be a real number that can take any value between 0 and 1\. `log` is the natural
+    logarithm, with *e* (2.718) as the base, which you may recall from high school
+    math. The body of the `binaryCrossentropy` function contains an if-else logical
+    branching, which performs different calculations depending on whether `truthLabel`
+    is 0 or 1\. [Figure 3.8](#ch03fig08) plots the two cases in the same plot.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 3.8\. The binary cross-entropy loss function. The two cases (`truthLabel
+    = 1` and `truthLabel = 0`) are plotted separately, reflecting the if-else logical
+    branching in [listing 3.8](#ch03ex08).
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](03fig08_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'When looking at the plots in [figure 3.8](#ch03fig08), remember that lower
+    values are better because this is a loss function. The important things to note
+    about the loss function are as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If `truthLabel` is 1, a value of `prob` closer to 1.0 leads to a lower loss-function
+    value. This makes sense because when the example is actually positive, we want
+    the model to output a probability as close to 1.0 as possible. And vice versa:
+    if the `truthLabel` is 0, the loss value is lower when the probability value is
+    closer to 0\. This also makes sense because in that case, we want the model to
+    output a probability as close to 0 as possible.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Unlike the binary-thresholding function shown in [figure 3.7](#ch03fig07), these
+    curves have nonzero slopes at every point, leading to nonzero gradients. This
+    is why it is suitable for backpropagation-based model training.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: One question you might ask is, why not repeat what we did for the regression
+    model—just pretend that the 0–1 values are regression targets and use MSE as the
+    loss function? After all, MSE is differentiable, and calculating the MSE between
+    the truth label and the probability would yield nonzero derivatives just like
+    `binaryCrossentropy`. The answer has to do with the fact that MSE has “diminishing
+    returns” at the boundaries. For example, in [table 3.4](#ch03table04), we list
+    the `binaryCrossentropy` and MSE loss values for a number of `prob` values when
+    `truthLabel` is 1\. As `prob` gets closer to 1 (the desired value), the MSE decreases
+    more and more slowly compared to `binaryCrossentropy`. As a result, it is not
+    as good at “encouraging” the model to produce a higher (closer to 1) `prob` value
+    when `prob` is already fairly close to 1 (for instance, 0.9). Likewise, when `truthLabel`
+    is 0, MSE is not as good as `binaryCrossentropy` in generating gradients that
+    push the model’s `prob` output toward 0 either.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Table 3.4\. Comparing values of binary cross entropy and MSE for hypothetical
+    binary classification results
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '| truthLabel | prob | Binary cross entropy | MSE |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- | --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 1 | 0.1 | 2.302 | 0.81 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 1 | 0.5 | 0.693 | 0.25 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 1 | 0.9 | 0.100 | 0.01 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 1 | 0.99 | 0.010 | 0.0001 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 1 | 0.999 | 0.001 | 0.000001 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 1 | 1 | 0 | 0 |'
+  prefs: []
+  type: TYPE_TB
+- en: 'This shows another aspect in which binary-classification problems are different
+    from regression problems: for a binary-classification problem, the loss (`binaryCrossentropy`)
+    and metrics (accuracy, precision, and so on) are different, while they are usually
+    the same for a regression problem (for example, `meanSquaredError`). As we will
+    see in the next section, multiclass-classification problems also involve different
+    loss functions and metrics.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 3.3\. Multiclass classification
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'In [section 3.2](#ch03lev1sec2), we explored how to structure a binary-classification
+    problem; now we’ll do a quick aside into how to handle *nonbinary classification*—that
+    is, classification tasks involving three or more classes.^([[10](#ch03fn10)])
+    The dataset we will use to illustrate multiclass classification is the *iris-flower
+    dataset*, a famous dataset with its origin in the field of statistics (see [https://en.wikipedia.org/wiki/Iris_flower_data_set](https://en.wikipedia.org/wiki/Iris_flower_data_set)).
+    This dataset focuses on three species of the iris flower, called *iris setosa*,
+    *iris versicolor*, and *iris* *virginica*. These three species can be distinguished
+    from one another on the basis of their shapes and sizes. In the early 20th century,
+    Ronald Fisher, a British statistician, measured the length and width of the petals
+    and sepals (different parts of the flower) of 150 samples of iris. This dataset
+    is balanced: there are exactly 50 samples for each target label.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ^(10)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: It is important not to confuse *multiclass* classification with *multilabel*
+    classification. In multilabel classification, an individual input example may
+    correspond to multiple output classes. An example is detecting the presence of
+    various types of objects in an input image. One image may include only a person;
+    another image may include a person, a car, and an animal. A multilabel classifier
+    is required to generate an output that represents all the classes that are applicable
+    to the input example, no matter whether there is one or more than one such class.
+    This section is not concerned with multilabel classification. Instead, we focus
+    on the simpler single-label, multiclass classification, in which every input example
+    corresponds to exactly one output class among >2 possible classes.
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: 'In this problem, our model takes as input four numeric features—petal length,
+    petal width, sepal length, and sepal width—and tries to predict a target label
+    (one of the three species). The example is available in the iris folder of tfjs-examples,
+    which you can check out and run with these commands:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: 3.3.1\. One-hot encoding of categorical data
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'Before studying the model that solves the iris-classification problem, we need
+    to highlight the way in which the categorical target (species) is represented
+    in this multiclass-classification task. All the machine-learning examples we’ve
+    seen in this book so far involve simpler representation of targets, such as the
+    single number in the download-time prediction problem and that in the Boston-housing
+    problem, as well as the 0–1 representation of binary targets in the phishing-detection
+    problem. However, in the iris problem, the three species of flowers are represented
+    in a slightly less familiar way called *one-hot encoding*. Open data.js, and you
+    will notice this line:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here, `shuffledTargets` is a plain JavaScript array consisting of the integer
+    labels for the examples in a shuffled order. Its elements all have values 0, 1,
+    and 2, reflecting the three iris species in the dataset. It is converted into
+    a int32-type 1D tensor through the `tf.tensor1d(shuffledTargets).toInt()` call.
+    The resultant 1D tensor is then passed into the `tf.oneHot()` function, which
+    returns a 2D tensor of the shape `[numExamples, IRIS_NUM_CLASSES]`. `numExamples`
+    is the number of examples that `targets` contains, and `IRIS_NUM_CLASSES` is simply
+    the constant 3\. You can examine the actual values of `targets` and `ys` by adding
+    some printing lines right below the previously cited line—that is, something like
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: ^(11)
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Unlike `target`, `ys` is not a plain JavaScript array. Instead, it is a tensor
+    object backed by GPU memory. Therefore, the regular console.log won’t show its
+    value. The `print()` method is specifically for retrieving the values from the
+    GPU, formatting them in a shape-aware and human-friendly way, and logging them
+    to the console.
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: 'Once you have made these changes, the parcel bundler process that has been
+    started by the Yarn `watch` command in your terminal will automatically rebuild
+    the web files. Then you can open the devtool in the browser tab being used to
+    watch this demo and refresh the page. The printed messages from the `console.log()`
+    and `print()` calls will be logged into the console of the devtool. The printed
+    messages you will see will look something like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: or
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'and so forth. To describe this in words, for an example with the integer label
+    0, you get a row of values `[1, 0, 0]`; for an example with integer label 1, you
+    get a row of values `[0, 1, 0]`, and so forth. This is a simple and clear example
+    of one-hot encoding: it turns an integer label into a vector consisting of all-zero
+    values except at the index that corresponds to the label, where the value is 1\.
+    The length of the vector equals the number of all possible categories. The fact
+    that there is a single 1 value in the vector is precisely the reason why this
+    encoding scheme is called “one-hot.”'
+  prefs: []
+  type: TYPE_NORMAL
+- en: This encoding may look unnecessarily complicated to you. Why use three numbers
+    to represent a category when a single number could do the job? Why do we choose
+    this over the simpler and more economical single-integer-index encoding? This
+    can be understood from two different angles.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, it is much easier for a neural network to output a continuous, float-type
+    value than an integer one. It is not elegant to apply rounding on float-type output,
+    either. A much more elegant and natural approach is for the last layer of the
+    neural network to output a few separate float-type numbers, each constrained to
+    be in the `[0, 1]` interval through a carefully chosen activation function similar
+    to the sigmoid activation function we used for binary classification. In this
+    approach, each number is the model’s estimate of the probability of the input
+    example belonging to the corresponding class. This is exactly what one-hot encoding
+    is for: it is the “correct answer” for the probability scores, which the model
+    should aim to fit through its training process.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Second, by encoding a category as an integer, we implicitly create an ordering
+    among the classes. For example, we may label *iris setosa* as 0, *iris versicolor*
+    as 1, and *iris virginica* as 2\. But ordering schemes like this are often artificial
+    and unjustified. For example, this numbering scheme implies that *setosa* is “closer”
+    to *versicolor* than to *virginica*, which may not be true. Neural networks operate
+    on real numbers and are based on mathematical operations such as multiplication
+    and addition. Hence, they are sensitive to the magnitude of numbers and their
+    ordering. If the categories are encoded as a single number, it becomes an extra,
+    nonlinear relation that the neural network must learn. By contrast, one-hot-encoded
+    categories don’t involve any implied ordering and hence don’t tax the learning
+    capability of a neural network in this fashion.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As we will see in [chapter 9](kindle_split_021.html#ch09), one-hot encoding
+    not only is used for output targets of neural networks but also is applicable
+    when categorical data form the inputs to neural networks.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 3.3.2\. Softmax activation
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: With an understanding of how the input features and output target are represented,
+    we are now ready to look at the code that defines our model (from iris/index.js).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 3.9\. The multilayer neural network for iris-flower classification
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The model defined in [listing 3.9](#ch03ex09) leads to the following summary:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As can be seen from the printed summary, this is a fairly simple model with
+    a relatively small (83) number of weight parameters. The output shape `[null,
+    3]` corresponds to the one-hot encoding of the categorical target. The activation
+    used for the last layer, namely *softmax*, is designed specifically for the multiclass
+    classification problem. The mathematical definition of softmax can be written
+    as the following pseudo-code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: Unlike the sigmoid activation function we’ve seen, the softmax activation function
+    is not element-by-element because each element of the input vector is transformed
+    in a way that depends on all other elements. Specifically, each element of the
+    input is converted to its natural exponential (the `exp` function, with *e* =
+    2.718 as the base). Then the exponential is divided by the sum of all elements’
+    exponentials. What does this do? First, it ensures that every number is in the
+    interval between 0 and 1\. Second, it is guaranteed that all the elements of the
+    output vector sum to 1\. This is a desirable property because 1) the outputs can
+    be interpreted as probability scores assigned to the classes, and 2) in order
+    to be compatible with the categorical cross-entropy loss function, the outputs
+    must satisfy this property. Third, the definition ensures that a larger element
+    in the input vector maps to a larger element in the output vector. To give a concrete
+    example, suppose the matrix multiplication and bias addition in the last dense
+    layer produces a vector of
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: Its length is 3 because the dense layer is configured to have 3 units. Note
+    that the elements are float numbers unconstrained to any particular range. The
+    softmax activation will convert the vector into
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'You can verify this yourself by running the following TensorFlow.js code (for
+    example, in the devtool console when the page is pointing at [js.tensorflow.org](http://js.tensorflow.org)):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: The three elements of the softmax function’s output 1) are all in the `[0, 1]`
+    interval, 2) sum to 1, and 3) are ordered in a way that matches the ordering in
+    the input vector. As a result of these properties, the output can be interpreted
+    as the probability values assigned (by the model) to all the possible classes.
+    In the previous code snippet, the second category is assigned the highest probability
+    while the first is assigned the lowest.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As a consequence, when using an output from a multiclass classifier of this
+    sort, you can choose the index of the highest softmax element as the final decision—that
+    is, a decision on what class the input belongs to. This can be achieved by using
+    the method `argMax()`. For example, this is an excerpt from index.js:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`predictOut` is a 2D tensor of shape `[numExamples, 3]`. Calling its `argMax0`
+    method causes the shape to be reduced to `[numExample]`. The argument value –1
+    indicates that `argMax()` should look for maximum values along the last dimension
+    and return their indices. For instance, suppose `predictOut` has the following
+    value:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Then, `argMax(-1)` will return a tensor that indicates the maximum values along
+    the last (second) dimension are found at indices 1 and 0 for the first and second
+    examples, respectively:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: '3.3.3\. Categorical cross entropy: The loss function for multiclass classification'
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'In the binary classification example, we saw how binary cross entropy was used
+    as the loss function and why other, more human-interpretable metrics such as accuracy
+    and recall couldn’t be used as the loss function. The situation for multiclass
+    classification is quite analogous. There exists a straightforward metric—accuracy—that
+    is the fraction of examples that are classified correctly by the model. This metric
+    is important for humans to understand how well the model is performing and is
+    used in this code snippet in [listing 3.9](#ch03ex09):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'However, accuracy is a bad choice for loss function because it suffers from
+    the same zero-gradient issue as the accuracy in binary classification. Therefore,
+    people have devised a special loss function for multiclass classification: *categorical
+    cross entropy*. It is simply a generalization of binary cross entropy into the
+    cases where there are more than two categories.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 3.10\. Pseudo-code for categorical cross-entropy loss
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In the pseudo-code in the previous listing, `oneHotTruth` is the one-hot encoding
+    of the input example’s actual class. `probs` is the softmax probability output
+    from the model. The key takeaway from this pseudo-code is that as far as categorical
+    cross entropy is concerned, only one element of `probs` matters, and that is the
+    element whose indices correspond to the actual class. The other elements of `probs`
+    may vary all they like, but as long as they don’t change the element for the actual
+    class, it won’t affect the categorical cross entropy. For that particular element
+    of `probs`, the closer it gets to 1, the lower the value of the cross entropy
+    will be. Like binary cross entropy, categorical cross entropy is directly available
+    as a function under the `tf.metrics` namespace, and you can use it to calculate
+    the categorical cross entropy of simple but illustrating examples. For example,
+    with the following code, you can create a hypothetical, one-hot-encoded truth
+    label and a hypothetical `probs` vector and compute the corresponding categorical
+    cross-entropy value:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: This gives you an answer of approximately 0.693\. This means that when the probability
+    assigned by the model to the actual class is 0.5, `categoricalCrossentropy` has
+    a value of 0.693\. You can verify it against the pseudo-code in [listing 3.10](#ch03ex10).
+    You may also try raising or lowering the value from 0.5 to see how `categoricalCrossentropy`
+    changes (for instance, see [table 3.5](#ch03table05)). The table also includes
+    a column that shows the MSE between the one-hot truth label and the `probs` vector.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Table 3.5\. The values of categorical cross entropy under different probability
+    outputs. Without loss of generality, all the examples (row) are based on a case
+    in which there are three classes (as is the case in the iris-flower dataset),
+    and the actual class is the second one.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '| One-hot truth label | probs (softmax output) | Categorical cross entropy
+    | MSE |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- | --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [0, 1, 0] | [0.2, 0.5, 0.3] | 0.693 | 0.127 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [0, 1, 0] | [0.0, 0.5, 0.5] | 0.693 | 0.167 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [0, 1, 0] | [0.0, 0.9, 0.1] | 0.105 | 0.006 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [0, 1, 0] | [0.1, 0.9, 0.0] | 0.105 | 0.006 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| [0, 1, 0] | [0.0, 0.99, 0.01] | 0.010 | 0.00006 |'
+  prefs: []
+  type: TYPE_TB
+- en: By comparing rows 1 and 2 or comparing rows 3 and 4 in this table, it should
+    be clear that changing the elements of `probs` that don’t correspond to the actual
+    class doesn’t alter the binary cross entropy, even though it may alter the MSE
+    between the one-hot truth label and `probs`. Also, like in binary cross entropy,
+    MSE shows diminished return when the `probs` value for the actual class approaches
+    1, and hence is not good at encouraging the probability value of the correct class
+    to go up as categorical entropy in this regime. These are the reasons why categorical
+    cross entropy is more suitable as the loss function than MSE for multiclass-classification
+    problems.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '3.3.4\. Confusion matrix: Fine-grained analysis of multiclass classification'
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: By clicking the Train Model from Scratch button on the example’s web page, you
+    can get a trained model in a few seconds. As [figure 3.9](#ch03fig09) shows, the
+    model reaches nearly perfect accuracy after 40 epochs of training. This reflects
+    the fact that the iris dataset is a small one with relatively well-defined boundaries
+    between the classes in the feature space.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Figure 3.9\. A typical result from training the iris model for 40 epochs. Top
+    left: the loss function plotted against epochs of training. Top right: the accuracy
+    plotted against epochs of training. Bottom: the confusion matrix.'
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](03fig09_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: The bottom part of [figure 3.9](#ch03fig09) shows an additional way of characterizing
+    the behavior of a multiclass classifier, called a *confusion matrix*. A confusion
+    matrix breaks down the results of a multiclass classifier according to their actual
+    classes and the model’s predicted classes. It is a square matrix of shape `[numClasses,
+    numClasses]`. The element at indices `[i, j]` (row i and column j) is the number
+    of examples that belong to class `i` and are predicted as class `j` by the model.
+    Therefore, the diagonal elements of a confusion matrix correspond to correctly
+    classified examples. A perfect multiclass classifier should produce a confusion
+    matrix with no nonzero elements outside the diagonal. This is exactly the case
+    for the confusion matrix in [figure 3.9](#ch03fig09).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In addition to showing the final confusion matrix, the iris example also draws
+    the confusion matrix at the end of every training epoch, using the `onTrainEnd()`
+    callback. In early epochs, you may see a less perfect confusion matrix than the
+    one in [figure 3.9](#ch03fig09). The confusion matrix in [figure 3.10](#ch03fig10)
+    shows that 8 out of the 24 input examples were misclassified, which corresponds
+    to an accuracy of 66.7%. However, the confusion matrix tells us about more than
+    just a single number: it shows which classes involve the most mistakes and which
+    involve fewer. In this particular example, all flowers from the second class are
+    misclassified (either as the first or the third class), while the flowers from
+    the first and third classes are always classified correctly. Therefore, you can
+    see that in multiclass classification, a confusion matrix is a more informative
+    measurement than simply the accuracy, just like precision and recall together
+    form a more comprehensive measurement than accuracy in binary classification.
+    Confusion matrices can provide information that aids decision-making related to
+    the model and the training process. For example, making some types of mistakes
+    may be more costly than confusing other pairs of classes. Perhaps mistaking a
+    sports site for a gaming site is less of a problem than confusing a sports site
+    for a phishing scam. In those cases, you can adjust the model’s hyperparameters
+    to minimize the costliest mistakes.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 3.10\. An example of an “imperfect” confusion matrix, in which there
+    are nonzero elements off the diagonal. This confusion matrix is generated after
+    only 2 epochs, before the training converged.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](03fig10_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: The models we’ve seen so far all take an array of numbers as inputs. In other
+    words, each input example is represented as a simple list of numbers, of which
+    the length is fixed, and the ordering of the elements doesn’t matter as long as
+    they are consistent for all examples fed to the model. While this type of model
+    covers a large subset of important and practical machine-learning problems, it
+    is far from the only kind. In the coming chapters, we will look at more complex
+    input data types, including images and sequences. In [chapter 4](kindle_split_015.html#ch04),
+    we’ll start from images, a ubiquitous and widely useful type of input data for
+    which powerful neural network structures have been developed to push the accuracy
+    of machine-learning models to superhuman levels.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Exercises
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: When creating neural networks for the Boston-housing problem, we stopped at
+    a model with two hidden layers. Given what we said about cascading nonlinear functions
+    leading to enhanced capacity of models, will adding more hidden layers to the
+    model lead to improved evaluation accuracy? Try this out by modifying index.js
+    and rerunning the training and evaluation.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: What is the factor that prevents more hidden layers from improving the evaluation
+    accuracy?
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'What makes you reach this conclusion? (Hint: look at the error on the training
+    set.)'
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Look at how the code in [listing 3.6](#ch03ex06) uses the `onEpochBegin` callback
+    to calculate and draw an ROC curve at the beginning of every training epoch. Can
+    you follow this pattern and make some modifications to the body of the callback
+    function so that you can print the precision and recall values (calculated on
+    the test set) at the beginning of every epoch? Describe how these values change
+    as the training progresses.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Study the code in [listing 3.7](#ch03ex07) and understand how it computes the
+    ROC curve. Can you follow this example and write a new function, called `drawPrecisionRecallCurve()`,
+    which, as its name indicates, computes and renders a precision-recall curve? Once
+    you are done writing the function, call it from the `onEpochBegin` callback so
+    that a precision-recall curve can be plotted alongside the ROC curve at the beginning
+    of every training epoch. You may need to make some changes or additions to ui.js.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Suppose you are told the FPR and TPR of a binary classifier’s results. With
+    those two numbers, is it possible for you to calculate the overall accuracy? If
+    not, what extra piece(s) of information do you require?
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The definitions of binary cross entropy ([section 3.2.4](#ch03lev2sec6)) and
+    categorical cross entropy ([section 3.3.3](#ch03lev2sec9)) are both based on the
+    natural logarithm (the log of base *e*). What if we change the definition so that
+    they use the log of base 10? How would that affect the training and inference
+    of binary and multiclass classifiers?
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Turn the pseudo-code for the hyperparameter grid search in [listing 3.4](#ch03ex04)
+    into actual JavaScript code, and use the code to perform hyperparameter optimization
+    for the two-layer Boston-housing model in [listing 3.1](#ch03ex01). Specifically,
+    tune the number of units of the hidden layer and the learning rate. Feel free
+    to decide on the ranges of units and learning rate to search over. Note that machine-learning
+    engineers generally use approximately geometric sequences (that is, logarithmic)
+    spacing for these searches (for example, units = 2, 5, 10, 20, 50, 100, 200, .
+    . .).
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Classification tasks are different from regression tasks in that they involve
+    making discrete predictions.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'There are two types of classification: binary and multiclass. In binary classification,
+    there are two possible classes for a given input, whereas in multiclass classification,
+    there are three or more.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Binary classification can usually be viewed as detecting a certain type of event
+    or object of significance, called positives, among all the input examples. When
+    viewed this way, we can use metrics such as precision, recall, and FPR, in addition
+    to accuracy, to quantify various aspects of a binary classifier’s behavior.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The trade-off between the need to catch all positive examples and the need to
+    minimize false positives (false alarms) is common in binary-classification tasks.
+    The ROC curve, along with the associated AUC metric, is a technique that helps
+    us quantify and visualize this relation.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A neural network created for binary classification should use the sigmoid activation
+    in its last (output) layer and use binary cross entropy as the loss function during
+    training.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: To create a neural network for multiclass classification, the output target
+    is usually represented by one-hot encoding. The neural network ought to use softmax
+    activation in its output layer and be trained using the categorical cross-entropy
+    loss function.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: For multiclass classification, confusion matrices can provide more fine-grained
+    information regarding the mistakes made by the model than accuracy can.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[Table 3.6](#ch03table06) summarizes recommended methodologies for the most
+    common types of machine-learning problems we have seen so far (regression, binary
+    classification, and multiclass classification).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Hyperparameters are configurations concerning a machine-learning model’s structure,
+    properties of its layer, and its training process. They are distinct from the
+    model’s weight parameters in that 1) they do not change during the model’s training
+    process, and 2) they are often discrete. Hyperparameter optimization is the process
+    in which values of the hyperparameters are sought in order to minimize a loss
+    on the validation dataset. Hyperparameter optimization is still an active area
+    of research. Currently, the most frequently used methods include grid search,
+    random search, and Bayesian methods.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Table 3.6\. An overview of the most common types of machine-learning tasks,
+    their suitable last-layer activation function and loss function, as well as the
+    metrics that help quantify the model quality
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '| Type of task | Activation of output layer | Loss function | Suitable metrics
+    supported during Model.fit() calls | Additional metrics |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- | --- | --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Regression | ''linear'' (default) | ''meanSquaredError'' or ''meanAbsoluteError''
+    | (same as loss) |   |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Binary classification | ''sigmoid'' | ''binaryCrossentropy'' | ''accuracy''
+    | Precision, recall, precision-recall curve, ROC curve, AUC |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Single-label, multiclass classification | ''softmax'' | ''categoricalCrossentropy''
+    | ''accuracy'' | Confusion matrix |'
+  prefs: []
+  type: TYPE_TB

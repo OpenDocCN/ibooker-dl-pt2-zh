@@ -1,0 +1,1910 @@
+- en: Chapter 4\. Recognizing images and sounds using convnets
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '*This chapter covers*'
+  prefs: []
+  type: TYPE_NORMAL
+- en: How images and other perceptual data, such as audio, are represented as multidimensional
+    tensors
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: What convnets are, how they work, and why they are especially suitable for machine-learning
+    tasks involving images
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: How to write and train a convnet in TensorFlow.js to solve the task of classifying
+    hand-written digits
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: How to train models in Node.js to achieve faster training speeds
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: How to use convnets on audio data for spoken-word recognition
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The ongoing deep-learning revolution started with breakthroughs in image-recognition
+    tasks such as the ImageNet competition. There is a wide range of useful and technically
+    interesting problems that involve images, from recognizing the contents of images
+    to segmenting images into meaningful parts, and from localizing objects in images
+    to synthesizing images. This subarea of machine learning is sometimes referred
+    to as *computer vision*.^([[1](#ch04fn1)]) Computer-vision techniques are often
+    transplanted to areas that have nothing to do with vision or images (such as natural
+    language processing), which is one more reason why it is important to study deep
+    learning for computer vision.^([[2](#ch04fn2)]) But before delving into computer-vision
+    problems, we need to discuss the ways in which images are represented in deep
+    learning.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ¹
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Note that computer vision is itself a broad field, some parts of which use non-machine-learning
+    techniques beyond the scope of this book.
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ²
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Readers who are especially interested in deep learning in computer vision and
+    want to dive deeper into the topic can check out Mohamed Elgendy’s, *Grokking
+    Deep Learning for Computer Vision*, Manning Publications, in press.
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: '4.1\. From vectors to tensors: Representing images'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: In the previous two chapters, we looked at machine-learning tasks involving
+    numerical inputs. For example, the download-duration prediction problem in [chapter
+    2](kindle_split_013.html#ch02) took a single number (file size) as the input.
+    The input in the Boston-housing problem was an array of 12 numbers (number of
+    rooms, crime rate, and so on). What these problems have in common is the fact
+    that each input example can be represented as a flat (non-nested) array of numbers,
+    which corresponds to a 1D tensor in TensorFlow.js. Images are represented differently
+    in deep learning.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To represent an image, we use a 3D tensor. The first two dimensions of the tensor
+    are the familiar height and width dimensions. The third one is the color channel.
+    For example, color is often encoded as RGB values. In this case, each of the three
+    colors is a channel, which leads to a size of 3 along the third dimension. If
+    we have an RGB-encoded color image of size 224 × 224 pixels, we can represent
+    it as a 3D tensor of size `[224, 224, 3]`. The images in some computer-vision
+    problems are noncolor (for example, grayscale). In those cases, there is only
+    one channel, which, if represented as a 3D tensor, will lead to a tensor shape
+    of `[height, width, 1]` (see [figure 4.1](#ch04fig01) for an example).^([[3](#ch04fn3)])
+  prefs: []
+  type: TYPE_NORMAL
+- en: ³
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: An alternative is to “flatten” all the pixels of the image and their associated
+    color values into a 1D tensor (a flat array of numbers). But doing so makes it
+    hard to exploit the association between the color channels of each pixel and the
+    2D spatial relations between pixels.
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Figure 4.1\. Representing an MNIST image as tensors in deep learning. For the
+    sake of visualization, we downsized the MNIST image from 28 × 28 to 8 × 8\. The
+    image is a grayscale one, which leads to a height-width-channel (HWC) shape of
+    `[8, 8, 1]`. The single color channel along the last dimension is omitted in this
+    diagram.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](04fig01a_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: This mode of encoding an image is referred to as *height-width-channel (HWC)*.
+    To perform deep learning on images, we often combine a set of images into a batch
+    for efficient parallelized computation. When batching images, the dimension of
+    individual images is always the first dimension. This is similar to how we combined
+    1D tensors into a batched 2D tensor in [chapters 2](kindle_split_013.html#ch02)
+    and [3](kindle_split_014.html#ch03). Therefore, a batch of images is a 4D tensor,
+    with the four dimensions being image number (N), height (H), width (W), and color
+    channel (C), respectively. This format is referred to as *NHWC*. There is an alternative
+    format, resulting from a different ordering of the four dimensions. It is called
+    *NCHW*. As its name suggests, NCHW puts the channel dimension ahead of the height
+    and width dimensions. TensorFlow.js can handle both the NHWC and NCHW formats.
+    But we will only use the default NHWC format in this book, for consistency.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.1.1\. The MNIST dataset
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: The computer-vision problem we will focus on in this chapter is the MNIST^([[4](#ch04fn4)])
+    handwritten-digit dataset. This is such an important and frequently used dataset
+    that it is often referred to as the “hello world” for computer vision and deep
+    learning. The MNIST dataset is older and smaller than most datasets you will find
+    in deep learning. Yet it is good to be familiar with it because it is widely used
+    as an example and often serves as a first test for novel deep-learning techniques.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ⁴
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: MNIST stands for Modified NIST. The “NIST” part of the name comes from the fact
+    that the dataset originated from the US National Institute of Standards and Technology
+    around 1995\. The “modified” part of the name reflects the modification made to
+    the original NIST dataset, which included 1) normalizing images into the same
+    uniform 28 × 28 pixel raster with anti-aliasing to make the training and test
+    subsets more homogeneous and 2) making sure that the sets of writers are disjoint
+    between the training and test subsets. These modifications made the dataset easier
+    to work with and more amenable to objective evaluation of model accuracy.
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Each example in the MNIST dataset is a 28 × 28 grayscale image (see [figure
+    4.1](#ch04fig01) for an example). These images were converted from real handwriting
+    of the 10 digits 0 through 9\. The image size of 28 × 28 is sufficient for reliable
+    recognition of these simple shapes, although it is smaller than the image sizes
+    seen in typical computer-vision problems. Each image is accompanied by a definitive
+    label, which indicates which of the 10 possible digits the image actually is.
+    As we have seen in the download-time prediction and Boston-housing datasets, the
+    data is divided into a training set and a test set. The training set consists
+    of 60,000 images, while the test contains 10,000 images. The MNIST dataset^([[5](#ch04fn5)])
+    is approximately balanced, meaning that there are approximately equal numbers
+    of examples for the 10 categories (that is, the 10 digits).
+  prefs: []
+  type: TYPE_NORMAL
+- en: ⁵
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: See Yann LeCun, Corinna Cortes, and Christopher J.C. Burges, “The MNIST Database
+    of Handwritten Digits,” [http://yann.lecun.com/exdb/mnist/](http://yann.lecun.com/exdb/mnist/).
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: 4.2\. Your first convnet
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Given the representation of the image data and the labels, we know what kind
+    of input a neural network that solves the MNIST dataset should take and what kind
+    of output it should generate. The input to the neural network is a tensor of the
+    NHWC-format shape `[null, 28, 28, 1]`. The output is a tensor of shape `[null,
+    10]`, where the second dimension corresponds to the 10 possible digits. This is
+    the canonical one-hot encoding of multiclass-classification targets. It is the
+    same as the one-hot encoding of the species of iris flowers we saw in the iris
+    example in [chapter 3](kindle_split_014.html#ch03). With this knowledge, we can
+    dive into the details of convnets (which, as a reminder, is short for convolutional
+    networks), the method of choice for image-classification tasks such as MNIST.
+    The “convolutional” part of the name may sound scary. It is just a type of mathematical
+    operation, and we will explain it in detail.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The code is in the mnist folder of tfjs-examples. Like the previous examples,
+    you can access and run the code as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[Listing 4.1](#ch04ex01) is an excerpt from the main index.js code file in
+    the mnist example. It is a function that creates the convnet we use to solve the
+    MNIST problem. The number of layers in this sequential model (seven) is significantly
+    greater than in the examples we have seen so far (between one and three layers).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.1\. Defining a convolutional model for the MNIST dataset
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** First conv2d layer'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***2*** Pooling after convolution'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***3*** Repeating “motif” of conv2d-maxPooling2d'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***4*** Flattens tensor to prepare for dense layers'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***5*** Uses softmax activation for multiclass classification problem'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***6*** Prints a text summary of model'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The sequential model constructed by the code in [listing 4.1](#ch04ex01) consists
+    of seven layers, created one by one through the `add()` method calls. Before we
+    examine the detailed operations performed by each layer, let’s look at the model’s
+    overall architecture, which is shown in [figure 4.2](#ch04fig02). As the diagram
+    shows, the model’s first five layers include a repeating pattern of conv2d-maxPooling2d
+    layer groups, followed by a flatten layer. The groups of conv2d-maxPooling2d layers
+    are the working horse of feature extraction. Each of the layers transforms an
+    input image into an output one. A conv2d layer operates through a *convolutional
+    kernel*, which is “slid” over the height and width dimensions of the input image.
+    At each sliding position, it is multiplied with the input pixels, and the products
+    are summed and fed through a nonlinearity. This yields a pixel in the output image.
+    The maxPooling2d layers operate in a similar fashion but without a kernel. By
+    passing the input image data through the successive layers of convolution and
+    pooling, we get tensors that become smaller and smaller in size and more and more
+    abstract in the feature space. The output of the last pooling layer is transformed
+    into a 1D tensor through flattening. The flattened 1D tensor then goes into the
+    dense layer (not shown in the diagram).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 4.2\. A high-level overview of the architecture of a simple convnet of
+    the kind constructed by the code in [listing 4.1](#ch04ex01). In this figure,
+    the sizes of the images and intermediate tensors are made smaller than the actual
+    sizes in the model defined by [listing 4.1](#ch04ex01) for illustration’s sake.
+    So are the sizes of the convolutional kernels. Also note that this diagram shows
+    a single channel in each intermediate 4D tensor, whereas the intermediate tensors
+    in the actual model have multiple channels.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](04fig01_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'You can think of the convnet as an MLP built on top of convolutional and pooling
+    preprocessing. The MLP is exactly the same type as what we’ve seen in the Boston-housing
+    and phishing-detection problems: it’s simply made of dense layers with nonlinear
+    activations. What’s different in the convnet here is that the input to the MLP
+    is the output of the cascaded conv2d and maxPooling2d layers. These layers are
+    specifically designed for image inputs to extract useful features from them. This
+    architecture was discovered through years of research in neural networks: it leads
+    to an accuracy significantly better than feeding the pixel values of the images
+    directly into an MLP.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: With this high-level understanding of the MNIST convnet, let’s now dive deeper
+    into the internal workings of the model’s layers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.2.1\. conv2d layer
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: The first layer is a conv2d layer, which performs 2D convolution. This is the
+    first convolutional layer you see in this book. What does it do? conv2d is an
+    image-to-image transform—it transforms a 4D (NHWC) image tensor into another 4D
+    image tensor, possibly with a different height, width, and number of channels.
+    (It may seem strange that conv2d operates on 4D tensors, but keep in mind that
+    there are two extra dimensions, one for batch examples and one for channels.)
+    Intuitively, it can be understood as a group of simple “Photoshop filters”^([[6](#ch04fn6)])
+    that lead to image effects such as blurring and sharpening. These effects are
+    done with 2D convolution, which involves sliding a small patch of pixels (the
+    *convolutional kernel*, or simply *kernel*) over the input image. At each sliding
+    position, the kernel is multiplied with the small patch of the input image that
+    it overlaps with, pixel by pixel. Then the pixel-by-pixel products are summed
+    to form pixels in the resulting image.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ⁶
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: 'We owe this analogy to Ashi Krishnan’s talk titled “Deep Learning in JS” at
+    JSConf EU 2018: [http://mng.bz/VPa0](http://mng.bz/VPa0).'
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Compared to a dense layer, a conv2d layer has more configuration parameters.
+    `kernelSize` and `filters` are two key parameters of the conv2d layer. To understand
+    their meaning, we need to describe how 2D convolution works on a conceptual level.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Figure 4.3](#ch04fig03) illustrates 2D convolution in greater detail. Here,
+    we suppose the input image (top left) tensor consists of a simple example so that
+    we can draw it easily on paper. We suppose the conv2d operation is configured
+    as `kernelSize = 3` and `filters = 3`. Due to the fact that the input image has
+    two color channels (a somewhat unusual number of channels just for illustration
+    purposes), the kernel is a 3D tensor of shape `[3, 3, 2, 3]`. The first two numbers
+    (3 and 3) are the height and width of the kernel, determined by `kernelSize`.
+    The third dimension (2) is the number of input channels. What is the fourth dimension
+    (3)? It is the number of filters, which equals the last dimension of conv2d’s
+    output tensor.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 4.3\. How a conv2D layer works, with an example. For simplicity, it is
+    assumed that the input tensor (top left) contains only one image and is therefore
+    a 3D tensor. Its dimensions are height, width, and depth (color channels). The
+    batch dimension is omitted for simplicity. The depth of the input image tensor
+    is set as 2 for simplicity. Note that the height and width of the image (4 and
+    5) are much smaller than those of a typical real image. The depth (2) is less
+    than the more typical value of 3 or 4 (for example, for RGB or RGBA). Assuming
+    that the `filters` property (the number of filters) of the conv2D layer is 3,
+    `kernelSize` is `[3, 3]`, and `strides` is `[1, 1]`, the first step in performing
+    the 2D convolution is to slide through the height and width dimensions and extract
+    small patches of the original image. Each patch has a height of 3 and a width
+    of 3, matching the layer’s `filterSize`; it also has the same depth as the original
+    image. In the second step, a dot product is calculated between every 3 × 3 × 2
+    patch and the convolutional kernel (that is, “filters”). [Figure 4.4](#ch04fig04)
+    gives more details on each dot-product operation. The kernel is a 4D tensor and
+    consists of three 3D filters. The dot product between the image patch with the
+    filter occurs separately for the three filters. The image patch is multiplied
+    with the filter pixel-by-pixel, and the products are summed, which leads to a
+    pixel in the output tensor. Because there are three filters in the kernel, each
+    image patch is converted to a stack of three pixels. This dot-product operation
+    is performed over all image patches, and the resulting stacks of three pixels
+    are merged as the output tensor, which has a shape of `[2, 3, 3]` in this case.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](04fig02_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: If the output is regarded as an image tensor (a totally valid way of looking
+    at this!), then filters can be understood as the number of channels in the output.
+    Unlike the input image, the channels in the output tensor don’t actually have
+    to do with colors. Instead, they represent different visual features of the input
+    image, learned from the training data. For example, some filters may be sensitive
+    to straight-line boundaries between bright and dark regions at a certain orientation,
+    while others may be sensitive to corners formed by a brown color, and so forth.
+    More on that later.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The “sliding” action mentioned previously is represented as extracting small
+    patches from the input image. Each patch has height and width equal to `kernelSize`
+    (3 in this case). Since the input image has a height of 4, there are only two
+    possible sliding positions along the height dimension because we need to make
+    sure that the 3 × 3 window does not fall outside the bounds of the input image.
+    Similarly, the width (5) of the input image gives us three possible sliding positions
+    along the width dimension. Hence, we end up with `2 × 3 = 6` image patches extracted.
+  prefs: []
+  type: TYPE_NORMAL
+- en: At each sliding-window position, a dot-product operation occurs. Recall that
+    the convolutional kernel has a shape of `[3, 3, 2, 3]`. We can break up the 4D
+    tensor along the last dimension into three separate 3D tensors, each of which
+    has a shape of `[3, 3, 2]`, as shown by the hash lines in [figure 4.3](#ch04fig03).
+    We take the image patch and one of the 3D tensors, multiply them together pixel-by-pixel,
+    and sum all the `3 * 3 * 2 = 18` values to get a pixel in the output tensor. [Figure
+    4.4](#ch04fig04) illustrates the dot-product step in greater detail. It is not
+    a coincidence that the image patch and the slice of the convolutional kernel have
+    exactly the same shape—we extracted the image patches based on the kernel’s shape!
+    This multiply-and-add operation is repeated for all three slices of the kernel,
+    which gives a set of three numbers. Then this dot-product operation is repeated
+    for the remaining image patches, which gives the six columns of three cubes in
+    the figure. These columns are finally combined to form the output, which has an
+    HWC shape of `[2, 3, 3]`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 4.4\. An illustration of the dot-product (that is, multiply-and-add)
+    operation in the 2D convolution operation, a step in the full workflow outlined
+    in [figure 4.3](#ch04fig03). For the sake of illustration, it is assumed that
+    the image patch (x) contains only one color channel. The image patch has a shape
+    of `[3, 3, 1]`, that is, the same as the size of the convolutional kernel slice
+    (K). The first step is element-by-element multiplication, which yields another
+    `[3, 3, 1]` tensor. The elements of the new tensor are added together (represented
+    by the σ), and the sum is the result.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](04fig03_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Like a dense layer, a conv2d layer has a bias term, which is added to the result
+    of the convolution. Also, a conv2d layer is usually configured to have a nonlinear
+    activation function. In this example, we use relu. Recall that in the [chapter
+    3](kindle_split_014.html#ch03) section “[Avoiding the fallacy of stacking layers
+    without nonlinearity](kindle_split_014.html#ch03lev3sec2),” we warned that stacking
+    two dense layers without nonlinearity is mathematically equivalent to using a
+    single dense layer. A similar cautionary note applies to conv2d layers: stacking
+    two such layers without a nonlinear activation is mathematically equivalent to
+    using a single conv2d layer with a larger kernel and is hence an inefficient way
+    of constructing a convnet that should be avoided.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Whew! That’s it for the details of how conv2d layers work. Let’s take a step
+    back and look at what conv2d actually achieves. In a nutshell, it is a special
+    way to transform an input image into an output image. The output image will usually
+    have smaller height and width compared to the input. The reduction in size is
+    dependent on the `kernelSize` configuration. The output image may have fewer,
+    more, or the same channels than the input, which is determined by the `filters`
+    configuration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'So conv2d is an image-to-image transformation. Two key features of the conv2d
+    transformation are locality and parameter sharing:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Locality* refers to the property that the value of a given pixel in the output
+    image is affected by only a small patch of the input image, instead of all the
+    pixels in the input image. The size of that patch is `kernelSize`. This is what
+    makes conv2d distinct from dense layers: in a dense layer, every output element
+    is affected by every input element. In other words, the input elements and output
+    elements are “densely connected” in a dense layer (hence its name). So, we can
+    say that a conv2d layer is “sparsely connected.” While dense layers learn global
+    patterns in the input, convolutional layers learn local patterns—patterns within
+    the small window of the kernel.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Parameter sharing* refers to the property that the way in which output pixel
+    A is affected by its small input patch is exactly the same as the way in which
+    output pixel B is affected by its input patch. This is because the dot product
+    at every sliding position uses the same convolutional kernel ([figure 4.3](#ch04fig03)).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Due to locality and parameter sharing, a conv2d layer is a highly efficient,
+    image-to-image transform in terms of the number of parameters required. In particular,
+    the size of the convolutional kernel does not change with the height or width
+    of the input image. Coming back to the first conv2d layer in [listing 4.1](#ch04ex01),
+    the kernel has a shape of `[kernelSize, kernelSize, 1, filter]` (that is, `[5,
+    5, 1, 8]`), and therefore a total of 5 * 5 * 1 * 8 = 200 parameters, regardless
+    of whether the input MNIST images are 28 × 28 or much larger. The output of the
+    first conv2d layer has a shape of `[24, 24, 8]` (omitting the batch dimension).
+    So, the conv2d layer transforms a tensor consisting of 28 * 28 * 1 = 784 elements
+    into another tensor of 24 * 24 * 8 = 4,608 elements. If we were to implement this
+    transform with a dense layer, how many parameters will be involved? The answer
+    is 784 * 4,608 = 3,612,672 (not including the bias), which is about 18 thousand
+    times more than the conv2d layer! This thought experiment shows the efficiency
+    of convolutional layers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The beauty of conv2d’s locality and parameter sharing is not only in its efficiency,
+    but also in the fact that it mimics (in a loose fashion) how biological visual
+    systems work. Consider neurons in the retina. Each neuron is affected by only
+    a small patch in the eye’s field of view, called the *receptive field*. Two neurons
+    located at different locations of the retina respond to light patterns in their
+    respective receptive fields in pretty much the same way, which is analogous to
+    the parameter sharing in a conv2d layer. What’s more, conv2d layers prove to work
+    well for computer-vision problems, as we will soon appreciate in this MNIST example.
+    conv2d is a neat neural network layer that has it all: efficiency, accuracy, and
+    relevance to biology. No wonder it is so widely used in deep learning.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.2.2\. maxPooling2d layer
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: Having examined the conv2d layer, let’s look at the next layer in the sequential
+    model—a maxPooling2d layer. Like conv2d, maxPooling2d is a kind of image-to-image
+    transform. But the maxPooling2d transform is simpler compared to conv2d. As [figure
+    4.5](#ch04fig05) shows, it simply calculates the maximum pixel values in small
+    image patches and uses them as the pixel values in the output. The code that defines
+    and adds the maxPooling2d layer is
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: Figure 4.5\. An example of how a maxPooling2D layer works. This example uses
+    a tiny 4 × 4 image and assumes that the maxPooling2D layer is configured to have
+    a `poolSize` of `[2, 2]` and `strides` of `[2, 2]`. The depth dimension is not
+    shown, but the max-pooling operation occurs independently over the dimensions.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](04fig04.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'In this particular case, the image patches have a height and width of 2 × 2
+    because of the specified `poolSize` value of `[2, 2]`. The patches are extracted
+    every two pixels, along both dimensions. This spacing between patches results
+    from the `strides` value we use here: `[2, 2]`. As a result, the output image,
+    with an HWC shape of `[12, 12, 8]`, is half the height and half the width of the
+    input image (shape `[24, 24, 8]`) but has the same number of channels.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A maxPooling2d layer serves two main purposes in a convnet. First, it makes
+    the convnet less sensitive to the exact location of key features in the input
+    image. For example, we want to be able to recognize the digit “8” regardless of
+    whether it has shifted to the left or the right from the center in the 28 × 28
+    input image (or shifted up or down, for that matter), a property called *positional
+    invariance*. To understand how the maxPooling2d layer enhances positional invariance,
+    realize the fact that within each image patch that maxPooling2d operates on, it
+    doesn’t matter where the brightest pixel is, as long as it falls into that patch.
+    Admittedly, a single maxPooling2d layer can do only so much in making the convnet
+    insensitive to shifts because its pooling window is limited. However, when multiple
+    maxPooling2d layers are used in the same convnet, they work together to achieve
+    considerably greater positional invariance. This is exactly what is done in our
+    MNIST model—as well as in virtually all practical convnets—which contains two
+    maxPooling2d layers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As a thought experiment, consider what happens when two conv2d layers (called
+    conv2d_1 and conv2d_2) are stacked directly on top of each other without an intermediate
+    maxPooling2d layer. Suppose each of the two conv2d layers has a `kernelSize` of
+    3; then each pixel in conv2d_2’s output tensor is a function of a 5 × 5 region
+    in the original input to conv2d_1\. We can say that each “neuron” of the conv2d_2
+    layer has a receptive field of size 5 × 5\. What happens when there is an intervening
+    maxPooling2d layer between the two conv2d layers (as is the case in our MNIST
+    convnet)? The receptive field of conv2d_2’s neurons becomes larger: 11 × 11\.
+    This is due to the pooling operation, of course. When multiple maxPooling2d layers
+    are present in a convnet, layers at higher levels can have broad receptive fields
+    and positional invariance. In short, they can see wider!'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Second, a maxPooling2d layer also shrinks the size of the height and width dimensions
+    of the input tensor, significantly reducing the amount of compute required in
+    subsequent layers and in the entire convnet overall. For example, the output from
+    the first conv2d layer has an output tensor of shape `[26, 26, 16]`. After passing
+    through the maxPooling2d layer, the tensor shape becomes `[13, 13, 16]`, which
+    reduces the number of tensor elements by a factor of 4\. The convnet contains
+    another maxPooling2d layer, which further shrinks the size of the weights in subsequent
+    layers and the number of elementwise mathematical operations in those layers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.2.3\. Repeating motifs of convolution and pooling
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'Having examined the first maxPooling2d layer, let’s focus our attention on
+    the next two layers of the convnet, defined by these lines in [listing 4.1](#ch04ex01):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'These two layers are an exact repeat of the previous two layers (except that
+    the conv2d layer has a larger value in its `filters` configuration and does not
+    possess an `inputShape` field). This type of an almost-repeating “motif” consisting
+    of a convolutional layer and a pooling layer is seen frequently in convnets. It
+    performs a critical role: hierarchical extraction of features. To understand what
+    it means, consider a convnet trained for the task of classifying animals in images.
+    At early stages of the convnet, the filters (that is, channels) in a convolutional
+    layer may encode low-level geometric features, such as straight lines, curved
+    lines, and corners. These low-level features are transformed into more complex
+    features, such as a cat’s eye, nose, and ear (see [figure 4.6](#ch04fig06)). At
+    the top level of the convnet, a layer may have filters that encode the presence
+    of a whole cat. The higher the level, the more abstract the representation and
+    the more removed from the pixel-level values the features are. But those abstract
+    features are exactly what is required to achieve good accuracy on the convnet’s
+    task—for instance, detecting a cat when it is present in the image. Moreover,
+    these features are not handcrafted but are instead extracted from the data in
+    an automatic fashion through supervised learning. This is a quintessential example
+    of the kind of layer-by-layer representational transformation that we described
+    as the essence of deep learning in [chapter 1](kindle_split_011.html#ch01).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 4.6\. Hierarchical extraction of features from an input image by a convnet,
+    using a cat image as an example. Note that in this example, the input to the neural
+    network is at the bottom, and the output is at the top.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](04fig05_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 4.2.4\. Flatten and dense layers
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: After the input tensor has passed through the two groups of conv2d-maxPooling2d
+    transformations, it becomes a tensor of the HWC shape `[4, 4, 16]` (without the
+    batch dimension). The next layer in the convnet is a flatten layer. This layer
+    forms a bridge between the previous conv2d-maxPooling2d layers and the following
+    layers of the sequential model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The code for the flatten layer is simple, as the constructor doesn’t require
+    any configuration parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: A flatten layer “squashes” a multidimensional tensor into a 1D tensor, preserving
+    the total number of elements. In our case, the 3D tensor of shape `[3, 3, 32]`
+    is flattened into a 1D tensor `[288]` (without the batch dimension). An obvious
+    question for the squashing operation is how to order the elements, because there
+    is no intrinsic order in the original 3D space. The answer is, we order the elements
+    such that if you go down the elements in the flattened 1D tensor and look at how
+    their original indices (from the 3D tensor) change, the last index changes the
+    fastest, the second-to-last index changes the second fastest, and so forth, while
+    the first index changes the slowest. This is illustrated in [figure 4.7](#ch04fig07).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 4.7\. How a flatten layer works. A 3D tensor input is assumed. For the
+    sake of simplicity, we let each dimension have a small size of 2\. The indices
+    of the elements are shown on the “faces” of the cubes that represent the elements.
+    The flatten layer transforms the 3D tensor into a 1D tensor while preserving the
+    total number of elements. The ordering of the elements in the flattened 1D tensor
+    is such that when you go down the elements of the output 1D tensor and examine
+    their original indices in the input tensor, the last dimension is the one that
+    changes the fastest.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](04fig06_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: What purpose does the flatten layer serve in our convnet? It sets the stage
+    for the subsequent dense layers. As we learned in [chapters 2](kindle_split_013.html#ch02)
+    and [3](kindle_split_014.html#ch03), a dense layer usually takes a 1D tensor (excluding
+    the batch dimension) as its input due to how a dense layer works ([section 2.1.4](kindle_split_013.html#ch02lev2sec4)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The next two lines of the code in [listing 4.1](#ch04ex01) add two dense layers
+    to the convnet:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Why two dense layers and not just one? The same reason as in the Boston-housing
+    example and phishing-URL-detection example we saw in [chapter 3](kindle_split_014.html#ch03):
+    adding layers with nonlinear activation increases the network’s capacity. In fact,
+    you can think of the convnet as consisting of two models stacked on top of each
+    other:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A model that contains conv2d, maxPooling2d, and flatten layers, which extracts
+    visual features from the input images
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: An MLP with two dense layers that uses the extracted features to make digit-class
+    predictions—this is essentially what the two dense layers are for
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In deep learning, many models show this pattern of feature-extraction layers
+    followed by MLPs for final predictions. We will see more examples like this throughout
+    the rest of this book, in models ranging from audio-signal classifiers to natural
+    language processing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.2.5\. Training the convnet
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: Now that we’ve successfully defined the topology of the convnet, the next step
+    is to train it and evaluate the result of the training. This is what the code
+    in the next listing is for.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.2\. Training and evaluating the MNIST convnet
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** Uses callbacks to plot accuracy and loss during training'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***2*** Evaluates the model’s accuracy using data the model hasn’t seen'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Much of the code here is about updating the UI as the training progresses,
+    for instance, to plot how the loss and accuracy values change. This is useful
+    for monitoring the training process but not strictly essential for model training.
+    Let’s highlight the parts essential for training:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`trainData.xs` (the first argument to `model.fit()`) contains the input MNIST
+    images represented as a tensor of NHWC shape `[N, 28, 28, 1]`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`trainData.labels` (the second argument to `model.fit()`). This includes the
+    input labels, represented as a one-hot encoded 2D tensor of shape `[N, 10]`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The loss function used in the `model.compile()` call, `categoricalCrossentropy`,
+    which is appropriate for multiclass-classification problems like MNIST. Recall
+    that we used the same loss function for the iris-flower-classification problem
+    in [chapter 3](kindle_split_014.html#ch03).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The metric function specified in the `model.compile()` call: `''accuracy''`.
+    This function measures what fraction of the examples are classified correctly,
+    given that the prediction is made based on the largest element among the 10 elements
+    of the convnet’s output. Again, this is exactly the same metric we used for the
+    newswire problem. Recall the difference between the cross-entropy loss and the
+    accuracy metric: cross-entropy is differentiable and hence makes backpropagation-based
+    training possible, whereas the accuracy metric is not differentiable but is more
+    easily interpretable.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The `batchSize` parameter specified for the `model.fit()` call. In general,
+    the benefit of using larger batch sizes is that it produces a more consistent
+    and less variable gradient update to the model’s weights than a smaller batch
+    size. But the larger the batch size, the more memory is required during training.
+    You should also keep in mind that given the same amount of training data, a larger
+    batch size leads to a small number of gradient updates per epoch. So, if you use
+    a larger batch size, be sure to increase the number of epochs accordingly so you
+    don’t inadvertently decrease the number of weight updates during training. Thus,
+    there is a trade-off. Here, we use a relatively small batch size of 64 because
+    we need to make sure that this example works on a wide range of hardware. Like
+    other parameters, you can modify the source code and refresh the page so as to
+    experiment with the effect of using different batch sizes.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The `validationSplit` used in the `model.fit()` call. This lets the training
+    process leave out the last 15% of `trainData.xs` and `trainData.labels` for validation
+    during training. As you learned with the previous nonimage models, monitoring
+    validation loss and accuracy is important during training. It gives you an idea
+    of whether and when the model is *overfitting*. What is overfitting? Put simply,
+    it is a state in which the model pays too much attention to the fine details of
+    the data it has seen during training—so much so that its prediction accuracy on
+    data not seen during training is negatively affected. It is a critical concept
+    in supervised machine learning. Later in the book ([chapter 8](kindle_split_020.html#ch08)),
+    we will devote an entire chapter to how to spot and counteract overfitting.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`model.fit()` is an async function, so we need to use `await` on it if subsequent
+    actions depend on the completion of the `fit()` call. This is exactly what’s done
+    here, as we need to perform an evaluation on the model using a test dataset after
+    the model is trained. The evaluation is performed using the `model.evaluate()`
+    method, which is synchronous. The data fed to `model.evaluate()` is `testData`,
+    which has the same format as the `trainData` mentioned earlier, but has a smaller
+    number of examples. These examples were never seen by the model during the `fit()`
+    call, ensuring that the test dataset does not leak into the evaluation result
+    and that the result of the evaluation is an objective assessment of the model’s
+    quality.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: With this code, we let the model train 10 epochs (specified in the input box),
+    which gives us the loss and accuracy curves in [figure 4.8](#ch04fig08). As shown
+    by the plots, the loss converges toward the end of the training epochs, and so
+    does the accuracy. The validation loss and accuracy values do not deviate from
+    their training counterparts too much, which indicates that there is no significant
+    overfitting in this case. The final `model.evaluate()` call gives an accuracy
+    in the neighborhood of 99.0% (the actual value you get will vary slightly from
+    run to run, owing to the random initialization of weights and the implicit random
+    shuffling of examples during training).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Figure 4.8\. The MNIST convnet’s training curves. Ten epochs of training are
+    performed, with each epoch consisting of approximately 800 batches. Left: loss
+    value. Right: accuracy value. The values from the training and validation sets
+    are shown by the different colors, line widths, and marker symbols. The validation
+    curves contain fewer data points than the training ones because, unlike the training
+    batches, validation is performed only at the end of every epoch.'
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](04fig07_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: How good is 99.0%? It is passable from a practical point of view, but it is
+    certainly not the state of the art. With more convolutional layers, it is possible
+    to achieve an accuracy reaching 99.5% by increasing the number of convolutional
+    and pooling layers and the number of filters in the model. However, training those
+    larger convnets take significantly longer in the browser—so long that it makes
+    sense to do the training in a less resource-constrained environment like Node.js.
+    We will show you exactly how to do that in [section 4.3](#ch04lev1sec3).
+  prefs: []
+  type: TYPE_NORMAL
+- en: From a theoretical point of view, remember MNIST is a 10-way classification
+    problem. So, the chance-level (pure guessing) accuracy is 10%; 99.0% is way better
+    than that. But chance level is not a very high bar. How do we show the value of
+    the conv2d and maxPooling2d layers in the model? Would we have done as well if
+    we stuck with the good old dense layers?
+  prefs: []
+  type: TYPE_NORMAL
+- en: To answer these questions, we can do an experiment. The code in index.js contains
+    another function for model creation called `createDenseModel()`. Unlike the `createConvModel()`
+    function we saw in [listing 4.1](#ch04ex01), `createDenseModel()` creates a sequential
+    model made of only flatten and dense layers, that is, without using the new layer
+    types we learned in this chapter. `createDenseModel()` makes sure that the total
+    number of parameters is approximately equal between the dense model it creates
+    and the convnet we just trained—approximately 33,000, so it will be a fairer comparison.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.3\. A flatten-and-dense-only model for MNIST, for comparison with
+    convnet
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The summary of the model defined in [listing 4.3](#ch04ex03) is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Using the same training configuration, we obtain training results as shown
+    in [figure 4.9](#ch04fig09) from the nonconvolutional model. The final evaluation
+    accuracy we get after 10 training epochs is about 97.0%. The difference of two
+    percentage points may seem small, but in terms of error rate, the nonconvolutional
+    model is three times worse than the convnet. As a hands-on exercise, try increasing
+    the size of the nonconvolutional model by increasing the `units` parameter of
+    the hidden (first) dense layer in the `createDenseModel()` function. You will
+    see that even with greater sizes, it is impossible for the dense-only model to
+    achieve an accuracy on par with the convnet. This shows you the power of a convnet:
+    through parameter sharing and exploiting the locality of visual features, convnets
+    can achieve superior accuracy on computer-vision tasks with an equal or fewer
+    number of parameters than nonconvolutional neural networks.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 4.9\. Same as [figure 4.8](#ch04fig08), but for a nonconvolutional model
+    for the MNIST problem, created by the `createDenseModel()` function in [listing
+    4.3](#ch04ex03)
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](04fig08_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 4.2.6\. Using a convnet to make predictions
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: Now we have a trained convnet. How do we use it to actually classify images
+    of hand-written digits? First, you need to get hold of the image data. There are
+    a number of ways through which image data can be made available to TensorFlow.js
+    models. We will list them and describe when they are applicable.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Creating image tensors from TypedArrays
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: In some cases, the image data you want are already stored as JavaScript `TypedArray`s.
+    This is the case in the tfjs-example/mnist example we are focusing on. The details
+    are in the data.js file, and we will not elaborate on the detailed machinery.
+    Given a `Float32Array` representing an MNIST of the correct length (say, a variable
+    named `imageDataArray`), we can convert it into a 4D tensor of the shape expected
+    by our model with^([[7](#ch04fn7)])
+  prefs: []
+  type: TYPE_NORMAL
+- en: ⁷
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: See [appendix B](kindle_split_030.html#app02) for a more comprehensive tutorial
+    on how to create tensors using the low-level API in TensorFlow.js.
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The second argument in the `tf.tensor4d()` call specifies the shape of the
+    tensor to be created. It is necessary because a `Float32Array` (or a `TypedArray`
+    in general) is a flat structure with no information regarding the image’s dimensions.
+    The size of the first dimension is 1 because we are dealing with a single image
+    in `imageDataArray`. As in previous examples, the model always expects a batch
+    dimension during training, evaluation, and inference, no matter whether there
+    is only one image or more than one. If the `Float32Array` contains a batch of
+    multiple images, it can also be converted into a single tensor, where the size
+    of the first dimension equals the number of images:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'tf.browser.fromPixels: Getting image tensors from HTML img, canva- as, or video
+    elements'
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: The second way to get image tensors in the browser is to use the TensorFlow.js
+    function `tf.browser.fromPixels()` on HTML elements that contain image data—this
+    includes `img`, `canvas`, and `video` elements.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For example, suppose a web page contains an `img` element defined as
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'You can obtain the image data displayed in the `img` element with one line:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This generates a tensor of shape `[height, width, 3]`, where the three channels
+    are for RGB color encoding. The `asType0` call at the end is necessary because
+    `tf.browser.fromPixels()` returns a int32-type tensor, but the convnet expects
+    float32-type tensors as inputs. The height and width are determined by the size
+    of the `img` element. If it doesn’t match the height and width expected by the
+    model, you can either change the height and width attributes of the `img` element
+    (if that doesn’t make the UI look bad, of course) or resize the tensor from `tf.browser.fromPixels()`
+    by using one of the two image-resizing methods provided by TensorFlow.js, `tf.image.resizeBilinear()`
+    or `tf.image.resizeNearestNeigbor()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`tf.image.resizeBilinear()` and `tf.image.resizeNearestNeighbor()` have the
+    same syntax, but they perform image resizing with two different algorithms. The
+    former uses bilinear interpolation to form pixel values in the new tensor, while
+    the latter performs nearest-neighbor sampling and is usually less computationally
+    intensive than bilinear interpolation.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that the tensor created by `tf.browser.fromPixels()` does not include a
+    batch dimension. So, if the tensor is to be fed into a TensorFlow.js model, it
+    must be dimension-expanded first; for example,
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`expandDims()` takes a dimension argument in general. But in this case, the
+    argument can be omitted because we are expanding the first dimension, which is
+    the default for that argument.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In addition to `img` elements, `tf.browser.fromPixels()` works on `canvas` and
+    `video` elements in the same way. Applying `tf.browser.fromPixels()` on `canvas`
+    elements is useful for cases in which the user can interactively alter the content
+    of a canvas before the content is used by a TensorFlow.js model. For example,
+    imagine an online handwriting-recognition app or an online hand-drawn-shape-recognition
+    app. Apart from static images, applying `tf.browser.fromPixels()` on `video` elements
+    is useful for obtaining frame-by-frame image data from a webcam. This is exactly
+    what’s done in the Pac-Man demo that Nikhil Thorat and Daniel Smilkov gave during
+    the initial TensorFlow.js announcement (see [http://mng.bz/xl0e](http://mng.bz/xl0e)),
+    the PoseNet demo,^([[8](#ch04fn8)]) and many other TensorFlow.js-based web apps
+    that use a webcam. You can read the source code on GitHub at [http://mng.bz/ANYK](http://mng.bz/ANYK).
+  prefs: []
+  type: TYPE_NORMAL
+- en: ⁸
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Dan Oved, “Real-time Human Pose Estimation in the Browser with TensorFlow.js,”
+    Medium, 7 May 2018, [http://mng.bz/ZeOO](http://mng.bz/ZeOO).
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: 'As we have seen in the previous chapters, great care should be taken to avoid
+    *skew* (that is, mismatch) between the training data and the inference data. In
+    this case, our MNIST convnet is trained with image tensors normalized to the range
+    between 0 and 1\. Therefore, if the data in the `x` tensor has a different range,
+    say 0–255, as is common in HTML-based image data, we should normalize the data:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: With the data at hand, we are now ready to call `model.predict()` to get the
+    predictions. See the following listing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.4\. Using the trained convnet for inference
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** Uses tf.tidy() to prevent WebGL memory leaks'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***2*** Calls argMax() to get the class with the largest probability'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The code is written with the assumption that the batch of images for prediction
+    is already available in a single tensor, namely, `examples.xs`. It has a shape
+    of `[100,` `28, 28,` `1]` (including the batch dimension), where the first dimension
+    reflects the fact that there are 100 images we are running a prediction on. `model.predict()`
+    returns an output 2D tensor of shape `[100,` `10]`. The first dimension of the
+    output corresponds to the examples, while the second dimension corresponds to
+    the 10 possible digits. Every row of the output tensor includes the probability
+    values assigned to the 10 digits for a given image input. To determine the prediction,
+    we need to find out the indices of the maximum probability values, image by image.
+    This is done with the lines
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `argMax()` function returns the indices of the maximum values along a given
+    axis. In this case, this axis is the second dimension, `const axis = 1`. The return
+    value of `argMax()` is a tensor of shape `[100, 1]`. By calling `dataSync()`,
+    we convert the `[100, 1]`- shaped tensor into a length-100 `Float32Array`. Then
+    `Array.from()` converts the `Float32Array` into an ordinary JavaScript array consisting
+    of 100 integers between 0 and 9\. This predictions array has a very straightforward
+    meaning: it is the classification results made by the model for the 100 input
+    images. In the MNIST dataset, the target labels happen to match the output index
+    exactly. Therefore, we don’t even need to convert the array into string labels.
+    The predictions array is consumed by the next line, which calls a UI function
+    that renders the results of the classification alongside the test images (see
+    [figure 4.10](#ch04fig10)).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 4.10\. A few examples of predictions made by the model after training,
+    shown alongside the input MNIST images
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](04fig09_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: '4.3\. Beyond browsers: Training models faster using Node.js'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'In the previous section, we trained a convnet in the browser, and it reached
+    a test accuracy of 99.0%. In this section, we will create a more powerful convnet
+    that will give us a higher test accuracy: around 99.5%. The improved accuracy
+    comes at a cost, though: a greater amount of memory and computation consumed by
+    the model during both training and inference. The increase in cost is more pronounced
+    during training because training involves backpropagation, which is more computationally
+    intensive compared to the forward runs that inference entails. The larger convnet
+    will be too heavy and too slow to train in most web browser environments.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.3.1\. Dependencies and imports for using tfjs-node
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: Enter the Node.js version of TensorFlow.js! It runs in a backend environment,
+    unhindered by any resource restriction like that of a browser tab. The CPU version
+    of Node.js of TensorFlow (*tfjs-node* for short hereafter) directly uses the multithreaded
+    math operations written in C++ and used by the main Python version of TensorFlow.
+    If you have a CUDA-enabled GPU installed on your machine, tfjs-node can also use
+    the GPU-accelerated math kernels written in CUDA, achieving even greater gains
+    in speed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The code for our enhanced MNIST convnet is in the mnist-node directory of tfjs-examples.
+    As in the examples we have seen, you can use the following commands to access
+    the code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: What’s different from the previous examples is that the mnist-node example will
+    run in a terminal instead of a web browser. To download the dependencies, use
+    the `yarn` command.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you examine the package.json file, you can see the dependency `@tensorflow/tfjs-node`.
+    With `@tensorflow/tfjs-node` declared as a dependency, `yarn` will automatically
+    download the C++ shared library (with the name libtensorflow.so, libtensorflw
+    .dylib, or libtensorflow.dll on Linux, Mac, or Windows systems, respectively)
+    into your node_ modules directory for use by TensorFlow.js.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Once the `yarn` command has finished running, you can kick off the model training
+    with
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: We assume that the node binary is available on your path since you have already
+    installed yarn (see [appendix A](kindle_split_027.html#app01) if you need more
+    information on this).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The workflow just described will allow you to train the enhanced convnet on
+    your CPU. If your workstation and laptop have a CUDA-enabled GPU inside, you can
+    also train the model on your GPU. The steps involved are as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Install the correct versions of the NVIDIA driver for your GPU.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Install the NVIDIA CUDA toolkit. This is the library that enables general-purpose
+    parallel computing on NVIDIA’s line of GPUs.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Install CuDNN, NVIDIA’s library for high-performance, deep-learning algorithms
+    built on top of CUDA (see [appendix A](kindle_split_027.html#app01) for more details
+    on steps 1–3).
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: In package.json, replace the `@tensorflow/tfjs-node` dependency with `@-tensor-flow/tfjs-node-gpu`,
+    but keep the same version number because the two packages have synchronized releases.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Run `yarn` again, which will download the shared library that contains the CUDA
+    math operations for TensorFlow.js use.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: In main.js, replace the line
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: with
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: Start the training again with
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: If the steps are done correctly, your model will be roaring ahead on your CUDA
+    GPU, training at a speed that is typically five times the speed you can get with
+    the CPU version (tfjs-node). Training with either the CPU or GPU version of tfjs-node
+    is significantly faster compared to training the same model in the browser.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Training an enhanced convnet for MNIST in tfjs-node
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: Once the training is complete in 20 epochs, the model should show a final test
+    (or evaluation) accuracy of approximately 99.6%, which beats the previous result
+    of 99.0% we achieved in [section 4.2](#ch04lev1sec2). So, what are the differences
+    between this node-based model and the browser-based model that lead to this boost
+    in accuracy? After all, if you train the same model in tfjs-node and the browser
+    version of TensorFlow.js using the training data, you should get the same results
+    (except the effects or random weights initialization.) To answer this question,
+    let’s look at the definition of the node-based model. The model is constructed
+    in the file model.js, which is imported by main.js.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.5\. Defining a larger convnet for MNIST in Node.js
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** Adds dropout layers to reduce overfitting'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The summary of the model is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'These are the key differences between our tfjs-node model and the browser-based
+    model:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The node-based model has four conv2d layers, one more compared to the browser-based
+    model.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The hidden dense layer in the node-based model has more units (512) compared
+    to the counterpart in the browser-based model (100).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Overall, the node-based model has about 18 times as many weight parameters as
+    the browser-based model.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The node-based model has two *dropout* layers inserted between the flatten and
+    dense layers.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The first three differences in this list give the node-based model a higher
+    capacity than the browser-based model. They are also what make the node-based
+    model too memory- and computation-intensive to be trained with acceptable speed
+    in the browser. As we learned in [chapter 3](kindle_split_014.html#ch03), with
+    greater model capacity comes a greater risk of overfitting. The increased risk
+    of overfitting is ameliorated by the fourth difference, namely, the inclusion
+    of dropout layers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Reducing overfitting with dropout layers
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: 'Dropout is yet another new TensorFlow.js layer type you have encountered in
+    this chapter. It is one of the most effective and widely used ways to reduce overfitting
+    in deep neural networks. Its functionality can be described simply:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'During the training phase (during `Model.fit()` calls), it randomly sets a
+    fraction of the elements in the input tensor as zero (or “dropped”), and the result
+    is the output tensor of the dropout layer. For the purpose of this example, a
+    dropout layer has only one configuration parameter: the dropout rate (for example,
+    the two `rate` fields as shown in [listing 4.5](#ch04ex05)). For example, suppose
+    a dropout layer is configured to have a dropout rate of 0.25, and the input tensor
+    is a 1D tensor of value `[0.7, -0.3, 0.8, -0.4]`; the output tensor may be `[0.7,
+    -0.3, 0.0, 0.4]`—with 25% of the input tensor’s elements selected at random and
+    set to the value 0\. During backpropagation, the gradient tensor on a dropout
+    layer is affected similarly by this random zeroing-out.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: During the inference phase (during `Model.predict()` and `Model.evaluate()`
+    calls), a dropout layer does *not* randomly zero-out elements in the input tensor.
+    Instead, the input is simply passed through as the output without change (that
+    is, an identity mapping).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[Figure 4.11](#ch04fig11) shows an example of how a dropout layer with a 2D
+    input tensor works at training time and testing time.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 4.11\. An example of how a dropout layer works. In this example, the
+    input tensor is 2D and has a shape of `[4, 2]`. The dropout layer has its rate
+    configured as 0.25, which leads to 25% (that is, two out of eight) elements of
+    the input tensor being randomly selected and set to zero during the training phase.
+    During the inference phase, the layer acts as a trivial passthrough.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](04fig10.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: It might seem strange that such a simple algorithm is one of the most effective
+    ways of fighting overfitting. Why does it work? Geoff Hinton, the inventor of
+    the dropout algorithm (among many other things in neural networks) says he was
+    inspired by a mechanism used by some banks to prevent fraud by employees. In his
+    own words,
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*I went to my bank. The tellers kept changing, and I asked one of them why.
+    He said he didn’t know, but they got moved around a lot. I figured it must be
+    because it would require cooperation between employees to successfully defraud
+    the bank. This made me realize that randomly removing a different subset of neurons
+    on each example would prevent conspiracies and thus reduce overfitting.*'
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: To put this into the lingo of deep learning, introducing noise in the output
+    values of a layer breaks up happenstance patterns that aren’t significant with
+    regard to the true patterns in the data (what Hinton refers to as “conspiracies”).
+    In exercise 3 at the end of this chapter, you should try removing the two dropout
+    layers from the node-based convnet in model.js, train the model again, and see
+    how the training, validation, and evaluation accuracies change as a result.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[Listing 4.6](#ch04ex06) shows the key code we use to train and evaluate the
+    enhanced convnet. If you compare the code here with that in [listing 4.2](#ch04ex02),
+    you can appreciate the similarity between the two chunks of code. Both are centered
+    around `Model.fit()` and `Model.evaluate()` calls. The syntax and style are identical,
+    except with regard to how the loss value, accuracy value, and training progress
+    are rendered or displayed on different user interfaces (terminal versus browser).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This shows an important feature of TensorFlow.js, a JavaScript deep-learning
+    framework that straddles the frontend and the backend:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*As far as the creation and training of models is concerned, the code you write
+    in TensorFlow.js is the same regardless of whether you are working with the web
+    browser or with Node.js.*'
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: Listing 4.6\. Training and evaluating the enhanced convnet in tfjs-node
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** Evaluates the model using data the model hasn’t seen'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 4.3.2\. Saving the model from Node.js and loading it in the browser
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: Training your model consumes CPU and GPU resources and takes some time. You
+    don’t want to throw away the fruit of training. Without saving the model, you
+    would have to start from scratch the next time you run main.js. This section shows
+    how to save the model after training and export the saved model as files on the
+    disk (called a *checkpoint* or an *artifact*). We will also show you how to import
+    the checkpoint in the browser, reconstitute it as a model, and use it for inference.
+    The final part of the `main()` function in main.js consists of the model-saving
+    code in the following listing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.7\. Saving the trained model to the file system in tfjs-node
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `save()` method of the `model` object is used to save the model to a directory
+    on your file system. The method takes a single argument, which is a URL string
+    that begins with the scheme file://. Note that it is possible to save the model
+    on the file system because we are using tfjs-node. The browser version of TensorFlow.js
+    also provides the `model.save()` API but cannot access the machine’s native file
+    system directly because the browser forbids that for security reasons. Non-file-system
+    saving destinations (such as the browser’s local storage and IndexedDB) will have
+    to be used if we are using TensorFlow.js in the browser. Those correspond to URL
+    schemes other than file://.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`model.save()` is an asynchronous function because it involves file or network
+    input-output in general. Therefore, we use await on the `save()` call. Suppose
+    `modelSavePath` has a value /tmp/tfjs-node-mnist; after the `model.save()` call
+    completes, you can examine the content of the directory,'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'which may print a list of files like the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'There, you can see two files:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: model.json is a JSON file that contains the model’s saved topology. What’s referred
+    to as “topology” here includes the types of layers that form the model, their
+    respective configuration parameters (such as `filters` for a conv2d layer and
+    `rate` for a dropout layer), as well as the way in which the layers connect to
+    each other. The connections are simple for the MNIST convnet because it is a sequential
+    model. We will see models with less trivial connection patterns, which can also
+    be saved to disk with `model.save()`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'In addition to the model topology, model.json also contains a manifest of the
+    model’s weights. That part lists the names, shapes, and data types of all the
+    model’s weights, in addition to the locations at which the weight values are stored.
+    This brings us to the second file: weights.bin. As its name indicates, weights.bin
+    is a binary file that stores all the model’s weight values. It is a flat binary
+    stream without demarcation of where the individual weights begin and end. That
+    “metainformation” is available in the weights-manifest part of the JSON object
+    in model.json.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'To load the model using tfjs-node, you can use the `tf.loadLayersModel()` method,
+    pointing to the location of the model.json file (not shown in the example code):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`tf.loadLayersModel()` reconstitutes the model by deserializing the saved topology
+    data in model.json. Then, `tf.loadLayersModel()` reads the binary weight values
+    in weights.bin using the manifest in model.json and force-sets the model’s weight
+    to those values. Like `model.save()`, `tf.loadLayersModel()` is asynchronous,
+    so we use `await` when calling it here. Once the call returns, the `loadedModel`
+    object is, for all intents and purposes, equivalent to the model created and trained
+    using the JavaScript code in [listings 4.5](#ch04ex05) and [4.6](#ch04ex06). You
+    can print a summary of the model by calling its `summary()` method, use it to
+    perform inference by calling its `predict()` method, evaluate its accuracy by
+    using the `evaluate()` method, or even retrain it using the `fit()` method. If
+    so desired, the model can also be saved again. The workflow of retraining and
+    resaving a loaded model will be relevant when we talk about transfer learning
+    in [chapter 5](kindle_split_016.html#ch05).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'What’s said in the previous paragraph applies to the browser environment as
+    well. The files you saved can be used to reconstitute the model in a web page.
+    The reconstituted model supports the full `tf.LayersModel()` workflow, with the
+    caveat that, if you retrain the entire model, it will be especially slow and inefficient
+    due to the large size of the enhanced convnet. The only thing that’s fundamentally
+    different between loading a model in tfjs-node and in the browser is that you
+    should use a URL scheme other than file:// in the browser. Typically, you can
+    put the model.json and weights.bin files as static asset files on an HTTP server.
+    Suppose your hostname is localhost and your files are seen under the server path
+    my/models/; you can use the following line to load the model in the browser:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When handling HTTP-based model loading in the browser, `tf.loadLayersModel()`
+    calls the browser’s built-in fetch function under the hood. Therefore, it has
+    the following features and properties:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Both http:// and https:// are supported.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Relative server paths are supported. In fact, if a relative path is used, the
+    http:// or https:// part of the URL can be omitted. For example, if your web page
+    is at the server path my/index.html, and your model’s JSON file is at my/models/model.json,
+    you can use the relative path model/model.json:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: To specify additional options for the HTTP/HTTPS requests, the `tf.io.browserHTTPRequest()`
+    method should be used in lieu of the string argument. For example, to include
+    credentials and headers during model loading, you can do something like
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '4.4\. Spoken-word recognition: Applying convnets on audio data'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: So far, we have shown you how to use convnets to perform computer-vision tasks.
+    But human perception is not just vision. Audio is an important modality of perceptual
+    data and is accessible via browser APIs. How to recognize the content and meaning
+    of speech and other kinds of sounds? Remarkably, convnets not only work for computer
+    vision, but also help audio-related machine learning in a significant way.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this section, you will see how we can solve a relatively simple audio task
+    with a convnet similar to the one we built for MNIST. The task is to classify
+    short snippets of speech recordings into 20 or so word categories. This task is
+    simpler than the kind of speech recognition you may see in devices such as Amazon
+    Echo and Google Home. In particular, those speech-recognition systems involve
+    larger vocabularies than the one used in this example. Also, they process connected
+    speech consisting of multiple words spoken in succession, whereas our example
+    deals with words spoken one at a time. Therefore, our example doesn’t qualify
+    as a “speech recognizer;” instead, it is more accurately described as a “word
+    recognizer” or “speech-command recognizer.” However, our example still has practical
+    uses (such as hands-free UIs and accessibility features). Also, the deep-learning
+    techniques embodied in this example actually form the basis of more advanced speech-recognition
+    systems.^([[9](#ch04fn9)])
+  prefs: []
+  type: TYPE_NORMAL
+- en: ⁹
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: ''
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: 'Ronan Collobert, Christian Puhrsch, and Gabriel Synnaeve, “Wav2Letter: An End-to-End
+    ConvNet-based Speech Recognition System,” submitted 13 Sept. 2016, [https://arxiv.org/abs/1609.03193](https://arxiv.org/abs/1609.03193).'
+  prefs:
+  - PREF_BQ
+  type: TYPE_NORMAL
+- en: '4.4.1\. Spectrograms: Representing sounds as images'
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: As in any deep-learning application, if you want to understand how the model
+    works, you need to understand the data first. To understand how audio convnets
+    work, we need to first look at how sound is represented as tensors. Recall from
+    high school physics that sounds are patterns of air-pressure changes. A microphone
+    picks up the air-pressure changes and converts them to electrical signals, which
+    can in turn be digitized by a computer’s sound card. Modern web browsers feature
+    the *WebAudio* API, which talks to the sound card and provides real-time access
+    to the digitized audio signals (with permission granted by the user). So, from
+    a JavaScript programmer’s point of view, sounds are arrays of real-valued numbers.
+    In deep learning, such arrays of numbers are usually represented as 1D tensors.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You might be wondering, how can the kinds of convnets we have seen so far work
+    on 1D tensors? Aren’t they supposed to operate on tensors that are at least 2D?
+    The key layers of a convnet, including conv2d and maxPooling2d, exploit spatial
+    relations in 2D spaces. It turns out that sounds *can* be represented as special
+    types of images called *spectrograms*. Spectrograms not only make it possible
+    to apply convnets on sounds but also have theoretical justifications beyond deep
+    learning.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As [figure 4.12](#ch04fig12) shows, a spectrogram is a 2D array of numbers,
+    which can be shown as grayscale images pretty much in the same way as MNIST images.
+    The horizontal dimension is time, and the vertical one is frequency. Each vertical
+    slice of a spectrogram is the *spectrum* of the sound inside a short time window.
+    A spectrum is a decomposition of a sound into different frequency components,
+    which can be roughly understood as different “pitches.” Just as light can be divided
+    by a prism into multiple colors, sound can be decomposed by a mathematical operation
+    called *Fourier transform* into multiple frequencies. In a nutshell, a spectrogram
+    describes how the frequency content of sound changes over a number of successive,
+    short time windows (usually on the order of 20 milliseconds).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 4.12\. Example spectrograms of the isolated spoken words “zero” and “yes.”
+    A spectrogram is a joint time-frequency representation of sound. You can think
+    of a spectrogram as a sound represented as an image. Each slice along the time
+    axis (a column of the image) is a short moment (frame) in time; each slice along
+    the frequency axis (a row of the image) corresponds to a particular narrow range
+    of frequency (pitch). The value at each pixel of the image represents the relative
+    energy of the sound in the given frequency bin at a given moment in time. The
+    spectrograms in this figure are rendered such that a darker shade of gray corresponds
+    to a higher amount of energy. Different speech sounds have different defining
+    features. For example, sibilant consonants like “z” and “s” are characterized
+    by a quasi-steady-state energy concentrated at frequencies above 2–3 kHz; vowel
+    sounds like “e” and “o” are characterized by horizontal stripes (energy peaks)
+    in the low end of the spectrum (< 3 kHz). These energy peaks are called *formants*
+    in acoustics. Different vowels have different formant frequencies. All these distinctive
+    features of different speech sounds can be used by a deep convnet for word recognition.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](04fig11_alt.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Spectrograms are a suitable representation of sound for the following reasons.
+    First, they save space: the number of float numbers in a spectrogram is usually
+    a few times less than the number of float values in the raw waveform. Second,
+    in a loose sense, spectrograms correspond to how hearing works in biology. An
+    anatomical structure inside the inner ear called the cochlea essentially performs
+    the biological version of Fourier transform. It decomposes sounds into different
+    frequencies, which are then picked up by different sets of auditory neurons. Third,
+    spectrogram representation of speech sounds makes different types of speech sounds
+    easier to distinguish from each other. This is shown by the example speech spectrograms
+    in [figure 4.12](#ch04fig12): vowels and consonants all have different defining
+    patterns in their spectrograms. Decades ago, prior to the wide adoption of machine
+    learning, people working on speech recognition actually tried to handcraft rules
+    that detect different vowels and consonants from spectrograms. Deep learning saves
+    us the trouble and tears of such handcrafting.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s stop and think for a moment. Looking at the MNIST images in [figure 4.1](#ch04fig01)
+    and the speech spectrograms in [figure 4.12](#ch04fig12), you should be able to
+    appreciate the similarity between the two datasets. Both datasets contain patterns
+    in a 2D feature space, which a pair of trained eyes should be able to distinguish.
+    Both datasets show some randomness in the detailed location, size, and details
+    of the features. Finally, both are multicategory classification tasks. While MNIST
+    contains 10 possible classes, our speech-commands dataset contains 20 (the 10
+    digits from 0 to 9, “up,” “down,” “left,” “right,” “go,” “stop,” “yes,” and “no,”
+    in addition to the category of “unknown” words and background noise). It is exactly
+    these similarities in the essence of the datasets that make convnets suitable
+    for the speech-command-recognition task.
+  prefs: []
+  type: TYPE_NORMAL
+- en: But there are also some noticeable differences between the two datasets. First,
+    the audio recordings in the speech-command dataset are somewhat noisy, as you
+    can see from the speckles of dark pixels that don’t belong to the speech sound
+    in the example spectrograms in [figure 4.12](#ch04fig12). Second, every spectrogram
+    in the speech-command dataset has a size of 43 × 232, which is significantly larger
+    compared to the 28 × 28 size of the individual MNIST images. The size of the spectrogram
+    is asymmetric between the time and frequency dimensions. These differences will
+    be reflected by the convnet we will use on the audio dataset.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The code that defines and trains the speech-commands convnet lives in the tfjs-models
+    repo. You can access the code with the following commands:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: The creation and compilation of the model is encapsulated in the `createModel()`
+    function in model.ts.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.8\. Convnet for classifying spectrograms of speech commands
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** Repeating motifs of conv2d+maxPooling2d'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***2*** Multilayer perceptron begins'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***3*** Uses dropout to reduce overfitting'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***4*** Configures loss and metric for multicategory classification'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The topology of our audio convnet looks a lot like the MNIST convnets. The sequential
+    model begins with several repeating motifs of conv2d layers paired with maxPooling2d
+    layers. The convolution-pooling part of the model ends at a flatten layer, on
+    top of which an MLP is added. The MLP has two dense layers. The hidden dense layer
+    has a relu activation, and the final (output) one has a softmax activation that
+    suits the classification task. The model is compiled to use `categoricalCrossentropy`
+    as the loss function and emit the accuracy metric during training and evaluation.
+    This is exactly the same as the MNIST convnets because both datasets involve multicategory
+    classification. The audio convnet also shows some interesting differences from
+    the MNIST one. In particular, the `kernelSize` properties of the conv2d layers
+    are rectangular (for instance, `[2, 8]`) instead of square-shaped. These values
+    are selected to match the nonsquare shape of the spectrograms, which have a larger
+    frequency dimension than the temporal dimension.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To train the model, you need to download the speech-command dataset first.
+    The dataset originated from the speech-commands dataset collected by Pete Warden,
+    an engineer on the Google Brain team (see [www.tensorflow.org/tutorials/sequences/audio_recognition](http://www.tensorflow.org/tutorials/sequences/audio_recognition)).
+    It has been converted to a browser-specific spectrogram format:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'These commands will download and extract the browser version of the speech-command
+    dataset. Once the data has been extracted, you can kick off the training process
+    with this command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The first argument to the `yarn train` command points at the location of the
+    training data. The following arguments specify the path at which the model’s JSON
+    file will be saved, together with the weight file and the metadata JSON file.
+    Just like when we trained the enhanced MNIST convnet, the training of the audio
+    convnet happens in tfjs-node, with the potential to utilize GPUs. Because the
+    sizes of the dataset and the model are larger than the MNIST convnet, the training
+    will take longer (on the order of a few hours). You can get a significant speedup
+    of the training if you have a CUDA GPU and change the command slightly to use
+    tfjs-node-gpu instead of the default tfjs-node (which runs on a CPU only). To
+    do that, just add the flag `--gpu` to the previous command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: When the training ends, the model should achieve a final evaluation (test) accuracy
+    of approximately 94%.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The trained model is saved at the path specified by the flag in the previous
+    command. Like the MNIST convnet we trained with tfjs-node, the saved model can
+    be loaded in the browser for serving. However, you need to be familiar with the
+    WebAudio API to be able to acquire data from the microphone and preprocess it
+    into a format that can be used by the model. For your convenience, we wrote a
+    wrapper class that not only loads a trained audio convnet, but also takes care
+    of the data ingestion and preprocessing. If you are interested in the mechanisms
+    of the audio data input pipeline, you can study the underlying code in the tfjs-model
+    Git repository, in the folder speech-commands/src. The wrapper is available via
+    npm under the name @tensorflow-models/speech-commands. [Listing 4.9](#ch04ex09)
+    shows a minimal example of how the wrapper class can be used to perform online
+    recognition of speech-command words in the browser.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the speech-commands/demo folder of the tfjs-models repo, you can find a
+    less barebones example of how to use the package. To clone and run the demo, run
+    the following commands under the speech-commands directory:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `yarn watch` command will automatically open a new tab in your default web
+    browser. In order to see the speech-command recognizer in action, make sure your
+    machine has a microphone ready (which most laptops do). Each time a word within
+    the vocabulary is recognized, it will be displayed on the screen along with the
+    one-second-long spectrogram that contains the word. So, this is browser-based,
+    single-word recognition in action, powered by the WebAudio API and a deep convnet.
+    Surely it doesn’t have the ability to recognize connected speech with grammar?
+    That will require help from other types of neural network building blocks capable
+    of processing sequential information. We will visit those in [chapter 8](kindle_split_020.html#ch08).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.9\. Example usage of the @tensorflow-models/speech-commands module
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: '***1*** Imports the speech-commands module. Make sure it is listed as a dependency
+    in package.json.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***2*** Creates an instance of the speech-command recognizer that uses the
+    browser’s built-in fast Fourier transform (FFT)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***3*** You can examine what word labels (including the “background-noise”
+    and “unknown” labels) the model is capable of recognizing.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***4*** Starts online streaming recognition. The first argument is a callback,
+    which will be invoked anytime a non-background-noise, non-unknown word is recognized
+    with a probability above the threshold (0.75 in this case).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***5*** result.scores contains the probability scores that correspond to recognizer.wordLabels().'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***6*** Finds the index of the word with the highest score'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '***7*** Stops the online streaming recognition in 10 seconds'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Exercises
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The convnet for classifying MNIST images in the browser ([listing 4.1](#ch04ex01))
+    has two groups of conv2d and maxPooling2d layers. Modify the code to reduce the
+    number to only one group. Answer the following questions:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: How does that affect the total number of trainable parameters of the convnet?
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: How does that affect the training speed?
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: How does that affect the final accuracy obtained by the convnet after training?
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: This exercise is similar to exercise 1\. But instead of playing with the number
+    of conv2d-maxPooling2d layer groups, experiment with the number of dense layers
+    in the MLP part of the convnet in [listing 4.1](#ch04ex01). How do the total number
+    of parameters, training speed, and final accuracy change if you remove the first
+    dense layer and keep only the second (output) one?
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Remove dropout from the convnet in mnist-node ([listing 4.5](#ch04ex05)), and
+    see what happens to the training process and the final test accuracy. Why does
+    that happen? What does that show?
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'As practice using the `tf.browser.fromPixels()` method to pull image data from
+    image- and video-related elements of a web page, try the following:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Use `tf.browser.fromPixels()` to get a tensor representing a color JPG image
+    by using an `img` tag.
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: What are the height and width of the image tensor returned by `tf.browser.fromPixels()`?
+    What determines the height and width?
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Resize the image to a fixed dimension of 100 × 100 (height × width) using `tf.image.resizeBilinear().`
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Repeat the previous step, but using the alternative resizing function `tf.image.resizeNearestNeighbor()`
+    instead. Can you spot any differences between the results of these two resizing
+    functions?
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Create an HTML canvas and draw some arbitrary shapes in it using functions such
+    as `rect()`. Or, if you wish, you can use more advanced libraries such as d3.js
+    or three.js to draw more complicated 2D and 3D shapes in it. Then, get the image
+    tensor data from the canvas using `tf.browser.fromPixels()`.
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Convnets extract 2D spatial features from input images with a hierarchy of stacked
+    conv2d and maxPooling2d layers.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: conv2d layers are multichannel, tunable spatial filters. They have the properties
+    of locality and parameter sharing, which make them powerful feature extractors
+    and efficient representational transforms.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: maxPooling2d layers reduce the size of the input image tensor by calculating
+    the maximum within fixed-size windows, achieving better positional invariance.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The conv2d-maxPooling2d “tower” of a convnet usually ends in a flatten layer,
+    which is followed by an MLP made of dense layers for classification or regression
+    tasks.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: With its restricted resources, the browser is only suitable for training small
+    models. To train larger models, it is recommended you use tfjs-node, the Node.js
+    version of TensorFlow.js; tfjs-node can use the same CPU- and GPU-parallelized
+    kernels used by the Python version of TensorFlow.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: With greater model capacities comes greater risks of overfitting. Overfitting
+    can be ameliorated by adding dropout layers in a convnet. Dropout layers randomly
+    zero-out a given fraction of the input elements during training.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Convnets are useful not only for computer vision tasks. When audio signals are
+    represented as spectrograms, convnets can be applied on them to achieve good classification
+    accuracies as well.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
