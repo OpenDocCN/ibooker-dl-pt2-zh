@@ -3,25 +3,30 @@
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 13个Transformer
 - en: This chapter covers
   id: totrans-1
   prefs: []
   type: TYPE_NORMAL
+  zh: 本章涵盖
 - en: Implementing a full Transformer model with all the components
   id: totrans-2
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 实现一个包含所有组件的完整Transformer模型
 - en: Implementing a spam classifier using a pretrained BERT model from TFHub
   id: totrans-3
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用TFHub中预训练的BERT模型实现垃圾邮件分类器
 - en: Implementing a question-answering model using Hugging Face’s Transformer library
   id: totrans-4
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用Hugging Face的Transformer库实现问答模型
 - en: In chapters 11 and 12, you learned about sequence-to-sequence models, a powerful
     family of models that allows us to map an arbitrary-length sequence to another
     arbitrary-length sequence. We exemplified this ability through a machine translation
@@ -42,6 +47,7 @@
   id: totrans-5
   prefs: []
   type: TYPE_NORMAL
+  zh: 在第11章和第12章，你学习了序列到序列模型，这是一类强大的模型家族，允许我们将任意长度的序列映射到另一个任意长度的序列。我们通过一个机器翻译任务来举例说明这种能力。序列到序列模型由一个编码器和一个解码器组成。编码器接收输入序列（源语言中的句子）并创建该序列的紧凑表示（称为上下文向量）。解码器接收上下文向量以生成最终的目标（即目标语言中的句子）。但是我们看到上下文向量的限制如何限制了模型，并研究了两种改进模型性能的技术。首先，教师强制允许解码器不仅在给定时间内查看上下文向量，还可以查看目标语言中先前的单词。这为解码器提供了更多的信息，以准确地生成最终的预测。其次，注意机制允许解码器窥视编码器输出历史中的任何部分，并使用该信息来生成输出。然而，LSTM和GRU模型仍然相当受限制，因为它们一次只能看到一个序列输出，并且需要依赖有限的状态向量（即记忆）来记住它们所看到的内容。
 - en: But there’s a new rival in town. If there’s one word that most recent state-of-the-art
     NLP and computer vision research have been brimming with, it’s Transformer. Transformer
     models are the latest type of deep learning models that made an unforgettable
@@ -51,6 +57,7 @@
   id: totrans-6
   prefs: []
   type: TYPE_NORMAL
+  zh: 但是现在镇上出现了一个新的竞争对手。如果有一个词可以概括最近最先进的自然语言处理（NLP）和计算机视觉研究，那就是Transformer。Transformer模型是最新型的深度学习模型，通过被冠以NLP许多任务的最新技术而令人难忘，击败了先前的领导者，如基于LSTM和GRU的模型。受到他们在NLP领域取得的空前成功的启发，它们现在正在被引入来解决各种计算机视觉问题。
 - en: By design, Transformer models make remembering or using information present
     in long sequences of data (e.g., a sequence of words) trivial. Unlike LSTM models,
     which have to look at one time step at a time, Transformer models can see the
@@ -61,6 +68,7 @@
   id: totrans-7
   prefs: []
   type: TYPE_NORMAL
+  zh: 按设计，Transformer模型使得记忆或使用长序列数据（例如单词序列）中的信息变得轻而易举。与LSTM模型不同，后者必须一次查看一个时间步长，Transformer模型可以一次看到整个序列。这使得Transformer模型比其他模型更好地理解语言。此外，由于纵向（即时间）计算的最小化需要对文本进行顺序处理，Transformer模型享有高度的可并行性。
 - en: 'In this chapter, continuing our conversation from chapter 5, we will discuss
     some more details of the Transformer model so that our understanding of it is
     holistic. We will see how the Transformer model employs several embeddings to
@@ -83,24 +91,35 @@
   id: totrans-8
   prefs: []
   type: TYPE_NORMAL
+  zh: 在本章中，延续我们在第五章的对话，我们将讨论 Transformer 模型的一些更多细节，以便我们对其有一个全面的理解。我们将看到 Transformer
+    模型如何使用多个嵌入来表示标记以及这些标记在序列中的位置。然后我们将学习 BERT，这是 Transformer 模型的一个变体，它已经在大型文本语料库上进行了训练，可以作为基础层轻松解决下游
+    NLP 任务，而不需要复杂的模型。BERT 本质上是 Transformer 模型的编码器部分，使用了两种技术进行大量文本的预训练：掩码语言建模（即，序列中的单词被随机掩码，BERT
+    必须预测掩码单词）和下一个句子预测（即，给定两个句子 A 和 B，预测 B 是否暗示 A）。当我们使用它在 TensorFlow 中实现一个垃圾邮件分类器时，我们将看到
+    BERT 在实际中的运行情况。接下来，Hugging Face 的 transformers 库（[https://huggingface.co/transformers/](https://huggingface.co/transformers/)）是实现最先进的
+    Transformer 模型的热门选择，易于使用。如果您打算在 TensorFlow 中实现 Transformer 模型，那么这是最有价值的库之一。出于这个原因，我们将使用
+    Hugging Face 的 Transformers 库实现一个问答模型。最后，我们将结束本章，讨论 Transformer 模型在计算机视觉中的应用。
 - en: As the first step, let’s revisit what we have already learned about Transformer
     models (see figure 13.1) and expand our understanding a bit further.
   id: totrans-9
   prefs: []
   type: TYPE_NORMAL
+  zh: 作为第一步，让我们重新审视一下我们已经学过的关于 Transformer 模型的知识（见图 13.1），并进一步扩展我们的理解。
 - en: '![13-01](../../OEBPS/Images/13-01.png)'
   id: totrans-10
   prefs: []
   type: TYPE_IMG
+  zh: '![13-01](../../OEBPS/Images/13-01.png)'
 - en: Figure 13.1 How Transformer models are used to solve NLP problems
   id: totrans-11
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 13.1 Transformer 模型如何解决 NLP 问题
 - en: 13.1 Transformers in more detail
   id: totrans-12
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 13.1 更详细的 Transformer
 - en: You are working as a data scientist, and it’s been suggested that you use a
     Transformer model in your NLP workflow. You look at the Transformer models provided
     in TensorFlow. However, you are struggling to understand the model from the documentation.
@@ -113,11 +132,15 @@
   id: totrans-13
   prefs: []
   type: TYPE_NORMAL
+  zh: 你是一名数据科学家，有人建议你在 NLP 工作流中使用 Transformer 模型。你看了 TensorFlow 提供的 Transformer 模型。然而，你很难从文档中理解这个模型。你认为从零开始实现一个
+    Transformer 网络是理解赋予 Transformer 模型生命的概念的好方法。因此，你决定按照论文“Attention Is All You Need”（[https://arxiv.org/pdf/1706.03762.pdf](https://arxiv.org/pdf/1706.03762.pdf)）中指定的所有组件来实现一个
+    Transformer 模型。这个模型将具有诸如嵌入层（标记和位置嵌入）、自注意层、归一化层等组件。
 - en: 13.1.1 Revisiting the basic components of the Transformer
   id: totrans-14
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 13.1.1 重新审视 Transformer 的基本组件
 - en: In chapter 5, we talked about the basics of the Transformer model to implement
     a simplified Transformer. Now let’s deepen our discussion and look at all the
     components that coexist in a Transformer model. The Transformer model is an encoder-decoder-based
@@ -128,11 +151,14 @@
   id: totrans-15
   prefs: []
   type: TYPE_NORMAL
+  zh: 在第 5 章，我们讨论了 Transformer 模型的基础，以实现一个简化的 Transformer。现在让我们深入讨论并查看存在于 Transformer
+    模型中的所有组件。Transformer 模型是基于编码器-解码器的模型。编码器接受一系列输入（例如，Dogs are great）以创建这些标记的隐藏（或潜在）表示。接下来，解码器使用编码器生成的输入标记的表示，并生成一个输出（例如，输入的法语翻译）。
 - en: 'The encoder consists of a stack of layers, where each layer consists of two
     sublayers:'
   id: totrans-16
   prefs: []
   type: TYPE_NORMAL
+  zh: 编码器由一堆层组成，其中每一层包含两个子层：
 - en: '*A self-attention layer*—Generates a latent representation for each input token
     in the sequence. For each input token, this layer looks at the entire input sequence
     and selects other tokens in the sequence that enrich the semantics of the generated
@@ -141,16 +167,19 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '*自注意力层*—为序列中的每个输入标记生成潜在表示。对于每个输入标记，此层查看整个输入序列，并选择序列中的其他标记，以丰富为该标记生成的隐藏输出的语义（即，*关注表示*）。'
 - en: '*A fully connected layer*—Generates an element-wise hidden representation of
     the attended representation.'
   id: totrans-18
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '*全连接层*—生成与关注表示相关的逐元素隐藏表示。'
 - en: 'The decoder consists of three sublayers:'
   id: totrans-19
   prefs: []
   type: TYPE_NORMAL
+  zh: 解码器由三个子层组成：
 - en: '*A masked self-attention layer*—For each input token, it looks at all the tokens
     to the left of it. The decoder needs to mask words to the right to prevent the
     model from seeing words in the future, making the prediction task trivial for
@@ -159,6 +188,7 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '*掩码自注意力层*—对于每个输入标记，它查看其左侧的所有标记。解码器需要屏蔽右侧的单词，以防止模型看到未来的单词，使得解码器的预测任务变得简单。'
 - en: '*An encoder-decoder attention layer*—For each input token in the decoder, it
     looks at both the encoder’s outputs as well as the decoder’s masked attended output
     to generate a semantically rich hidden output'
@@ -166,12 +196,14 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '*编码器-解码器注意力层*—对于解码器中的每个输入标记，它查看编码器的输出以及解码器的掩码关注输出，以生成一个语义丰富的隐藏输出。'
 - en: '*A fully connected layer*—Generates an element-wise hidden representation of
     the attended representation of the decoder.'
   id: totrans-22
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '*全连接层*—生成解码器关注表示的逐元素隐藏表示。'
 - en: 'The hardest thing to navigate in our previous discussions was understanding
     the self-attention layer. Therefore, it’s worthwhile revisiting the computations
     transpiring in the self-attention layer. Computations in the self-attention layer
@@ -179,27 +211,32 @@
   id: totrans-23
   prefs: []
   type: TYPE_NORMAL
+  zh: 在我们之前的讨论中，最难理解的是自注意力层。因此，值得重新审视自注意力层中发生的计算。自注意力层中的计算围绕着三个权重矩阵展开：
 - en: Query weight matrix (*W*[q])
   id: totrans-24
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 查询权重矩阵（*W*[q]）
 - en: Key weight matrix (*W*[k])
   id: totrans-25
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 键权重矩阵（*W*[k]）
 - en: Value weight matrix (*W*[v])
   id: totrans-26
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 值权重矩阵（*W*[v]）
 - en: 'Each of these weight matrices produces three outputs for a given token (at
     position *i*) in a given input sequence: a query, a key, and a value, respectively.
     Let’s refresh our memory on what we said about these entities in chapter 5:'
   id: totrans-27
   prefs: []
   type: TYPE_NORMAL
+  zh: 这些权重矩阵中的每一个对于给定输入序列中的给定标记（在位置*i*）产生三个输出：查询、键和值。让我们刷新一下我们在第 5 章中对这些实体所说的话：
 - en: '*Query* (*q*[i])—Helps to build a probability matrix that is eventually used
     for indexing values (*v*). Query affects the rows of the matrix and represents
     the index of the current word that’s being processed.'
@@ -207,6 +244,7 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '*查询*（*q*[i]）—帮助构建最终用于索引值（*v*）的概率矩阵。查询影响矩阵的行，并表示正在处理的当前单词的索引。'
 - en: '*Key* (*k*[i])—Helps to build a probability matrix that is eventually used
     for indexing values (*v*). Key affects the columns of the matrix and represents
     the candidate words that need to be mixed depending on the query word.'
@@ -214,6 +252,7 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '*关键*（*k*[i]）—帮助构建最终用于索引值（*v*）的概率矩阵。关键影响矩阵的列，并表示需要根据查询词混合的候选词。'
 - en: '*Value* (*v*[i])—Hidden (i.e., latent) representation of the inputs that are
     used to compute the final output by indexing from the probability matrix created
     using query and key. As explained earlier, the final output at position *i* is
@@ -223,6 +262,8 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '*Value*（*v*[i]) ——输入的隐藏（即潜在）表示，用于通过查询和密钥创建的概率矩阵索引计算最终输出。正如前面解释的那样，在位置 *i* 处的最终输出不仅使用第
+    *i* 个令牌，还使用输入序列中的其他令牌，这增强了最终表示中捕获的语义。'
 - en: The high-level purpose of these elements is to generate an attended representation
     (i.e., a latent or hidden representation for a given token that is enriched by
     the information in other tokens of the input sequence) of a given input token.
@@ -230,23 +271,27 @@
   id: totrans-31
   prefs: []
   type: TYPE_NORMAL
+  zh: 这些元素的高层目的是生成一个被关注的表示（即给定令牌的潜在或隐藏表示，其由输入序列中其他令牌的信息增强）。为此，模型
 - en: Generates a query for each position in the input sequence
   id: totrans-32
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 为输入序列中的每个位置生成一个查询
 - en: For each query, determines how much each key should contribute (the key also
     represents individual tokens)
   id: totrans-33
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 对于每个查询，确定每个密钥应该贡献多少（密钥也代表个别令牌）
 - en: Based on the contributions of the keys for a given query, mixes the values corresponding
     to those keys to generate the final attended representation
   id: totrans-34
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 基于给定查询的密钥的贡献，混合与这些密钥对应的值以生成最终的关注表示
 - en: 'All three of the query, key, and values are generated by multiplying a trainable
     weight matrix with an input token’s numerical representation. All this needs to
     happen in a differentiable way to ensure the gradients can be backpropagated through
@@ -255,10 +300,12 @@
   id: totrans-35
   prefs: []
   type: TYPE_NORMAL
+  zh: 查询、密钥和值都是通过将可训练的权重矩阵与输入令牌的数值表示相乘而生成的。所有这些都需要以可微分的方式进行，以确保梯度可以通过模型进行反向传播。论文提出了以下计算来计算输入令牌的自注意力层的最终表示：
 - en: '![13_01a](../../OEBPS/Images/13_01a.png)'
   id: totrans-36
   prefs: []
   type: TYPE_IMG
+  zh: '![13_01a](../../OEBPS/Images/13_01a.png)'
 - en: 'Here, Q represents the queries, K represents the keys, and V represents values
     for all the inputs and all the tokens in each input in a batch of data. This is
     what makes Transformer models so powerful: unlike LSTM models, Transformer models
@@ -267,11 +314,14 @@
   id: totrans-37
   prefs: []
   type: TYPE_NORMAL
+  zh: 这里，Q 表示查询，K 表示密钥，V 表示批量数据中所有输入和每个输入中所有令牌的值。这就是使 Transformer 模型如此强大的原因：与 LSTM
+    模型不同，Transformer 模型将所有令牌在一个序列中聚合到一个矩阵乘法中，使得这些模型高度可并行化。
 - en: 13.1.2 Embeddings in the Transformer
   id: totrans-38
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: Transformer 中的嵌入
 - en: One thing we overlooked when discussing the Transformer model is the embeddings
     used in it. We briefly touched on the word embeddings used. Let’s discuss this
     topic in more detail here. Word embeddings provide a semantic-preserving representation
@@ -282,6 +332,7 @@
   id: totrans-39
   prefs: []
   type: TYPE_NORMAL
+  zh: 当我们讨论 Transformer 模型时，有一件事情被忽略了，那就是它使用的嵌入。我们简要地提到了使用的词嵌入。让我们在这里更详细地讨论这个话题。词嵌入根据单词的上下文提供了语义保持的表示。换句话说，如果两个单词在相同的上下文中使用，它们将具有相似的单词向量。例如，“猫”和“狗”将具有相似的表示，而“猫”和“火山”将具有完全不同的表示。
 - en: Word vectors were initially introduced in the paper titled “Efficient Estimation
     of Word Representations in Vector Space” by Mikolov et al. ([https://arxiv.org/pdf/1301.3781.pdf](https://arxiv.org/pdf/1301.3781.pdf)).
     It came in two variants, skip-gram and continuous bag-of-words (CBOW). Because
@@ -290,6 +341,10 @@
   id: totrans-40
   prefs: []
   type: TYPE_NORMAL
+  zh: 单词向量最初在 Mikolov 等人的论文中被介绍，题为“Efficient Estimation of Word Representations in
+    Vector Space” ([https://arxiv.org/pdf/1301.3781.pdf](https://arxiv.org/pdf/1301.3781.pdf))。它有两个变种，skip-gram
+    和 continuous bag-of-words（CBOW）。由于 skip-gram 稍微比 CBOW 更广泛地被接受，让我们讨论 skip-gram
+    算法的要点。
 - en: The first step is to define a large matrix of size *V* × *E*, where *V* is the
     size of the vocabulary and *E* is the size of the embeddings. The size of the
     embeddings (E) is a user-defined hyperparameter, where a larger E typically leads
@@ -394,6 +449,7 @@
   id: totrans-53
   prefs: []
   type: TYPE_NORMAL
+  zh: 位置嵌入被用来告诉模型一个标记出现的位置。其主要目的是为了让位置嵌入服务器告诉变压器模型一个单词出现的位置。这是因为，与LSTMs/GRUs不同，变压器模型没有序列的概念，因为它们一次处理整个文本。此外，单词位置的改变可能会改变句子或单词的含义。例如，在两个版本中
 - en: '[PRE1]'
   id: totrans-54
   prefs: []
@@ -405,14 +461,17 @@
   id: totrans-55
   prefs: []
   type: TYPE_NORMAL
+  zh: 单词“it”指的是不同的东西，单词“it”的位置可以用作识别这种差异的线索。原始的变压器论文使用以下方程式生成位置嵌入：
 - en: '*PE*(*pos*,2*i*) = sin(*pos*/10000^(21/d[model]))'
   id: totrans-56
   prefs: []
   type: TYPE_NORMAL
+  zh: '*PE*(*pos*,2*i*) = sin(*pos*/10000^(21/d[model]))'
 - en: '*PE*(*pos*,2*i +* 1) = cos(*pos*/10000^(21/d[model]))'
   id: totrans-57
   prefs: []
   type: TYPE_NORMAL
+  zh: '*PE*(*pos*,2*i +* 1) = cos(*pos*/10000^(21/d[model]))'
 - en: where pos denotes the position in the sequence and *i* denotes the *i*^(th)
     feature dimension (0 ≤ *i* < *d*[model]). Even-numbered features use a sine function,
     whereas odd-numbered features use a cosine function. Figure 13.2 presents how
@@ -425,10 +484,12 @@
   id: totrans-58
   prefs: []
   type: TYPE_NORMAL
+  zh: 其中pos表示序列中的位置，*i*表示*i*^(th)特征维度（0 ≤ *i* < *d*[model]）。偶数特征使用正弦函数，而奇数特征使用余弦函数。图13.2展示了当时间步长和特征位置变化时位置嵌入的变化。可以看到，具有较高索引的特征位置具有较低频率的正弦波。作者确切的方程式并不完全清楚。但是，他们确实提到他们没有看到前一个方程式和让模型在训练期间联合学习位置嵌入之间有显著的性能差异。
 - en: '![13-02](../../OEBPS/Images/13-02.png)'
   id: totrans-59
   prefs: []
   type: TYPE_IMG
+  zh: '![13-02](../../OEBPS/Images/13-02.png)'
 - en: Figure 13.2 How positional embeddings change with the time step and the feature
     position. Even-numbered feature positions use the sine function, whereas odd-numbered
     positions use the cosine function. Additionally, the frequency of the signals
@@ -436,6 +497,7 @@
   id: totrans-60
   prefs: []
   type: TYPE_NORMAL
+  zh: 图13.2 位置嵌入随时间步长和特征位置的变化。偶数特征位置使用正弦函数，而奇数位置使用余弦函数。此外，信号的频率随着特征位置的增加而降低。
 - en: It is important to note that both token and positional embeddings will have
     the same dimensionality (i.e., *d*[model]). Finally, as the input to the model,
     the token embeddings and the positional embeddings are summed to form a single
@@ -443,20 +505,24 @@
   id: totrans-61
   prefs: []
   type: TYPE_NORMAL
+  zh: 需要注意的是，标记嵌入和位置嵌入都具有相同的维度（即*d*[model]）。最后，作为模型的输入，标记嵌入和位置嵌入被求和以形成单个混合嵌入向量（图13.3）。
 - en: '![13-03](../../OEBPS/Images/13-03.png)'
   id: totrans-62
   prefs: []
   type: TYPE_IMG
+  zh: '![13-03](../../OEBPS/Images/13-03.png)'
 - en: Figure 13.3 The embeddings generated in a Transformer model and how the final
     embeddings are computed
   id: totrans-63
   prefs: []
   type: TYPE_NORMAL
+  zh: 图13.3 在变压器模型中生成的嵌入以及如何计算最终嵌入
 - en: 13.1.3 Residuals and normalization
   id: totrans-64
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 13.1.3 残差和规范化
 - en: Another important characteristic of the Transformer models is the existence
     of the residual connections and the normalization layers in between the individual
     layers. We discussed residual connections in depth in chapter 7 when we discussed
@@ -465,6 +531,7 @@
   id: totrans-65
   prefs: []
   type: TYPE_NORMAL
+  zh: 变压器模型的另一个重要特征是残差连接和单个层之间的规范化层的存在。当我们讨论图像分类的高级技术时，我们在第7章中深入讨论了残差连接。让我们简要地重新讨论残差连接的机制和动机。
 - en: Residual connections are formed by adding a given layer’s output to the output
     of one or more layers ahead. This, in turn, forms “shortcut connections” through
     the model and provides a stronger gradient flow by reducing the changes of the
@@ -474,31 +541,37 @@
   id: totrans-66
   prefs: []
   type: TYPE_NORMAL
+  zh: 残差连接是通过将给定层的输出添加到前面一个或多个层的输出而形成的。这反过来形成了模型中的“快捷连接”，并通过减少所谓的*梯度消失*现象提供了更强的梯度流（见图13.4）。梯度消失导致最靠近输入的层的梯度非常小，以至于这些层的训练受到阻碍。
 - en: '![13-04](../../OEBPS/Images/13-04.png)'
   id: totrans-67
   prefs: []
   type: TYPE_IMG
+  zh: '![13-04](../../OEBPS/Images/13-04.png)'
 - en: Figure 13.4 Mathematical view of residual connections
   id: totrans-68
   prefs: []
   type: TYPE_NORMAL
+  zh: 图13.4 残差连接的数学视角
 - en: 'In Transformer models, in each layer, residual connections are created in the
     following way:'
   id: totrans-69
   prefs: []
   type: TYPE_NORMAL
+  zh: 在 Transformer 模型中，每个层次都会创建残差连接，具体如下：
 - en: The input to the multi-head self-attention sublayer is added to the output of
     the multi-head self-attention sublayer.
   id: totrans-70
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 多头自注意力子层的输入被添加到多头自注意力子层的输出中。
 - en: The input to the fully connected sublayer is added to the output of the fully
     connected sublayer.
   id: totrans-71
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 完全连接子层的输入被添加到完全连接子层的输出中。
 - en: Next, the output reinforced by residual connections goes through a layer normalization
     layer. *Layer normalization*, similar to batch normalization, is a way to reduce
     the “covariate shift” in neural networks, allowing them to be trained faster and
@@ -510,12 +583,15 @@
   id: totrans-72
   prefs: []
   type: TYPE_NORMAL
+  zh: 接下来，通过残差连接增强的输出经过一层层归一化层。*层归一化*，类似于批归一化，是减少神经网络中“协变量转移”的一种方式，使其能够更快地训练并达到更好的性能。协变量转移是指神经网络激活分布的变化（由数据分布的变化引起），这些变化在模型训练过程中发生。这种分布的变化会在模型训练期间影响一致性，并对模型产生负面影响。层归一化是由
+    Ba 等人在论文“Layer Normalization”中介绍的（[https://arxiv.org/pdf/1607.06450.pdf](https://arxiv.org/pdf/1607.06450.pdf)）。
 - en: Batch normalization computes the mean and variance of activations as an average
     over the samples in the batch, causing its performance to rely on mini batch sizes,
     which are used to train the model.
   id: totrans-73
   prefs: []
   type: TYPE_NORMAL
+  zh: 批归一化计算激活的均值和方差作为批次中样本的平均值，导致其性能依赖于用于训练模型的小批量大小。
 - en: However, layer normalization computes the mean and variance (i.e., the normalization
     terms) of the activations in such a way that the normalization terms are the same
     for every hidden unit. In other words, layer normalization has a single mean and
@@ -529,30 +605,37 @@
   id: totrans-74
   prefs: []
   type: TYPE_NORMAL
+  zh: 然而，层归一化计算激活的均值和方差（即归一化项）的方式是这样的，即归一化项对每个隐藏单元都是相同的。换句话说，层归一化对于层中的所有隐藏单元都有一个单一的均值和方差值。这与批归一化不同，后者对层中的每个隐藏单元维护单独的均值和方差值。此外，与批归一化不同，层归一化不会对批次中的样本进行平均，而是留下了平均化，对不同的输入具有不同的归一化项。通过每个样本具有一个均值和方差，层归一化摆脱了对小批量大小的依赖。有关此方法的更多细节，请参阅原始论文。
 - en: Layer normalization in TensorFlow/Keras
   id: totrans-75
   prefs: []
   type: TYPE_NORMAL
+  zh: TensorFlow/Keras 中的层归一化
 - en: TensorFlow provides a convenient implementation of the layer normalization algorithm
     at [http://mng.bz/YGRB](http://mng.bz/YGRB). You can use this layer with any model
     you define using TensorFlow Keras APIs.
   id: totrans-76
   prefs: []
   type: TYPE_NORMAL
+  zh: TensorFlow 提供了层归一化算法的方便实现，网址为 [http://mng.bz/YGRB](http://mng.bz/YGRB)。你可以使用
+    TensorFlow Keras API 定义的任何模型来使用这个层。
 - en: Figure 13.5 depicts how residual connections and layer normalization are used
     in Transformer models.
   id: totrans-77
   prefs: []
   type: TYPE_NORMAL
+  zh: 图13.5 展示了在 Transformer 模型中如何使用残差连接和层归一化。
 - en: '![13-05](../../OEBPS/Images/13-05.png)'
   id: totrans-78
   prefs: []
   type: TYPE_IMG
+  zh: '![13-05](../../OEBPS/Images/13-05.png)'
 - en: Figure 13.5 How residual connections and layer normalization layers are used
     in the Transformer model
   id: totrans-79
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 13.5 残差连接和层归一化层在 Transformer 模型中的使用方式
 - en: With that, we end the discussion about the components in the Transformer model.
     We have discussed all the bells and whistles of the Transformer model, namely
     self-attention layers, fully connected layers, embeddings (token and positional),
@@ -562,14 +645,18 @@
   id: totrans-80
   prefs: []
   type: TYPE_NORMAL
+  zh: 讨论关于 Transformer 模型中的组件到此结束。我们已经讨论了 Transformer 模型的所有要点，即自注意力层、全连接层、嵌入（标记和位置）、层归一化和残差连接。在下一节中，我们将讨论如何使用一个称为
+    BERT 的预训练 Transformer 模型来解决垃圾邮件分类任务。
 - en: Exercise 1
   id: totrans-81
   prefs: []
   type: TYPE_NORMAL
+  zh: 练习 1
 - en: You are given the following code for the Transformer encoder
   id: totrans-82
   prefs: []
   type: TYPE_NORMAL
+  zh: 你被给定了以下 Transformer 编码器的代码
 - en: '[PRE2]'
   id: totrans-83
   prefs: []
@@ -581,10 +668,12 @@
   id: totrans-84
   prefs: []
   type: TYPE_NORMAL
+  zh: 其中 EncoderLayer 定义了一个典型的 Transformer 编码器层，其中包含自注意力子层和全连接子层。你被要求使用以下方程式集成位置编码
 - en: '*PE*(*pos*, 2*i*) = sin(*pos*/10000^(2*i*/d[model]))'
   id: totrans-85
   prefs: []
   type: TYPE_NORMAL
+  zh: '*PE*(*pos*, 2*i*) = sin(*pos*/10000^(2*i*/d[model]))'
 - en: '*pos* goes from 0 to 511 (d=512 features) and *i* goes from 0 to 24 (n_steps=25
     time steps) and denotes the time step. In other words, our positional encoding
     will be a tensor of shape [n_steps, d]. You can use tf.math.sin() to generate
@@ -595,11 +684,15 @@
   id: totrans-86
   prefs: []
   type: TYPE_NORMAL
+  zh: '*pos* 从 0 到 511（d=512 特征），*i* 从 0 到 24（n_steps=25 时间步），表示时间步。换句话说，我们的位置编码将是一个形状为
+    [n_steps, d] 的张量。你可以使用 tf.math.sin() 逐元素生成张量的 sin 值。你可以将位置嵌入定义为张量，而不是 tf.keras.layers.Layer
+    的乘积。最终嵌入应通过将标记嵌入和位置嵌入相加来生成。你会如何做？'
 - en: 13.2 Using pretrained BERT for spam classification
   id: totrans-87
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 13.2 使用预训练的 BERT 进行垃圾邮件分类
 - en: You are working as a data scientist for a mail service company, and the company
     is dying to implement a spam classification functionality. They want to implement
     this functionality in house and save dollars. Having read about BERT and how powerful
@@ -611,6 +704,8 @@
   id: totrans-88
   prefs: []
   type: TYPE_NORMAL
+  zh: 你正在为一家邮件服务公司担任数据科学家，公司渴望实现垃圾邮件分类功能。他们希望在公司内部实现此功能并节省成本。通过阅读关于 BERT 及其在解决 NLP
+    任务中的强大性能的文章，你向团队解释，你需要做的就是下载 BERT 模型，在 BERT 顶部拟合一个分类层，并在标记的数据上端到端地训练整个模型。标记的数据包括一个垃圾消息和一个指示消息是否为垃圾或正常的标签。你被委托负责实现此模型。
 - en: 'Now that we have discussed all the moving elements of the Transformer architecture,
     it puts us in a very strong position to understand BERT. BERT is a Transformer-based
     model introduced in the paper “BERT: Pre-Training of Deep Bidirectional Transformers
@@ -620,6 +715,10 @@
   id: totrans-89
   prefs: []
   type: TYPE_NORMAL
+  zh: '现在我们已经讨论了 Transformer 架构的所有移动元素，这使得我们非常有能力理解 BERT。BERT 是一种基于 Transformer 的模型，由
+    Devlin 等人在论文 “BERT: Pre-Training of Deep Bidirectional Transformers for Language
+    Understanding” 中介绍（[https://arxiv.org/pdf/1810.04805.pdf](https://arxiv.org/pdf/1810.04805.pdf)），它代表了自然语言处理历史上的一个非常重要的里程碑，因为它是一个先驱性模型，证明了在
+    NLP 领域应用 “迁移学习”的能力。'
 - en: BERT is a Transformer model that is pretrained on large amounts of textual data
     in an unsupervised fashion. Therefore, you can use BERT as the basis to get rich,
     semantically sound numerical representations for textual input sequences that
@@ -631,22 +730,28 @@
   id: totrans-90
   prefs: []
   type: TYPE_NORMAL
+  zh: BERT 是一个在大量文本数据上以无监督方式预训练的 Transformer 模型。因此，你可以使用 BERT 作为基础，获得丰富、语义上准确的文本输入序列的数字表示，这些表示可以直接提供给下游
+    NLP 模型。由于 BERT 提供的丰富文本表示，你可以让你的决策支持模型不再需要理解语言，而是可以直接专注于手头的问题。从技术角度来看，如果你正在用 BERT
+    解决分类问题，你所需要做的就是
 - en: Fit a classifier(s) (e.g., a logistic regression layer) on top of BERT, which
     takes BERT’s output(s) as the input(s)
   id: totrans-91
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 在 BERT 之上拟合一个分类器（例如逻辑回归层），将 BERT 的输出作为输入
 - en: Train the model (i.e., BERT + classifier(s)) end to end on the discriminative
     task
   id: totrans-92
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 在判别性任务上（即 BERT + 分类器）端到端地训练模型
 - en: History of BERT
   id: totrans-93
   prefs: []
   type: TYPE_NORMAL
+  zh: BERT 的历史
 - en: Before models like BERT, solving natural language processing (NLP) tasks was
     both repetitive and time-consuming. Every time, you had to train a model from
     scratch. And to exacerbate this suboptimal way of tackling problems, most models
@@ -654,6 +759,7 @@
   id: totrans-94
   prefs: []
   type: TYPE_NORMAL
+  zh: 在像 BERT 这样的模型出现之前，解决自然语言处理（NLP）任务既重复又耗时。每次都需要从头开始训练一个模型。更糟糕的是，大多数模型都无法处理长文本序列，限制了它们理解语言的能力。
 - en: In 2017, Transformer models for NLP tasks were proposed in the paper “Attention
     Is All You Need” ([https://arxiv.org/pdf/1706.03762.pdf](https://arxiv.org/pdf/1706.03762.pdf)).
     Transformer models beat previous dominants like LSTMs and GRUs across the board
@@ -663,6 +769,8 @@
   id: totrans-95
   prefs: []
   type: TYPE_NORMAL
+  zh: 2017 年，NLP 任务的 Transformer 模型在论文“Attention Is All You Need”（[https://arxiv.org/pdf/1706.03762.pdf](https://arxiv.org/pdf/1706.03762.pdf)）中提出。Transformer
+    模型在一系列 NLP 任务上击败了之前的主导者，如 LSTMs 和 GRUs。与逐字逐句查看并维护状态（即内存）的循环模型不同，Transformer 模型一次查看整个序列。
 - en: Then, in 2018, the “ImageNet moment” arrived for NLP (i.e., transfer learning
     in NLP). The ImageNet moment refers to the moment when ML practitioners realized
     that using a computer vision model that is already trained on the large ImageNet
@@ -679,21 +787,28 @@
   id: totrans-96
   prefs: []
   type: TYPE_NORMAL
+  zh: 然后，在 2018 年，NLP（即在 NLP 中进行迁移学习）迎来了“ImageNet 时刻”。ImageNet 时刻是指 ML 从业者意识到，在其他任务（如目标检测、图像分割）上使用已经在大型
+    ImageNet 图像分类数据集上训练过的计算机视觉模型，可以更快地获得更好的性能。这实际上催生了在计算机视觉领域广泛使用的迁移学习概念。因此，直到 2018
+    年，NLP 领域还没有一个非常好的方法来利用迁移学习来提升任务性能。论文“通用语言模型微调用于文本分类”（[https://arxiv.org/pdf/1801.06146.pdf](https://arxiv.org/pdf/1801.06146.pdf)）介绍了在语言建模任务上预训练然后在判别性任务上训练模型的思想（例如，分类问题）。这种方法的优势在于，你不需要像从头训练模型那样多的样本。
 - en: In 2018, BERT was introduced. It was a marriage of two of the finest moments
     in the history of NLP. In other words, BERT is a Transformer model that is pretrained
     on large amounts of textual data in an unsupervised fashion.
   id: totrans-97
   prefs: []
   type: TYPE_NORMAL
+  zh: 2018 年，BERT 被引入。这是自然语言处理历史上两个最出色时刻的结合。换句话说，BERT 是一个在大量文本数据上以无监督方式预训练的 Transformer
+    模型。
 - en: We will now examine the BERT model in more detail.
   id: totrans-98
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在我们将更详细地了解 BERT 模型。
 - en: 13.2.1 Understanding BERT
   id: totrans-99
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 13.2.1 理解 BERT
 - en: Let’s now inspect BERT more microscopically. As I alluded to earlier, BERT is
     a Transformer model. To be exact, it’s the encoder part of the Transformer model.
     This means that BERT takes an input sequence (a collection of tokens) and produces
@@ -702,16 +817,19 @@
   id: totrans-100
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在让我们更微观地检查BERT。正如我之前提到的，BERT是一个Transformer模型。确切地说，它是Transformer模型的编码器部分。这意味着BERT接受一个输入序列（一组标记）并生成一个编码的输出序列。图13.6描述了BERT的高层架构。
 - en: '![13-06](../../OEBPS/Images/13-06.png)'
   id: totrans-101
   prefs: []
   type: TYPE_IMG
+  zh: '![13-06](../../OEBPS/Images/13-06.png)'
 - en: Figure 13.6 The high-level architecture of BERT. It takes a set of input tokens
     and produces a sequence of hidden representations generated using several hidden
     layers.
   id: totrans-102
   prefs: []
   type: TYPE_NORMAL
+  zh: 图13.6 BERT的高层架构。它接受一组输入标记并生成使用几个隐藏层生成的隐藏表示的序列。
 - en: When BERT takes an input, it inserts some special tokens into the input. First,
     at the beginning, it inserts a [CLS] (an abbreviated form of the term classification)
     token that is used to generate the final hidden representation for certain types
@@ -724,6 +842,7 @@
   id: totrans-103
   prefs: []
   type: TYPE_NORMAL
+  zh: 当BERT接受一个输入时，它会在输入中插入一些特殊的标记。首先，在开始时，它插入一个[CLS]（分类的缩写形式）标记，用于生成特定类型任务（例如，序列分类）的最终隐藏表示。它表示在关注序列中的所有标记后的输出。接下来，根据输入类型，它还会插入一个[SEP]（即“分隔”）标记。[SEP]标记标记了输入中不同序列的结束和开始。例如，在问答中，模型接受问题和可能包含答案的上下文（例如，段落）作为输入，并且[SEP]在问题和上下文之间使用。
 - en: Next, the final embedding of the tokens is generated using three different embedding
     spaces. The token embedding has a unique vector for each token in the vocabulary.
     The positional embeddings encode the position of each token, as discussed earlier.
@@ -738,22 +857,26 @@
   id: totrans-104
   prefs: []
   type: TYPE_NORMAL
+  zh: 接下来，使用三种不同的嵌入空间生成标记的最终嵌入。标记嵌入为词汇表中的每个标记提供了一个独特的向量。位置嵌入编码了每个标记的位置，如前面讨论的。最后，段落嵌入为输入的每个子组件提供了一个不同的表示。例如，在问答中，问题将具有作为其段落嵌入向量的唯一向量，而上下文将具有不同的嵌入向量。这通过在输入序列中的每个不同组件的*n*个不同嵌入向量来完成。根据输入中为每个标记指定的组件索引，检索相应的段落嵌入向量。*n*需要事先指定。
 - en: 'The real value of BERT comes from the fact that it has been pretrained on a
     large corpus of data in a self-supervised fashion. In the pretraining stage, BERT
     is trained on two different tasks:'
   id: totrans-105
   prefs: []
   type: TYPE_NORMAL
+  zh: BERT的真正价值来自于它是以自监督方式在大型语料库上预训练的事实。在预训练阶段，BERT在两个不同的任务上进行训练：
 - en: Masked language modeling (MLM)
   id: totrans-106
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 掩码语言建模（MLM）
 - en: Next-sentence prediction (NSP)
   id: totrans-107
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 下一句预测（NSP）
 - en: The masked language modeling (MLM) task is inspired by the *Cloze task* or the
     *Cloze test*, where a student is given a sentence with one or more blanks and
     is asked to fill the blanks. Similarly, given a text corpus, words are masked
@@ -762,6 +885,7 @@
   id: totrans-108
   prefs: []
   type: TYPE_NORMAL
+  zh: 掩码语言建模（MLM）任务灵感来自*填空题*或*填空测验*，其中学生被给出一句带有一个或多个空白的句子，并被要求填写空白。类似地，给定一个文本语料库，单词从句子中被掩码，然后模型被要求预测掩码的标记。例如，句子
 - en: '[PRE3]'
   id: totrans-109
   prefs: []
@@ -771,6 +895,7 @@
   id: totrans-110
   prefs: []
   type: TYPE_NORMAL
+  zh: 可能变成
 - en: '[PRE4]'
   id: totrans-111
   prefs: []
@@ -781,6 +906,7 @@
   id: totrans-112
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意：已经有大量基于Transformer的模型，每个模型都在前一个模型的基础上进行了构建。您可以在附录C中了解更多关于这些模型的信息。
 - en: 'Figure 13.7 illustrates the main components of BERT during the training of
     the masked language modeling task. BERT uses a special token ([MASK]) to represent
     masked words. Then the target for the model will be the word “bakery.” But this
@@ -793,25 +919,30 @@
   id: totrans-113
   prefs: []
   type: TYPE_NORMAL
+  zh: 图13.7显示了在遮蔽语言建模任务训练过程中BERT的主要组成部分。BERT使用特殊标记（[MASK]）来表示被遮蔽的单词。然后模型的目标将是单词"bakery"。但这给模型带来了实际问题。特殊标记[MASK]在实际文本中不会出现。这意味着模型在关键问题的微调阶段（即在分类问题上训练时）看到的文本将与在预训练阶段看到的文本不同。这有时被称为*预训练-微调不一致性*。因此，BERT的作者建议采取以下方法来处理这个问题。当屏蔽一个单词时，做以下之一：
 - en: Use the [MASK] token as it is (with 80% probability).
   id: totrans-114
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用[MASK]标记（使用80％的概率）。
 - en: Use a random word (with 10% probability).
   id: totrans-115
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用随机单词（以10％的概率）。
 - en: Use the true word (with 10% probability).
   id: totrans-116
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用真实的单词（以10％的概率）。
 - en: '![13-07](../../OEBPS/Images/13-07.png)'
   id: totrans-117
   prefs: []
   type: TYPE_IMG
+  zh: '![13-07](../../OEBPS/Images/13-07.png)'
 - en: 'Figure 13.7 The methodology used for pretraining BERT. BERT is pretrained on
     two tasks: a masked language modeling task and the next sentence prediction task.
     In the masked language modeling task, the tokens in the input are masked and the
@@ -820,6 +951,7 @@
   id: totrans-118
   prefs: []
   type: TYPE_NORMAL
+  zh: 图13.7显示了预训练BERT使用的方法。BERT在两个任务上进行预训练：遮蔽语言建模任务和下一句预测任务。在遮蔽语言建模任务中，输入中的标记被遮蔽，模型被要求预测被遮蔽的标记。在下一句预测任务中，模型被要求预测两个句子是否相邻。
 - en: 'Next, in the next sentence prediction task, the model is given a pair of sentences,
     A and B (in that order), and is asked to predict whether B is the next sentence
     after A. This can be done by fitting a binary classifier on top of BERT and training
@@ -829,18 +961,21 @@
   id: totrans-119
   prefs: []
   type: TYPE_NORMAL
+  zh: 接下来，在下一句预测任务中，模型会得到一对句子A和B（按照顺序），并被要求预测B是否是A之后的下一句。可以通过在BERT之上拟合一个二元分类器，并在选择的句子对上端到端地训练整个模型来完成。以无监督的方式生成模型的输入对是不难的：
 - en: A sample with the label TRUE is generated by picking two sentences that are
     adjacent to each other.
   id: totrans-120
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 通过选择相邻的两个句子生成标签为TRUE的样本。
 - en: A sample with the label FALSE is generated by picking two sentences randomly
     that are not adjacent to each other.
   id: totrans-121
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 通过随机选择不相邻的两个句子生成标签为FALSE的样本。
 - en: Following this approach, a labeled data set is generated for the next sentence
     prediction task. Then BERT, along with the binary classifier, is trained end to
     end using the labeled data set. Figure 13.7 highlights the data and the model
@@ -848,12 +983,14 @@
   id: totrans-122
   prefs: []
   type: TYPE_NORMAL
+  zh: 按照这种方法，为下一句预测任务生成了一个带标签的数据集。然后，使用带标签的数据集对BERT和二元分类器进行端到端的训练。图13.7突出显示了下一句预测任务中的数据和模型架构。
 - en: You might have noticed in figure 13.6 that the input to BERT has special tokens.
     There are two special tokens (in addition to the [MASK] token we already discussed)
     that serve special purposes.
   id: totrans-123
   prefs: []
   type: TYPE_NORMAL
+  zh: 您可能已经注意到图13.6中输入到BERT的是特殊标记。除了我们已讨论过的[MASK]标记之外，还有两个特殊的标记具有特殊的用途。
 - en: The [CLS] token is appended to any input sequence fed to BERT. This denotes
     the beginning of the input. It also forms the basis for the input fed into the
     classification head used on top of BERT to solve your NLP task. As you know, BERT
@@ -863,12 +1000,15 @@
   id: totrans-124
   prefs: []
   type: TYPE_NORMAL
+  zh: '[CLS]标记被附加到输入到BERT的任何输入序列上。它表示输入的开始。它还为放置在BERT顶部的分类头上使用的输入提供基础。正如您所知，BERT对序列中的每个输入标记生成一个隐藏表示。按照惯例，与[CLS]标记对应的隐藏表示被用作放置在BERT之上的分类模型的输入。'
 - en: 'The task-specific NLP tasks solved by BERT can be classified into four different
     categories. These are based on the tasks found in the General Language Understanding
     Evaluation (GLUE) benchmark task suite ([https://gluebenchmark.com](https://gluebenchmark.com)):'
   id: totrans-125
   prefs: []
   type: TYPE_NORMAL
+  zh: BERT 解决的任务特定 NLP 任务可以分为四种不同的类别。这些基于 General Language Understanding Evaluation（GLUE）基准任务套件中的任务
+    ([https://gluebenchmark.com](https://gluebenchmark.com))：
 - en: '*Sequence classification*—Here, a single input sequence is given and the model
     is asked to predict a label for the whole sequence (e.g., sentiment analysis,
     spam identification).'
@@ -876,6 +1016,7 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '*序列分类*—这里，给定一个单一的输入序列，并要求模型为整个序列预测一个标签（例如，情感分析，垃圾邮件识别）。'
 - en: '*Token classification*—Here, a single input sequence is given and the model
     is asked to predict a label for each token in the sequence (e.g., named entity
     recognition, part-of-speech tagging).'
@@ -883,6 +1024,7 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '*令牌分类*—这里，给定一个单一的输入序列，并要求模型为序列中的每个令牌预测一个标签（例如，命名实体识别，词性标注）。'
 - en: '*Question answering*—Here, the input consists of two sequences: a question
     and a context. The question and the context are separated by an [SEP] token. The
     model is trained to predict the starting and ending indices of the span of tokens
@@ -891,6 +1033,7 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '*问答*—这里，输入包括两个序列：一个问题和一个上下文。问题和上下文之间由一个 [SEP] 令牌分隔。模型被训练来预测属于答案的令牌范围的起始和结束索引。'
 - en: '*Multiple choice*—Here the input consists of multiple sequences: a question
     followed by multiple candidates that may or may not be the answer to the question.
     These multiple sequences are separated by the token [SEP] and provided as a single
@@ -900,6 +1043,7 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '*多选题*—这里的输入由多个序列组成：一个问题，后跟可能是或可能不是问题答案的多个候选项。这些多个序列由令牌 [SEP] 分隔，并作为单个输入序列提供给模型。模型被训练来预测该问题的正确答案（即，类标签）。'
 - en: 'BERT is designed in such a way that it can be used to solve these tasks without
     any modifications to the base model. In tasks that involve multiple sequences
     (e.g., question answering, multiple-choice questions), you need to tell the model
@@ -911,6 +1055,8 @@
   id: totrans-130
   prefs: []
   type: TYPE_NORMAL
+  zh: BERT 的设计使得它能够在不对基础模型进行任何修改的情况下用于解决这些任务。在涉及多个序列的任务中（例如，问答，多选题），您需要单独告诉模型不同的输入（例如，问题的令牌和问题回答任务中的上下文的令牌）。为了做出这种区分，使用
+    [SEP] 令牌。[SEP] 令牌在不同序列之间插入。例如，如果您正在解决一个问答任务，您可能会有一个输入如下：
 - en: '[PRE5]'
   id: totrans-131
   prefs: []
@@ -920,6 +1066,7 @@
   id: totrans-132
   prefs: []
   type: TYPE_NORMAL
+  zh: 然后，BERT 的输入可能如下所示
 - en: '[PRE6]'
   id: totrans-133
   prefs: []
@@ -937,29 +1084,35 @@
   id: totrans-134
   prefs: []
   type: TYPE_NORMAL
+  zh: BERT 还使用段落嵌入空间来表示一个令牌属于哪个序列。例如，只有一个序列的输入对于所有令牌具有相同的段落嵌入向量（例如，垃圾邮件分类任务）。具有两个或更多序列的输入使用第一个或第二个空间，取决于令牌属于哪个序列。例如，在问答中，模型将使用唯一的段落嵌入向量来编码问题的令牌，其中将使用不同的段落嵌入向量来编码上下文的令牌。现在我们已经讨论了使用
+    BERT 成功解决下游 NLP 任务所需的所有要素。让我们重申一下有关 BERT 的关键要点：
 - en: BERT is an encoder-based Transformer that is pretrained on large amounts of
     text.
   id: totrans-135
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: BERT 是一种基于编码器的 Transformer，经过大量文本的预训练。
 - en: BERT uses masked language modeling and next-sentence prediction tasks to pretrain
     the model.
   id: totrans-136
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: BERT 使用掩码语言建模和下一句预测任务进行模型的预训练。
 - en: BERT outputs a hidden representation for every token in the input sequence.
   id: totrans-137
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: BERT 为输入序列中的每个令牌输出隐藏表示。
 - en: 'BERT has three embedding spaces: token embedding, positional embedding, and
     segment embedding.'
   id: totrans-138
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: BERT 有三个嵌入空间：令牌嵌入，位置嵌入和段落嵌入。
 - en: BERT uses a special token [CLS] to denote the beginning of an input and is used
     as the input to a downstream classification model.
   id: totrans-139
@@ -1122,36 +1275,43 @@
   id: totrans-171
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们将在这里使用第一种策略（即欠采样多数类）。更具体地说，我们将首先
 - en: Create balanced testing and validation data sets by randomly sampling data from
     the data set (n examples per each class)
   id: totrans-172
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 通过从数据集中随机抽样数据来创建平衡的测试和验证数据集（每个类别n个示例）
 - en: Assign the rest of the data to a training set and undersample the majority class
     in the training set using an algorithm known as the *near-miss* algorithm
   id: totrans-173
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 将剩余的数据分配给训练集，并使用一种称为*near-miss*算法的算法对训练集中的多数类进行欠采样。
 - en: The creation of the training validation and testing data is illustrated in figure
     13.8.
   id: totrans-174
   prefs: []
   type: TYPE_NORMAL
+  zh: 创建训练验证和测试数据的过程如图13.8所示。
 - en: '![13-08](../../OEBPS/Images/13-08.png)'
   id: totrans-175
   prefs: []
   type: TYPE_IMG
+  zh: '![13-08](../../OEBPS/Images/13-08.png)'
 - en: Figure 13.8 How the training, validation, and testing data sets are created
     from the original data set
   id: totrans-176
   prefs: []
   type: TYPE_NORMAL
+  zh: 图13.8 从原始数据集创建训练、验证和测试数据集的过程
 - en: 'First, let’s import a few under-samplers from the library and the NumPy library:'
   id: totrans-177
   prefs: []
   type: TYPE_NORMAL
+  zh: 首先，让我们从库和NumPy库中导入一些欠采样器：
 - en: '[PRE9]'
   id: totrans-178
   prefs: []
@@ -1162,6 +1322,7 @@
   id: totrans-179
   prefs: []
   type: TYPE_NORMAL
+  zh: 接下来，我们将定义一个变量n，它表示在验证和测试数据集中每个类别要保留多少个样本：
 - en: '[PRE10]'
   id: totrans-180
   prefs: []
@@ -1175,6 +1336,7 @@
   id: totrans-181
   prefs: []
   type: TYPE_NORMAL
+  zh: 接下来我们将定义一个随机欠采样器。最重要的参数是sampling_strategy参数，它接受一个字典，其中键是标签，值是该标签所需的样本数量。我们还将通过random_state参数传递random_seed以确保每次运行代码时都获得相同的结果：
 - en: '[PRE11]'
   id: totrans-182
   prefs: []
@@ -1185,6 +1347,7 @@
   id: totrans-183
   prefs: []
   type: TYPE_NORMAL
+  zh: 然后我们调用欠采样器的fit_resample()函数，使用我们创建的inputs和labels数组来采样数据：
 - en: '[PRE12]'
   id: totrans-184
   prefs: []
@@ -1196,6 +1359,7 @@
   id: totrans-185
   prefs: []
   type: TYPE_NORMAL
+  zh: 一旦您适应了欠采样器，您可以使用欠采样器的sample_indices_属性获取所选样本的索引。使用这些索引，我们将创建一对新的数组test_x和test_y来保存测试数据：
 - en: '[PRE13]'
   id: totrans-186
   prefs: []
@@ -1207,6 +1371,7 @@
   id: totrans-187
   prefs: []
   type: TYPE_NORMAL
+  zh: 不在测试数据集中的索引被分配到不同的数组：rest_x 和 rest_y。这些将被用来创建验证数据集和训练数据集：
 - en: '[PRE14]'
   id: totrans-188
   prefs: []
@@ -1219,6 +1384,7 @@
   id: totrans-189
   prefs: []
   type: TYPE_NORMAL
+  zh: 和之前的方法类似，我们从rest_x和rest_y中欠采样数据来创建验证数据集（valid_x和valid_y）。请注意，我们不使用inputs和labels数组，而是使用这些数组分离出测试数据后剩余的数据：
 - en: '[PRE15]'
   id: totrans-190
   prefs: []
@@ -1229,6 +1395,7 @@
   id: totrans-191
   prefs: []
   type: TYPE_NORMAL
+  zh: 最后，我们创建训练数据集，该数据集将保存在创建测试和验证数据集后剩余的所有元素：
 - en: '[PRE16]'
   id: totrans-192
   prefs: []
@@ -1248,6 +1415,7 @@
   id: totrans-193
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们还必须确保训练数据集是平衡的。为了做到这一点，让我们使用比随机选择元素更智能的方式来欠采样数据。我们将在这里使用的欠采样算法称为near-miss算法。near-miss算法会删除与少数类别中的样本太接近的多数类别中的样本。这有助于增加少数类别和多数类别示例之间的距离。在这里，少数类别指的是数据较少的类别，而多数类别指的是数据较多的类别。为了使用near-miss算法，它需要能够计算两个样本之间的距离。因此，我们需要将我们的文本转换为一些数值表示。我们将使用scikit-learn的CountVectorizer来实现这一点：
 - en: '[PRE17]'
   id: totrans-194
   prefs: []
@@ -1259,6 +1427,7 @@
   id: totrans-195
   prefs: []
   type: TYPE_NORMAL
+  zh: train_bow 将包含我们数据的词袋表示。然后我们可以将其传递给 NearMiss 实例。获取数据的方式与之前相同：
 - en: '[PRE18]'
   id: totrans-196
   prefs: []
@@ -1269,6 +1438,7 @@
   id: totrans-197
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们打印出我们数据集的大小，看看它们是否与我们最初想要的大小相匹配：
 - en: '[PRE19]'
   id: totrans-198
   prefs: []
@@ -1279,10 +1449,12 @@
   id: totrans-199
   prefs: []
   type: TYPE_NORMAL
+  zh: 太棒了！我们的数据集都是平衡的，我们准备继续进行工作流的其余部分。
 - en: Defining the model
   id: totrans-200
   prefs: []
   type: TYPE_NORMAL
+  zh: 定义模型
 - en: With the data prepared and ready, we will download the model. The BERT model
     we will use is from the TensorFlow hub ([https://www.tensorflow.org/hub](https://www.tensorflow.org/hub)).
     The TensorFlow hub is a model repository for various models trained on various
@@ -1292,16 +1464,20 @@
   id: totrans-201
   prefs: []
   type: TYPE_NORMAL
+  zh: 准备好数据后，我们将下载模型。我们将使用的 BERT 模型来自 TensorFlow hub ([https://www.tensorflow.org/hub](https://www.tensorflow.org/hub))。TensorFlow
+    hub 是各种模型训练任务的模型仓库。您可以获得多种任务的模型，包括图像分类、对象检测、语言建模、问答等等。要查看所有可用模型的完整列表，请访问 [https://tfhub.dev/](https://tfhub.dev/)。
 - en: 'In order for us to successfully use BERT for an NLP task, we need three important
     things to work:'
   id: totrans-202
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了成功地利用BERT来完成自然语言处理任务，我们需要三个重要的工作：
 - en: '*A tokenizer*—Determines how to split the provided input sequence to tokens'
   id: totrans-203
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '*分词器* —— 确定如何将提供的输入序列分割为标记'
 - en: '*An encoder*—Takes in the tokens, computes numerical representations, and finally
     generates a hidden representation for each token as well as a pooled representation
     (a single representation of the whole sequence)'
@@ -1309,12 +1485,14 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '*编码器* —— 接受标记，计算数值表示，并最终为每个标记生成隐藏表示以及汇总表示（整个序列的单一表示）'
 - en: '*A classification head*—Takes in the pooled representation and generates a
     label for the input'
   id: totrans-205
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '*分类头* —— 接受汇总表示并为输入生成标签'
 - en: First, let’s examine the tokenizer. The tokenizer takes a single input string
     or a list of strings and converts it to a list of strings or a list of lists of
     strings, respectively. It does this by breaking each string into smaller elements.
@@ -1330,16 +1508,21 @@
   id: totrans-206
   prefs: []
   type: TYPE_NORMAL
+  zh: 首先，让我们来看一下分词器。分词器接受单个输入字符串或字符串列表，并将其转换为字符串列表或字符串列表，分别将其拆分为较小的元素。例如，可以通过在空格字符上分割来将句子分割为单词。BERT
+    中的分词器使用一种称为 *WordPiece* 算法的算法 ([http://mng.bz/z40B](https://static.googleusercontent.com/media/research.google.com/en//pubs/archive/37842.pdf))。它使用迭代方法找到数据集中常见的子词（即单词的部分）。WordPiece
+    算法的细节超出了本书的范围。欢迎查阅原始论文以了解更多细节。对于本讨论而言，分词器的最重要特征是它将给定的输入字符串（例如，句子）分解为较小标记的列表（例如，子词）。
 - en: Advantage of sub-word approaches like the WordPiece algorithm
   id: totrans-207
   prefs: []
   type: TYPE_NORMAL
+  zh: 像 WordPiece 算法这样的子词方法的优点
 - en: Sub-word approaches like the WordPiece algorithm learn smaller, commonly occurring
     parts of words and use them to define the vocabulary. There are two main advantages
     to this approach compared to having whole words in our vocabulary.
   id: totrans-208
   prefs: []
   type: TYPE_NORMAL
+  zh: 像 WordPiece 算法这样的子词方法学习单词的较小且常见的部分，并使用它们来定义词汇表。与将整个单词放入词汇表相比，此方法有两个主要优点。
 - en: 'Using sub-words often reduces the size of the vocabulary. Assume the words
     [“walk”, “act”, “walked”, “acted”, “walking”, “acting”]. If individual words are
     used, each word needs to be a single item in the vocabulary. However, if a sub-word
@@ -1349,6 +1532,8 @@
   id: totrans-209
   prefs: []
   type: TYPE_NORMAL
+  zh: 使用子词通常可以减少词汇量的大小。假设单词为[“walk”, “act”, “walked”, “acted”, “walking”, “acting”]。如果使用单独的单词，每个单词都需要在词汇表中成为一个单一项目。然而，如果使用子词方法，词汇表可以缩减为[“walk”,
+    “act”, “##ed”, “##ing”]，只有四个单词。在这里，##表示它需要添加另一个子词作为前缀。
 - en: 'Secondly, a sub-word approach can handle out-of-vocabulary words. This means
     the sub-word approach can represent words that appear in the test data set, but
     not in the training set. A word-based approach will not be able to do so and will
@@ -1360,10 +1545,13 @@
   id: totrans-210
   prefs: []
   type: TYPE_NORMAL
+  zh: '第二，子词方法可以处理词汇表中未出现的单词。这意味着子词方法可以通过组合来自词汇表的两个子词（例如，developed = develop + ##ed）来表示出现在测试数据集中但未出现在训练集中的单词。基于单词的方法将无法这样做，而只能使用特殊标记替换看不见的单词。假设子词表[“walk”,
+    “act”, “##ed”, “##ing”, “develop”]。即使训练数据中没有出现“developed”或“developing”这些单词，词汇表仍然可以通过组合来自词汇表的两个子词来表示这些单词。'
 - en: 'To set up the tokenizer, let’s first import the tf-models-official library:'
   id: totrans-211
   prefs: []
   type: TYPE_NORMAL
+  zh: 要设置标记器，让我们首先导入tf-models-official库：
 - en: '[PRE20]'
   id: totrans-212
   prefs: []
@@ -1373,6 +1561,7 @@
   id: totrans-213
   prefs: []
   type: TYPE_NORMAL
+  zh: 然后，您可以按以下方式定义标记器：
 - en: '[PRE21]'
   id: totrans-214
   prefs: []
@@ -1390,6 +1579,9 @@
   id: totrans-215
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这里，你首先需要获取词汇文件的位置，并定义一些配置，比如在对文本进行标记化之前是否应该将其转换为小写。词汇文件是一个文本文件，每行都有一个子词。这个标记器使用了Fast
+    WordPiece Tokenization（[https://arxiv.org/abs/2012.15524.pdf](https://arxiv.org/abs/2012.15524.pdf)），这是原始WordPiece算法的高效实现。请注意，vocab_file和do_lower_case是我们将在下一步从TensorFlow
+    hub下载的模型工件中找到的设置。但为了方便理解，我们在这里将它们定义为常量。您将在笔记本中找到自动提取它们的代码。接下来，我们可以按照以下方式使用标记器：
 - en: '[PRE22]'
   id: totrans-216
   prefs: []
@@ -1399,6 +1591,7 @@
   id: totrans-217
   prefs: []
   type: TYPE_NORMAL
+  zh: 它返回
 - en: '[PRE23]'
   id: totrans-218
   prefs: []
@@ -1414,6 +1607,7 @@
   id: totrans-219
   prefs: []
   type: TYPE_NORMAL
+  zh: '您可以在这里看到BERT的标记器如何标记句子。有些单词保持原样，而有些单词则分成子词（例如，seas + ##hell + ##s）。如前所述，##表示它不标记一个单词的开头。换句话说，##表示这个子词需要添加另一个子词作为前缀才能得到一个实际的单词。现在，让我们来看看BERT模型使用的特殊标记以及为它们分配的ID是什么。这也验证了这些标记存在于标记器中：'
 - en: '[PRE24]'
   id: totrans-220
   prefs: []
@@ -1423,6 +1617,7 @@
   id: totrans-221
   prefs: []
   type: TYPE_NORMAL
+  zh: 这将返回
 - en: '[PRE25]'
   id: totrans-222
   prefs: []
@@ -1435,16 +1630,19 @@
   id: totrans-223
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这里，[PAD]是BERT用来表示填充令牌（0）的另一个特殊标记。在NLP中，常常使用填充来将不同长度的句子填充到相同的长度，填充的句子是用零填充的。在这里，[PAD]标记对应了零。
 - en: With the basic functionality of the tokenizer understood, we can define a function
     called encode_sentence() that will encode a given sentence to an input understood
     by the BERT model (see the next listing).
   id: totrans-224
   prefs: []
   type: TYPE_NORMAL
+  zh: 了解了标记器的基本功能后，我们可以定义一个名为encode_sentence()的函数，将给定的句子编码为BERT模型所理解的输入（请参见下一个清单）。
 - en: Listing 13.2 Encoding a given input string using BERT’s tokenizer
   id: totrans-225
   prefs: []
   type: TYPE_NORMAL
+  zh: 清单13.2 使用BERT的标记器对给定的输入字符串进行编码
 - en: '[PRE26]'
   id: totrans-226
   prefs: []
@@ -1590,11 +1788,14 @@
   id: totrans-252
   prefs: []
   type: TYPE_NORMAL
+  zh: BertPackInputs 执行了 BERT 模型需要的许多不同的预处理操作。您可以在 [https://www.tensorflow.org/api_docs/python/tfm/nlp/layers/BertPackInputs](https://www.tensorflow.org/api_docs/python/tfm/nlp/layers/BertPackInputs)
+    上阅读关于此层接受的各种输入的信息。
 - en: 'To generate the prepared training, validation, and testing data for the model,
     simply call the get_bert_inputs() function:'
   id: totrans-253
   prefs: []
   type: TYPE_NORMAL
+  zh: 要为模型生成准备好的训练、验证和测试数据，只需调用 get_bert_inputs() 函数：
 - en: '[PRE32]'
   id: totrans-254
   prefs: []
@@ -1605,6 +1806,7 @@
   id: totrans-255
   prefs: []
   type: TYPE_NORMAL
+  zh: 完成后，让我们作为预防措施对 train_inputs 中的数据进行洗牌。目前，数据是有序的，即垃圾邮件消息在正常邮件消息之后：
 - en: '[PRE33]'
   id: totrans-256
   prefs: []
@@ -1621,6 +1823,9 @@
   id: totrans-257
   prefs: []
   type: TYPE_NORMAL
+  zh: 记得对输入和标签都使用相同的洗牌方式来保持它们的关联。我们已经做好了为模型准备输入的一切。现在是揭晓模型的大时刻了。我们需要定义一个具有分类头的 BERT，以便模型可以在我们的分类数据集上进行端到端的训练。我们将分两步来完成这个过程。首先，我们将从
+    TensorFlow hub 下载 BERT 的编码器部分，然后使用 tensorflow-models-official 库中的 tfm.nlp.models.BertClassifier
+    对象来生成最终的带有分类器头的 BERT 模型。让我们来看看我们如何完成第一部分：
 - en: '[PRE34]'
   id: totrans-258
   prefs: []
@@ -1641,6 +1846,10 @@
   id: totrans-259
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这里，我们首先定义了三个输入层，每个输入层都映射到 BertPackInputs 的一个输出。例如，input_word_ids 输入层将接收到在 get_bert_inputs()
+    函数生成的字典中键为 input_word_ids 的输出。接下来，我们通过向 hub.KerasLayer 对象传递一个 URL 来下载预训练的 BERT
+    编码器。这个层会生成两个输出：sequence_output，其中包含所有时间步长的隐藏表示，和 pooled_output，其中包含与 [CLS] 标记位置对应的隐藏表示。对于这个问题，我们需要后者，将其传递给位于编码器顶部的分类头。最后，我们将使用
+    Functional API 定义一个 Keras 模型。这个模型需要通过字典定义特定的输入和输出签名，如之前所示。我们将使用这个模型来定义一个基于这个编码器的分类器模型：
 - en: '[PRE35]'
   id: totrans-260
   prefs: []
@@ -1652,10 +1861,13 @@
   id: totrans-261
   prefs: []
   type: TYPE_NORMAL
+  zh: 正如您所见，定义分类器非常简单。我们只需将我们的 hub_encoder 传递给 BertClassifier，并声明我们有两个类别，即垃圾邮件和正常邮件（即
+    num_classes=2）。
 - en: Alternative way to get the BERT encoder
   id: totrans-262
   prefs: []
   type: TYPE_NORMAL
+  zh: 获取 BERT 编码器的另一种方式
 - en: 'There’s another method you can use to get a BERT encoder. However, it requires
     manually loading pretrained weights; therefore, we will keep this method as an
     alternative. Firstly, you start with a configuration file containing the encoder
