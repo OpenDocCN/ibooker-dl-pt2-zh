@@ -1171,11 +1171,14 @@
   id: totrans-148
   prefs: []
   type: TYPE_NORMAL
+  zh: 例如，我们可以收集所有工作 pod 的 IP 或 DNS，并将它们放在一起，然后将它们广播回每个工作 pod。在广播期间，我们将工作组信息设置为每个 pod
+    中的`TF_CONFIG`环境变量，以启动分布式训练组。`TF_CONFIG`环境变量是 TensorFlow 分布式库的特殊要求。
 - en: 4.3.4 Updating and fetching the job status
   id: totrans-149
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 4.3.4 更新和获取作业状态
 - en: After creating training pods, the Kubernetes job tracker will continue querying
     the pod execution status and move the job to other job lists when its status changes.
     For example, if the pod is created successfully and starts running, the tracker
@@ -1185,10 +1188,13 @@
   id: totrans-150
   prefs: []
   type: TYPE_NORMAL
+  zh: 创建训练 pod 后，Kubernetes 作业跟踪器将继续查询 pod 执行状态，并在其状态更改时将作业移动到其他作业列表中。例如，如果 pod 成功创建并开始运行，则跟踪器将作业从启动列表移动到运行列表。如果
+    pod 执行完成，则跟踪器将作业从运行列表移动到已完成作业列表。图 4.5 描绘了这个过程。
 - en: '![](../Images/04-05.png)'
   id: totrans-151
   prefs: []
   type: TYPE_IMG
+  zh: '![](../Images/04-05.png)'
 - en: 'Figure 4.5 Track the Kubernetes training job status: step 1, obtains the jobs
     in the running list; step 2, queries the pod execution status of each of the jobs
     running in the Kubernetes cluster; and step 3, moves the job to the finalized
@@ -1196,6 +1202,8 @@
   id: totrans-152
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 4.5 跟踪 Kubernetes 训练作业状态：第 1 步，获取运行列表中的作业；第 2 步，查询运行在 Kubernetes 集群中的每个作业的
+    pod 执行状态；第 3 步，如果 pod 执行完成（成功或失败），则将作业移动到已完成作业列表中。
 - en: When a user submits a job status query, the training service will search the
     job ID in all four job queues in the memory store and return the job object. Interestingly,
     although there are multiple training pods, we only need to check the status of
@@ -1205,6 +1213,8 @@
   id: totrans-153
   prefs: []
   type: TYPE_NORMAL
+  zh: 当用户提交作业状态查询时，训练服务将在内存存储中的所有四个作业队列中搜索作业 ID 并返回作业对象。有趣的是，尽管有多个训练 pod，我们只需要检查主
+    pod 的状态来跟踪分布式训练的进度。这是因为，在同步数据并行训练中，所有工作节点在每个训练周期都必须相互同步，因此主 pod 可以代表其他工作节点。
 - en: The code for querying and updating job execution status is very similar to the
     Docker job tracker that we see in section 3.3.5\. The only difference is that
     we query the Kubernetes cluster instead of the Docker engine to obtain the training
@@ -1213,27 +1223,33 @@
   id: totrans-154
   prefs: []
   type: TYPE_NORMAL
+  zh: 查询和更新作业执行状态的代码与我们在第 3.3.5 节中看到的 Docker 作业跟踪器非常相似。唯一的区别是，我们查询 Kubernetes 集群而不是
+    Docker 引擎来获取训练状态。我们将代码留给您去探索；您可以在`KubectlTracker`类的`updateContainerStatus`方法中找到它。
 - en: 4.3.5 Converting the training code to run distributedly
   id: totrans-155
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 4.3.5 将训练代码转换为分布式运行
 - en: We made two changes to our intent classification training code (introduced in
     the previous chapter, section 3.3.6) to support both distributed mode and single-device
     mode.
   id: totrans-156
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们对我们的意图分类训练代码（在上一章节，第 3.3.6 节中介绍）进行了两处更改，以支持分布式模式和单设备模式。
 - en: 'First change: Initialize the training group'
   id: totrans-157
   prefs: []
   type: TYPE_NORMAL
+  zh: 第一次更改：初始化训练组
 - en: We use the `WORLD_SIZE` environment variable to check whether the training code
     should run in distributed training. If the world size equals 1, then we use the
     same single-device training code that we saw in section 3.3.6.
   id: totrans-158
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们使用`WORLD_SIZE`环境变量来检查训练代码是否应在分布式训练中运行。如果 world size 等于 1，则我们使用与第 3.3.6 节中看到的相同的单设备训练代码。
 - en: 'But if the value is greater than 1, we initialize the training process to join
     the distributed group. Please also notice that a unique `RANK` value for each
     pod is passed from the training service (Kubernetes job tracker), which is needed
@@ -1243,6 +1259,7 @@
   id: totrans-159
   prefs: []
   type: TYPE_NORMAL
+  zh: 但如果值大于 1，我们将初始化训练过程以加入分布式组。还请注意，从训练服务（Kubernetes 作业跟踪器）传递给每个 pod 的唯一`RANK`值，这对于分布式组的初始化是必需的。在自注册到分布式组后，我们还将模型和数据采样器声明为分布式。参见以下代码的更改：
 - en: '[PRE13]'
   id: totrans-160
   prefs: []
@@ -1252,12 +1269,14 @@
   id: totrans-161
   prefs: []
   type: TYPE_NORMAL
+  zh: 第二个改变：只从主节点上传最终模型
 - en: 'In the second change, we only allow the master pod (rank = 0) to upload the
     final model. This is to prevent each worker from uploading the same models multiple
     times:'
   id: totrans-162
   prefs: []
   type: TYPE_NORMAL
+  zh: 在第二个改变中，我们只允许主节点（rank = 0）上传最终模型。这是为了防止每个工作节点多次上传相同的模型：
 - en: '[PRE14]'
   id: totrans-163
   prefs: []
@@ -1267,11 +1286,13 @@
   id: totrans-164
   prefs: []
   type: TYPE_NORMAL
+  zh: ❶ Rank 0 是主节点。
 - en: 4.3.6 Improvements
   id: totrans-165
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 4.3.6 改进
 - en: If we continue the path to making this sample service production ready, we can
     follow the thoughts in section 4.2.2 to work on improving fault tolerance and
     reducing network bandwidth saturation. We can also extend the Kubernetes job tracker
@@ -1284,11 +1305,13 @@
   id: totrans-166
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果我们继续将这个示例服务推向生产就绪状态的路径，我们可以遵循第4.2.2节中的思路，努力改进容错性并减少网络带宽饱和度。我们还可以扩展Kubernetes作业跟踪器以支持TensorFlow和Horovod分布式训练。从训练服务的角度来看，它们并没有太大的区别，因为训练服务传递给训练代码的配置非常通用；这些信息对于所有框架都是必需的，但名称不同。只要训练服务和训练代码之间的协议清晰稳定，我们仍然可以将训练代码视为黑盒，在分布式环境中甚至可以这样处理。
 - en: 4.4 Training large models that can’t load on one GPU
   id: totrans-167
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 4.4 不能在单个GPU上加载的大型模型训练
 - en: The neural network size (defined by the number of parameters) is growing rapidly
     in the research field, and we cannot ignore this trend. Using the ImageNet challenge
     as an example, the winner in 2014 (GoogleNet) had 4 million parameters; the winner
@@ -1297,18 +1320,22 @@
   id: totrans-168
   prefs: []
   type: TYPE_NORMAL
+  zh: 在研究领域，神经网络大小（由参数数量定义）正在迅速增长，我们不能忽视这一趋势。以ImageNet挑战为例，2014年的获胜者（GoogleNet）有400万个参数；2017年的获胜者（Squeeze-and-Excitation
+    Networks）有1.458亿个参数；当前领先的方法有超过10亿个参数。
 - en: Although our neural network size grew nearly 300×, GPU memory has only increased
     4×. You will see cases more often in the future in which we can’t train a model
     because it can’t be loaded onto one GPU.
   id: totrans-169
   prefs: []
   type: TYPE_NORMAL
+  zh: 尽管我们的神经网络大小增长了近300倍，但GPU内存仅增加了4倍。将来我们会更频繁地遇到无法训练模型的情况，因为它无法加载到单个GPU上。
 - en: In this section, we will discuss common strategies for training large models.
     Unlike the data parallelism strategy described in section 4.2, the method introduced
     here requires effortful work on training code.
   id: totrans-170
   prefs: []
   type: TYPE_NORMAL
+  zh: 在本节中，我们将讨论训练大型模型的常见策略。与第4.2节中描述的数据并行策略不同，这里介绍的方法需要在训练代码上付出努力。
 - en: Note Although the methods introduced in this section are normally implemented
     by data scientists, we hope you can still follow them. Understanding the strategies
     behind these training techniques is very helpful for designing communication protocols
@@ -1319,11 +1346,13 @@
   id: totrans-171
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意：虽然本节介绍的方法通常由数据科学家实现，但我们希望您仍然能够理解它们。了解这些训练技术背后的策略对于设计训练服务和训练代码之间的通信协议非常有帮助。它还为在训练服务中进行故障排除或微调训练性能提供了洞察力。为了简单起见，我们只会在概念级别上描述算法，并侧重于工程角度上的必要工作。
 - en: '4.4.1 Traditional methods: Memory saving'
   id: totrans-172
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 4.4.1 传统方法：节省内存
 - en: Let’s say your data science team wants to train a model that can load to the
     largest GPU in your training cluster; for example, they want to train a 24 GB
     BERT model in a 10 GB memory GPU. There are several memory-saving techniques the
@@ -1334,6 +1363,7 @@
   id: totrans-173
   prefs: []
   type: TYPE_NORMAL
+  zh: 假设您的数据科学团队想要训练一个可以加载到您训练集群中最大GPU的模型；例如，他们想要在一个10 GB内存的GPU上训练一个24 GB的BERT模型。团队可以使用几种节省内存的技术来在这种情况下训练模型，包括梯度累积和内存交换。这项工作通常由数据科学家实现。作为平台开发人员，您只需了解这些选项。我们将简要描述它们，这样您就会知道何时建议使用它们中的每一种。
 - en: note There are several other memory-saving methods, such as OpenAI’s gradient
     checkpointing ([https://github.com/cybertronai/gradient-checkpointing](https://github.com/cybertronai/gradient-checkpointing))
     and NVIDIA’s vDNN ([https://arxiv.org/abs/1602.08124](https://arxiv.org/abs/1602.08124)),
@@ -1342,10 +1372,13 @@
   id: totrans-174
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意还有其他几种节省内存的方法，例如 OpenAI 的梯度检查点（[https://github.com/cybertronai/gradient-checkpointing](https://github.com/cybertronai/gradient-checkpointing)）和
+    NVIDIA 的 vDNN（[https://arxiv.org/abs/1602.08124](https://arxiv.org/abs/1602.08124)），但由于本书不涉及深度学习算法，我们将它们留给独立研究。
 - en: Gradient accumulation
   id: totrans-175
   prefs: []
   type: TYPE_NORMAL
+  zh: 梯度累积
 - en: In deep learning training, the dataset is split into batches. In each training
     step, for loss calculation, gradient computation, and model parameter updating,
     we take the whole batch of examples (training data) into memory and handle the
@@ -1353,6 +1386,7 @@
   id: totrans-176
   prefs: []
   type: TYPE_NORMAL
+  zh: 在深度学习训练中，数据集被分成批次。在每个训练步骤中，用于损失计算、梯度计算和模型参数更新，我们将整个批次的示例（训练数据）加载到内存中，并一次处理所有计算。
 - en: We can mitigate the memory pressure by reducing the batch size—for example,
     training 16 examples in a batch rather than 32 examples in a batch. But reducing
     batch size can cause the model to converge a lot more slowly. And this is where
@@ -1360,6 +1394,7 @@
   id: totrans-177
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们可以通过减小批量大小来减轻内存压力，例如将批次中的示例数量从 32 减少到 16。但是减小批量大小可能会导致模型收敛速度大大降低。这就是梯度累积可以帮助的地方。
 - en: Gradient accumulation cuts batch examples into configurable numbers of minibatches
     and then calculates the loss and gradients after each minibatch. But instead of
     updating the model parameters, it waits and accumulates the gradients over all
@@ -1368,6 +1403,7 @@
   id: totrans-178
   prefs: []
   type: TYPE_NORMAL
+  zh: 梯度累积将批量示例分成可配置数量的小批量，然后在每个小批量之后计算损失和梯度。但是，它不会更新模型参数，而是等待并累积所有小批量的梯度。然后，最终，根据累积梯度更新模型参数。
 - en: Let’s look at an example to see how this speeds up the process. Imagine that,
     because of GPU memory constraints, we can’t run training with a batch size of
     32\. With gradient accumulation, we can split each batch into four minibatches,
@@ -1379,10 +1415,14 @@
   id: totrans-179
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们看一个示例，了解这如何加快流程。想象一下，由于 GPU 内存限制，我们无法使用批量大小为 32 进行训练。使用梯度累积，我们可以将每个批次分成四个小批次，每个小批次大小为
+    8。因为我们累积所有四个小批次的梯度，并且仅在所有四个小批次完成后更新模型，所以该过程几乎等同于使用批量大小为 32 进行训练。不同之处在于，我们一次只在
+    GPU 中计算 8 个示例，而不是 32 个，因此成本比使用批量为 32 的情况慢 4 倍。
 - en: Memory swap (GPU and CPU)
   id: totrans-180
   prefs: []
   type: TYPE_NORMAL
+  zh: 内存交换（GPU 和 CPU）
 - en: 'The memory swap method is very simple: it copies activations between CPU and
     GPU, back and forth. If you are unaccustomed to deep learning terms, think of
     *activation* as the computation output from each node of the neural network. The
@@ -1391,6 +1431,8 @@
   id: totrans-181
   prefs: []
   type: TYPE_NORMAL
+  zh: 内存交换方法非常简单：它在 CPU 和 GPU 之间来回复制激活。如果您不习惯深度学习术语，请将*激活*想象为神经网络每个节点的计算输出。其思想是仅在
+    GPU 中保留当前计算步骤所需的数据，并将计算结果交换到 CPU 内存以供将来使用。
 - en: Building on this idea, a new relay-style execution technique called L2L (layer
     to layer) keeps only the executing layers and transit buffers on the GPU. The
     whole model and the optimizer—which holds the state—are stored in the CPU space.
@@ -1402,6 +1444,9 @@
   id: totrans-182
   prefs: []
   type: TYPE_NORMAL
+  zh: 在此基础上，一种名为 L2L（层到层）的新的中继式执行技术将仅在 GPU 上保留正在执行的层和中转缓冲区。整个模型和保存状态的优化器都存储在 CPU 空间中。L2L
+    可以大大提高 GPU 吞吐量，并允许我们在价格合理的设备上开发大型模型。如果您对此方法感兴趣，可以查阅普迪佩迪等人撰写的论文“使用新的执行算法在恒定内存中训练大型神经网络”（[https://arxiv.org/abs/2002.05645](https://arxiv.org/abs/2002.05645)），该论文在
+    GitHub 上还有一个 PyTorch 实现。
 - en: 'Both gradient accumulation and memory swap are effective ways to train a large
     model on a smaller GPU. But, like most things, they come with a cost: they tend
     to slow down the training. Because of this drawback, we normally use them only
@@ -1409,6 +1454,7 @@
   id: totrans-183
   prefs: []
   type: TYPE_NORMAL
+  zh: 梯度累积和内存交换都是在较小的GPU上训练大模型的有效方法。但是，像大多数事情一样，它们会降低训练速度。由于这个缺点，我们通常只在原型设计时使用它们。
 - en: 'To obtain workable training speeds, we really need to train models distributedly
     on multiple GPUs. So, in the next section, we will introduce a more production-like
     approach: pipeline parallelism. It can train a large model distributedly with
@@ -1416,11 +1462,13 @@
   id: totrans-184
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了获得可行的训练速度，我们真的需要在多个GPU上分布式地训练模型。因此，在下一节中，我们将介绍一种更接近生产的方法：管道并行。它可以以令人印象深刻的训练速度分布式训练大型模型。
 - en: 4.4.2 Pipeline model parallelism
   id: totrans-185
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 4.4.2 管道模型并行
 - en: 'In section 4.2, we discussed the most commonly used distributed training method:
     data parallelism. This approach keeps a copy of the whole model on each device
     and partitions data into multiple devices. Then it aggregates the gradients and
@@ -1433,30 +1481,36 @@
   id: totrans-186
   prefs: []
   type: TYPE_NORMAL
+  zh: 在第4.2节中，我们讨论了最常用的分布式训练方法：数据并行。这种方法在每个设备上保留整个模型的副本，并将数据划分为多个设备。然后它聚合梯度并在每个训练步骤中更新模型。整个数据并行的方法效果很好，只要整个模型可以加载到一个GPU上。然而，正如我们在本节中看到的那样，我们并不总是能够做到这一点。这就是管道并行的用处所在。在本节中，我们将学习管道并行，这是一种在多个GPU上分布式训练大型模型的训练方法。
 - en: To understand pipeline parallelism, let’s first take a brief look at model parallelism.
     This little detour will make the jump to pipeline parallelism easier.
   id: totrans-187
   prefs: []
   type: TYPE_NORMAL
+  zh: 要理解管道并行，让我们先简要了解模型并行。这个小插曲将使我们更容易转向管道并行。
 - en: Model parallelism
   id: totrans-188
   prefs: []
   type: TYPE_NORMAL
+  zh: 模型并行
 - en: The idea of model parallelism is to split a neural network into smaller subnets
     and run each subnet on different GPUs. Figure 4.6 illustrates the model parallelism
     approach.
   id: totrans-189
   prefs: []
   type: TYPE_NORMAL
+  zh: 模型并行的思想是将神经网络分割成较小的子网并在不同的GPU上运行每个子网。图4.6说明了模型并行的方法。
 - en: '![](../Images/04-06.png)'
   id: totrans-190
   prefs: []
   type: TYPE_IMG
+  zh: '![](../Images/04-06.png)'
 - en: Figure 4.6 Split a four-layer, fully connected deep learning network into four
     subgroups; each group has one layer, and each subgroup runs on one GPU.
   id: totrans-191
   prefs: []
   type: TYPE_NORMAL
+  zh: 图4.6将四层全连接深度学习网络分为四个子群组；每个群组有一层，每个子群组在一个GPU上运行。
 - en: Figure 4.6 visualizes the model parallel process. It first converts a neural
     network (four layers) into four sub–neural networks (single layer) and then assigns
     each single-layer network a dedicated GPU. By doing so, we run a model distributedly
@@ -1464,6 +1518,7 @@
   id: totrans-192
   prefs: []
   type: TYPE_NORMAL
+  zh: 图4.6展示了模型并行的过程。首先，它将神经网络（四层）转换为四个子神经网络（单层），然后为每个单层网络分配一个专用的GPU。通过这样做，我们在四个GPU上分布式地运行模型。
 - en: The concept of model parallelism is straightforward, but the actual implementation
     can be tricky; it depends on the architecture of the network. To give you an idea,
     the following listing is a piece of dummy PyTorch code that makes a network run
@@ -1471,10 +1526,12 @@
   id: totrans-193
   prefs: []
   type: TYPE_NORMAL
+  zh: 模型并行的概念很简单，但实际实现可能会有些棘手；它取决于网络的架构。为了让您有一个概念，下面的代码片段是一个在两个GPU上运行网络的虚构的PyTorch代码片段。
 - en: Listing 4.2 A sample model parallelism implementation in PyTorch
   id: totrans-194
   prefs: []
   type: TYPE_NORMAL
+  zh: 列表4.2是在PyTorch中实现模型并行的示例代码
 - en: '[PRE15]'
   id: totrans-195
   prefs: []
@@ -1488,6 +1545,7 @@
   id: totrans-196
   prefs: []
   type: TYPE_NORMAL
+  zh: 如列表4.2所示，在`__init__`函数中初始化了两个子网络并将其分配到两个GPU上，然后在`forward`函数中将它们连接起来。由于深度学习网络结构的多样性，不存在一种通用方法（范式）来拆分网络。我们必须逐个实现模型并行。
 - en: Another problem with model parallelism is its severe underutilization of GPU
     resources. Because all the devices in the training group have sequential dependency,
     only one device can work at a time, which wastes a lot of GPU cycles. Figure 4.7
@@ -1496,10 +1554,12 @@
   id: totrans-197
   prefs: []
   type: TYPE_NORMAL
+  zh: 模型并行的另一个问题是严重浪费GPU资源。由于训练组中的所有设备都有顺序依赖性，一次只能有一个设备工作，这会浪费大量的GPU时钟周期。图4.7显示了使用三个GPU进行模型并行训练时的GPU利用情况。
 - en: '![](../Images/04-07.png)'
   id: totrans-198
   prefs: []
   type: TYPE_IMG
+  zh: '![](../Images/04-07.png)'
 - en: Figure 4.7 Model parallel training can have severely low GPU usage. In this
     approach, the network is split into three subnets and runs on three GPUs. Because
     of the sequential dependency among the three GPUs, each GPU is idle 66% of the
@@ -1507,6 +1567,7 @@
   id: totrans-199
   prefs: []
   type: TYPE_NORMAL
+  zh: 图4.7 模型并行训练可能导致GPU利用率严重下降。在这种方法中，网络被分为三个子网并在三个GPU上运行。由于三个GPU之间的顺序依赖关系，每个GPU在训练时间的66%空闲。
 - en: Let’s walk through this figure to see why GPU usage is so low. On the left,
     in figure 4.7 (a), we see the model parallel design. We split a model network
     into three subnetworks and let each subnetwork run on a different GPU. In each
@@ -1516,6 +1577,7 @@
   id: totrans-200
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们通过这张图来看看为什么GPU使用率如此之低。在左边，图4.7（a）中，我们看到了模型并行设计。我们将模型网络分成三个子网络，并让每个子网络在不同的GPU上运行。在每个训练迭代中，当运行正向传播时，我们首先计算子网1，然后计算子网2和子网3；当运行反向传播时，梯度更新则发生在相反的顺序中。
 - en: 'In figure 4.7 (b), on the right, you can see the resource utilization of the
     three GPUs during the training. The time axis is divided into two parts: the forward
     pass and the backward pass. The forward pass means the computation of the model
@@ -1524,6 +1586,8 @@
   id: totrans-201
   prefs: []
   type: TYPE_NORMAL
+  zh: 在图4.7（b）中，右边，你可以看到在训练过程中三个GPU的资源利用情况。时间轴分为两部分：正向传播和反向传播。正向传播意味着模型推断的计算，从GPU
+    1到GPU 2和GPU3，而反向传播意味着模型权重更新的反向传播，从GPU 3到GPU 2和GPU 1。
 - en: If you look vertically at the time bar, regardless of whether it’s a forward
     pass or a backward pass, you see only one GPU active at a time. This is because
     of the sequential dependency between each subnet. For instance, in the forward
@@ -1533,6 +1597,8 @@
   id: totrans-202
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果你在时间条上垂直观察，无论是正向传播还是反向传播，你都只能看到一个GPU在工作。这是因为每个子网之间存在顺序依赖关系。例如，在正向传播中，子网2需要等待子网1的输出来完成自己的正向计算，因此在GPU
+    1完成计算之前，GPU 2将在正向传播中空闲。
 - en: No matter how many GPUs you add, only one GPU can work at one time, which is
     a huge waste. This is when pipeline parallelism comes in handy. Pipeline parallelism
     makes model training more efficient by eliminating that waste and fully saturating
@@ -1540,10 +1606,12 @@
   id: totrans-203
   prefs: []
   type: TYPE_NORMAL
+  zh: 无论你添加多少个GPU，一次只能有一个GPU工作，这是一种巨大的浪费。这时就轮到管道并行ism派上用场了。管道并行ism通过消除这种浪费并充分利用GPU来使模型训练更加高效。让我们看看它是如何工作的。
 - en: Pipeline parallelism
   id: totrans-204
   prefs: []
   type: TYPE_NORMAL
+  zh: 管道并行ism
 - en: Pipeline parallelism is essentially an improved version of model parallelism.
     In addition to partitioning a network to different GPUs, it also divides each
     training example batch into small minibatches and overlaps computations of these
@@ -1552,6 +1620,7 @@
   id: totrans-205
   prefs: []
   type: TYPE_NORMAL
+  zh: 管道并行ism本质上是模型并行ism的改进版本。除了将网络划分到不同的GPU中，它还将每个训练示例批次分成小的微批次，并在层之间重叠这些微批次的计算。通过这样做，它使所有GPU大部分时间都保持忙碌，从而提高了GPU的利用率。
 - en: 'There are two major implementations of this approach: PipeDream (Microsoft)
     and GPipe (Google). We use GPipe as the demo example here because it optimizes
     the gradients’ update in each training step and has better training throughput.
@@ -1561,10 +1630,12 @@
   id: totrans-206
   prefs: []
   type: TYPE_NORMAL
+  zh: 这种方法有两个主要的实现：PipeDream（微软）和GPipe（谷歌）。我们在这里使用GPipe作为演示示例，因为它优化了每个训练步骤中的梯度更新，并且具有更好的训练吞吐量。你可以从“GPipe：使用微批量管道并行ism轻松扩展”的Huang等人的论文中找到有关GPipe的更多细节（[https://arxiv.org/abs/1811.06965](https://arxiv.org/abs/1811.06965)）。让我们在图4.8中，以高层次来看一下GPipe是如何工作的。
 - en: '![](../Images/04-08.png)'
   id: totrans-207
   prefs: []
   type: TYPE_IMG
+  zh: '![](../Images/04-08.png)'
 - en: 'Figure 4.8 (a) An example neural network with sequential layers is partitioned
     across four accelerators. F[k] is the composite forward computation function of
     the *k*th cell. Bk is the backpropagation function, which depends on both B[k+1],
@@ -1577,6 +1648,10 @@
   id: totrans-208
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 4.8（a）显示了一个具有顺序层的示例神经网络被分区到四个加速器上。 F[k] 是第 *k* 个单元的组合前向计算函数。 Bk 是反向传播函数，它依赖于来自上一层的
+    B[k+1] 和 F[k]。 （b）naive 模型并行ism策略由于网络的顺序依赖关系而导致严重的利用不足。（c）流水线并行ism将输入 minibatch
+    划分为更小的微批次，使不同的加速器可以同时处理不同的微批次。 梯度在最后同步应用。 （来源：图 2，“GPipe：使用微批次管道并行ism轻松扩展”，Huang
+    等人，2019 年，arXiv:1811.06965）
 - en: Figure 4.8 (a) depicts a neural network made of four subnetworks; each subnetwork
     is loaded on one GPU. F means forward pass, B means backward pass, and F[k] and
     B[k] run on GPUk. The training sequence is first, forward pass, F[0] -> F[1] ->
@@ -1585,12 +1660,17 @@
   id: totrans-209
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 4.8（a）描述了一个由四个子网络组成的神经网络； 每个子网络都加载在一个 GPU 上。 F 表示前向传递，B 表示后向传递，而 F[k] 和 B[k]
+    则在 GPUk 上运行。 训练顺序首先是前向传递，F[0] -> F[1] -> F[2] -> F[3]，然后是后向传递，F[3] -> (B[3], F[2])
+    -> (B[2], F[2]) -> (B[1], F[1]) -> B[0]。
 - en: Figure 4.8 (b) displays the training flow for naive model parallelism. We can
     see that the GPU is seriously underutilized; only one GPU is activated in the
     forward- and backward pass; thus, each GPU is idle 75% of the time.
   id: totrans-210
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 4.8（b）显示了 naive 模型并行ism的训练流程。 我们可以看到 GPU 严重未被利用； 在前向传递和后向传递中只有一个 GPU 被激活；
+    因此，每个 GPU 有 75% 的空闲时间。
 - en: Figure 4.8 (c) shows the GPipe improvements in the sequence of training operations.
     GPipe first divides every training example batch into four equal microbatches,
     which are pipelined through the four GPUs. F[(0,2)] in the graph means forward
@@ -1603,6 +1683,9 @@
   id: totrans-211
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 4.8（c）显示了 GPipe 在训练操作序列中的改进。 GPipe 首先将每个训练示例批次划分为四个相等的微批次，并通过四个 GPU 进行管道处理。
+    图中的 F[(0,2)] 表示在 GPU 0 上使用 minibatch 2 进行前向传递计算。 在后向传递期间，基于用于前向传递的相同模型参数计算每个微批次的梯度。
+    关键在于它不会立即更新模型参数； 相反，它会累积每个微批次的所有梯度。 在每个训练批次结束时，我们使用来自所有四个微批次的累积梯度来更新所有四个 GPU 上的模型参数。
 - en: 'By comparing figure 4.8 (b) and (c), we see the GPU utilization increase greatly;
     now each GPU is idle 47% of the time. Let’s see a code example using PyTorch GPipe
     implementation to train a transformer model on two GPUs (see following listing).
@@ -1612,10 +1695,14 @@
   id: totrans-212
   prefs: []
   type: TYPE_NORMAL
+  zh: 通过比较图 4.8（b）和（c），我们可以看到 GPU 利用率大大提高； 现在每个 GPU 有 47% 的空闲时间。 让我们看一个使用 PyTorch
+    GPipe 实现来在两个 GPU 上训练一个 transformer 模型的代码示例（请参见下面的清单）。 为了清楚地演示这个想法，我们只保留与管道相关的代码，并将它们分成四部分。
+    您可以查看由 Pritam Damania 撰写的教程“使用流水线并行ism训练 transformer 模型的 PyTorch”来获取完整的代码（[http://mng.bz/5mD8](http://mng.bz/5mD8)）。
 - en: Listing 4.3 Training transformer models using pipeline parallelism
   id: totrans-213
   prefs: []
   type: TYPE_NORMAL
+  zh: 清单 4.3 使用流水线并行ism训练 transformer 模型
 - en: '[PRE16]'
   id: totrans-214
   prefs: []
@@ -1628,11 +1715,13 @@
   id: totrans-215
   prefs: []
   type: TYPE_NORMAL
+  zh: 如我们从清单 4.3 中看到的，流水线并行代码比分布式数据并行ism复杂得多。 除了设置通信组之外，我们还需要考虑如何划分我们的模型网络并在工作进程间传输梯度和激活（对子网络的前向输出建模）。
 - en: 4.4.3 How software engineers can support pipeline parallelism
   id: totrans-216
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 4.4.3 软件工程师如何支持流水线并行ism
 - en: You may have noticed that all the methods we talk about in this section are
     techniques for writing training code. Because data scientists normally write the
     training code, you may be wondering what we, as software developers, can do to
@@ -1640,6 +1729,7 @@
   id: totrans-217
   prefs: []
   type: TYPE_NORMAL
+  zh: 你可能注意到我们在本节中讨论的所有方法都是用于编写训练代码的技术。因为数据科学家通常编写训练代码，所以你可能想知道作为软件开发人员，我们能做些什么来支持流水线并行训练。
 - en: First, we can work on building the training service to automate the pipeline
     training execution and improve resource utilization (for example, always keeping
     the GPU busy). This automation includes matters like allocating worker resources,
@@ -1649,6 +1739,8 @@
   id: totrans-218
   prefs: []
   type: TYPE_NORMAL
+  zh: 首先，我们可以着手构建训练服务来自动化流水线训练的执行，并提高资源利用率（例如，始终保持GPU忙碌）。这种自动化包括分配工作资源，启用工作节点间的通信，以及将流水线训练代码和相应的初始化参数分发给每个工作节点（例如，工作节点IP地址，进程ID，GPU
+    ID和工作节点组大小）。
 - en: Second, we can alert the data scientist team about the new distributed training
     options. Sometimes the data scientist team isn’t aware of the new engineering
     methods that can improve the model training experience, so communication is key
@@ -1657,6 +1749,7 @@
   id: totrans-219
   prefs: []
   type: TYPE_NORMAL
+  zh: 第二，我们可以向数据科学家团队介绍新的分布式训练选项。有时候数据科学家团队对能够改善模型训练体验的新工程方法并不了解，所以在这里沟通非常重要。我们可以与团队成员合作，引导对流水线并行方法进行实验。
 - en: Third, we can work on improving the availability of model training. In section
     4.2.4, we discussed that distributed training is fragile; it requires every worker
     to perform consistently. If one worker fails, the entire training group fails,
@@ -1665,16 +1758,19 @@
   id: totrans-220
   prefs: []
   type: TYPE_NORMAL
+  zh: 第三，我们可以着手改善模型训练的可用性。在4.2.4节中，我们讨论了分布式训练的脆弱性；它要求每个工作节点表现一致。如果一个工作节点失败，整个训练集也会失败，这是对时间和预算的巨大浪费。数据科学家会非常感激我们在训练过程监控、故障转移和故障恢复上所付出的努力。
 - en: Data parallelism or pipeline parallelism?
   id: totrans-221
   prefs: []
   type: TYPE_NORMAL
+  zh: 数据并行还是流水线并行？
 - en: 'Now we know that there are two major strategies for distributed training: data
     parallelism and pipeline parallelism. You might understand these concepts, but
     you might still be uncertain about when to use them.'
   id: totrans-222
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在我们知道有两种主要的分布式训练策略：数据并行和流水线并行。你可能对这些概念有所了解，但可能仍然不确定何时使用它们。
 - en: We would suggest always starting with model training on a single machine. If
     you have a large dataset and the training takes a long time, then consider distributed
     training. We always prefer data parallelism over pipeline parallelism merely because
@@ -1684,17 +1780,20 @@
   id: totrans-223
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们建议始终从单个机器上进行模型训练。如果你有一个大型数据集并且训练时间很长，那么考虑分布式训练。我们总是更喜欢使用数据并行而不是流水线并行，仅仅因为数据并行的实现更简单，我们可以更快地得到结果。如果模型太大无法加载到一个GPU中，那么流水线并行是正确的选择。
 - en: Summary
   id: totrans-224
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 摘要
 - en: 'Distributed training has two schools of thought: data parallelism and model
     parallelism. Pipeline parallelism is an improved version of model parallelism.'
   id: totrans-225
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 分布式训练有两种思路：数据并行和模型并行。流水线并行是模型并行的改进版。
 - en: If a model can be loaded into one GPU, data parallelism is the primary method
     to implement distributed training; it’s simple to use and provides great speed
     improvements.
@@ -1702,12 +1801,14 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 如果一个模型可以加载到一个GPU中，数据并行是实现分布式训练的主要方法；它易于使用并提供了很大的速度改进。
 - en: Using Kubernetes to manage the computing cluster can greatly reduce the complexity
     of compute resource management.
   id: totrans-227
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用Kubernetes来管理计算集群可以大大减少计算资源管理的复杂性。
 - en: Although each training framework (TensorFlow, PyTorch) offers different configurations
     and APIs to write distributed training code, their code pattern and execution
     workflow are very similar. Thus, a training service can support the various distributed
@@ -1716,6 +1817,7 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 尽管每个训练框架（TensorFlow、PyTorch）提供了不同的配置和API来编写分布式训练代码，但它们的代码模式和执行流程非常相似。因此，训练服务可以采用统一的方法支持各种分布式训练代码。
 - en: After encapsulating the setup configuration of various training frameworks,
     a training service can still treat training code as a black box, even in the distributed
     training setting.
@@ -1723,6 +1825,7 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 在封装各种训练框架的设置配置后，即使在分布式训练环境中，训练服务仍然可以将训练代码视为黑盒处理。
 - en: To obtain data parallelism training progress/status, you only need to check
     the master worker because all workers are always in sync with each other. Also,
     to avoid saving duplicated models from all workers when their training jobs complete,
@@ -1732,6 +1835,7 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 要获取数据并行训练的进展/状态，您只需检查主工作器，因为所有工作器始终彼此同步。此外，为避免在训练工作完成后从所有工作器保存重复的模型，您可以设置训练代码，以确保仅在主工作器执行时保存模型和检查点文件。
 - en: 'Horovod is a great distributed training framework. It offers a unified method
     to run distributed training for code written in various frameworks: PyTorch, TensorFlow,
     MXNet, and PySpark. If a training code uses Horovod to implement distributed training,
@@ -1741,18 +1845,22 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: Horovod 是一个优秀的分布式训练框架。它提供了一种统一的方法来运行在各种框架（如 PyTorch、TensorFlow、MXNet 和 PySpark）中编写的分布式训练代码。如果训练代码使用
+    Horovod 实现分布式训练，训练服务可以使用一种方法（Horovod 方法）来执行它，而不管它是用哪个训练框架编写的。
 - en: Availability, resilience, and failure recovery are important engineering concerns
     for distributed training.
   id: totrans-232
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 可用性、弹性和故障恢复是分布式训练的重要工程问题。
 - en: 'There are two strategies for training a model that does not fit into one GPU:
     the memory-saving method and the model parallelism method.'
   id: totrans-233
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 针对无法放入一个 GPU 的模型，有两种训练策略：节省内存的方法和模型并行的方法。
 - en: The memory-saving method loads only a portion of the model or a small data batch
     to GPU at a time—for instance, gradient accumulation and memory swap. These methods
     are easy to implement but slow down the model training process.
@@ -1760,6 +1868,7 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 节省内存的方法每次只将模型的一部分或小批量数据加载到 GPU 上——例如，梯度累积和内存交换。这些方法易于实施，但会减慢模型的训练过程。
 - en: The model parallelism method divides a large model into a group of sub–neural
     networks and distributes them onto multiple GPUs. The downside of this approach
     is low GPU utilization. To overcome that, pipeline model parallelism was invented.
@@ -1767,3 +1876,4 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 模型并行的方法将一个大型模型划分为一组子神经网络，并将它们分布到多个 GPU 上。这种方法的缺点是 GPU 利用率较低。为了克服这个问题，发明了流水线模型并行。
