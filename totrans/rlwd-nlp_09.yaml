@@ -1064,20 +1064,24 @@
   id: totrans-121
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在让我们看看解码器在预测阶段的行为，其中给定了一个源句子给网络，但我们不知道正确的翻译应该是什么。在这个阶段，解码器的行为很像我们在第5章讨论过的语言模型。它被提供了由编码器产生的句子表示，以及一个特殊的标记<START>，表示句子的开头。第一个循环神经网络单元处理这两个输入并产生第一个隐藏状态，然后将其馈送到线性层和softmax层，以产生目标词汇的概率分布。关键部分来了——与训练阶段不同，你不知道接下来应该出现的正确单词，所以你有多个选项。你可以选择任何一个具有相当高概率的随机单词（比如“dog”），但最好的选择可能是选择概率最高的单词（如果是“Mary”那就太幸运了）。机器翻译系统生成刚刚选择的单词，然后将其馈送到下一个循环神经网络单元。这个过程重复进行，直到遇到特殊标记<END>。图6.14说明了这个过程。
 - en: '![CH06_F14_Hagiwara](../Images/CH06_F14_Hagiwara.png)'
   id: totrans-122
   prefs: []
   type: TYPE_IMG
+  zh: '![CH06_F14_Hagiwara](../Images/CH06_F14_Hagiwara.png)'
 - en: Figure 6.14 A prediction using a Seq2Seq decoder
   id: totrans-123
   prefs: []
   type: TYPE_NORMAL
+  zh: 图6.14 使用Seq2Seq解码器进行预测
 - en: OK, so are we all good, then? Can we move on to evaluating our MT system, because
     it is doing everything it can to produce the best possible translation? Not so
     fast—many things could go wrong by decoding the target sentence in this manner.
   id: totrans-124
   prefs: []
   type: TYPE_NORMAL
+  zh: 好的，我们都准备好了吗？我们可以继续评估我们的机器翻译系统了吗，因为它正在尽其所能产生最佳的翻译？不要那么快——在这种方式解码目标句子时可能会出现许多问题。
 - en: First of all, the goal of MT decoding is to maximize the probability of the
     target sentence as a whole, not just individual words. This is exactly what you
     trained the network to do—to produce the largest probability for correct sentences.
@@ -1094,6 +1098,7 @@
   id: totrans-125
   prefs: []
   type: TYPE_NORMAL
+  zh: 首先，机器翻译解码的目标是最大化整个目标句子的概率，而不仅仅是单个单词。这正是你训练网络要做的事情——为正确的句子产生最大的概率。然而，前面描述的每一步选择单词的方式是为了最大化该单词的概率。换句话说，这种解码过程只保证了局部最大概率。这种短视、局部最优的算法在计算机科学中被称为*贪婪*，我刚刚解释的解码算法被称为*贪婪解码*。然而，仅仅因为你在每一步都在最大化单词的概率并不意味着你在最大化整个句子的概率。一般来说，贪婪算法不能保证产生全局最优解，而使用贪婪解码可能会让你陷入次优翻译的困境。这并不是很直观，所以让我用一个简单的例子来说明这一点。
 - en: When you are picking words at each timestep, you have multiple words to pick
     from. You pick one of them and move on to the next RNN cell, which produces another
     set of possible words to pick from, depending on the word you picked previously.
@@ -1104,14 +1109,17 @@
   id: totrans-126
   prefs: []
   type: TYPE_NORMAL
+  zh: 当你在每个时间步选择单词时，你有多个单词可以选择。你选择其中一个然后移动到下一个循环神经网络单元，它会产生另一组可能选择的单词，这取决于你之前选择的单词。这可以用一个树状结构来表示，就像图6.15所示的那样。该图显示了你在一个时间步选择的单词（例如“did”）如何分支到下一个时间步可以选择的一组可能单词（“you”和“not”）。
 - en: '![CH06_F15_Hagiwara](../Images/CH06_F15_Hagiwara.png)'
   id: totrans-127
   prefs: []
   type: TYPE_IMG
+  zh: '![CH06_F15_Hagiwara](../Images/CH06_F15_Hagiwara.png)'
 - en: Figure 6.15 A decoding decision tree
   id: totrans-128
   prefs: []
   type: TYPE_NORMAL
+  zh: 图6.15 解码决策树
 - en: Each transition from word to word is labeled with a score, which corresponds
     to how large the probability of choosing that transition is. Your goal here is
     to maximize the total sum of the scores when you traverse one path from timestep
@@ -1123,6 +1131,8 @@
   id: totrans-129
   prefs: []
   type: TYPE_NORMAL
+  zh: 每个单词到单词的转换都加上了一个分数，该分数对应于选择该转换的概率有多大。你的目标是在从时间步1到4遍历一条路径时最大化得分的总和。在数学上，概率是0到1之间的实数，并且你应该将（而不是相加）每个概率相乘以获得总数，但我在这里简化了问题。例如，如果你从“Mary”到“did”，然后到“you”和“do”，你刚生成了一个句子“Mary
+    did you do”，总分是1 + 5 + 1 = 7。
 - en: 'The greedy decoder we saw earlier will face two choices after it generates
     “did” at timestep 2: either generate “you” with a score of 5 or “not” with a score
     of 3\. Because all it does is pick the one with the highest score, it will pick
@@ -1133,6 +1143,8 @@
   id: totrans-130
   prefs: []
   type: TYPE_NORMAL
+  zh: 在之前看到的贪婪解码器生成时间步2的“did”后，它将面临两个选择：用5分数生成“you”或用3分数生成“not”。因为它只是选择得分最高的那个，它会选择“you”并继续前进。然后在时间步3之后，它将面临另一个分支——用1分数生成“do”或用2分数生成“know”。同样，它将选择最大的分数，这样你就会得到“Mary
+    did you know”的翻译，其分数为1+ 5 + 1 = 8。
 - en: This is not a bad result. At least, it is not as bad as the first path, which
     sums up to a score of 7\. By picking the maximum score at each branch, you are
     making sure that your final result is at least decent. However, what if you picked
@@ -1147,6 +1159,8 @@
   id: totrans-131
   prefs: []
   type: TYPE_NORMAL
+  zh: 这并不是一个坏结果。至少，它不像第一条路径一样糟糕，它的总得分为7。通过在每个分支上选择最大分数，你确保你的最终结果至少是像样的。然而，如果你在时间步3选择了“not”呢？乍一看，这似乎不是个好主意，因为你得到的分数只有3，比你走另一条路径的5小。但在下一个时间步，通过生成“slap”，你得到了5分的分数。回顾起来，这是正确的决定——总体而言，你得到了1
+    + 3 + 5 = 9分，这比沿着另一个“you”路径得到的分数要高。通过牺牲短期回报，你能够在长期获得更大的回报。但是由于贪婪解码器的近视性质，它永远不会选择这条路径——它无法回溯并改变其心意，一旦选择了一条而不是另一条路径。
 - en: Choosing which way to go to maximize the total score seems easy if you look
     at the toy example in figure 6.15, but in reality, you can’t “foresee” the future—if
     you are at timestep t, you can’t predict what will happen at timestep t + 1 and
@@ -1158,6 +1172,8 @@
   id: totrans-132
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果看一下图6.15中的玩具示例，选择哪个方向以最大化总分数似乎很容易，但在现实中，你不能“预见”未来——如果你处于时间步t，你无法预测在时间步t +
+    1及以后会发生什么，直到你实际选择一个单词并将其馈送到RNN中为止。但是，最大化单个概率的路径不一定是最优解。你无法尝试每个可能的路径并查看你得到的分数，因为词汇表通常包含成千上万个独特的单词，这意味着可能的路径数呈指数增长。
 - en: The sad truth is that you can’t realistically expect to find the optimal path
     that maximizes the probability for the entire sentence within a reasonable amount
     of time. But you can avoid being stuck (or at least, make it less likely to be
@@ -1241,6 +1257,9 @@
   id: totrans-141
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果在任何特定时间步有多个词可供选择，假设可能会产生多个子假设。在时间步2，你有三个不同的选择——“你”，“不”和“n’t”——这会生成三个新的子假设：[Mary
+    did you] (6)，[Mary did not] (4) 和 [Mary did n’t] (3)。这就是束搜索解码的关键部分：因为束中只有有限的空间，任何不够好的假设在按分数排序后都会从束中掉下来。因为在这个例子中束只能容纳两个假设，除了前两个以外的任何东西都会被挤出束外，这就留下了[Mary
+    did you] (6)和[Mary did not] (4)。
 - en: At timestep 3, each remaining hypothesis can spawn up to two child hypotheses.
     The first one ([Mary did you] (6)) will generate [Mary did you know] (8) and [Mary
     did you do] (7), whereas the second one ([Mary did not] (4)) turns into [Mary
@@ -1249,6 +1268,8 @@
   id: totrans-142
   prefs: []
   type: TYPE_NORMAL
+  zh: 在时间步3，每个剩余的假设可以产生多达两个子假设。第一个（[Mary did you] (6)）将生成[Mary did you know] (8)和[Mary
+    did you do] (7)，而第二个（[Mary did not] (4)）会变成[Mary did not slap] (9)。这三个假设按分数排序，最好的两个将作为束搜索解码的结果返回。
 - en: 'Congratulations—now your algorithm was able to find the path that maximizes
     the total sum of the scores. By considering multiple hypotheses at the same time,
     beam search decoding can increase the chance that you will find better solutions.
@@ -1261,6 +1282,8 @@
   id: totrans-143
   prefs: []
   type: TYPE_NORMAL
+  zh: 恭喜——现在你的算法能够找到最大化总分数的路径。通过同时考虑多个假设，束搜索解码可以增加你找到更好解决方案的机会。然而，它永远不是完美的——注意，一个同样好的路径[Mary
+    did n’t do]，得分为9，在时间步3 就从束中掉出来了。要“拯救”它，你需要增加束宽度到3或更大。一般来说，束宽度越大，翻译结果的期望质量就越高。然而，这是有一个折衷的：因为计算机需要考虑多个假设，随着束宽度的增加，它会线性变慢。
 - en: 'In Fairseq, you can use the —beam option to change the beam size. In the example
     in section 6.3.3, I used —beam 5 to use a beam width of 5\. You were already using
     beam search without noticing. If you invoke the same command with —beam 1, which
@@ -1271,28 +1294,35 @@
   id: totrans-144
   prefs: []
   type: TYPE_NORMAL
+  zh: 在 Fairseq 中，你可以使用 —beam 选项来改变束大小。在第 6.3.3 节的示例中，我使用了 —beam 5 来使用束宽度为 5。你已经在不知不觉中使用了束搜索。如果你使用相同的命令调用
+    —beam 1，这意味着你使用的是贪婪解码而不是束搜索，你可能会得到略有不同的结果。当我尝试这样做时，我得到的结果几乎相同，除了最后一个：“counts,
+    please”，这不是“La cuenta, por favor.” 的一个很好的翻译。这意味着使用束搜索确实有助于提高翻译质量！
 - en: 6.5 Evaluating translation systems
   id: totrans-145
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 6.5 评估翻译系统
 - en: In this section, I’d like to briefly touch on the topic of evaluating machine
     translation systems. Accurately evaluating MT systems is an important topic, both
     in theory and practice.
   id: totrans-146
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这一节中，我想简要谈谈评估机器翻译系统的话题。准确评估机器翻译系统是一个重要的话题，无论在理论上还是在实践中。
 - en: 6.5.1 Human evaluation
   id: totrans-147
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 6.5.1 人工评估
 - en: The simplest and the most accurate way to evaluate MT systems’ output is to
     use human evaluation. After all, language is translated for humans. Translations
     that are deemed good by humans should be good.
   id: totrans-148
   prefs: []
   type: TYPE_NORMAL
+  zh: 评估机器翻译系统输出的最简单、最准确的方法是使用人工评估。毕竟，语言是为人类翻译的。被人类认为好的翻译应该是好的。
 - en: As mentioned previously, we have a few considerations for what makes a translation
     good. There are two most important and commonly used concepts for this—*adequacy*
     (also called *fidelity*) and *fluency* (also closely related to intelligibility).
@@ -1367,6 +1397,8 @@
   id: totrans-154
   prefs: []
   type: TYPE_NORMAL
+  zh: 因此，如果我们能够使用某种自动方式来评估翻译质量，将是可取的。这种工作方式类似于我们之前看到的其他 NLP 任务的一些自动度量，例如分类的准确度、精确度、召回率和
+    F1 度量。其思想是提前为每个输入实例创建期望的输出，并将系统的输出与之进行比较。通常，这是通过为每个源句准备一组人为创建的翻译（称为*参考*）并计算参考和系统输出之间的某种相似度来完成的。一旦你创建了参考并定义了指标，你就可以根据需要自动评估翻译质量多少次。
 - en: One of the simplest ways to compute the similarity between the reference and
     a system output is to use the *word error rate* (WER). WER reflects how many errors
     the system made compared to the reference, measured by the relative number of
@@ -1380,6 +1412,9 @@
   id: totrans-155
   prefs: []
   type: TYPE_NORMAL
+  zh: 计算参考和系统输出之间相似度的最简单方法之一是使用*单词错误率*（WER）。WER 反映系统相对于参考的错误数量，通过插入、删除和替换的相对数量来衡量。该概念类似于编辑距离，不同之处在于WER
+    是针对单词而不是字符计数的。例如，当参考句子是“玛丽没有打绿色的女巫”，系统翻译为“玛丽打了绿色的邪恶女巫”时，你需要进行三次“编辑”才能将后者与前者匹配——插入“没有”，用“打”替换“击中”，删除“邪恶”。如果你将三除以参考长度（=
+    7），就是你的WER（= 3/7，或 0.43）。WER 越低，翻译质量越好。
 - en: Although WER is simple and easy to compute, it is not widely used for evaluating
     MT systems nowadays. One reason is related to multiple references. There may be
     multiple, equally valid translations for a single source sentence, but it is not
@@ -1390,6 +1425,8 @@
   id: totrans-156
   prefs: []
   type: TYPE_NORMAL
+  zh: 尽管WER 简单易用，但在评估机器翻译系统时如今并不常用。一个原因与多个参考有关。对于单个源句可能有多个同样有效的翻译，但是当存在多个参考时如何应用WER
+    并不清楚。对于机器翻译中自动评估最常用的稍微复杂一点的指标是 BLEU（双语评估学习）。BLEU 通过使用*修改后的精确度*来解决多个参考的问题。接下来我将用一个简单的例子来说明这一点。
 - en: 'In the following table, we are evaluating a candidate (a system’s output) “the
     the the the the the the” (which is, by the way, a terrible translation) against
     two references: “the cat is on the mat” and “there is a cat on the mat.” The basic
@@ -1400,18 +1437,23 @@
   id: totrans-157
   prefs: []
   type: TYPE_NORMAL
+  zh: 在以下表格中，我们评估一个候选人（系统的输出）“the the the the the the the”（顺便说一句，这是一个糟糕的翻译）与两个参考：“猫在地毯上”和“地毯上有只猫”。BLEU
+    的基本思想是计算候选中所有唯一单词的精度。因为候选中只有一个唯一单词“the”，如果计算其精度，它将自动成为候选的分数，即为 1，或 100%。但这似乎有些不对。
 - en: '| Candidate | the | the | the | the | the | the | the |'
   id: totrans-158
   prefs: []
   type: TYPE_TB
+  zh: '| 候选 | the | the | the | the | the | the | the |'
 - en: '| Reference 1 | the | cat | is | on | the | mat |  |'
   id: totrans-159
   prefs: []
   type: TYPE_TB
+  zh: '| 参考 1 | 猫 | 在 | 地毯 | 上 |  |'
 - en: '| Reference 2 | there | is | a | cat | on | the | mat |'
   id: totrans-160
   prefs: []
   type: TYPE_TB
+  zh: '| 参考 2 | 那里 | 有 | 一只 | 猫 | 在 | 地毯 | 上 |'
 - en: Because only two “thes” exist in the references, the spurious “thes” generated
     by the system shouldn’t count toward the precision. In other words, we should
     treat them as false positives. We can do this by capping the denominator of precision
@@ -1423,6 +1465,9 @@
   id: totrans-161
   prefs: []
   type: TYPE_NORMAL
+  zh: 因为参考译文中只有两个“the”，系统生成的虚假“the”不应该计入精度。换句话说，我们应该将它们视为误报。我们可以通过将精度的分母限制为参考译文中该词的最大出现次数来做到这一点。因为在这种情况下（在参考译文
+    1 中）是 2，其修改后的精度将为 2/7，约为 29%。在实践中，BLEU 不仅使用唯一的词（即一元词），还使用候选译文和参考译文中长度不超过 4 的所有唯一单词序列（n
+    元词）。
 - en: However, we can game this metric in another way—because it’s based on precision,
     not on recall, an MT system can easily obtain high scores by producing very few
     words that the system is confident about. In the previous example, you can simply
@@ -1433,6 +1478,8 @@
   id: totrans-162
   prefs: []
   type: TYPE_NORMAL
+  zh: 然而，我们可以通过另一种方式操纵这个指标——因为它基于精度而不是召回率，一个机器翻译系统可以通过产生很少的系统确信的词语来轻松获得高分。在前面的例子中，你只需简单地产生“cat”（甚至更简单地，“the”），BLEU
+    分数将达到100%，这显然不是一个好的翻译。BLEU 通过引入简洁惩罚来解决这个问题，如果候选翻译比参考译文短，就会打折扣。
 - en: Development of accurate automatic metrics has been an active research area.
     Many new metrics are proposed and used to address the shortcomings of BLEU. We
     barely scratched the surface in this section. Although new metrics show higher
@@ -1441,11 +1488,14 @@
   id: totrans-163
   prefs: []
   type: TYPE_NORMAL
+  zh: 精确自动评估指标的开发是一个活跃的研究领域。许多新的指标被提出并用于解决 BLEU 的缺点。我们在这一部分只是浅尝辄止。虽然新的指标显示与人类评估的相关性更高，并声称更好，但
+    BLEU 仍然是目前最广泛使用的指标，主要是因为其简单性和悠久的传统。
 - en: '6.6 Case study: Building a chatbot'
   id: totrans-164
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 6.6 案例研究：构建聊天机器人
 - en: In this section, I’m going to go over another application of a Seq2Seq model—a
     chatbot, which is an NLP application with which you can have a conversation. We
     are going to build a very simple yet functional chatbot using a Seq2Seq model
@@ -1453,11 +1503,13 @@
   id: totrans-165
   prefs: []
   type: TYPE_NORMAL
+  zh: 在本节中，我将讨论 Seq2Seq 模型的另一个应用——聊天机器人，这是一种 NLP 应用，你可以与之进行对话。我们将使用 Seq2Seq 模型构建一个非常简单但功能齐全的聊天机器人，并讨论构建智能代理的技术和挑战。
 - en: 6.6.1 Introducing dialogue systems
   id: totrans-166
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 6.6.1 引入对话系统
 - en: 'I briefly touched upon dialogue systems in section 1.2.1\. To recap, two main
     types of dialogue systems exist: task-oriented and chatbots. Although task-oriented
     dialogue systems are used to achieve some specific goals, such as making a reservation
@@ -1468,6 +1520,8 @@
   id: totrans-167
   prefs: []
   type: TYPE_NORMAL
+  zh: 我在第 1.2.1 节简要介绍了对话系统。简而言之，主要有两种类型的对话系统：面向任务和聊天机器人。尽管面向任务的对话系统用于实现一些特定目标，例如在餐厅预订和获取一些信息，但聊天机器人用于与人类进行对话。由于商业对话人工智能系统如亚马逊
+    Alexa、苹果 Siri 和谷歌助手的成功和大量普及，对话技术目前是自然语言处理从业者的热门话题。
 - en: 'You may not have a clue as to how we can get started with building an NLP application
     that can have conversations. How can we build something “intelligent” that “thinks”
     so that it can generate meaningful responses to human input? This seems farfetched
@@ -1536,6 +1590,7 @@
   id: totrans-174
   prefs: []
   type: TYPE_NORMAL
+  zh: 您可以使用以下 paste 命令的组合（以水平方式拼接文件）和 head 命令来查看训练部分的开头。请注意，我们使用 fr（表示“外语”，而不是“法语”）来表示我们正在从中翻译的“语言”：
 - en: '[PRE10]'
   id: totrans-175
   prefs: []
@@ -1548,6 +1603,8 @@
   id: totrans-176
   prefs: []
   type: TYPE_NORMAL
+  zh: 如您所见，每一行都包含一个话语（在左侧）和对其的回应（在右侧）。请注意，此数据集与我们在第 6.3.1 节中使用的西班牙语-英语平行语料库具有相同的结构。下一步是运行
+    fairseq-preprocess 命令将其转换为二进制格式，如下所示：
 - en: '[PRE11]'
   id: totrans-177
   prefs: []
@@ -1559,17 +1616,20 @@
   id: totrans-178
   prefs: []
   type: TYPE_NORMAL
+  zh: 再次，这与我们为西班牙语翻译器示例运行的内容类似。只需注意您指定的源语言—我们在这里使用的是 fr 而不是 es。
 - en: 6.6.3 Training and running a chatbot
   id: totrans-179
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 6.6.3 训练和运行聊天机器人
 - en: 'Now that the training data for the chatbot is ready, let’s train a Seq2Seq
     model from this data. You can invoke the fairseq-train command with almost identical
     parameters to the last time, as shown next:'
   id: totrans-180
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，聊天机器人的训练数据准备好了，让我们从这些数据中训练一个 Seq2Seq 模型。您可以像下面这样调用 fairseq-train 命令，几乎使用与上次相同的参数：
 - en: '[PRE12]'
   id: totrans-181
   prefs: []
@@ -1583,11 +1643,14 @@
   id: totrans-182
   prefs: []
   type: TYPE_NORMAL
+  zh: 与先前一样，请注意验证损失随每个时代的变化。当我尝试时，验证损失在约五个时代内减小，然后开始缓慢上升。在观察到验证损失趋于稳定后，随时按 Ctrl +
+    C 停止训练命令。Fairseq 将自动将最佳模型（按验证损失测量）保存为 checkpoint_best.pt。
 - en: 'Finally, you can run the chatbot model by invoking the fairseq-interactive
     command, as shown here:'
   id: totrans-183
   prefs: []
   type: TYPE_NORMAL
+  zh: 最后，您可以通过调用 fairseq-interactive 命令来运行聊天机器人模型，如下所示：
 - en: '[PRE13]'
   id: totrans-184
   prefs: []
@@ -1600,6 +1663,7 @@
   id: totrans-185
   prefs: []
   type: TYPE_NORMAL
+  zh: 与前面的示例一样，您可以输入源句并与聊天机器人对话，让它将它们“翻译”为另一种语言！以下是我与我训练的模型进行的一部分对话（为了清晰起见，我添加了粗体）。再次强调，您的结果可能不同：
 - en: '[PRE14]'
   id: totrans-186
   prefs: []
@@ -1612,11 +1676,13 @@
   id: totrans-187
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这个例子中，对话看起来很自然。因为自我对话语料库是通过限制可能的对话主题集来构建的，所以如果您保持在这些主题（电影、体育、音乐等）上，对话更有可能顺利进行。
 - en: 'However, as soon as you start talking about unfamiliar topics, the chatbot
     loses its confidence in its answers, as shown next:'
   id: totrans-188
   prefs: []
   type: TYPE_NORMAL
+  zh: 然而，一旦您开始谈论不熟悉的话题，聊天机器人就会对其答案失去信心，如下所示：
 - en: '[PRE15]'
   id: totrans-189
   prefs: []
@@ -1633,11 +1699,13 @@
   id: totrans-190
   prefs: []
   type: TYPE_NORMAL
+  zh: 这是一个众所周知的现象—一个简单的基于 Seq2Seq 的聊天机器人很快就会退化到生成“我不知道”和“我不确定”等模板回答，每当被问及它不熟悉的事物时。这与我们训练这个聊天机器人的方式有关。因为我们训练模型是为了使其在训练数据中最小化损失，它能采取的最佳策略是生成适用于尽可能多的输入句子的东西。非常通用的短语，比如“我不知道”，可以成为许多问题的答案，所以这是一个安全的策略，可以减少损失！
 - en: 6.6.4 Next steps
   id: totrans-191
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 6.6.4 后续步骤
 - en: 'Although our chatbot can produce realistic-looking responses for many inputs,
     it’s far from perfect. One issue that it’s not great at dealing with is proper
     nouns. You can see this when you ask questions that solicit specific answers,
@@ -1645,6 +1713,7 @@
   id: totrans-192
   prefs: []
   type: TYPE_NORMAL
+  zh: 虽然我们的聊天机器人可以为许多输入产生逼真的响应，但它离完美还有很远的路要走。它处理不好的一个问题是专有名词。当你询问需要具体答案的问题时，就会看到这一点，比如：
 - en: '[PRE16]'
   id: totrans-193
   prefs: []
@@ -1660,11 +1729,15 @@
   id: totrans-194
   prefs: []
   type: TYPE_NORMAL
+  zh: 这里，<unk>是未知词的通用特殊符号。聊天机器人正在尝试回答某些问题，但该问题在训练数据中出现的频率太低，以至于不能被视为独立的词。这是一般简单 NMT
+    系统中出现的问题。因为模型需要将有关单词的所有信息压缩成 200 多维的数字向量，所以许多细节和类似单词之间的区别都被牺牲了。想像一下将关于你所在城市所有餐厅的信息压缩成一个
+    200 维的向量！
 - en: 'Also, the chatbot we trained doesn’t have any “memory” or any notion of context
     whatsoever. You can test this by asking a series of related questions as follows:'
   id: totrans-195
   prefs: []
   type: TYPE_NORMAL
+  zh: 此外，我们训练的聊天机器人没有任何 "记忆" 或任何上下文概念。你可以通过问一系列相关问题来测试这一点，如下所示：
 - en: '[PRE17]'
   id: totrans-196
   prefs: []
@@ -1680,6 +1753,8 @@
   id: totrans-197
   prefs: []
   type: TYPE_NORMAL
+  zh: 在第二个问题中，聊天机器人在理解上下文方面有困难，并产生了完全无关的响应。要正确回答这样的问题，模型需要理解代词 "it" 指的是前面的名词，即本例中的
+    "Mexican food"。NLP 系统在现实世界中解决哪些提及指向哪些实体的任务被称为*共指消解*。系统还需要维护某种类型的记忆，以跟踪到目前为止在对话中讨论了哪些内容。
 - en: Finally, the simple Seq2Seq models we discussed in this chapter are not great
     at dealing with long sentences. If you look back at figure 6.2, you’ll understand
     why—the model reads the input sentence using an RNN and represents everything
@@ -1693,22 +1768,28 @@
   id: totrans-198
   prefs: []
   type: TYPE_NORMAL
+  zh: 最后，在本章中讨论的简单 Seq2Seq 模型在处理长句子方面并不擅长。如果您回顾一下图6.2，就会理解这一点 - 模型使用 RNN 读取输入语句，并使用固定长度的句子表示向量表示有关句子的所有内容，然后从该向量生成目标语句。无论输入是“Hi！”还是“The
+    quick brown fox jumped over the lazy dog.”，句子表示都会成为瓶颈，特别是对于更长的输入。因此，在2015年左右，直到发明了一种称为
+    *注意力* 的机制来解决这个问题之前，神经 MT 模型无法击败传统的基于短语的统计 MT 模型。我们将在第8章详细讨论注意力。
 - en: Summary
   id: totrans-199
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 概括
 - en: Sequence-to-sequence (Seq2Seq) models transform one sequence into another using
     an encoder and a decoder.
   id: totrans-200
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: Seq2Seq 模型使用编码器和解码器将一个序列转换为另一个序列。
 - en: You can use the fairseq framework to build a working MT system within an hour.
   id: totrans-201
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 你可以使用 fairseq 框架在一小时内构建工作中的翻译系统。
 - en: A Seq2Seq model uses a decoding algorithm to generate the target sequence. Greedy
     decoding maximizes the probability at each step, whereas beam search tries to
     find better solutions by considering multiple hypotheses at once.
@@ -1716,23 +1797,28 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: Seq2Seq 模型使用解码算法生成目标序列。贪心解码每一步都最大化概率，而束搜索则尝试同时考虑多个假设来寻找更好的解决方案。
 - en: A metric called BLEU is commonly used for automatically evaluating MT systems.
   id: totrans-203
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 用于自动评估翻译系统的一个指标叫做 BLEU。
 - en: A simple chatbot can be built by using a Seq2Seq model and a conversation dataset.
   id: totrans-204
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 通过使用 Seq2Seq 模型和对话数据集，可以构建一个简单的聊天机器人。
 - en: ^(1.)See Oriol Vinyals et al., “Grammar as a Foreign Language,” (2015; [https://arxiv.org/abs/1412.7449](https://arxiv.org/abs/1412.7449))
     for more details.
   id: totrans-205
   prefs: []
   type: TYPE_NORMAL
+  zh: ^(1.) 详细信息请参阅 Oriol Vinyals 等人的“Grammar as a Foreign Language”（2015 年；[https://arxiv.org/abs/1412.7449](https://arxiv.org/abs/1412.7449)）。
 - en: ^(2.) Note that $ at the beginning of every line is rendered by the shell, and
     you don’t need to type it.
   id: totrans-206
   prefs: []
   type: TYPE_NORMAL
+  zh: ^(2.) 请注意每行开头的 $ 是由 shell 渲染的，您无需输入它。
