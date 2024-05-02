@@ -3,33 +3,39 @@
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 8 注意力与 Transformer
 - en: This chapter covers
   id: totrans-1
   prefs: []
   type: TYPE_NORMAL
+  zh: 本章内容包括
 - en: Using attention to produce summaries of the input and improve the quality of
     Seq2Seq models
   id: totrans-2
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用注意力机制生成输入摘要，提高 Seq2Seq 模型的质量
 - en: Replacing RNN-style loops with self-attention, a mechanism for the input to
     summarize itself
   id: totrans-3
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 用自注意力替换 RNN 风格的循环，一种使输入摘要自身的机制
 - en: Improving machine translation systems with the Transformer model
   id: totrans-4
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 用 Transformer 模型改进机器翻译系统
 - en: Building a high-quality spell-checker using the Transformer model and publicly
     available datasets
   id: totrans-5
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用 Transformer 模型和公开可用数据集构建高质量的拼写检查器
 - en: Our focus so far in this book has been recurrent neural networks (RNNs), which
     are a powerful model that can be applied to various NLP tasks such as sentiment
     analysis, named entity recognition, and machine translation. In this chapter,
@@ -44,6 +50,10 @@
   id: totrans-6
   prefs: []
   type: TYPE_NORMAL
+  zh: 到目前为止，本书的重点一直是循环神经网络（RNNs），它是一种强大的模型，可应用于各种 NLP 任务，如情感分析、命名实体识别和机器翻译。在本章中，我们将介绍一个更加强大的模型——*Transformer*[¹](#pgfId-1106840)——一种基于自注意力概念的全新编码器-解码器神经网络架构。自
+    2017 年问世以来，它毫无疑问是最重要的 NLP 模型。它不仅是一个强大的模型（例如，用于机器翻译和各种 Seq2Seq 任务），而且还被用作许多现代 NLP
+    预训练模型的底层架构，包括 GPT-2（第 8.4.3 节）和 BERT（第 9.2 节）。自 2017 年以来的现代 NLP 发展最好的总结可以概括为“Transformer
+    时代”。
 - en: In this chapter, we start with attention, a mechanism that made a breakthrough
     in machine translation, then move on to introducing self-attention, the concept
     that forms the foundation of the Transformer model. We will build two NLP applications—a
@@ -55,11 +65,15 @@
   id: totrans-7
   prefs: []
   type: TYPE_NORMAL
+  zh: 在本章中，我们首先介绍了注意力机制，这是机器翻译中取得突破的一种机制，然后介绍了自注意力，这是 Transformer 模型的基础概念。我们将构建两个
+    NLP 应用程序——西班牙语到英语的机器翻译器和一个高质量的拼写检查器，并学习如何将 Transformer 模型应用于您的日常应用程序。正如我们将在后面看到的那样，Transformer
+    模型可以在某些任务（如翻译和生成）中以接近人类水平的性能显著提高 NLP 系统的质量，而且几乎可以超越 RNNs。
 - en: 8.1 What is attention?
   id: totrans-8
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 8.1 什么是注意力？
 - en: In chapter 6, we covered Seq2Seq models—NLP models that transform one sequence
     to another using an encoder and a decoder. Seq2Seq is a versatile and powerful
     paradigm with many applications, although the “vanilla” Seq2Seq models are not
@@ -68,11 +82,14 @@
   id: totrans-9
   prefs: []
   type: TYPE_NORMAL
+  zh: 在第 6 章中，我们介绍了 Seq2Seq 模型——一种使用编码器和解码器将一个序列转换为另一个的 NLP 模型。Seq2Seq 是一种多功能且强大的范式，尽管“简单”
+    Seq2Seq 模型也不是没有局限性。在本节中，我们讨论了 Seq2Seq 模型的瓶颈，并激发了使用注意力机制的动机。
 - en: 8.1.1 Limitation of vanilla Seq2Seq models
   id: totrans-10
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 8.1.1 简单 Seq2Seq 模型的局限性
 - en: Let’s remind ourselves how Seq2Seq models work. Seq2Seq models consist of an
     encoder and a decoder. The decoder takes a sequence of tokens in the source language
     and runs it through an RNN, which produces a fixed-length vector at the end. This
@@ -83,14 +100,18 @@
   id: totrans-11
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们先回顾一下 Seq2Seq 模型的工作原理。Seq2Seq 模型由编码器和解码器组成。解码器接收源语言中的一系列标记，并将其通过 RNN 运行，最终产生一个固定长度的向量。这个固定长度的向量是输入句子的表示。解码器，另一个
+    RNN，接收这个向量，并逐标记地产生目标语言中的一个序列。图 8.1 说明了如何使用简单的 Seq2Seq 模型将西班牙语句子翻译成英语。
 - en: '![CH08_F01_Hagiwara](../Images/CH08_F01_Hagiwara.png)'
   id: totrans-12
   prefs: []
   type: TYPE_IMG
+  zh: '![CH08_F01_Hagiwara](../Images/CH08_F01_Hagiwara.png)'
 - en: Figure 8.1 A bottleneck in a vanilla Seq2Seq model
   id: totrans-13
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 8.1 简单 Seq2Seq 模型中的瓶颈
 - en: This Seq2Seq architecture is quite simple and powerful, but it is known that
     its vanilla version (shown in figure 8.1) does not translate sentences as well
     as other traditional machine translation algorithms (such as phrase-based statistical
@@ -1427,6 +1448,8 @@
   id: totrans-181
   prefs: []
   type: TYPE_NORMAL
+  zh: 然而，这种类型的拼写检查器有几个问题。首先，就像示例中的第一个单词“tisimptant”一样，您如何知道句子的哪一部分实际上是一个单词？我副本中默认的微软
+    Word 拼写检查器指出它是“disputant”的拼写错误，尽管对于任何英语使用者来说，它实际上是两个（或更多）单词的拼写错误是显而易见的。用户还可能拼写标点符号（包括空格），这使得一切都变得复杂。其次，仅仅因为某个单词在词典中存在，并不意味着它就没有错误。例如，示例中的第二个单词“too”是“to”的拼写错误，但两者都是任何英语词典中都有的有效单词。您如何判断前者在这种情况下是错误的呢？第三，所有这些决定都是在没有上下文的情况下做出的。我尝试过的一个拼写检查器在这个例子中显示“thus”是替换“ths”的候选词之一。然而，从这个上下文（名词之前）来看，“this”是一个更合适的候选词是显而易见的，尽管“this”和“thus”都与“ths”相隔一个编辑距离，这意味着根据编辑距离来看，它们都是同样有效的选项。
 - en: You would be able to solve some of these issues by adding some heuristic rules.
     For example, “too” is more likely a misspelling of “to” before a verb, and “this”
     is more likely before a noun than “thus.” But this method is obviously not scalable.
@@ -1440,29 +1463,34 @@
   id: totrans-182
   prefs: []
   type: TYPE_NORMAL
+  zh: 通过添加一些启发式规则，您可以解决其中一些问题。例如，“too”更有可能是动词之前“to”的拼写错误，“this”更有可能出现在名词之前而不是“thus”。但这种方法显然不具备可扩展性。还记得第1.1.2节中可怜的初级开发者吗？语言广阔而充满异常。您不能仅仅通过编写这些简单单词的规则来处理语言的全部复杂性。即使您能够为这些简单单词编写规则，您又如何知道“tisimptant”实际上是两个单词呢？您会尝试在每个可能的位置拆分这个单词，看拆分后的单词是否与现有单词相似吗？如果输入的是一种没有空格的语言，比如中文和日语，会怎么样呢？
 - en: 'At this point, you may realize this “split and fix” approach is going nowhere.
     In general, when designing an NLP application, you should think in terms of the
     following three aspects:'
   id: totrans-183
   prefs: []
   type: TYPE_NORMAL
+  zh: 此时，您可能意识到这种“拆分和修复”的方法行不通。一般来说，在设计自然语言处理应用程序时，您应该从以下三个方面考虑：
 - en: '*Task*—What is the task being solved? Is it a classification, sequential-labeling,
     or sequence-to-sequence problem?'
   id: totrans-184
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '*任务*—正在解决什么任务？是分类、序列标注还是序列到序列问题？'
 - en: '*Model*—What model are you going to use? Is it a feed-forward network, an RNN,
     or the Transformer?'
   id: totrans-185
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '*模型*—您将使用什么模型？是前馈网络、循环神经网络还是 Transformer？'
 - en: '*Dataset*—Where are you obtaining the dataset to train and validate your model?'
   id: totrans-186
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '*数据集*—您从哪里获取数据集来训练和验证您的模型？'
 - en: Based on my experience, a vast majority of NLP applications nowadays can be
     solved by combining these aspects. How about spell-checkers? Because they take
     a piece of text as the input and produce the fixed string, it’d be most straightforward
@@ -1474,15 +1502,20 @@
   id: totrans-187
   prefs: []
   type: TYPE_NORMAL
+  zh: 根据我的经验，如今绝大多数自然语言处理应用程序都可以通过结合这些方面来解决。拼写检查器呢？因为它们以一段文本作为输入，并生成修复后的字符串，如果我们将其作为一个
+    Seq2Seq 任务使用 Transformer 模型来解决将会最直接。换句话说，我们将建立一个机器翻译系统，将带有拼写/语法错误的嘈杂输入转换为干净、无误的输出，如图
+    8.16 所示。您可以将这两个方面看作是两种不同的“语言”（或英语的“方言”）。
 - en: '![CH08_F16_Hagiwara](../Images/CH08_F16_Hagiwara.png)'
   id: totrans-188
   prefs: []
   type: TYPE_IMG
+  zh: '![CH08_F16_Hagiwara](../Images/CH08_F16_Hagiwara.png)'
 - en: Figure 8.16 Training a spell-checker as an MT system that translates “noisy”
     sentences into “clean” ones
   id: totrans-189
   prefs: []
   type: TYPE_NORMAL
+  zh: 图8.16 将拼写检查器训练为将“嘈杂”的句子翻译成“干净”的句子的MT系统
 - en: At this point, you may be wondering where we are obtaining the dataset. This
     is often the most important (and the most difficult) part in solving real-world
     NLP problems. Fortunately, we can use a public dataset for this task. Let’s dive
@@ -1490,11 +1523,13 @@
   id: totrans-190
   prefs: []
   type: TYPE_NORMAL
+  zh: 此时，您可能会想知道我们从哪里获取数据集。这通常是解决现实世界自然语言处理问题中最重要（也是最困难）的部分。幸运的是，我们可以使用公共数据集来完成这项任务。让我们深入研究并开始构建一个拼写检查器。
 - en: 8.5.2 Training a spell-checker
   id: totrans-191
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 8.5.2 训练拼写检查器
 - en: We will be using GitHub Typo Corpus ([https://github.com/mhagiwara/github-typo
     -corpus](https://github.com/mhagiwara/github-typo-corpus)) as the dataset to train
     a spell-checker. The dataset, created by my collaborator and me, consists of hundreds
@@ -1504,6 +1539,7 @@
   id: totrans-192
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们将使用GitHub Typo Corpus（[https://github.com/mhagiwara/github-typo-corpus](https://github.com/mhagiwara/github-typo-corpus)）作为训练拼写检查器的数据集。这个数据集是由我和我的合作者创建的，其中包含数十万个从GitHub自动收集的“打字错误”编辑。这是迄今为止最大的拼写错误及其校正数据集，这使得它成为训练拼写检查器的理想选择。
 - en: One decision we need to make before preparing the dataset and training a model
     is what to use as the atomic linguistic unit on which the model operates. Many
     NLP models use tokens as the smallest unit (i.e., RNN/Transformer is fed a sequence
@@ -1520,6 +1556,7 @@
   id: totrans-193
   prefs: []
   type: TYPE_NORMAL
+  zh: 在准备数据集和训练模型之前，我们需要做出一个决定，那就是选择模型操作的原子语言单位。许多自然语言处理模型使用令牌作为最小单位（即，RNN/Transformer被馈送一个令牌序列），但越来越多的自然语言处理模型使用*单词或句子片段*作为基本单位（第10.4节）。对于拼写校正，我们应该使用什么作为最小的单位？与许多其他自然语言处理模型一样，起初使用单词作为输入听起来像是一个很好的“默认”选择。然而，正如我们之前所看到的，令牌的概念并不适用于拼写校正——用户可能会弄乱标点符号，如果您正在处理令牌，这会使一切过于复杂。更重要的是，因为自然语言处理模型需要操作一个固定的词汇表，所以拼写校正器的词汇表需要包含训练期间遇到的每个单词的每个拼写错误。这将使得训练和维护这样一个自然语言处理模型变得不必要昂贵。
 - en: For these reasons, we will be using *characters* as the basic unit for our spell-checker,
     as we did in section 5.6\. Using characters has several advantages—it can keep
     the size of the vocabulary quite small (usually less than one hundred for a language
@@ -1532,12 +1569,14 @@
   id: totrans-194
   prefs: []
   type: TYPE_NORMAL
+  zh: 由于这些原因，我们将使用*字符*作为拼写检查器的基本单位，就像在第5.6节中一样。使用字符有几个优点——它可以保持词汇表的大小相当小（通常对于具有小字母表集的语言，如英语，不到一百个）。即使是充满打字错误的嘈杂数据集，您也不必担心膨胀您的词汇表，因为打字错误只是字符的不同排列。您还可以将标点符号（甚至空白符）视为词汇表中的字符之一。这使得预处理步骤非常简单，因为您不需要任何语言工具包（如标记器）来执行此操作。
 - en: NOTE Using characters is not without disadvantages. One main issue is using
     them will increase the length of sequences, because you need to break everything
     up into characters. This makes the model large and slower to train.
   id: totrans-195
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意：使用字符并非没有缺点。其中一个主要问题是使用它们会增加序列的长度，因为你需要将所有内容分解为字符。这使得模型变得庞大且训练速度变慢。
 - en: 'First, let’s prepare the dataset for training a spell-checker. All the necessary
     data and code for building a spell-checker are included in this repository: [https://github.com/mhagiwara/xfspell](https://github.com/mhagiwara/xfspell).
     The tokenized and split datasets are located under data/gtc (as train.tok.fr,
@@ -1735,14 +1774,18 @@
   id: totrans-220
   prefs: []
   type: TYPE_NORMAL
+  zh: 这又开始听起来熟悉了。我们可以使用数据来模拟打字错误！但是如何做呢？这就是我们需要再次发挥创造力的地方——如果你“翻转”我们用来训练拼写检查器的原始数据集的方向，你可以观察到人们是如何打字错误的。如果你把干净的文本视为源语言，把嘈杂的文本视为目标语言，并为该方向训练一个
+    Seq2Seq 模型，那么你实际上是在训练一个“拼写损坏器”—一个将看起来很真实的拼写错误插入干净文本的 Seq2Seq 模型。请参见图 8.18 进行说明。
 - en: '![CH08_F18_Hagiwara](../Images/CH08_F18_Hagiwara.png)'
   id: totrans-221
   prefs: []
   type: TYPE_IMG
+  zh: '![CH08_F18_Hagiwara](../Images/CH08_F18_Hagiwara.png)'
 - en: Figure 8.18 Using back-translation to generate artificial noisy data
   id: totrans-222
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 8.18 使用回译生成人工噪声数据
 - en: This technique of using the “inverse” of the original training data to artificially
     generate a large amount of data in the source language from a real corpus in the
     target language is called *back-translation* in the machine learning literature.
@@ -1751,6 +1794,7 @@
   id: totrans-223
   prefs: []
   type: TYPE_NORMAL
+  zh: 在机器学习文献中，使用原始训练数据的“反向”来从目标语言中的真实语料库中人工生成大量源语言数据的技术被称为 *回译*。这是一种提高机器翻译系统质量的流行技术。正如我们接下来将展示的，它也可以有效地提高拼写检查器的质量。
 - en: 'You can easily train a spell corruptor just by swapping the source and the
     target languages. You can do this by supplying “en” (clean text) as the source
     language and “fr” (noisy text) as the target language when you run fairseq-preprocess
@@ -1758,6 +1802,7 @@
   id: totrans-224
   prefs: []
   type: TYPE_NORMAL
+  zh: 通过交换源语言和目标语言，您可以轻松训练一个拼写损坏器。您可以在运行 fairseq-preprocess 时将“en”（干净文本）作为源语言提供，将“fr”（嘈杂文本）作为目标语言，如下所示：
 - en: '[PRE26]'
   id: totrans-225
   prefs: []
@@ -1770,6 +1815,7 @@
   id: totrans-226
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们不再详细介绍训练过程——你可以使用几乎相同的 fairseq-train 命令启动训练。只是不要忘记为 —save-dir 指定一个不同的目录。在训练结束后，您可以检查拼写损坏器是否确实能按预期损坏输入文本：
 - en: '[PRE27]'
   id: totrans-227
   prefs: []
@@ -1788,6 +1834,8 @@
   id: totrans-228
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意我之前添加的额外选项，以粗体显示。这意味着 fairseq-interactive 命令使用采样（从概率最大的前 10 个标记中采样）而不是束搜索。当损坏干净文本时，通常最好使用采样而不是束搜索。简而言之，采样根据
+    softmax 层后的概率分布随机选择下一个标记，而束搜索则试图找到最大化输出序列分数的“最佳路径”。虽然束搜索在翻译某些文本时可以找到更好的解决方案，但在通过回译增加数据时，我们希望得到更嘈杂、更多样化的输出。过去的研究[⁶](#pgfId-1107565)也表明，采样（而不是束搜索）对通过回译增加数据效果更好。
 - en: From here, the sky’s the limit. You can collect as much clean text as you want,
     generate noisy text from it using the corruptor you just trained, and increase
     the size of the training data. There is no guarantee that the artificial errors
@@ -1799,6 +1847,8 @@
   id: totrans-229
   prefs: []
   type: TYPE_NORMAL
+  zh: 从这里开始，一切皆有可能。你可以收集尽可能多的干净文本，使用刚刚训练的损坏程序生成嘈杂文本，并增加训练数据的大小。并不能保证人工错误看起来像人类所做的真实错误一样，但这并不重要，因为
+    1）源（嘈杂）侧仅用于编码，2）目标（干净）侧数据始终是由人类编写的“真实”数据，从中 Transformer 可以学习如何生成真实文本。你收集的文本数据越多，模型对无错误的真实文本的信心就越大。
 - en: I won’t go over every step I took to increase the size of the data, but here’s
     the summary of what I did and what you can also do. Collect as much clean and
     diverse text data from publicly available datasets, such as Tatoeba and Wikipedia
@@ -1815,12 +1865,18 @@
   id: totrans-230
   prefs: []
   type: TYPE_NORMAL
+  zh: 我不会详细介绍我为增加数据量所采取的每一步，但这里是我所做的事情以及你也可以做的事情的总结。从公开可用的数据集（如 Tatoeba 和维基百科的转储）中收集尽可能多的干净和多样化的文本数据是一个方法。我最喜欢的方法是使用
+    OpenWebTextCorpus（[https://skylion007.github.io/OpenWebTextCorpus/](https://skylion007.github.io/OpenWebTextCorpus/)），这是一个开源项目，用于复制最初用于
+    GPT-2 训练的数据集。它由从 Reddit 的所有外部链接爬取的大量（40 GB）高质量网页文本组成。因为整个数据集的预处理和运行损坏程序可能需要几天甚至几周的时间，你可以取一个子集（比如说，1/1000），然后将其添加到数据集中。我取了数据集的
+    1/100 子集，对其进行了预处理，并运行了损坏程序，以获得嘈杂干净的平行数据集。这 1/100 子集单独就添加了五百多万对（相比之下，原始训练集仅包含约
+    240k 对）。你可以下载预训练权重并尝试存储库中的拼写检查器，而不是从头开始训练。
 - en: The training took several days, even on multiple GPUs, but when it was done,
     the result was very encouraging. Not only can it accurately fix spelling errors,
     as shown here
   id: totrans-231
   prefs: []
   type: TYPE_NORMAL
+  zh: 训练花了几天时间，甚至在多个 GPU 上，但当完成时，结果非常令人鼓舞。它不仅可以准确地修复拼写错误，如下所示
 - en: '[PRE28]'
   id: totrans-232
   prefs: []
@@ -1831,6 +1887,7 @@
   id: totrans-233
   prefs: []
   type: TYPE_NORMAL
+  zh: 而且拼写检查器似乎也在某种程度上理解英语的语法，如下所示：
 - en: '[PRE29]'
   id: totrans-234
   prefs: []
@@ -1845,6 +1902,8 @@
   id: totrans-235
   prefs: []
   type: TYPE_NORMAL
+  zh: 这个例子本身可能不能证明模型真正理解语法（即根据主语的数量使用正确的动词）。它可能只是学习了一些连续单词之间的关联，这可以通过任何统计 NLP 模型（如
+    n-gram 语言模型）实现。然而，即使在你让句子更加复杂之后，拼写检查器也显示出了惊人的弹性，如下一个代码片段所示：
 - en: '[PRE30]'
   id: totrans-236
   prefs: []
@@ -1861,11 +1920,13 @@
   id: totrans-237
   prefs: []
   type: TYPE_NORMAL
+  zh: 从这些例子中，可以清楚地看出模型学会了如何忽略不相关的名词短语（例如“Tom and Jerry”和“yellow desk”），并专注于决定动词形式（“was”与“were”）的名词（“book(s)”）。我们更有信心它理解了基本的句子结构。我们所做的一切只是收集了大量干净的文本，并在其上训练了Transformer模型，结合了原始的训练数据和损坏器。希望通过这些实验，你能感受到Transformer模型的强大之处！
 - en: Summary
   id: totrans-238
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 摘要
 - en: Attention is a mechanism in neural networks that focuses on a specific part
     of the input and computes its context-dependent summary. It works like a “soft”
     version of a key-value store.
@@ -1873,55 +1934,66 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 注意力机制是神经网络中的一种机制，它专注于输入的特定部分，并计算其上下文相关的摘要。它类似于“软”版本的键-值存储。
 - en: Encoder-decoder attention can be added to Seq2Seq models to improve their translation
     quality.
   id: totrans-240
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 可以将编码器-解码器注意力机制添加到Seq2Seq模型中，以提高其翻译质量。
 - en: Self-attention is an attention mechanism that produces the summary of the input
     by summarizing itself.
   id: totrans-241
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 自注意力是一种注意力机制，通过总结自身来产生输入的摘要。
 - en: The Transformer model applies self-attention repeatedly to gradually transform
     the input.
   id: totrans-242
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: Transformer模型反复应用自注意力机制，逐渐转换输入。
 - en: High-quality spell-checkers can be built using the Transformer and a technique
     called back-translation.
   id: totrans-243
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 可以使用Transformer和一种称为回译的技术来构建高质量的拼写检查器。
 - en: ^(1.)Vaswani et al., “Attention Is All You Need,” (2017). [https://arxiv.org/abs/1706.03762](https://arxiv.org/abs/1706.03762).
   id: totrans-244
   prefs: []
   type: TYPE_NORMAL
+  zh: ^(1.)Vaswani等人，“注意力机制就是一切”，（2017）。[https://arxiv.org/abs/1706.03762](https://arxiv.org/abs/1706.03762)。
 - en: ^(2.)Bahdanau et al., “Neural Machine Translation by Jointly Learning to Align
     and Translate,” (2014). [https://arxiv.org/abs/1409.0473](https://arxiv.org/abs/1409.0473).
   id: totrans-245
   prefs: []
   type: TYPE_NORMAL
+  zh: ^(2.)Bahdanau等人，“通过共同学习对齐和翻译进行神经机器翻译”，（2014）。[https://arxiv.org/abs/1409.0473](https://arxiv.org/abs/1409.0473)。
 - en: ^(3.)Bahdanau et al., “Neural Machine Translation by Jointly Learning to Align
     and Translate,” (2014). [https://arxiv.org/abs/1409.0473](https://arxiv.org/abs/1409.0473).
   id: totrans-246
   prefs: []
   type: TYPE_NORMAL
+  zh: ^(3.)Bahdanau等人，“通过共同学习对齐和翻译进行神经机器翻译”，（2014）。[https://arxiv.org/abs/1409.0473](https://arxiv.org/abs/1409.0473)。
 - en: '^(4.)Dai et al., “Transformer-XL: Attentive Language Models Beyond a Fixed-Length
     Context,” (2019). [https://arxiv.org/abs/1901.02860](https://arxiv.org/abs/1901.02860).'
   id: totrans-247
   prefs: []
   type: TYPE_NORMAL
+  zh: ^(4.)Dai等人，“Transformer-XL:超越固定长度上下文的注意力语言模型”，（2019）。[https://arxiv.org/abs/1901.02860](https://arxiv.org/abs/1901.02860)。
 - en: ^(5.)Lample and Conneau, “Cross-Lingual Language Model Pretraining,” (2019).
     [https://arxiv.org/abs/1901 .07291](https://arxiv.org/abs/1901.07291).
   id: totrans-248
   prefs: []
   type: TYPE_NORMAL
+  zh: ^(5.)Lample和Conneau，“跨语言语言模型预训练”，（2019）。[https://arxiv.org/abs/1901 .07291](https://arxiv.org/abs/1901.07291)。
 - en: ^(6.)Edunov et al.,”Understanding Back-Translation at Scale,” (2018). [https://arxiv.org/abs/1808.09381](https://arxiv.org/abs/1808.09381).
   id: totrans-249
   prefs: []
   type: TYPE_NORMAL
+  zh: ^(6.)Edunov等人，“大规模理解回译”，（2018）。[https://arxiv.org/abs/1808.09381](https://arxiv.org/abs/1808.09381)。
