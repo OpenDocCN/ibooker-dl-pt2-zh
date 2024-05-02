@@ -1,0 +1,2334 @@
+- en: 8 Reduce, Reuse, Recycle Your Words (RNNs and LSTMs)
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter covers
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Unrolling recursion so you can understand how to use it for NLP
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Implementing word and character-based RNNs in PyTorch
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Identifying applications where RNNs are your best option
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Re-engineering your datasets for training RNNs
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Customizing and tuning your RNN structure for your NLP problems
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Understanding backprop (backpropagation) in time
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Combining long and short-term memory mechanisms to make your RNN smarter
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: An *RNN* (Recurrent Neural Network) recycles tokens. Why would you want to recycle
+    and reuse your words? To build a more sustainable NLP pipeline of course! ;) *Recurrence*
+    is just another word for recycling. An RNN uses recurrence to allow it to remember
+    the tokens it has already read and reuse that understanding to predict the target
+    variable. And if you use RNNs to predict the next word, RNNs can generate, going
+    on and on and on, until you tell them to stop. This sustainability or regenerative
+    ability of RNNs is their superpower.
+  prefs: []
+  type: TYPE_NORMAL
+- en: It turns out that your NLP pipeline can predict the next tokens in a sentence
+    much better if it remembers what it has already read and understood. But, wait,
+    didn’t a CNN "remember" the nearby tokens with a kernel or filter of weights?
+    It did! But a CNN can only *remember* a limited window, that is a few words long.
+    By recycling the machine’s understanding of each token before moving to the next
+    one, an RNN can remember something about *all* of the tokens it has read. This
+    makes your machine reader much more sustainable, it can keep reading and reading
+    and reading…​for as long as you like.
+  prefs: []
+  type: TYPE_NORMAL
+- en: But wait, isn’t recursion dangerous? If that’s the first thought that came to
+    you when you read recurrence, you’re not alone. Anyone who has taken an algorithms
+    class has probably broken a function, an entire program, or even taken down an
+    entire web server, but using recurrence the wrong way. The key to doing recurrence
+    correctly and safely is that you must always make sure your algorithm is *reducing*
+    the amount of work it has to do with each recycling of the input. This means you
+    need to delete something from the input before you call the function again with
+    that input. For your NLP RNN, this comes naturally as you *pop* (remove) a token
+    off of the *stack* (the text string) before you feed that input back into your
+    network.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: Technically "recurrence" and "recursion" are two different things. ^([[1](#_footnotedef_1
+    "View footnote.")]) But most mathematicians and computer scientists use both words
+    to explain the same concept - recycling a portion of the output back into the
+    input to perform an operation repeatedly in sequence. ^([[2](#_footnotedef_2 "View
+    footnote.")]) But as with all natural language words, the concepts are fuzzy and
+    it can help to understand them both when building *Recurrent* Neural Networks.
+    As you’ll see in the code for this chapter, an RNN doesn’t have a function that
+    calls itself recursively the way you normally think of recursion. The `.forward(x)`
+    method is called in a `for` loop that is outside of the RNN itself.
+  prefs: []
+  type: TYPE_NORMAL
+- en: RNNs are *neuromorphic*. This is a fancy way of saying that researchers are
+    mimicking how they think brains work when they design artificial neural nets such
+    as RNNs. You can use what you know about how your own brain works to come up with
+    ideas for how to process text with artificial neurons. And your brain is recurrently
+    processing the tokens that you are reading right now. So recurrence must be a
+    smart, efficient way to use your brain resources to understand text.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As you read this text you are recycling what you already know about the previous
+    words before updating your prediction of what’s going to happen next. And you
+    don’t stop predicting until you reach the end of a sentence or paragraph or whatever
+    you’re trying to understand. Then you can pause at the end of a text and process
+    all of what you’ve just read. Just like the RNNs in this chapter, the RNN in your
+    brain uses that pause at the end to encode, classify, and *get something out of*
+    the text. And because RNNs are always predicting, you can use them to predict
+    words that your NLP pipeline should say. So RNNs are great not only for reading
+    text data but also for tagging and writing text.
+  prefs: []
+  type: TYPE_NORMAL
+- en: RNNs are a game changer for NLP. They have spawned an explosion of practical
+    applications and advancements in deep learning and AI.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 8.1 What are RNNs good for?
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The previous deep learning architectures you’ve learned about are great for
+    processing short bits of text - usually individual sentences. RNNs promise to
+    break through that text length barrier and allow your NLP pipeline to ingest an
+    infinitely long sequence of text. And not only can they process unending text,
+    but they can also *generate* text for as long as you like. RNNs open up a whole
+    new range of applications like generative conversational chatbots and text summarizers
+    that combine concepts from many different places within your documents.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| **Type** | **Description** | **Applications** |'
+  prefs: []
+  type: TYPE_TB
+- en: '| One to Many | One input tensor used to generate a sequence of output tensors
+    | Generate chat messages, answer questions, describe images |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Many to One | sequence of input tensors gathered up into a single output
+    tensor | Classify or tag text according to its language, intent, or other characteristics
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Many to Many | a sequence of input tensors used to generate a sequence of
+    output tensors | Translate, tag, or anonymize the tokens within a sequence of
+    tokens, answer questions, participate in a conversation |'
+  prefs: []
+  type: TYPE_TB
+- en: This is the superpower of RNNs, they process sequences of tokens or vectors.
+    You are no longer limited to processing a single, fixed-length vector. So you
+    don’t have to truncate and pad your input text to make your round text the right
+    shape to fit into a square hole. And an RNN can generate text sequences that go
+    on and on forever if you like. You don’t have to stop or truncate the output at
+    some arbitrary maximum length that you decide ahead of time. Your code can dynamically
+    decide when enough is enough.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 8.1 Recycling tokens creates endless options
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![rnn unrolled many to many drawio](images/rnn-unrolled-many-to-many_drawio.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: You can use RNNs to achieve state-of-the-art performance on many of the tasks
+    you’re already familiar with, even when your text is shorter than infinity `;)`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: translation
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: summarization
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: classification
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: question answering
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'And RNNs are one of the most efficient and accurate ways to accomplish some
+    new NLP tasks that you will learn about in this chapter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: generating new text such as paraphrases, summaries or even answers to questions
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: tagging individual tokens
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: diagramming the grammar of sentences, as you did in English class
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: creating language models that predict the next token
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If you read through the RNNs that are at the top of the leader board on Papers
+    with Code ^([[3](#_footnotedef_3 "View footnote.")]) you can see that RNNs are
+    the most efficient approach for many applications.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'RNNs aren’t just for researchers and academics. Let’s get real. In the real
+    world, people are using RNNs to:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: spell checking and correction
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: autocompletion of natural language or programming language expressions
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: classify sentences for grammar checking or FAQ chatbots
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: classify questions or generate answers to those questions
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: generate entertaining conversational text for chatbots
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: named entity recognition (NER) and extraction
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: classify, predict, or generate names for people, babies, and businesses
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: classify or predict subdomain names (for security vulnerability scanning
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: You can probably guess what most of those applications are about, but you’re
+    probably curious about that last one (subdomain prediction). A subdomain is that
+    first part of a domain name in a URL, the `www` in `www.lesswrong.com` or `en`
+    in `en.wikipedia.org`. Why would anyone want to predict or guess subdomains? Dan
+    Meisler did a talk on the critical role that subdomain guessers play in his cybersecurity
+    toolbox.^([[4](#_footnotedef_4 "View footnote.")]) Once you know a subdomain,
+    a hacker or pentester can scan the domain to find vulnerabilities in the server
+    security.
+  prefs: []
+  type: TYPE_NORMAL
+- en: And once you will soon be comfortable using RNNs to generate completely new
+    words, phrases, sentences, paragraphs and even entire pages of text. It can be
+    so much fun playing around with RNNs that you could find yourself accidentally
+    creating applications that open up opportunities for completely new businesses.
+  prefs: []
+  type: TYPE_NORMAL
+- en: suggest company, product or domain names ^([[5](#_footnotedef_5 "View footnote.")])
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: suggest baby names
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: sentence labeling and tagging
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: autocomplete for text fields
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: paraphrasing and rewording sentences
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: inventing slang words and phrases
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 8.1.1 RNNs can handle any sequence
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: In addition to NLP, RNNs are useful for any sequence of numerical data, such
+    as time series. You just need to represent the objects in your sequence as numerical
+    vectors. For natural language words this is often the word embedding. But you
+    can also see how a city government might represent daily or hourly electric scooter
+    rentals, freeway traffic, or weather conditions as vectors. And often they will
+    want to predict all of this simultaneously in one vector.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Because RNNs can output something for each and every element in a sequence,
+    you can create an RNN that outputs a prediction for "tomorrow" — the next sequence
+    element after the one you currently know. You can then use that prediction to
+    predict the one after that, recursively. This means that once you master backpropagation
+    through time, you will be able to use RNNs to predict things such as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The next day’s weather
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The next minute’s web traffic volume
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The next second’s Distributed Denial of Services (DDOS) web requests
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The action an automobile driver will take over the next 100 milliseconds
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The next image in a sequence of frames in a video clip
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: As soon as you have a prediction of the target variable you can measure the
+    error - the difference between the model’s output and the desired output. This
+    usually happens at the last time step in whatever sequence of events you are processing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 8.1.2 RNNs remember everything you tell them
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Have you ever accidentally touched wet paint and found yourself "reusing" that
+    paint whenever you touched something? And as a child, you might have fancied yourself
+    an impressionistic painter as you shared your art with the world by finger-painting
+    the walls around you. You’re about to learn how to build a more mindful impressionistic
+    word painter. In chapter 7 you imagined a lettering stencil as an analogy for
+    processing text with CNNs. Well now, instead of sliding a word stencil across
+    the words in a sentence you are going to roll a paint roller across them…​ while
+    they’re still wet!
+  prefs: []
+  type: TYPE_NORMAL
+- en: Imagine painting the letters of a sentence with slow-drying paint and laying
+    it on thick. And let’s create a diverse rainbow of colors in your text. Maybe
+    you’re even supporting LBGTQ pride week by painting the crosswalks and bike lanes
+    in North Park.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 8.2 A rainbow of meaning
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![wet paint rainbow lettering drawio](images/wet-paint-rainbow-lettering_drawio.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Now, pick up a clean paint roller and roll it across the letters of the sentence
+    from the beginning of the sentence to the end. Your roller would pick up the paint
+    from one letter and recycle it to lay it back down on top of the previous letters.
+    Depending on how big your roller is, a small number of letters (or parts of letters)
+    would be rolled on top of the letters to the right. All the letters after the
+    first one would be smeared together to create a smudgy stripe that only vaguely
+    resembles the original sentence.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 8.3 Pot of gold at the end of the rainbow
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![wet paint rainbow lettering smudged drawio](images/wet-paint-rainbow-lettering-smudged_drawio.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: The smudge gathers up all the paint from the previous letters into a single
+    compact representation of the original text. But is it a useful, meaningful representation?
+    For a human reader, all you’ve done is create a multicolored mess. It wouldn’t
+    communicate much meaning to the humans reading it. This is why humans don’t use
+    this *representation* of the meaning of the text for themselves. However, if you
+    think about the smudge of characters you might be able to imagine how a machine
+    might interpret it. And for a machine, it is certainly much more dense and compact
+    than the original sequence of characters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In NLP we want to create compact, dense vector representations of text. Fortunately,
+    that representation we’re looking for is hidden on your paint roller! As your
+    fresh clean roller got smeared with the letters of your text it gathered up a
+    *memory* of all the letters you rolled it across. This is analogous to the word
+    embeddings you created in Chapter 6\. But this embedding approach would work on
+    much longer pieces of text. You could keep rolling the roller forever across more
+    and more text, if you like, squeezing more and more text into the compact representation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In previous chapters, your tokens were mostly words or word n-grams. You need
+    to expand your idea of a token to include individual characters. The simplest
+    RNNs use characters rather than words as tokens. This is called a character-based
+    RNN. Just as you had word and token embeddings in previous chapters you can think
+    of characters having meaning too. Now does it make more sense how this smudge
+    at the end of the "Wet Paint!" lettering represents an embedding of all the letters
+    of the text?
+  prefs: []
+  type: TYPE_NORMAL
+- en: One last imaginary step might help you bring out the hidden meaning in this
+    thought experiment. In your mind, check out that embedding on your paint roller.
+    In your mind roll it out on a fresh clean piece of paper. Keep in mind the paper
+    and your roller are only big enough to hold a single letter. That will *output*
+    a compact representation of the paint roller’s memory of the text. And that output
+    is hidden inside your roller until you decide to use it for something. That’s
+    how the text embeddings work in an RNN. The embeddings are *hidden* inside your
+    RNN until you decide to output them or combine them with something else to reuse
+    them. In fact, this vector representation of your text is stored in a variable
+    called `hidden` in many implementations of RNNs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Important
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: RNN embeddings are different from the word and document embeddings you learned
+    about in Chapters 6 and 7\. An RNN is gathering up meaning over time or text position.
+    An RNN encodes meaning into this vector for you to reuse with subsequent tokens
+    in the text. This is like the Python `str.encode()` function for creating a multi-byte
+    representation of Unicode text characters. The order in which the sequence of
+    tokens is processed matters a lot to the end result, the encoding vector. So you
+    probably want to call RNN embeddings "encodings", "encoding vectors" or "encoding
+    tensors." This vocabulary shift was encouraged by Garrett Lander on a project
+    to do NLP on extremely long and complex documents, such as patient medical records
+    or The Meuller Report.^([[6](#_footnotedef_6 "View footnote.")]) This new vocabulary
+    made it a lot easier for his team to develop a shared mental model of the NLP
+    pipeline.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Keep your eye out for the hidden layer later in this chapter. The activation
+    values are stored in the variable `h` or `hidden`. These activation values within
+    this tensor are your embeddings up to that point in the text. It’s overwritten
+    with new values each time a new token is processed as your NLP pipeline is gathering
+    up the meaning of the tokens it has read so far. In figure [8.4](#ch8_best_figure)
+    you can see how this blending of meaning in an embedding vector is much more compact
+    and blurry than the original text.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 8.4 Gather up meaning into one spot
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![wet paint rainbow lettering smudged encoding drawio](images/wet-paint-rainbow-lettering-smudged-encoding_drawio.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: You could read into the paint smudge something of the meaning of the original
+    text, just like in a Rorschach inkblot test. Rorschach inkblots are smudges of
+    ink or paint on flashcards used to spark people’s memories and test their thinking
+    or mental health.^([[7](#_footnotedef_7 "View footnote.")]) Your smudge of paint
+    from the paint roller is a vague, impressionistic representation of the original
+    text. And it’s a much more compact representation of the text. This is exactly
+    what you were trying to achieve, not just creating a mess. You could clean your
+    roller, rinse and repeat this process on a new line of text to get a different
+    smudge with a different *meaning* for your neural network. Soon you’ll see how
+    each of these steps is analogous to the actual mathematical operations going on
+    in an RNN layer of neurons.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Your paint roller has smeared many of the letters at the end of the sentence
+    so that the last exclamation point at the end is almost completely unintelligible.
+    But that unintelligible bit at the end is exactly what your machine needs to understand
+    the entire sentence within the limited surface area of the paint roller. You have
+    smudged all the letters of the sentence together onto the surface of your roller.
+    And if you want to see the message embedded in your paint roller, you just roll
+    it out onto a clean piece of paper.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In your RNN you can accomplish this by outputting the hidden layer activations
+    after you’ve rolled your RNN over the tokens of some text. The encoded message
+    probably won’t say much to you as a human, but it gives your paint roller, the
+    machine, a hint at what the entire sentence said. Your paint roller gathered an
+    impression of the entire sentence. We even use the word "gather" to express understanding
+    of something someone says, as in "I gather from what you just said, that rolling
+    paint rollers over wet paint are analogous to RNNs."
+  prefs: []
+  type: TYPE_NORMAL
+- en: Your paint roller has compressed, or encoded, the entire sentence of letters
+    into a short smudgy impressionistic stripe of paint. In an RNN this smudge is
+    a vector or tensor of numbers. Each position or dimension in the encoding vector
+    is like a color in your paint smudge. Each encoding dimension holds an aspect
+    of meaning that your RNN has been designed to keep track of. The impressions that
+    the paint made on your roller (the hidden layer activations) were continuously
+    recycled till you got to the end of the text. And then you reused all those smudges
+    on your roller to create a new impression of the entire sentence.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 8.1.3 RNNs hide their understanding
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The key change for an RNN is that it maintains a hidden embedding by recycling
+    the meaning of each token as it reads them one at a time. This hidden vector of
+    weights contains everything the RNN has understood up to the point in the text
+    it is reading. This means you can’t run the network all at once on the entire
+    text you’re processing. In previous chapters, your model learns a function that
+    maps one input to one output. But, as you’ll soon see, an RNN learns a *program*
+    that keeps running on your text until it’s done. An RNN needs to read your text
+    one token at a time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: An ordinary feedforward neuron just multiplies the input vector by a bunch of
+    weights to create an output. No matter how long your text is, a CNN or feedforward
+    neural network will have to do the exact same number of multiplications to compute
+    the output prediction. The neurons of a linear neural network all work together
+    to compose a new vector to represent your text. You can see in Figure [8.5](#ordinary-feedforward-neuron)
+    that a normal feedforward neural network takes in a vector input (`x`), multiplies
+    it by a matrix of weights (`W`), applies an activation function, and then outputs
+    a transformed vector (`y`). Feedforward network layers transform can only transform
+    one vector into another.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 8.5 Ordinary feedforward neuron
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![neuron feedforward drawio](images/neuron-feedforward_drawio.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: With RNNs, your neuron never gets to see the vector for the entire text. Instead,
+    an RNN must process your text one token at a time. To keep track of the tokens
+    it has already read it records a hidden vector (`h`) that can be passed along
+    to its future self - the exact same neuron that produced the hidden vector in
+    the first place. In computer science terminology this hidden vector is called
+    a *state*. That’s why Andrej Karpathy and other deep learning researchers get
+    so excited about the effectiveness of RNNs. RNNs enable machines to finally learn
+    Turing complete programs rather than just isolated functions.^([[8](#_footnotedef_8
+    "View footnote.")])
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 8.6 A neuron with recurrence
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![neuron with recurrence drawio](images/neuron-with-recurrence_drawio.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: If you unroll your RNN it begins to look a lot like a chain…​ a Markov Chain,
+    in fact. But this time your window is only one token wide and you’re reusing the
+    output from the previous token, combined with the current token before rolling
+    forward to the next token in your text. Fortunately, you started doing something
+    similar to this when you slid the CNN window or kernel across the text in Chapter
+    7.
+  prefs: []
+  type: TYPE_NORMAL
+- en: How can you implement neural network recurrence in Python? Luckily, you don’t
+    have to try to wrap around a recursive function call like you may have encountered
+    in coding interviews. Instead, all you have to do is create a variable to store
+    the hidden state separate from the inputs and outputs. And you need to have a
+    separate matrix of weights to use for computing that hidden tensor. Listing [8.1](#listing-recurrence-pytorch)
+    implements a minimal RNN from scratch, without using PyTorch’s `RNNBase` class.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 8.1 Recurrence in PyTorch
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: You can see how this new RNN neuron now outputs more than one thing. Not only
+    do you need to return the output or prediction, but you also need to output the
+    hidden state tensor to be reused by the "future self" neuron.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Of course, the PyTorch implementation has many more features. PyTorch RNNs can
+    even be trained from left to right and right to left simultaneously! This is called
+    a bidirectional language model. Of course, your problem needs to be "noncausal"
+    for a bidirectional language model to be of any use. A noncausal model in NLP
+    for English just means that you want your language model to predict words that
+    occur before (to the left of) other words that you already know. A common noncausal
+    application is to predict interior words that have been masked out intentionally
+    or accidentally corrupted during OCR (Optical Character Recognition). If you’re
+    curious about bidirectional RNNs, all of the PyTorch RNN models (RNNs, GRUs, LSTMs,
+    and even Transformers) include an option to turn on bidirectional recurrence.^([[9](#_footnotedef_9
+    "View footnote.")]) For question-answering models and other difficult problems,
+    you will often see a 5-10% improvement in the accuracy of bidirectional models
+    when you compare them to the default forward direction (causal) language models.
+    This is simply because their embeddings of a bidirectional language model are
+    more balanced, forgetting as much about the beginning of the text as they forget
+    about the end of the text.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 8.1.4 RNNs remember everything you tell them
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: To see how RNNs retain a memory of all the tokens of a document you can unroll
+    the neuron diagram in Figure 8.7\. You create copies of the neuron to show the
+    "future selves" in the `for` loop that is iterating through your tokens. This
+    is like unrolling a `for` loop, when you just copy and paste the lines of code
+    within the loop the appropriate number of times.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 8.7 Unroll an RNN to reveal its hidden secrets
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![rnn unrolled drawio](images/rnn-unrolled_drawio.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 8.7 shows an RNN passes the hidden state along to the next "future self"
+    neuron, sort of like Olympic relay runners passing the baton. But this baton is
+    imprinted with more and more memories as it is recycled over and over again within
+    your RNN. You can see how the tensors for the input tokens are modified many,
+    many times before the RNN finally sees the last token in the text.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Another nice feature of RNNs is that you can tap into an output tensor anywhere
+    along the way. This means you can tackle challenges like machine translation,
+    named entity recognition, anonymization and deanonymization of text, and even
+    unredaction of government documents.^([[10](#_footnotedef_10 "View footnote.")])
+  prefs: []
+  type: TYPE_NORMAL
+- en: These two features are what make RNNs unique.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can process as many tokens as you like in one text document.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: You can output anything you need after each token is processed.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: That first feature is not such a big deal. As you saw with CNNs, if you want
+    to process long text, you just need to make room for them in your max input tensor
+    size. In fact, the most advanced NLP models to date, *transformers*, create a
+    max length limit and pad the text just like CNNs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: However, that second feature of RNNs is a really big deal. Imagine all the things
+    you can do with a model that labels each and every token in a sentence. Linguists
+    spend a lot of time diagramming sentences and labeling tokens. RNNs and deep learning
+    have revolutionized the way linguistics research is done. Just look at some of
+    the linguistic features that SpaCy can identify for each word in some example
+    "hello world" text in listing [8.2](#figure-spacy-tags-tokens).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 8.2 SpaCy tags tokens with RNNs
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: It’s all well and good to have all that information - all that output whenever
+    you want it. And you’re probably excited to try out RNNs on really long text to
+    see how much it can actually remember.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 8.2 Predict someone’s nationality from only their last name
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: To get you up to speed quickly on recycling, you’ll start with the simplest
+    possible token — the lowly character (letter or punctuation). You are going to
+    build a model that can predict the nationality of last names, also called "surnames"
+    using only the letters in the names to guide the predictions. This kind of model
+    may not sound all that useful to you. You might even be worried that it could
+    be used to harm individuals from particular cultures.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Like you, the authors' LinkedIn followers were suspicious when we mentioned
+    we were training a model to predict the demographic characteristics of names.
+    Unfortunately, businesses and governments do indeed use models like this to identify
+    and target particular groups of people, often with harmful consequences. But these
+    models can also be used for good. We use them to help our nonprofit and government
+    customers anonymize their conversational AI datasets. Volunteers and open-source
+    contributors can then train NLP models from these anonymized conversation datasets
+    to identify healthcare or education content that can be helpful for users, while
+    simultaneously protecting user privacy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This multilingual dataset will give you a chance to learn how to deal with diacritics
+    and other embellishments that are common for non-English words. To keep it interesting,
+    you will remove these character embellishments and other giveaways in the Unicode
+    characters of multilingual text. That way your model can learn the patterns you
+    really care about rather than "cheating" based on this leakage. The first step
+    in processing this dataset is to *asciify* it - convert it to pure ASCII characters.
+    For example, the Unicode representation of the Irish name "O’Néàl" has an "acute
+    accent" over the "e" and a "grave accent" over the "a" in this name. And the apostrophe
+    between the "O" and "N" can be a special directional apostrophe that could unfairly
+    clue your model into the nationality of the name, if you don’t *asciify* it. You
+    will also need to remove the cedilla embellishment that is often added to the
+    letter "C" in Turkish, Kurdish, Romance and other alphabets.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now that you have a pipeline that "normalizes" the alphabet for a broad range
+    of languages, your model will generalize better. Your model will be useful for
+    almost any Latin script text, even text transliterated into Latin script from
+    other alphabets. You can use this exact same model to classify any string in almost
+    any language. You just need to label a few dozen examples in each language you
+    are interested in "solving" for.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now let’s see if you’ve created a *solvable problem*. A solvable machine learning
+    problem is one where:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can imagine a human answering those same questions
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: There exists a correct answer for the vast majority of "questions" you want
+    to ask your model
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: You don’t expect a machine to achieve accuracy much better than a well-trained
+    human expert
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Think about this problem of predicting the country or dialect associated with
+    a surname. Remember we’ve removed a lot of the clues about the language, like
+    the characters and embellishments that are unique to non-English languages. Is
+    it solvable?
+  prefs: []
+  type: TYPE_NORMAL
+- en: Start with the first question above. Can you imagine a human could identify
+    a person’s nationality from their asciified surname alone? Personally, I often
+    guess wrong when I try to figure out where one of my students is from, based on
+    their surname. I will never achieve 100% accuracy in real life and neither will
+    a machine. So as long as you’re OK with an imperfect model, this is a solvable
+    problem. And if you build a good pipeline, with lots of labeled data, you should
+    be able to create an RNN model that is at least as accurate as humans like you
+    or I. It may even be more accurate than a well-trained linguistics expert, which
+    is pretty amazing when you think about it. This is where the concept of AI comes
+    from, if a machine or algorithm can do intelligent things, we call it AI.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Think about what makes this problem hard. There is no one-to-one mapping between
+    surnames and countries. Even though surnames are generally shared between parents
+    and children for generations, people tend to move around. And people can change
+    their nationality, culture, and religion. All these things affect the names that
+    are common for a particular country. And sometimes individuals or whole families
+    decide to change their last name, especially immigrants, expats and spies. People
+    have a lot of different reasons for wanting to blend in.^([[11](#_footnotedef_11
+    "View footnote.")]) That blending of culture and language is what makes humans
+    so awesome at working together to achieve great things, including AI. RNNs will
+    give your nationality prediction model the same flexibility. And if you want to
+    change your name, this model can help you craft it so that it invokes the nationality
+    that you want people (and machines) to perceive of you.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Take a look at some random names from this dataset to see if you can find any
+    character patterns that are reused in multiple countries.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 8.3 Load the
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: Take a quick look at the data before diving in. It seems the Dutch like their
+    family names (surnames) to be at the beginning of the roll call. Several Dutch
+    surnames begin with "Aa." In the US there are a lot of business names that start
+    with "AAA" for similar reasons. And it seems that Moroccan, Dutch, and Finnish
+    languages and cultures tend to encourage the use of the trigram "Aar" at the beginning
+    of words. So you can expect some confusion among these nationalities. Don’t expect
+    to achieve 90% accuracy on a classifier.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You also want to count up the unique categories in your dataset so you know
+    how many options your model will have to choose from.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 8.4 Unique nationalities in the dataset
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: In listing [8.4](#listing-unique-nationalities-in-the-dataset) you can see the
+    thirty-seven unique nationalities and language categories that were collected
+    from multiple sources. This is what makes this problem difficult. It’s like a
+    multiple-choice question where there are 36 wrong answers and only one correct
+    answer. And these region or language categories often overlap. For example, Algerian
+    is considered to be an Arabic language, and Brazilian is a dialect of Portuguese.
+    There are several names that are shared across these nationality boundaries. So
+    the model can’t get the correct answer for all of the names. It can only try to
+    return the right answer as often as possible.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The diversity of nationalities and data sources helped us do name substitution
+    to anonymize messages exchanged within our multilingual chatbots. That way can
+    share conversation design datasets in open-source projects like the chatbots discussed
+    in Chapter 12 of this book. RNN models are great for anonymization tasks, such
+    as named entity recognition and generation of fictional names. They can even be
+    used to generate fictional, but realistic social security numbers, telephone numbers,
+    and other PII (Personally Identifiable Information). To build this dataset we
+    augmented the PyTorch RNN tutorial dataset with names scraped from public APIs
+    that contained data for underrepresented countries in Africa, South and Central
+    America, and Oceania.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When we were building this dataset during our weekly mob programming on Manning’s
+    Twitch channel, Rochdi Khalid pointed out that his last name is Arabic. And he
+    lives in Casablanca, Morocco where Arabic is an official language, along side
+    French and Berber. This dataset is a mashup of data from a variety of sources.^([[12](#_footnotedef_12
+    "View footnote.")]) some of which create labels based on broad language labels
+    such as "Arabic" and others are labeled with their specific nationality or dialect,
+    such as Moroccan, Algerian, Palestinian, or Malaysian.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Dataset bias is one of the most difficult biases to compensate for unless you
+    can find data for the groups you want to elevate. Besides public APIs, you can
+    also mine your internal data for names. Our anonymization scripts strip out names
+    from multilingual chatbot dialog. We added those names to this dataset to ensure
+    it is a representative sample of the kinds of users that interact with our chatbots.
+    You can use this dataset for your own projects where you need a truly global slice
+    of names from a variety of cultures.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Diversity has its challenges. As you might imagine some spellings of these transliterated
+    names are reused across national borders and even across languages. Translation
+    and transliteration are two separate NLP problems that you can solve with RNNs.
+    The word "नमस्कार" can be *translated* to the English word "hello". But before
+    your RNN would attempt to translate a Nepalese word it would *transliterate* the
+    Nepalese word "नमस्कार" into the word "namaskāra" which uses only the Latin character
+    set. Most multilingual deep learning pipelines utilize the Latin character set
+    (Romance script alphabet) to represent words in all languages.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: Transliteration is when you translate the characters and spellings of words
+    from one language’s alphabet to another, making it possible to represent words
+    using the Latin character set (Romance script alphabet) used in Europe and the
+    Americas. A simple example is the removal or adding of the acute accent from the
+    French character "é", as in "resumé" (resume) and "école" (school). Transliteration
+    is a lot harder for non-Latin alphabets such as Nepalese.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Here’s how you can calculate just how much overlap there is within each of your
+    categories (nationalities).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: In addition to the overlap *across* nationalities, the PyTorch tutorial dataset
+    contained many duplicated names within nationalities. More than 94% of the Arabic
+    names were duplicates, some of which are shown in listing [8.5](#listing-surname-oversampling).
+    Other nationalities and languages such as English, Korean, and Scottish appear
+    to have been deduplicated. Duplicates in your training set make your model fit
+    more closely to common names than to less frequently occurring names. Duplicating
+    entries in your datasets is a brute-force way of "balancing" your dataset or enforcing
+    statistics about the frequency of phrases to help it predict popular names and
+    heavily populated countries more accurately. This technique is sometimes referred
+    to as "oversampling the minority class" because it boosts the frequency and accuracy
+    of underrepresented classes in your dataset.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you’re curious about the original surname data check out the PyTorch "RNN
+    Classification Tutorial".^([[13](#_footnotedef_13 "View footnote.")]) There were
+    only 108 unique Arabic surnames among the 2000 Arabic examples in Arabic.txt.^([[14](#_footnotedef_14
+    "View footnote.")])
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 8.5 Surname oversampling
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: This means that even a relatively simple model (like the one shown in the PyTorch
+    tutorial) should be able to correctly label popular names like Abadi and Zogby
+    as Arabic. And you can anticipate your model’s confusion matrix statistics by
+    counting up the number of nationalities associated with each name in the dataset.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You are going to use a deduplicated dataset that you loaded in listing [8.5](#listing-surname-oversampling).
+    We have counted up the duplicates to give you the statistics for these duplicates
+    without burdening you with downloading a bloated dataset. And you will use a balanced
+    sampling of countries to encourage your model to treat all categories and names
+    equally. This means your model will predict rare names and rare countries just
+    as accurately as popular names from popular countries. This balanced dataset will
+    encourage your RNN to generalize from the linguistic features it sees in names.
+    Your model will be more likely to recognize patterns of letters that are common
+    among many different names, especially those that help the RNN distinguish between
+    countries. We’ve included information on how to obtain accurate usage frequency
+    statistics for names in the `nlpia2` repository on GitLab.^([[15](#_footnotedef_15
+    "View footnote.")]) You’ll need to keep this in mind if you intend to use this
+    model in the real world on a more random sample of names.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 8.6 Name nationality overlap
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: To help diversify this dataset and make it a little more representative of real-world
+    statistics, we added some names from India and Africa. And we compressed the dataset
+    by counting the duplicates. The resulting dataset of surnames combines data from
+    the PyTorch RNN tutorial with anonymized data from multilingual chatbots.^([[16](#_footnotedef_16
+    "View footnote.")]) In fact, we use this name classification and generation model
+    to anonymize names in our chatbot logs. This allows us to *default to open* with
+    both NLP datasets as well as software.^([[17](#_footnotedef_17 "View footnote.")])
+  prefs: []
+  type: TYPE_NORMAL
+- en: Important
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: A great way to find out if a machine learning pipeline has a chance of solving
+    your problem, pretend you are the machine. Give yourself training on a few of
+    the examples in your training set. Then try to answer a few of the "questions"
+    in your test set without looking at the correct label. Your NLP pipeline should
+    probably be able to solve your problem almost as well as you could. And in some
+    cases, you might find machines are much better than you because they can balance
+    many patterns in their head more accurately than you can.
+  prefs: []
+  type: TYPE_NORMAL
+- en: By computing the most popular nationality for each name in the dataset, it is
+    possible to create a confusion matrix, using the most common nationality as the
+    "true" label for a particular name. This can reveal several quirks in the dataset
+    that should influence what the model learns and how well it can perform this task.
+    There is no confusion at all for Arabic names because there are very few unique
+    Arabic names and none of them are included in the other nationalities. And a significant
+    overlap exists between Spanish, Portuguese, Italian and English names. Interestingly,
+    for the 100 Scottish names in the dataset, None of them are most commonly labeled
+    as Scottish. Scottish names are more often labeled as English and Irish names.
+    This is because there are thousands of English and Irish names, but only 100 Scottish
+    names in the original PyTorch tutorial dataset.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 8.8 The dataset is confused even before training
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![confusion pytorch tutorial](images/confusion-pytorch-tutorial.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: We’ve added 26 more nationalities to the original PyTorch dataset. This creates
+    much more ambiguity or overlap in the class labels. Many names are common in multiple
+    different regions of the world. An RNN can deal with this ambiguity quite well,
+    using the statistics of patterns in the character sequences to guide its classification
+    decisions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 8.2.1 Build an RNN from scratch
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Here’s the heart of your `RNN` class in listing [8.7](#listing-heart-rnn) Like
+    all Python classes, a PyTorch Module class has an `*init*()` method where you
+    can set some configuration values that control how the rest of the class works.
+    For an RNN you can use the `*init*()` method to set the hyperparameters that control
+    the number of neurons in the hidden vector as well as the size of the input and
+    output vectors.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For an NLP application that relies on tokenizers, it’s a good idea to include
+    the tokenizer parameters within the init method to make it easier to instantiate
+    again from data saved to disk. Otherwise, you’ll find that you end up with several
+    different models saved on your disk. And each model may use a different vocabulary
+    or dictionary to tokenize and vectorize your data. Keeping all those models and
+    tokenizers connected is a challenge if they aren’t stored together in one object.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The same goes for the vectorizers in your NLP pipeline. Your pipeline must be
+    consistent about where it stores each word for your vocabulary. And you also have
+    to be consistent about the ordering of your categories if your output is a class
+    label. You can easily get confused if you aren’t exactly consistent with the ordering
+    of your category labels each time you reuse your model. The output will be garbled
+    nonsense labels if the numerical values used by your model aren’t consistently
+    mapped to human-readable names for those categories. If you store your vectorizers
+    in your model class (see listing [8.7](#listing-heart-rnn)), it will know exactly
+    which category labels it wants to apply to your data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 8.7 Heart of an RNN
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: Technically, your model doesn’t need the full `char2i` vocabulary. It just needs
+    the size of the one-hot token vectors you plan to input into it during training
+    and inference. Likewise for the category labels. Your model only really needs
+    to know the number of categories. The names of those categories are meaningless
+    to the machine. But by including the category labels within your model you can
+    print them to the console whenever you want to debug the internals of your model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 8.2.2 Training an RNN, one token at a time
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The dataset of 30000+ surnames for 37+ countries in the `nlpia2` project is
+    manageable, even on a modest laptop. So you should be able to train it using the
+    in a reasonable amount of time. If your laptop has 4 or more CPU cores and 6 GB
+    or more RAM, the training will take about 30 minutes. And if you limit yourself
+    to only 10 countries, 10000 surnames, and get lucky (or smart) with your choice
+    of learning rate, you can train a good model in two minutes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Rather than using the built-in `torch.nn.RNN` layer you can build your first
+    RNN from scratch using plain old `Linear` layers. This will generalize your understanding
+    so you can design your own RNNs for almost any application.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 8.8 Training on a single sample must loop through the characters
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `nlpia2` package contains a script to orchestrate the training process and
+    allow you to experiment with different hyperparameters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: Tip
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: You want to use the `%run` magic command within the iPython console rather than
+    running your machine learning scripts in the terminal using the `python` interpreter.
+    The ipython console is like a debugger. It allows you to inspect all the global
+    variables and functions after your script finishes running. And if you cancel
+    the run or if there is an error that halts the script, you will still be able
+    to examine the global variables without having to start over from scratch.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Once you launch the `classify_name_nationality.py` script it will prompt you
+    with several questions about the model’s hyperparameters. This is one of the best
+    ways to develop an instinct about deep learning models. And this is why we chose
+    a relatively small dataset and small problem that can be successfully trained
+    in a reasonable amount of time. This allows you to try many different hyperparameter
+    combinations and fine tune your intuitions about NLP while fine tuning your model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing [8.9](#listing-interactive-prompts-hyperparameters) shows some hyperparameter
+    choices that will give you pretty good results. But we’ve left you room to explore
+    the "hyperspace" of options on your own. Can you find a set of hyperparameters
+    that can identify a broader set of nationalities with better accuracy?
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 8.9 Interactive prompts so you can play with hyperparameters
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: Even this simplified RNN model with only 128 neurons and 1500 epochs takes several
+    minutes to converge to a decent accuracy. This example was trained on a laptop
+    with a 4-core (8-thread) i7 Intel processor and 64 GB of RAM. If your computing
+    resources are more limited, you can train a simpler model on only 10 nationalities
+    and it should converge much more quickly. Keep in mind that many names were assigned
+    to multiple nationalities. And some of the nationality labels were more general
+    language labels like "Arabic" that apply to many many countries. So you don’t
+    expect to get very high accuracy, especially when you give the model many nationalities
+    (categories) to choose from.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 8.10 Training output log
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: Looks like the RNN achieved 57% accuracy on the training set and 29% accuracy
+    on the validation set. This is an unfair measure of the model’s usefulness. Because
+    the dataset was deduplicated before splitting into training and validation sets,
+    there is only one row in the dataset for each name-nationality combination. This
+    means that a name that is associated with one nationality in the training set
+    will likely be associated with a *different* nationality in the validation set.
+    This is why the PyTorch tutorial doesn’t create test or validation datasets in
+    the official docs. They don’t want to confuse you.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now that you understand the ambiguity in the dataset you can see how hard the
+    problem is and that this RNN does a really good job of generalizing from the patterns
+    it found in the character sequences. It generalizes to the validation set much
+    better than random chance. Random guesses would have achieved 4% accuracy on 25
+    categories (`1/25 == .04`) even if there was no ambiguity in the nationality associated
+    with each name.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s try it on some common surnames that are used in many countries. An engineer
+    named Rochdi Khalid helped create one of the diagrams in this chapter. He lives
+    and works in Casablanca, Morrocco. Even though Morocco isn’t the top prediction
+    for "Khalid", Morocco is in second place!
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: The top 3 predictions are all for Arabic-speaking countries. I don’t think there
+    are expert linguists that could do this prediction as fast or as accurately as
+    this RNN model did.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now it’s time to dig deeper and examine some more predictions to see if you
+    can figure out how only 128 neurons can predict someone’s nationality so well.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 8.2.3 Understanding the results
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: To use a model like this in the real world you will need to be able to explain
+    how it works to your boss. Germany, Finland, and the Netherlands (and soon in
+    all of the EU) are regulating how AI can be used, to force businesses to explain
+    their AI algorithms so users can protect themselves.^([[18](#_footnotedef_18 "View
+    footnote.")]) Businesses won’t be able to hide their exploitative business practices
+    within algorithms for long.^([[19](#_footnotedef_19 "View footnote.")]) ^([[20](#_footnotedef_20
+    "View footnote.")]) You can imagine how governments and businesses might use a
+    nationality prediction algorithm for evil. Once you understand how this RNN works
+    you’ll be able to use that knowledge to trick algorithms into doing what’s right,
+    elevating rather than discriminating against historically disadvantaged groups
+    and cultures.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Perhaps the most important piece of an AI algorithm is the metric you used to
+    train it. You used `NLLLoss` for the PyTorch optimization training loop in listing
+    [8.8](#training-on-a-single-sample). The `NLL` part stands for "Negative Log Likelihood".
+    You should already know how to invert the `log()` part of that expression. Try
+    to guess what the mathematical function and Python code is to invert the `log()`
+    function before checking out the code snippet below. As with most ML algorithms,
+    `log` means natural log, sometimes written as *ln* or *log to the base e*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: This means that the model is only 31% confident that Rochdi is Algerian. These
+    probabilities (likelihoods) can be used to explain how confident your model is
+    to your boss or teammates or even your users.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you’re a fan of "debug by print" you can modify your model to print out anything
+    you’re interested in about the math the model uses to make predictions. PyTorch
+    models can be instrumented with print statements whenever you want to record some
+    of the internal goings on. If you do decide to use this approach, you only need
+    to `.detach()` the tensors from the GPU or CPU where they are located to bring
+    them back into your working RAM for recording in your model class.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A nice feature of RNNs is that the predictions are built up step by step as
+    your `forward()` method is run on each successive token. This means you may not
+    even need to add print statements or other instrumentation to your model class.
+    Instead, you can just make predictions of the hidden and output tensors for parts
+    of the input text.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You may want to add some `predict_*` convenience functions for your model class
+    to make it easier to explore and explain the model’s predictions. If you remember
+    the `LogisticRegression` model in Scikit-Learn, it has a `predict_proba` method
+    to predict probabilities in addition to the `predict` method used to predict the
+    category. An RNN has an additional hidden state vector you may sometimes want
+    to examine for clues as to how the network is making predictions. So you can create
+    a `predict_hidden` method to output the 128-D hidden tensor and a `predict_proba`
+    to show you the predicted probabilities for each of the target categories (nationalities).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: This `predict_hidden` convenience method converts the text (surname) into a
+    tensor before iterating through the one-hot tensors to run the forward method
+    (or just the model’s `self`).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: This `predict_hidden` method gives you access to the most interesting part of
+    the model where the "logic" of the predictions is taking place. The hidden layer
+    evolves as it learns more and more about the nationality of a name with each character.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Finally, you can use a `predict_category` convenience method to run the model’s
+    forward pass predictions to predict the nationality of a name.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: The key thing to recognize is that for all of these methods, you don’t necessarily
+    have to input the entire string for the surname. It is perfectly fine to reevaluate
+    the first part of the surname text over and over again, as long as you reset the
+    hidden layer each time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you input an expanding window of text you can see how the predictions and
+    hidden layer evolve in their understanding of the surname. During mob programming
+    sessions with other readers of this book, we noticed that nearly all names started
+    out with predictions of "Chinese" as the nationality for a name until after the
+    3rd or 4th character. This is perhaps because so many Chinese surnames contain
+    4 (or fewer) characters.^([[21](#_footnotedef_21 "View footnote.")])
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now that you have helper functions you can use them to record the hidden and
+    category predictions as the RNN is run on each letter in a name.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: And you can create a 128 x 6 matrix of all the hidden layer values in a 6-letter
+    name. The list of PyTorch tensors can be converted to a list of lists and then
+    a DataFrame to make it easier to manipulate and explore.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: This wall of numbers contains everything your RNN "thinks" about the name as
+    it is reading through it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: There are some Pandas display options that will help you get a feel for the
+    numbers in a large DataFrame without TMI ("too much information"). Here are some
+    of the settings that helped improve the printouts of tables in this book
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To display only 2 decimal places of precision for floating point values try:
+    `pd.options.display.float_format = ''{:.2f}''`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To display a maximum of 12 columns and 7 rows of data from your DataFrame:
+    `pd.options.display.max_columns = 12` and `pd.options.display.max_rows = 7`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: These only affect the displayed representation of your data, not the internal
+    values used when you do addition or multiplication.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As you’ve probably done with other large tables of numbers, it’s often helpful
+    to find patterns by correlating it with other numbers that are interesting to
+    you. For example, you may want to find out if any of the hidden weights are keeping
+    track of the RNN’s position within the text - how many characters it is from the
+    beginning or end of the text.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: Interestingly our hidden layer has room in its hidden memory to record the position
+    in many different places. And the strongest correlation seems to be negative.
+    These are likely helping the model to estimate the likelihood of the current character
+    being the last character in the name. When we looked at a wide range of example
+    names, the predictions only seemed to converge on the correct answer at the very
+    last character or two. Andrej Karpathy experimented with several more ways to
+    glean insight from the weights of your RNN model in his blog post "The unreasonable
+    effectiveness of RNNs" in the early days of discovering RNNs. ^([[22](#_footnotedef_22
+    "View footnote.")])]
+  prefs: []
+  type: TYPE_NORMAL
+- en: 8.2.4 Multiclass classifiers vs multi-label taggers
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: How can you deal with the ambiguity of multiple different correct nationalities
+    for surnames? The answer is multi-label classification or tagging rather than
+    the familiar multiclass classification. Because the terms "multiclass classification"
+    and "multi-label classification" sound so similar and are easily confused, you
+    probably want to use the term "multi-label tagging" or just "tagging" instead
+    of "multi-label classification." And if you’re looking for the `sklearn` models
+    suited to this kind of problem you want to search for "multi-output classification."
+  prefs: []
+  type: TYPE_NORMAL
+- en: Multi-label taggers are made for ambiguity. In NLP intent classification and
+    tagging is full of intent labels that have fuzzy overlapping boundaries. We aren’t
+    talking about a graffiti war between Banksy and Bario Logan street artists when
+    we say "taggers". We’re talking about a kind of machine learning model that can
+    assign multiple discrete labels to an object in your dataset.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A multiclass classifier has multiple different categorical labels that are matched
+    to objects, one label for each object. A categorical variable takes on only one
+    of several mutually exclusive classes or categories. For example, if you wanted
+    to predict both the language and the gender associated with first names (given
+    names), then that would require a multiclass classifier. But if you want to label
+    a name with all the relevant nationalities and genders that are appropriate, then
+    you would need a tagging model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This may seem like splitting hairs to you, but it’s much more than just semantics.
+    It’s the semantics (meaning) of the text that you are processing that is getting
+    lost in the noise of bad advice on the Internet. David Fischer at ReadTheDocs.com
+    (RTD) and the organizer for San Diego Python ran into these misinformed blog posts
+    when he started learning about NLP to build a Python package classifier. Ultimately
+    he ended up building a tagger, which gave RTD advertisers more effective placements
+    for their ads and gave developers reading documentation more relevant advertisements.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: To turn any multi-class classifier into a multi-label tagger you must change
+    your activation function from `softmax` to an element-wise `sigmoid` function.
+    A softmax creates a probability distribution across all the mutually exclusive
+    categorical labels. A sigmoid function allows every value to take on any value
+    between zero and one, such that each dimension in your multi-label tagging output
+    represents the independent binary probability of that particular label applying
+    to that instance.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 8.3 Backpropagation through time
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Backpropagation for RNNs is a lot more work than for CNNs. The reason training
+    an RNN is so computationally expensive is that it must perform the forward and
+    backward calculations many times for each text example - once for each token in
+    the text. And then it has to do all that again for the next layer in the RNN.
+    And this sequence of operations is really important because the computation for
+    one token depends on the previous one. You are recycling the output and hidden
+    state tensors back into the calculation for the next token. For CNNs and fully
+    connected neural networks, the forward and backward propagation calculations could
+    run all at once on the entire layer. The calculations for each token in your text
+    did not affect the calculation for the neighboring tokens in the same text. RNNs
+    do forward and backward propagation in time, from one token in the sequence to
+    the next.
+  prefs: []
+  type: TYPE_NORMAL
+- en: But you can see in the unrolled RNN in Figure 8.7 that your training must propagate
+    the error back through all the weight matrix multiplications. Even though the
+    weight matrices are the same, or `tied` for all the tokens in your data, they
+    must work on each and every token in each of your texts. So your training loop
+    will need to loop through all the tokens backward to ensure that the error at
+    each step of the way is used to adjust the weights.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The initial error value is the distance between the final output vector and
+    the "true" vector for the label appropriate for that sample of text. Once you
+    have that difference between the truth and the predicted vector, you can work
+    your way back through time (tokens) to propagate that error to the previous time
+    step (previous token). The PyTorch package will use something very similar to
+    the chain rule that you used in algebra or calculus class to make this happen.
+    PyTorch calculates the gradients it needs during forward propagation and then
+    multiplies those gradients by the error for each token to decide how much to adjust
+    the weights and improve the predictions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: And once you’ve adjusted the weights for all the tokens in one layer you do
+    the same thing again for all the tokens on the next layer. Working your way from
+    the output of the network all the way back to the inputs (tokens) you will eventually
+    have to "touch" or adjust all of the weights many times for each text example.
+    Unlike backpropagation through a linear layer or CNN layer, the backpropagation
+    on an RNN must happen serially, one token at a time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: An RNN is just a normal feedforward neural network "rolled up" so that the Linear
+    weights are multiplied again and again for each token in your text. If you unroll
+    it you can see all the weight matrices that need to be adjusted. And like the
+    CNN, many of the weight matrices are shared across all of the tokens in the unrolled
+    view of the neural network computational graph. An RNN is one long kernel that
+    reuses "all" of the weights for each text document. The weights of an RNN are
+    one long, giant kernel. At each time step, it is the *same* neural network, just
+    processing a different input and output at that location in the text.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: In all of these examples, you have been passing in a single training example,
+    the *forward pass*, and then backpropagating the error. As with any neural network,
+    this forward pass through your network can happen after each training sample,
+    or you can do it in batches. And it turns out that batching has benefits other
+    than speed. But for now, think of these processes in terms of just single data
+    samples, single sentences, or documents.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In chapter 7 you learned how to process a string all at once with a CNN. CNNs
+    can recognize patterns of meaning in text using kernels (matrices of weights)
+    that represent those patterns. CNNs and the techniques of previous chapters are
+    great for most NLU tasks such as text classification, intent recognition, and
+    creating embedding vectors to represent the meaning of text in a vector. CNNs
+    accomplish this with overlapping windows of weights that can detect almost any
+    pattern of meaning in text.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 8\. 9\. 1D convolution with embeddings
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![cnn stride text words are sacred transparent drawio](images/cnn-stride-text-words-are-sacred_transparent_drawio.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: In Chapter 7 you imagined striding the kernel window over your text, one step
+    at a time. But in reality, the machine is doing all the multiplications in parallel.
+    The order of operations doesn’t matter. For example, the convolution algorithm
+    can do the multiplication on the pair of words and then hop around to all the
+    other possible locations for the window. It just needs to compute a bunch of dot
+    products and then sum them all up or pool them together at the end. Addition is
+    commutative (order doesn’t matter). And none of the convolution dot products depend
+    on any of the others. In fact, on a GPU these matrix multiplications (dot products)
+    are all happening *in parallel* at approximately the *same* time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: But an RNN is different. With an RNN you’re recycling the output of one token
+    back into the dot product you’re doing on the next token. So even though we talked
+    about RNNs working on any length text, to speed things up, most RNN pipelines
+    truncate and pad the text to a fixed length. This unrolls the RNN matrix multiplications
+    so that And you need two matrix multiplications for an RNN compared to one multiplication
+    for a CNN. You need one matrix of weights for the hidden vector and another for
+    the output vector.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you’ve done any signal processing or financial modeling you may have used
+    an RNN without knowing it. The recurrence part of a CNN is called 'auto-regression"
+    in the world of signal processing and quantitative financial analysis. An *auto-regressive
+    moving average* (ARMA) model is an RNN in disguise.^([[23](#_footnotedef_23 "View
+    footnote.")])
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this chapter, you are learning about a new way to structure the input data.
+    Just as in a CNN, each token is associated with a time (`t`) or position within
+    the text. The variable `t` is just another name for the index variable in your
+    sequence of tokens.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You will even see places where you use the integer value of `t` to retrieve
+    a particular token in the sequence of tokens with an expression such as `token
+    = tokens[t]`. So when you see `t-1` or `tokens[t-1]` you know that it is referring
+    to the preceding time step or token. And `t+1` and `tokens[t+1]` refers to the
+    next time step or token. In past chapters, you may have seen that we sometimes
+    used `i` for this index value.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now you will use multiple different indexes to keep track of what has been
+    passed into the network and is being output by the network:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`t` or `token_num`: time step or token position for the current tensor being
+    input to the network'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`k` or `sample_num`: sample number within a batch for the text example being
+    trained on'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`b` or `batch_num`: batch number of the set of samples being trained'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`epoch_num`: number of epochs that have passed since the start of training'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Figure 8.10 Data fed into a recurrent network
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![rnn input](images/rnn_input.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: This 2-D tensor representation of a document is similar to the "player piano"
+    representation of text in chapter 2\. Only this time you are creating a dense
+    representation of each token using word embeddings.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For an RNN you no longer need to process each text sample all at once. Instead,
+    you process text one token at a time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In your recurrent neural net, you pass in the word vector for the first token
+    and get the network’s output. You then pass in the second token, but you also
+    pass in the output from the first token! And then pass in the third token along
+    with the output from the second token. And so on. The network has a concept of
+    before and after, cause and effect - some vague notion of time (see Figure 8.8).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 8.3.1 Initializing the hidden layer in an RNN
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: There’s a chicken-and-egg problem with the hidden layer when you restart the
+    training of an RNN on each new document. For each text string you want to process,
+    there is no "previous" token or previous hidden state vector to recycle back into
+    the network. You don’t have anything to prime the pump with and start the recycling
+    (recurrence) loop. Your model’s `forward()` method needs a vector to concatenate
+    with the input vector so that it will be the right size for multiplying by `W_c2h`
+    and `W_c2o`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The most obvious approach is to set the initial hidden state to all zeroes and
+    allow the biases and weights to quickly ramp up to the best values during the
+    training on each sample. This can be great for any of the neurons that are keeping
+    track of time, the position in the token sequence that is currently (recurrently)
+    being processed. But there are also neurons trying to predict how far from the
+    end of the sequence you are. And your network has a defined polarity with 0 for
+    off and 1 for on. So you may want your network to start with a mix of zeros and
+    ones for your hidden state vector. Better yet you can use some gradient or pattern
+    of values between zero and 1 which is your particular "secret sauce", based on
+    your experience with similar problems.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Getting creative and being consistent with your initialization of deep learning
+    networks has the added benefit of creating more "explainable" AI. You will often
+    create a predictable structure in your weights. And by doing it the same way each
+    time you will know where to look within all the layers. For example, you will
+    know which positions in the hidden state vector are keeping track of position
+    (time) within the text.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To get the full benefit of this consistency in your initialization values you
+    will also need to be consistent with the ordering of your samples used during
+    training. You can sort your texts by their lengths, as you did with CNNs in Chapter
+    7\. But many texts will have the same length, so you will also need a sort algorithm
+    that consistently orders the samples with the same length. Alphabetizing is an
+    obvious option, but this will tend to trap your model in local minima as it’s
+    trying to find the best possible predictions for your data. It would get really
+    good at the "A" names but do poorly on "Z" names. So don’t pursue this advanced
+    seeding approach until you’ve fully mastered the random sampling and shuffling
+    that has proven so effective.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As long as you are consistent throughout the training process, your network
+    will learn the biases and weights that your network needs to layer on top of these
+    initial values. And that can create a recognizable structure in your neural network
+    weights.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: In some cases, it can help to seed your neural networks with an initial hidden
+    state other than all zeros. Johnathon Frankle and Michael Carbin found that being
+    intentional about reuse of good initialization values can be key to helping a
+    network find the *global minimum* loss achievable for a particular dataset "Lottery
+    Ticket Hypothesis" paper, ^([[24](#_footnotedef_24 "View footnote.")]) Their approach
+    is to initialize all weights and biases using a random seed that can be reused
+    in subsequent training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now your network is remembering something! Well, sort of. A few things remain
+    for you to figure out. For one, how does backpropagation even work in a structure
+    like this?
+  prefs: []
+  type: TYPE_NORMAL
+- en: Another approach that is popular in the Keras community is to retain the hidden
+    layer from a previous batch of documents. This "pre-trained" hidden layer embedding
+    gives your language model information about the context of the new document -
+    the text that came before it. However, this only makes sense if you’ve maintained
+    the order of your documents within the batches and across the batches that you
+    are training. In most cases, you shuffle and reshuffle your training examples
+    with each epoch. You do this when you want your model to work equally well at
+    making predictions "cold" without any priming by reading similar documents or
+    nearby passages of text.
+  prefs: []
+  type: TYPE_NORMAL
+- en: So unless you are trying to squeeze out every last bit of accuracy you can for
+    a really difficult problem you should probably just reset it to zeros every time
+    to start feeding a new document into your model. And if you do use this *stateful*
+    approach to training an RNN, make sure you will be able to warm up your model
+    on context documents for each prediction it needs to make in the real world (or
+    on your test set). And make sure you prepare your documents in a consistent order
+    and can reproduce this document ordering for a new set of documents that you need
+    to make prediction on with your model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 8.4 Remembering with recurrent networks
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: An RNN remembers previous words in the text they are processing and can keep
+    adding more and more patterns to its memory as it processes a theoretically limitless
+    amount of text. This can help it understand patterns that span the entire text
+    and recognize the difference between two texts that have dramatically different
+    meanings depending on where words occur.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*I apologize for the lengthy letter. I didn’t have time to write a shorter
+    one.*'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*I apologize for the short letter. I didn’t have time to write a lengthy one.*'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Swapping the words "short" and "lengthy", flips the meaning of this Mark Twain
+    quote. Knowing Mark Twain’s dry sense of humor and passion for writing, can you
+    tell which quote is his? It’s the one where he apologizes for the lengthy letter.
+    He’s making light of the fact that editing and writing concisely is hard work.
+    It’s something that smart humans can still do better than even the smartest AI.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The CNNs you learned about in Chapter 7 would have a hard time making the connection
+    between these two sentences about lengthy and short letters, whereas RNNs make
+    this connection easily. This is because CNNs have a limited window of text that
+    they can recognize patterns within. To make sense of an entire paragraph, you
+    would have to build up layers of CNNs with overlapping kernels or windows of text
+    that they understand. RNNs do this naturally. RNNs remember something about every
+    token in the document they’ve read. They remember everything you’ve input into
+    them until you tell them you are done with that document. This makes them better
+    at summarizing lengthy Mark Twain letters and makes them better at understanding
+    his long sophisticated jokes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Mark Twain was right. Communicating things concisely requires skill, intelligence
+    and attention to detail. In the paper "Attention is All You Need" Ashish Vaswani
+    revealed how transformers can add an attention matrix that allows RNNs to accurately
+    understand much longer documents.^([[25](#_footnotedef_25 "View footnote.")])
+    In chapter 9 you’ll see this attention mechanism at work, as well as the other
+    tricks that make the transformer approach to RNNs the most successful and versatile
+    deep learning architecture so far.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summarization of lengthy text is still an unsolved problem in NLP. Even the
+    most advanced RNNs and transformers make elementary mistakes. In fact, The Hutter
+    Prize for Artificial Intelligence will give you 5000 Euros for each one percent
+    improvement in the compression (lossless summarization) of Wikipedia.^([[26](#_footnotedef_26
+    "View footnote.")]) The Hutter Prize focuses on the compression of the symbols
+    within Wikipedia. You’re going to learn how to compress the meaning of text. That’s
+    even harder to do well. And it’s hard to measure how well you’ve done it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You will have to develop generally intelligent machines that understand common
+    sense logic and can organize and manipulate memories and symbolic representations
+    of those memories. That may seem hopeless, but it’s not. The RNNs you’ve built
+    so far can remember everything in one big hidden representation of their understanding.
+    Can you think of a way to give some structure to that memory, so that your machine
+    can organize its thoughts about text a bit better? What if you gave your machine
+    a separate way to maintain both short-term memories and long-term memories? This
+    would give it a working memory that it could then store in long-term memory whenever
+    it ran across a concept that was important to remember.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 8.4.1 Word-level Language Models
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: All the most impressive language models that you’ve read about use words as
+    their tokens, rather than individual characters. So, before you jump into GRUs
+    and LSTMs you will need to rearrange your training data to contain sequences of
+    word IDs rather than character (letter) IDs. And you’re going to have to deal
+    with much longer documents than just surnames, so you will want to `batchify`
+    your dataset to speed it up.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Take a look at the Wikitext-2 dataset and think about how you will preprocess
+    it to create a sequence of token IDs (integers).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: Oh wow, this is going to be an interesting dataset. Even the English language
+    version of Wikipedia contains a lot of other natural languages in it, such as
+    Japanese in this first article. If you use your tokenization and vocabulary-building
+    skills from previous chapters you should be able to create a Corpus class like
+    the one used in the RNN examples coming up.^([[27](#_footnotedef_27 "View footnote.")])
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'And you always want to make sure that your vocabulary has all the info you
+    need to generate the correct words from the sequence of word IDs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now, during training your RNN will have to read each token one at a time. That
+    can be pretty slow. What if you could train it on multiple passages of text simultaneously?
+    You can do this by splitting your text into batches or *batchifying* your data.
+    These batches can each become columns or rows in a matrix that PyTorch can more
+    efficiently perform math on within a *GPU* (Graphics Processing Unit).
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the `nlpia2.ch08.data` module you’ll find some functions for batchifying
+    long texts.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: One last step and your data is ready for training. You need to `stack` the tensors
+    within this list so that you have one large tensor to iterate through during your
+    training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: 8.4.2 Gated Recurrent Units (GRUs)
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: For short text, ordinary RNNs with a single activation function for each neuron
+    works well. All your neurons need to do is recycle and reuse the hidden vector
+    representation of what they have read so far in the text. But ordinary RNNs have
+    a short attention span that limits their ability to understand longer texts. The
+    influence of the first token in a string fades over time as your machine reads
+    more and more of the text. That’s the problem that GRU (Gated Recurrent Unit)
+    and LSTM (Long and Short Term Memory) neural networks aim to fix.
+  prefs: []
+  type: TYPE_NORMAL
+- en: How do you think you could counteract fading memory of early tokens in a text
+    string? How could you stop the fading, but just for a few important tokens at
+    the beginning of a long text string? What about adding an `if` statement to record
+    or emphasize particular words in the text. That’s what GRUs do. GRUs add `if`
+    statements, called *logic gates* (or just "gates"), to RNN neurons.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The magic of machine learning and backpropagation will take care of the if statement
+    conditions for you, so you don’t have to adjust logic gate thresholds manually.
+    Gates in an RNN learn the best thresholds by adjusting biases and weights that
+    affect the level of a signal that triggers a zero or 1 output (or something in
+    between). And the magic of back-propagation in time will train the LSTM gates
+    to let important signals (aspects of token meaning) pass through and get recorded
+    in the hidden vector and cell state vector.
+  prefs: []
+  type: TYPE_NORMAL
+- en: But wait, you probably thought we already had if statements in our network.
+    After all, each neuron has a nonlinear activation function that acts to squash
+    some outputs to zero and push others up close to 1\. So the key isn’t that LSTMs
+    add gates (activation functions) to your network. The key is that the new gates
+    are *inside* the neuron and connected in a way that creates a structure to your
+    neural network that wouldn’t naturally just emerge from a normal linear, fully-connected
+    layer of neurons. And that structure was intentionally designed with a purpose,
+    reflecting what researchers thing would help RNN neurons deal with this long-term
+    memory problem.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In addition to the original RNN output gate, GRUs add two new logic gates or
+    activation functions within your recurrent unit.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Reset gate: What parts of the hidden layer should be blocked because they are
+    no longer relevant to the current output.'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Update gate: What parts of the hidden layer should matter to the current output
+    (now, at time `t`).'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: You already had an activation function on the output of your RNN layer. This
+    output logic gate is called the "new" logic gate in a GRU.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: So when you are thinking about how many units to add to your neural network
+    to solve a particular problem, each LSTM or GRU unit gives your network a capacity
+    similar to 2 "normal" RNN neurons or hidden vector dimensions. A unit is just
+    a more complicated, higher-capacity neuron, and you can see this if you count
+    up the number of "learned parameters" in your LSTM model and compare it to those
+    of an equivalent RNN.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: You’re probably wondering why we started using the word "unit" rather than "neuron"
+    for the elements of this neural net. Researchers use the terms "unit" or "cell"
+    to describe the basic building blocks of an LSTM or GRU neural network because
+    they are a bit more complicated than a neuron. Each unit or cell in an LSTM or
+    GRU contains internal gates and logic. This gives your GRU or LSTM units more
+    capacity for learning and understanding text, so you will probably need fewer
+    of them to achieve the same performance as an ordinary RNN.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The *reset*, *update*, and *new* logic gates are implemented with the fully-connected
+    linear matrix multiplications and nonlinear activation functions you are familiar
+    with from Chapter 5\. What’s new is that they are implemented on each token recurrently
+    and they are implemented on the hidden and input vectors in parallel. Figure 8.12
+    shows how the input vector and hidden vector for a single token flow through the
+    logic gates and output the prediction and hidden state tensors.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 8.11 GRUs add capacity with logic gates
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![gru drawio](images/gru_drawio.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'If you have gotten good at reading data flow diagrams like Figure 8.12 you
+    may be able to see that the GRU *update* and *relevance* logic gates are implementing
+    the following two functions: ^([[28](#_footnotedef_28 "View footnote.")])'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: Looking at these two lines of code you can see that inputs to the formula are
+    exactly the same. Both the hidden and input tensors are multiplied by weight matrices
+    in both formulas. And if you remember your linear algebra and matrix multiplication
+    operations, you might be able to simplify the And you may notice in the block
+    diagram (figure 8.12) that the input and hidden tensors are concatenated together
+    before the matrix multiplication by W_reset, the reset weight matrix.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Once you add GRUs to your mix of RNN model architectures, you’ll find that they
+    are much more efficient. A GRU will achieve better accuracy with fewer learned
+    parameters and less training time and less data. The gates in a GRU give structure
+    to the neural network that creates more efficient mechanisms for remembering important
+    bits of meaning in the text. To measure efficiency you’ll need some code to count
+    up the learned (trainable) parameters in your models. This is the number of weight
+    values that your model must adjust to optimize the predictions. The requires_grad
+    attribute is an easy way to check whether a particular layer contains learnable
+    parameters or not.^([[29](#_footnotedef_29 "View footnote.")])
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: The more weights or learned parameters there are, the greater the capacity of
+    your model to learn more things about the data. But the whole point of all the
+    clever ideas, like convolution and recurrence, is to create neural networks that
+    are efficient. By choosing the right combination of algorithms, sizes and types
+    of layers, you can reduce the number of weights or parameters your model must
+    learn while simultaneously creating smarter models with greater capacity to make
+    good predictions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you experiment with a variety of GRU hyperparameters using the `nlpia2/ch08/rnn_word/hypertune.py`
+    script you can aggregate all the results with your RNN results to compare them
+    all together.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: You can see from these experiments that GRUs are your best bet for creating
+    language models that understand text well enough to predict the next word. Surprisingly
+    GRUs do not need as many layers as other RNN architectures to achieve the same
+    accuracy. And they take less time to train than RNNs to achieve comparable accuracy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 8.4.3 Long and Short-Term Memory (LSTM)
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: An LSTM neuron adds two more internal gates in an attempt to improve both the
+    long-term and the short-term memory capacity of an RNN. An LSTM retains the update
+    and relevance gates but adds new gates for forgetting and the output gate. four
+    internal gates, each with a different purpose. The first one is just the normal
+    activation function that you are familiar with.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Forgetting gate (`f`): Whether to completely ignore some element of the hidden
+    layer to make room in memory for future more important tokens.'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Input or update gate (`i`): What parts of the hidden layer should matter to
+    the current output (now, at time `t`).'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Relevance or cell gate (`i`): What parts of the hidden layer should be blocked
+    because they are not longer relevant to the current output.'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Output gate (`o`): What parts of the hidden layer should be output, both to
+    the neurons output as well as to the hidden layer for the next token in the text.'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: But what about that unlabeled `tanh` activation function at the upper right
+    of Figure 8.12? That’s just the original output activation used to create the
+    hidden state vector from the cell state. The hidden state vector holds information
+    about the most recently processed tokens; it’s the short-term memory of the LSTM.
+    The cell state vector holds a representation of the meaning of the text over the
+    long term, since the beginning of a document.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In Figure 8.13 you can see how these four logic gates fit together. The various
+    weights and biases required for each of the logic gates are hidden to declutter
+    the diagram. You can imagine the weight matrix multiplications happening within
+    each of the activation functions that you see in the diagram. Another thing to
+    notice is that the hidden state is not the only recurrent input and output. You’ve
+    now got another encoding or state tensor called the *cell state*. As before, you
+    only need the hidden state to compute the output at each time step. But the new
+    cell state tensor is where the long and short-term memories of past patterns are
+    encoded and stored to be reused on the next token.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 8.12 LSTMs add a forgetting gate and a cell output
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![lstm drawio](images/lstm_drawio.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: One thing in this diagram that you’ll probably only see in the smartest blog
+    posts is the explicit linear weight matrix needed to compute the output tensor.^([[30](#_footnotedef_30
+    "View footnote.")]) Even the PyTorch documentation glosses over this tidbit. You’ll
+    need to add this fully connected linear layer yourself at whichever layer you
+    are planning to compute predictions based on your hidden state tensor.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You’re probably saying to yourself "Wait, I thought all hidden states (encodings)
+    were the same, why do we have this new *cell state* thing?" Well, that’s the long-term
+    memory part of an LSTM. The cell state is maintained separately so the logic gates
+    can remember things and store them there, without having to mix them in with the
+    shorter-term memory of the hidden state tensor. And the cell state logic is a
+    bit different from the hidden state logic. It’s designed to be selective in the
+    things it retrains to keep room for things it learns about the text long before
+    it reaches the end of the string.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The formulas for computing the LSTM logic gates and outputs are very similar
+    to those for the GRU. The main difference is the addition of 3 more functions
+    to compute all the signals you need. And some of the signals have been rerouted
+    to create a more complicated network for storing more complex patterns of connections
+    between long and short-term memory of the text. It’s this more complicated interaction
+    between hidden and cell states that creates more "capacity" or memory and computation
+    in one cell. Because an LSTM cell contains more nonlinear activation functions
+    and weights it has more information processing capacity.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: 8.4.4 Give your RNN a tuneup
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: As you learned in Chapter 7, hyperparameter tuning becomes more and more important
+    as your neural networks get more and more complicated. Your intuitions about layers,
+    network capacity and training time will get fuzzier and fuzzier as the models
+    get complicated. RNNs are particularly intuitive. To jumpstart your intuition
+    we’ve trained dozens of different basic RNNs with different combinations of hyperparameters
+    such as the number of layers and number of hidden units in each layer. You can
+    explore all the hyperparameters that you are curious about using the code in `nlpia2/ch08`.^([[31](#_footnotedef_31
+    "View footnote.")])
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: It’s a really exciting thing to explore the hyperspace of options like this
+    and discover surprising tricks for building accurate models. Surprisingly, for
+    this RNN language model trained on a small subset of Wikipedia, you can get great
+    results without maximizing the size and capacity of the model. You can achieve
+    better accuracy with a 3-layer RNN than with a 5-layer RNN. You just need to start
+    with an aggressive learning rate and keep the dropout to a minimum. And the fewer
+    layers you have the faster the model will train.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: Experiment often, and always document what things you tried and how well the
+    model worked. This kind of hands-on work provides the quickest path toward an
+    intuition that speeds up your model building and learning. Your lifelong goal
+    is to train your mental model to predict which hyperparameter values will produce
+    the best results in any given situation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you feel the model is overfitting the training data but you can’t find a
+    way to make your model simpler, you can always try increasing the `Dropout(percentage)`.
+    This is a sledgehammer that reduces overfitting while allowing your model to have
+    as much complexity as it needs to match the data. If you set the dropout percentage
+    much above 50%, the model starts to have a difficult time learning. Your learning
+    will slow and the validation error may bounce around a lot. But 20% to 50% is
+    a pretty safe range for a lot of RNNs and most NLP problems.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you’re like Cole and me when we were getting started in NLP, you’re probably
+    wondering what a "unit" is. All the previous deep learning models have used "neurons"
+    as the fundamental unit of computation within a neural network. Researchers use
+    the more general term "unit" to describe the elements of an LSTM or GRU that contain
+    internal gates and logic. So when you are thinking about how many units to add
+    to your neural network to solve a particular problem, each LSTM or GRU unit gives
+    your network a capacity similar to two "normal" RNN neurons or hidden vector dimensions.
+    A unit is just a more complicated, higher-capacity neuron, and you can see this
+    if you count up the number of "learned parameters" in your LSTM model and compare
+    it to those of an equivalent RNN.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 8.5 Predicting
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The word-based RNN language model you trained for this chapter used the `WikiText-2`
+    corpus.^([[32](#_footnotedef_32 "View footnote.")]) The nice thing about working
+    with this corpus is that it is often used by researchers to benchmark their language
+    model accuracy. And the Wikipedia article text has already been tokenized for
+    you. Also, the uninteresting sections such as the References at the end of the
+    articles have been removed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Unfortunately, the PyTorch version of the WikiText-2 includes "<unk>" tokens
+    that randomly replace, or mask, 2.7% of the tokens. That means that your model
+    will never get very high accuracy unless there is some predictable pattern that
+    determines which tokens were masked with "<unk>". But if you download the original
+    raw text without the masking tokens you can train your language model on it and
+    get a quick boost in accuracy.^([[33](#_footnotedef_33 "View footnote.")]) And
+    you can compare the accuracy of your LSTM and GRU models to those of the experts
+    that use this benchmark data.^([[34](#_footnotedef_34 "View footnote.")])
+  prefs: []
+  type: TYPE_NORMAL
+- en: Here is an example paragraph at the end of the masked training dataset `train.txt`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: It seems that the last Wikipedia article in the WikiText-2 benchmark corpus
+    is about the common starling (a small bird in Europe). And from the article, it
+    seems that the starling appears to be good at mimicking human speech, just as
+    your RNN can.
+  prefs: []
+  type: TYPE_NORMAL
+- en: What about those "<unk>" tokens? These are designed to test machine learning
+    models. Language models are trained with the goal of predicting the words that
+    were replaced with the "<unk>" (unknown) tokens. Because you have a pretty good
+    English language model in your brain you can probably predict the tokens that
+    have been masked out with all those "<unk>" tokens.
+  prefs: []
+  type: TYPE_NORMAL
+- en: But if the machine learning model you are training thinks these are normal English
+    words, you may confuse it. The RNN you are training in this chapter is trying
+    to discern the *meaning* of the meaningless "<unk>" token, and this will reduce
+    its understanding of all other words in the corpus.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: If you want to avoid this additional source of error and confusion, you can
+    try training your RNN on the unofficial raw text for the `wikitext-2` benchmark.
+    There is a one-to-one correspondence between the tokens of the official wikitext-2
+    corpus and the unofficial raw version in the nlpia2 repository. ^([[35](#_footnotedef_35
+    "View footnote.")])
+  prefs: []
+  type: TYPE_NORMAL
+- en: So how many "<eos>" and "<unk>" tokens are there in this training set?
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: So 2.6% of the tokens have been replaced with the meaningless "<unk>" token.
+    And the "<eos>" token marks the newlines in the original text, which is typically
+    the end of a paragraph in a Wikipedia article.
+  prefs: []
+  type: TYPE_NORMAL
+- en: So let’s see how well it does at writing new sentences similar to those in the
+    WikiText-2 dataset, including the "<unk>" tokens. We’ll prompt the model to start
+    writing with the word "The" to find out what’s on the top of its "mind".
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: The first line in the training set is "= Valkyria Chronicles III =" and the
+    last article in the training corpus is titled "= Common Starling =". So this GRU
+    remembers how to generate text similar to text at the beginning and end of the
+    text passages it has read. So it surely seems to have both long and short-term
+    memory capabilities. This is exciting, considering we only trained a very simple
+    model on a very small dataset. But this GRI doesn’t yet seem to have the capacity
+    to store all of the English language patterns that it found in the two-million-token-long
+    sequence. And it certainly isn’t going to do any sense-making any time soon.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: Sense-making is the way people give meaning to the experiences that they share.
+    When you try to explain to yourself why others are doing what they are doing,
+    you are doing sense-making. And you don’t have to do it alone. A community can
+    do it as a group through public conversation mediated by social media apps and
+    even conversational virtual assistants. That’s why it’s often called "collective
+    sense-making." Startups like DAOStack are experimenting with chatbots that bubble
+    up the best ideas of a community and use them for building knowledge bases and
+    making decisions. ^([[36](#_footnotedef_36 "View footnote.")])
+  prefs: []
+  type: TYPE_NORMAL
+- en: You now know how to train a versatile NLP language model that you can use on
+    word-level or character-level tokens. You can use these models to classify text
+    or even generate modestly interesting new text. And you didn’t have to go crazy
+    on expensive GPUs and servers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 8.6 Test yourself
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: What are some tricks to improve "retention" for reading long documents with
+    an RNN?
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: What are some "unreasonably effective" applications for RNNs in the real world?
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: How could you use a name classifier for good? What are some unethical uses of
+    a name classifier?
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: What are some ethical and prosocial AI uses for a dataset with millions of username-password
+    pairs such as Mark Burnett’s password dataset? ^([[37](#_footnotedef_37 "View
+    footnote.")])
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Train an rnn_word model on the raw text, unmasked text for the Wikitext-2 dataset
+    the proportion of tokens that are "<unk>". Did this improve the accuracy of your
+    word-level RNN language model?
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Modify the dataset to label each name with a multi-hot tensor indicating all
+    the nationalities for each name.^([[38](#_footnotedef_38 "View footnote.")]) ^([[39](#_footnotedef_39
+    "View footnote.")]) How should you measure accuracy? Does your accuracy improve?
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 8.7 Summary
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In natural language token sequences, an RNN can remember everything it has read
+    up to that point, not just a limited window.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Splitting a natural language statement along the dimension of time (tokens)
+    can help your machine deepen its understanding of natural language.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: You can backpropagate errors back in time (token) as well as in the layers of
+    a deep learning network.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Because RNNs are particularly deep neural nets, RNN gradients are particularly
+    temperamental, and they may disappear or explode.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Efficiently modeling natural language character sequences wasn’t possible until
+    recurrent neural nets were applied to the task.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Weights in an RNN are adjusted in aggregate across time for a given sample.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: You can use different methods to examine the output of recurrent neural nets.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: You can model the natural language sequence in a document by passing the sequence
+    of tokens through an RNN backward and forward in time simultaneously.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[[1]](#_footnoteref_1) Mathematics forum StackExchange question about recurrence
+    and recursion ( [https://math.stackexchange.com/questions/931035/recurrence-vs-recursive](931035.html))'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[2]](#_footnoteref_2) MIT Open Courseware lectures for CS 6.005 "Software
+    Construction" ( [https://ocw.mit.edu/ans7870/6/6.005/s16/classes/10-recursion/](10-recursion.html))'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[3]](#_footnoteref_3) Papers with Code query for RNN applications ( [https://proai.org/pwc-rnn](proai.org.html))'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[4]](#_footnoteref_4) Daniel Miessler’s Unsupervised Learning podcast #340
+    ( [https://mailchi.mp/danielmiessler/unsupervised-learning-no-2676196](danielmiessler.html))
+    and the RNN source code ( [https://github.com/JetP1ane/Affinis](JetP1ane.html))'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[5]](#_footnoteref_5) Ryan Stout’s ( [https://github.com/ryanstout](github.com.html))
+    BustAName app ( [https://bustaname.com/blog_posts](bustaname.com.html))'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[6]](#_footnoteref_6) Garrett Lander, Al Kari, and Chris Thompson contributed
+    to our project to unredact the Meuller report ( [https://proai.org/unredact](proai.org.html))'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[7]](#_footnoteref_7) Rorsharch test Wikipedia article ( [https://en.wikipedia.org/wiki/Rorschach_test](wiki.html))'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[8]](#_footnoteref_8) "The unreasonable effectiveness of RNNs" ( [https://karpathy.github.io/2015/05/21/rnn-effectiveness](21.html))'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[9]](#_footnoteref_9) PyTorch `RNNBase` class source code ( [https://github.com/pytorch/pytorch/blob/75451d3c81c88eebc878fb03aa5fcb89328989d9/torch/nn/modules/rnn.py#L44](modules.html))'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[10]](#_footnoteref_10) Portland Python User Group presentation on unredacting
+    the Meuller Report ( [https://proai.org/unredact](proai.org.html))'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[11]](#_footnoteref_11) Lex Fridman interview with ex-spy Andrew Bustamante
+    ( [https://lexfridman.com/andrew-bustamante](lexfridman.com.html))'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[12]](#_footnoteref_12) There’s more info and data scraping code in the nlpia2
+    package ( [https://proai.org/nlpia-ch08-surnames](proai.org.html))'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[13]](#_footnoteref_13) PyTorch RNN Tutorial by Sean Robertson ( [https://pytorch.org/tutorials/intermediate/char_rnn_classification_tutorial.html](intermediate.html))'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[14]](#_footnoteref_14) The original PyTorch RNN Tutorial surname dataset
+    with duplicates ( [https://download.pytorch.org/tutorial/data.zip](tutorial.html))'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[15]](#_footnoteref_15) iPython `history` log in the `nlpia2` repository on
+    GitLab with examples for scraping surname data ( [https://proai.org/nlpia-ch08-surnames](proai.org.html))'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[16]](#_footnoteref_16) PyTorch character-based RNN tutorial ( [https://pytorch.org/tutorials/intermediate/char_rnn_classification_tutorial.html](intermediate.html))'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[17]](#_footnoteref_17) Qary ( [https://docs.qary.ai](.html)) combines technology
+    and data from all our multilingual chatbots ( [https://tangibleai.com/our-work](tangibleai.com.html))'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[18]](#_footnoteref_18) AI algorithm registry launched in Amsterdam in 2020
+    ( [https://algoritmeregister.amsterdam.nl/en/ai-register/](ai-register.html))'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[19]](#_footnoteref_19) EU Artificial Intelligence Act website ( [https://artificialintelligenceact.eu/](artificialintelligenceact.eu.html))'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[20]](#_footnoteref_20) The accepted ''OECD AI Council'' recommendations (
+    [https://legalinstruments.oecd.org/en/instruments/OECD-LEGAL-0449](instruments.html)
+    )'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[21]](#_footnoteref_21) Thank you Tiffany Kho for pointing this out.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[22]](#_footnoteref_22) footnote:["The unreasonable effectiveness of RNNs"
+    by Andrej Karpathy ( [https://karpathy.github.io/2015/05/21/rnn-effectiveness](21.html))'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[23]](#_footnoteref_23) ARMA model explanation ( [https://en.wikipedia.org/wiki/Autoregressive_model](wiki.html))'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[24]](#_footnoteref_24) [https://arxiv.org/pdf/1803.03635.pdf](pdf.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[25]](#_footnoteref_25) "Attention Is All You Need" by Ashish Vaswani et al
+    ( [https://arxiv.org/abs/1706.03762](abs.html))'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[26]](#_footnoteref_26) [https://en.wikipedia.org/wiki/Hutter_Prize](wiki.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[27]](#_footnoteref_27) The full source code is in the nlpia2 package ( [https://gitlab.com/tangibleai/nlpia2/-/blob/main/src/nlpia2/ch08/rnn_word/data.py](rnn_word.html))'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[28]](#_footnoteref_28) PyTorch docs for GRU layers ( [https://pytorch.org/docs/stable/generated/torch.nn.GRU.html#torch.nn.GRU](generated.html))'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[29]](#_footnoteref_29) PyTorch docs discussion about counting up learned
+    parameters ( [https://discuss.pytorch.org/t/how-do-i-check-the-number-of-parameters-of-a-model/4325/9](4325.html)
+    )'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[30]](#_footnoteref_30) Thank you Rian Dolphin for "LSTM Networks | A Detailed
+    Explanation" ( [http://archive.today/8YD7k](archive.today.html)).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[31]](#_footnoteref_31) The `hypertune.py` script in the `ch08/rnn_word` module
+    within the `nlpia2` Python package [https://gitlab.com/tangibleai/nlpia2/-/blob/main/src/nlpia2/ch08/rnn_word/hypertune.py](rnn_word.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[32]](#_footnoteref_32) PyTorch `torchtext` dataset ( [https://pytorch.org/text/0.8.1/datasets.html#wikitext-2](0.8.1.html))'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[33]](#_footnoteref_33) Raw, unmasked text with "answers" for all the "unk"
+    tokens ( [https://s3.amazonaws.com/research.metamind.io/wikitext/wikitext-2-raw-v1.zip](wikitext.html))'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[34]](#_footnoteref_34) AI researchers( [https://www.salesforce.com/products/einstein/ai-research/the-wikitext-dependency-language-modeling-dataset/](the-wikitext-dependency-language-modeling-dataset.html))'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[35]](#_footnoteref_35) `nlpia2` package with code and data for the rnn_word
+    model code and datasets used in this chapter ( [https://gitlab.com/tangibleai/nlpia2/-/tree/main/src/nlpia2/ch08/rnn_word/data/wikitext-2](data.html))'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[36]](#_footnoteref_36) DAOStack platform for decentralized governance ( [https://daostack.io/deck/DAOstack-Deck-ru.pdf](deck.html))'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[37]](#_footnoteref_37) Alexander Fishkov’s analysis ( [https://www.city-data.com/blog/1424-passwords-on-the-internet-publicly-available-dataset/](1424-passwords-on-the-internet-publicly-available-dataset.html))
+    of Mark Burnett’s ten million passwords ( [https://archive.is/cDki7](archive.is.html))
+    - torrent magnet link at the bottom of the article.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[38]](#_footnoteref_38) PyTorch community multi-label (tagging) data format
+    example ( [https://discuss.pytorch.org/t/multi-label-classification-in-pytorch/905/45](905.html))'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[39]](#_footnoteref_39) Example `torchtext`` Dataset class multi-label text
+    classification ( [https://discuss.pytorch.org/t/how-to-do-multi-label-classification-with-torchtext/11571/3](11571.html))'
+  prefs: []
+  type: TYPE_NORMAL

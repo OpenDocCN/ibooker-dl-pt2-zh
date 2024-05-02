@@ -1,0 +1,1820 @@
+- en: 5 Word brain (neural networks)
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter covers
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Building a base layer for your neural networks
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Understanding backpropagation to train neural networks
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Implementing a basic neural network in Python
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Implementing a scalable neural network in PyTorch
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Stacking network layers for better data representation
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Tuning up your neural network for better performance
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: When you read the title of this chapter, "word brain", the neurons in your brain
+    started firing, reminding you where you’d heard something like that before. And
+    now that you read the word "heard", your neurons might be connecting the words
+    in the title to the part of your brain that processes the *sound* of words. And
+    maybe, the neurons in your audio cortex are starting to connect the phrase "word
+    brain" to common phrases that rhyme with it, such as "bird brain."
+  prefs: []
+  type: TYPE_NORMAL
+- en: Even if my brain didn’t predict your brain very well, you’re about to build
+    a small brain yourself. And the "word brain" you are about to build will be a
+    lot better than both of our human brains, at least for some particularly hard
+    NLP tasks. You’re going to build a tiny brain that can process a single word and
+    predict something about what it means. And a neural net can do this when the word
+    it is processing is a person’s name and it doesn’t seem to *mean* anything at
+    all to a human.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Don’t worry if all of this talk about brains and predictions and words has you
+    confused. You are going to start simple, with just a single artificial neuron,
+    built in Python. And you’ll use PyTorch to handle all the complicated math required
+    to connect your neuron up to other neurons and create an artificial neural network.
+    Once you understand neural networks, you’ll begin to understand *deep learning*,
+    and be able to use it in the real world for fun, positive social impact, and …​
+    if you insist, profit.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.1 Why neural networks?
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'When you use a deep neural network for machine learning it is called *deep
+    learning*. In the past few years, deep learning has smashed through the accuracy
+    and intelligence ceiling on many tough NLP problems:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: question answering
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: reading comprehension
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: summarization
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*natural language inference* (NLI)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'And recently deep learning (deep neural networks) enabled previously unimaginable
+    applications:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: long, engaging conversations
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: companionship
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: writing software
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'That last one, writing software, is particularly interesting, because NLP neural
+    networks are being used to write software …​ wait for it …​ for NLP. This means
+    that AI and NLP algorithms are getting closer to the day when they will be able
+    to self-replicate and self-improve. This has renewed hope and interest in neural
+    networks as a path toward *Artificial General Intelligence* (AGI) - or at least
+    *more* generally intelligent machines. And NLP is already being used to directly
+    generate software that is advancing the intelligence of those NLP algorithms.
+    That virtuous cycle is creating models so complex and powerful that humans have
+    a hard time understanding them and explaining how they work. An OpenAI article
+    shows a clear inflection point in the complexity of models that happened in 2012,
+    when Geoffrey Hinton’s improvement to neural network architectures caught on.
+    Since 2012, the amount of compute used in the largest AI training runs have been
+    increasing exponentially with a 3.4-month doubling time.^([[1](#_footnotedef_1
+    "View footnote.")]) Neural networks make all this possible because they:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Are better at generalizing from a few examples
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Can automatically engineer features from raw data
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Can be trained easily on any unlabeled text
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Neural networks do the feature engineering for you, and they do it optimally.
+    They extract generally useful features and representations of your data according
+    to whatever problem you set up in your pipeline. And modern neural networks work
+    especially well even for information-rich data such as natural language text.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.1.1 Neural networks for words
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: With neural networks, you don’t have to guess whether the proper nouns or the
+    average word length or hand-crafted word sentiment scores are going to be what
+    your model needs. You can avoid the temptation to use readability scores, or sentiment
+    analyzers to reduce the dimensionality of your data. You don’t even have to squash
+    your vectors with blind (unsupervised) dimension reduction approaches such as
+    stop word filtering, stemming, lemmatizing, LDA, PCA, TSNE, or clustering. A neural
+    network *mini-brain* can do this for you, and it will do it optimally, based on
+    the statistics of the relationship between words and your target.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Warning
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: Don’t use stemmers, lemmatizers or other keyword-based preprocessing in your
+    deep learning pipeline unless you’re absolutely sure it is helping your model
+    perform better for your application.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you’re doing stemming, lemmatization, or keyword-based analyses you probably
+    want to try your pipeline without those filters. It doesn’t matter whether you
+    use NLTK, Stanford Core NLP, or even SpaCy, hand-crafted linguistic algorithms
+    like lemmatizers are probably not helping. These algorithms are limited by the
+    hand-labeled vocabulary and hand-crafted regular expressions that define the algorithm.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here are some preprocessing algorithms that will likely trip up your neural
+    nets:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Porter stemmer
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Penn Treebank lemmatizer
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Flesch-Kincaid readability analyzer
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: VADER sentiment analyzer
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In the hyperconnected modern world of machine learning and deep learning, natural
+    languages evolve too rapidly and these algorithms can’t keep up. Stemmers and
+    lemmatizers are overfit to a bygone era. The words "hyperconnected" and "overfit"
+    were nonexistent 50 years ago. Lemmatizers, stemmers, and sentiment analyzers
+    often do the wrong thing with unanticipated words such as these.^([[2](#_footnotedef_2
+    "View footnote.")])
+  prefs: []
+  type: TYPE_NORMAL
+- en: Deep learning is a game changer for NLP. In the past, brilliant linguists like
+    Julie Beth Lovins needed to hand-craft algorithms to extract stems, lemmas, and
+    keywords from text.^([[3](#_footnotedef_3 "View footnote.")]) (Her one-pass stemmer
+    and lemmatizer algorithms were later made famous by Martin Porter and others)^([[4](#_footnotedef_4
+    "View footnote.")]) Deep neural networks now make all that laborious work unnecessary.
+    They directly access the meaning of words based on their statistics, without requiring
+    brittle algorithms like stemmers and lemmatizers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Even powerful feature engineering approaches like the Latent Semantic Analysis
+    (LSA) of Chapter 4 can’t match the NLU capabilities of neural nets. The automatic
+    learning of decision thresholds with decision trees, random forests, and boosted
+    trees does’t provide the depth of language understanding of neural nets. Conventional
+    machine learning algorithms made full-text search and universally accessible knowledge
+    a reality. But deep learning with neural networks makes artificial intelligence
+    and intelligent assistants possible. You no longer needed an information retrieval
+    expert or librarian to find what you were looking for, you have a virtual librarian
+    to assist you. Deep Learning now powers your thinking in ways you wouldn’t have
+    imagined a few years ago.
+  prefs: []
+  type: TYPE_NORMAL
+- en: What is it about deep layers of neurons that has propelled NLP to such prominence
+    in our lives? Why is it that we are now so dependent on neural machine translation
+    (NMT) recommendation engines, middle button suggestions (There’s a subreddit where
+    people post comments made entirely of middle button suggestions from their smartphones?^([[5](#_footnotedef_5
+    "View footnote.")])), and auto-reply nudges? If you’ve tried digital detox, you
+    may have experienced this sensation of not being fully yourself without NLP helping
+    you behind the scenes. And NLP neural nets for have given us hope that Artificial
+    General Intelligence (AGI) is within reach. They promise to allow machines to
+    learn in the same way we often do, by just reading a lot of text.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The power of NLP that you learned to employ in the previous chapters is about
+    to get a lot more powerful. You’ll want to understand how deep, layered networks
+    of artificial neurons work in order to ensure that your algorithms benefit society
+    instead of destroy it. (Stuart Russell’s *Human Compatible AI* explains the dangers
+    and promise of AI and AGI, with some insightful NLP examples.) To wield this power
+    for good, you need to get a feeling for how neural networks work all the way down
+    deep at the individual neuron.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You’ll also want to understand *why* they work so well for many NLP problems…​and
+    why they fail miserably on others.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We want to save you from the "AI winter" that discouraged researchers in the
+    past. If you employ neural networks incorrectly you could get frost-bitten by
+    an overfit NLP pipeline that works well on your test data, but proves disastrous
+    in the real world. As you get to understand how neural networks work, you will
+    begin to see how you can build more *robust NLP* neural networks. Neural networks
+    for NLP problems are notoriously brittle and vulnerable to adversarial attacks
+    such as poisoning. (You can learn more about how to measure a model’s robustness
+    and improve it from Robin Jia’s PhD thesis.^([[6](#_footnotedef_6 "View footnote.")]))
+    But first, you must build an intuition for how a single neuron works.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: Here are two excellent natural language texts about processing natural language
+    text with neural networks. You can even use these texts to train a deep learning
+    pipeline to understand the terminology of NLP.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*A Primer on Neural Network Models for Natural Language Processing* by Yoav
+    Goldberg ([https://archive.is/BNEgK](archive.is.html))'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*CS224d: Deep Learning for Natural Language Processing* by Richard Socher ([https://web.stanford.edu/class/cs224d/lectures/](lectures.html))'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: You might also want to check *Deep learning for Natural Language Processing*
+    by Stephan Raaijmakers on Manning.([https://www.manning.com/books/deep-learning-for-natural-language-processing](books.html))
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.1.2 Neurons as feature engineers
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: One of the main limitations of linear regression, logistic regression, and naive
+    Bayes models is that they all require you to engineer features one by one. You
+    must find the best numerical representation of your text among all the possible
+    ways to represent text as numbers. Then you have to parameterize a function that
+    takes in these engineered feature representations and outputs your predictions.
+    Only then can the optimizer start searching for the parameter values that best
+    predict the output variable.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: In some cases, you will want to manually engineer threshold features for your
+    NLP pipeline. This can be especially useful if you need an explainable model that
+    you can discuss with your team and relate to real-world phenomena. To create a
+    simpler model with few engineered features, without neural networks, requires
+    you to examine residual plots for each and every feature. When you see a discontinuity
+    or nonlinearity in the residuals at a particular value of the feature, that’s
+    a good threshold value to add to your pipeline. Sometimes, you can even find an
+    association between your engineered thresholds and real-world phenomena.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For example, the TF-IDF vector representation you used in Chapter 3 works well
+    for information retrieval and full-text search. However, TF-IDF vectors often
+    don’t generalize well for semantic search or NLU in the real world where words
+    are used in ambiguous ways or mispelled. And the PCA or LSA transformation of
+    Chapter 4 may not find the right topic vector representation for your particular
+    problem. They are good for visualization but not optimal for NLU applications.
+    Multi-layer neural networks promise to do this feature engineering for you and
+    do it in a way that’s in some sense optimal. Neural networks search a much broader
+    space of possible feature engineering functions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Dealing with the polynomial feature explosion
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: Another example of some feature engineering that neural networks can optimize
+    for you is polynomial feature extraction. (Think back to the last time you used
+    `sklearn.preprocessing.PolynomialFeatures`) During feature engineering, you might
+    guess that the relationship between inputs and outputs is quadratic. In that case
+    you would square those input features and retrain a model with these new features
+    to see if it improved your model’s accuracy on the test set. Basically, if the
+    residuals for a particular feature (prediction minus test-set label) do not look
+    like white noise centered on zero, then that is an opportunity for you to take
+    out some more error from your model’s predictions by transforming that feature
+    with some nonlinear function, such as square (`*\*2`), cube (`\*\*3`), `sqrt`,
+    `log`, `exp`. Any function you can dream up is fair game. And you will gradually
+    develop an intuition that helps you guess the right function that will improve
+    your accuracy the most. And if you don’t know which interactions might be critical
+    to solving your problem, you have to multiply all your features by each other.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You know the depth and breadth of this rabbit hole. The number of possible fourth-order
+    polynomial features is virtually limitless. You might try to reduce the dimensions
+    of your TF-IDF vectors from 10s of thousands to 100s of dimensions using PCA or
+    LSA. But throwing in fourth-order polynomial features would exponentially expand
+    your dimensionality beyond even the dimensionality of TF-IDF vectors.
+  prefs: []
+  type: TYPE_NORMAL
+- en: And even with millions of possible polynomial features, there are still millions
+    more threshold features. Random forests of decision trees and boosted decision
+    trees have advanced to the point that they do a decent job of feature engineering
+    automatically. So finding the right threshold features is essentially a solved
+    problem. But these feature representations are difficult to explain and sometimes
+    don’t generalize well to the real world. This is where neural nets can help.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The Holy Grail of feature engineering is finding representations that say something
+    about the physics of the real world. If your features are explainable according
+    to real-world phenomena, you can begin to build confidence that it is more than
+    just predictive. It may be a truly causal model that says something about the
+    world that is true in general and not just for your dataset.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Peter Woit explains how the explosion of possible models in modern physics are
+    mostly *Not Even Wrong* .^([[7](#_footnotedef_7 "View footnote.")]) These *not
+    even wrong* models are what you create when you use `sklearn.preprocessing.PolynomialFeatures`.
+    And that is a real problem. Very few of the millions of these extracted polynomial
+    features are even physically possible. In other words the vast majority of polynomial
+    features are just noise.^([[8](#_footnotedef_8 "View footnote.")]) So if you `PolynomialFeatures`
+    in your preprocessing, limit the `degree` parameter to `2` or less.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Important
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: For any machine learning pipeline, make sure your polynomial features never
+    include the multiplication of more than 2 physical quantities. If you decide to
+    try polynomial features with a degree greater than two you can save yourself some
+    grief by filtering out unrealizable (fantasy) 3-way interaction features. For
+    example `x1 * x2 \** 2` is a legitimate third-degree polynomial feature to try,
+    but `x1 * x2 * x3` is not. Polynomial features involving the interaction (multiplication)
+    of more than two features together are not physically realizable. Removing these
+    "fantasy features" will improve the robustness of your NLP pipeline and help you
+    reduce any hallucinations coming out of your generative models.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We hope that by now you’re inspired by the possibilities that neural networks
+    offer. Let’s start our journey into the world of neural networks building single
+    neurons that look a lot like logistic regressions. Ultimately, you will be able
+    to combine and stack these neurons in layers that optimize the feature engineering
+    for you.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.1.3 Biological neurons
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Frank Rosenblatt came up with the first artificial neural network based on his
+    understanding of how biological neurons in our brains work. He called it a perceptron
+    because he was using it to help machines perceive their environment using sensor
+    data as input.^([[9](#_footnotedef_9 "View footnote.")]) He hoped they would revolutionize
+    machine learning by eliminating the need to hand-craft filters to extract features
+    from data. He also wanted to automate the process of finding the right combination
+    of functions for any problem.
+  prefs: []
+  type: TYPE_NORMAL
+- en: He wanted to make it possible for engineers to build AI systems without having
+    to design specialized models for each problem. At the time, engineers used linear
+    regressions, polynomial regressions, logistic regressions and decision trees to
+    help robots make decisions. Rosenblatt’s perceptron was a new kind of machine
+    learning algorithm that could approximate any function, not just a line, a logistic
+    function, or a polynomial.^([[10](#_footnotedef_10 "View footnote.")]) He based
+    it on how biological neurons work.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 5.1 Biological neuron cell
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![biological neuron cell](images/biological_neuron_cell.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Rosenblatt was building on a long history of successful logistic regression
+    models. He was modifying the optimization algorithm slightly to better mimic what
+    neuroscientists were learning about how biological neurons adjust their response
+    to the environment over time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Electrical signals flow into a biological neuron in your brain through the *dendrites*
+    (see Figure 5.1) and into the nucleus. The nucleus accumulates electric charge
+    and it builds up over time. When the accumulated charge in the nucleus reaches
+    the activation level of that particular neuron it *fires* an electrical signal
+    out through the *axon*. However, neurons are not all created equal. The dendrites
+    of the neuron in your brain are more "sensitive" for some neuron inputs than for
+    others. And the nucleus itself may have a higher or lower activation threshold
+    depending on its function in the brain. So for some more sensitive neurons it
+    takes less of a signal on the inputs to trigger the output signal being sent out
+    the axon.
+  prefs: []
+  type: TYPE_NORMAL
+- en: So you can imagine how neuroscientists might measure the sensitivity of individual
+    dendrites and neurons with experiments on real neurons. And this sensitivity can
+    be given a numerical value. Rosenblatt’s perceptron abstracts this biological
+    neuron to create an artificial neuron with a *weight* associated with each input
+    (dendrite). For artificial neurons, such as Rosenblatt’s perceptron, we represent
+    the sensitivity of individual dendrites as a numerical *weight* or *gain* for
+    that particular path. A biological cell *weights* incoming signals when deciding
+    when to fire. A higher weight represents a higher sensitivity to small changes
+    in the input.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A biological neuron will dynamically change those weights in the decision-making
+    process over the course of its life. You are going to mimic that biological learning
+    process using the machine learning process called *back propagation*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 5.2 Basic perceptron
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![perceptron](images/perceptron.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: AI researchers hoped to replace the rigid math of logistic regressions and linear
+    regressions and polynomial feature extraction with the more fuzzy and generalized
+    logic of neural networks — tiny brains. Rosenblatt’s artificial neurons even worked
+    for trigonometric functions and other highly nonlinear functions. Each neuron
+    solved one part of the problem and could be combined with other neurons to learn
+    more and more complex functions. (Though not all of them - even simple functions,
+    like an XOR gate can’t be solved with a single layer perceptron). He called this
+    collection of artificial neurons a perceptron.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Rosenblatt didn’t realize it at the time, but his artificial neurons could be
+    layered up just as biological neurons connect to each other in clusters. In modern
+    *deep learning* we connect the predictions coming out of one group of neurons
+    to another collection of neurons to refine the predictions. This allows us to
+    create layered networks that can model *any* function. They can now solve any
+    machine learning problem …​ if you have enough time and data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 5.3 Neural network layers
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![multilayer perceptron](images/multilayer-perceptron.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 5.1.4 Perceptron
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: One of the most complex things neurons do is process language. Think about how
+    a perceptron might be used to process natural language text. Does the math shown
+    in Figure 5.2 remind you of any of the machine learning models you’ve used before?
+    What machine learning models do you know of that multiply the input features by
+    a vector of weights or coefficients? Well, that would be a linear regression.
+    But what if you used a sigmoid activation function or logistic function on the
+    output of a linear regression? It’s starting to look a lot like a *logistic regression*
+    to me.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The sigmoid *activation function* used in a perceptron is actually the same
+    as the logistic function used within logistic regression. Sigmoid just means s-shaped.
+    And the logistic function has exactly the shape we want for creating a soft threshold
+    or logical binary output. So really what your neuron is doing here is equivalent
+    to a logistic regression on the inputs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is the formula for a logistic function implemented in Python.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: And here is what a logistic function looks like, and how the coefficient (weight)
+    and phase (intercept) affect its shape.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: What were your inputs when you did a logistic regression on natural language
+    sentences in earlier chapters? You first processed the text with a keyword detector,
+    `CountVectorizer`, or `TfidfVectorizer`. These models use a tokenizer, like the
+    ones you learned about in chapter 2 to split the text into individual words, and
+    then count them up. So for NLP it’s common to use the BOW counts or the TF-IDF
+    vector as the input to an NLP model, and that’s true for neural networks as well.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Each of Rosenblatt’s input weights (biological dendrites) had an adjustable
+    value for the weight or sensitivity of that signal. Rosenblatt implemented this
+    weight with a potentiometer, like a volume knob on an old-fashioned stereo receiver.
+    This allowed researchers to manually adjust the sensitivity of their neuron to
+    each of its inputs individually. A perceptron can be made more or less sensitive
+    to the counts of each word in the BOW or TF-IDF vector by adjusting this sensitivity
+    knob.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Once the signal for a particular word was increased or decreased according to
+    the sensitivity or weight it passed into the main body of the biological neuron
+    cell. It’s here in the body of the perceptron, and also in a real biological neuron,
+    where the input signals are added together. Then that signal is passed through
+    a soft thresholding function like a sigmoid before sending the signal out the
+    axon. A biological neuron will only *fire* if the signal is above some threshold.
+    The sigmoid function in a perceptron just makes it easy to implement that threshold
+    at 50% of the min-max range. If a neuron doesn’t fire for a given combination
+    of words or input signals, that means it was a negative classification match.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.1.5 A Python perceptron
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: So a machine can simulate a really simple neuron by multiplying numerical features
+    by "weights" and combining them together to create a prediction or make a decision.
+    These numerical features represent your object as a numerical vector that the
+    machine can "understand". For the home price prediction problem of Zillow’s zestimate,
+    how do you think they might build an NLP-only model to predict home prices? But
+    how do you represent the natural language description of a house as a vector of
+    numbers so that you can predict its price? You could take a verbal description
+    of the house and use the counts of each word as a feature, just as you did in
+    Chapters 2 and 3\. Or you could use a transformation like PCA to compress these
+    thousands of dimensions into topic vectors, as you did with PCA in Chapter 4.
+  prefs: []
+  type: TYPE_NORMAL
+- en: But these approaches are just a guess at which features are important, based
+    on the variability or variance of each feature. Perhaps the key words in the description
+    are the numerical values for the square footage and number of bedrooms in the
+    home. Your word vectors and topic vectors would miss these numerical values entirely.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In "normal" machine learning problems, like predicting home prices, you might
+    have structured numerical data. You will usually have a table with all the important
+    features listed, such as square footage, last sold price, number of bedrooms,
+    and even latitude and longitude or zip code. For natural language problems, however,
+    we want your model to be able to work with unstructured data, text. Your model
+    has to figure out exactly which words and in what combination or sequence are
+    predictive of your target variable. Your model must read the home description,
+    and, like a human brain, make a guess at the home price. And a neural network
+    is the closest thing you have to a machine that can mimic some of your human intuition.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The beauty of deep learning is that you can use as your input every possible
+    feature you can dream up. This means you can input the entire text description
+    and have your transformer produce a high-dimensional TF-IDF vector and a neural
+    network can handle it just fine. You can even go higher dimensional than that.
+    You can pass it the raw, unfiltered text as 1-hot encoded sequences of words.
+    Do you remember the piano roll we talked about in Chapter 2? Neural networks are
+    made for these kinds of raw representations of natural language data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Shallow learning
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: For your first deep learning NLP problem, you will keep it shallow. To understand
+    the magic of deep learning it helps to see how a single neuron works. A single
+    neuron will find a *weight* for each feature you input into the model. You can
+    think of these weights as a percentage of the signal that is let into the neuron.
+    If you’re familiar with linear regression, then you probably recognize these diagrams
+    and can see that the weights are just the slopes of a linear regression. And if
+    you throw in a logistic function, these weights are the coefficients that a logistic
+    regression learns as you give it examples from your dataset. To put it in different
+    words, the weights for the inputs to a single neuron are mathematically equivalent
+    to the slopes in a multivariate linear regression or logistic regression.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: Just as with the Scikit-Learn machine learning models, the individual features
+    are denoted as `x[i]` or in Python as `x[i]`. The *i* is an indexing integer denoting
+    the position within the input vector. And the collection of all features for a
+    given example are within the vector **x**.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`x = x[1], x[2], …​, x[i], …​, x[n]`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: And similarly, you’ll see the associate weights for each feature as w[i], where
+    *i* corresponds to the integer in x. The weights are generally represented as
+    a vector **W**
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`w = w[1], w[2], …​, w[i], …​, w[n]`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: With the features in hand, you just multiply each feature (x[i]) by the corresponding
+    weight (w[i]) and then sum up.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`y = (x[1] * w[1]) + (x[2] * w[2]) + …​ + (x[i] * w[i])`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here’s a fun, simple example to make sure you understand this math. Imagine
+    an input BOW vector for a phrase like "green egg egg ham ham ham spam spam spam
+    spam":'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: So this 4-input, 1-output, single-neuron network outputs a value of -0.76 for
+    these random weights in a neuron that hasn’t yet been trained.
+  prefs: []
+  type: TYPE_NORMAL
+- en: There’s one more piece you’re missing here. You need to run a nonlinear function
+    on the output (`y`) to change the shape of the output so it’s not just a linear
+    regression. Often a thresholding or clipping function is used to decide whether
+    the neuron should fire or not. For a thresholding function, if the weighted sum
+    is above a certain threshold, the perceptron outputs 1\. Otherwise, it outputs
+    0\. You can represent this threshold with a simple *step function* (labeled "Activation
+    Function" in Figure 5.2).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here’s the code to apply a step function or thresholding function to the output
+    of your neuron:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: And if you want your model to output a continuous probability or likelihood
+    rather than a binary `0` or `1`, you probably want to use the logistic activation
+    function that we introduced earlier in this chapter.^([[11](#_footnotedef_11 "View
+    footnote.")])
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: A neural network works like any other machine learning model — you present it
+    with numerical examples of inputs (feature vectors) and outputs (predictions)
+    for your model. And like a conventional logistic regression, the neural network
+    will use trial and error to find the weights on your inputs that create the best
+    predictions. Your *loss function* will measure how much error your model has.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Make sure this Python implementation of the math in a neuron makes sense to
+    you. Keep in mind, that the code we’ve written is only for the *feed forward*
+    path of a neuron. The math is very similar to what you would see in the `LogisticRegression.predict()`
+    function in Scikit-Learn for a 4-input, 1-output logistic regression.^([[12](#_footnotedef_12
+    "View footnote.")])
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: A *loss function* is a function that outputs a score to measure how bad your
+    model is, the total error of its predictions. An *objective function* just measures
+    how good your model is based on how small the error is. A *loss function* is like
+    the percentage of questions a student got wrong on a test. An *objective function*
+    is like the grade or percent score on that test. You can use either one to help
+    you learn the right answers and get better and better on your tests.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Why the extra weight?
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: Did you notice that you have one additional weight, `w0`? There is no input
+    labeled `x0`. So why is there a `w0`? Can you guess why we always give our neural
+    neurons an input signal with a constant value of "1.0" for `x0`? Think back to
+    the linear and logistic regression models you have built in the past. Do you remember
+    the extra coefficient in the single-variable linear regression formula?
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `y` variable is for the output or predictions from the model. The `x` variable
+    is for the single independent feature variable in this model. And you probably
+    remember that `m` represents the slope. But do you remember what `b` is for?
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now can you guess what the extra weight `w[0]` is for, and why we always make
+    sure it isn’t affected by the input (multiply it by an input of 1.0)?
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: It’s the *intercept* from your linear regression, just "rebranded" as the *bias*
+    weight (`w0`) for this layer of a neural network.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 5.2 and this example reference *bias*. What is this? The bias is an "always
+    on" input to the neuron. The neuron has a weight dedicated to it just as with
+    every other element of the input, and that weight is trained along with the others
+    in the exact same way. This is represented in two ways in the various literature
+    around neural networks. You may see the input represented as the base input vector,
+    say of *n*-elements, with a 1 appended to the beginning or the end of the vector,
+    giving you an *n*+1 dimensional vector. The position of the one is irrelevant
+    to the network, as long as it is consistent across all of your samples. Other
+    times people presume the existence of the bias term and leave it off the input
+    in a diagram, but the weight associated with it exists separately and is always
+    multiplied by one and added to the dot product of the sample input’s values and
+    their associated weights. Both are effectively the same.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The reason for having the bias weight at all is that you need the neuron to
+    be resilient to inputs of all zeros. It may be the case that the network needs
+    to learn to output 0 in the face of inputs of 0, but it may not. Without the bias
+    term, the neuron would output 0 * weight = 0 for any weights you started with
+    or tried to learn. With the bias term, you wouldn’t have the problem. And in case
+    the neuron needs to learn to output 0, the neuron can learn to decrement the weight
+    associated with the bias term enough to keep the dot product below the threshold.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 5.3 is a rather neat visualization of the analogy between some of the
+    signals within a biological neuron in your brain and the signals of an artificial
+    neuron used for deep learning. If you want to get deep, think about how you are
+    using a biological neuron to read this book about natural language processing
+    to learn about deep learning.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 5.4 A perceptron and a biological neuron
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![artificial neuron vs biological](images/artificial_neuron_vs_biological.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'The Python for the simplest possible single neuron looks like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: Perhaps you are more comfortable with numpy and *vectorized* mathematical operations
+    like you learned about in linear algebra class.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: Any Python conditional expression will evaluate to a `True` or `False` boolean
+    value. If you use that `bool` type in a mathematical operation such as addition
+    or multiplication, Python will *coerce* a `True` value into a numerical `int`
+    or `float` value of `1` or `1.0`. A `False` value is coerced into a `1` or `0`
+    when you multiply a Boolean by, or add it to another number.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `w` variable contains the vector of weight parameters for the model. These
+    are the values that will be learned as the neuron’s outputs are compared to the
+    desired outputs during training. The `x` variable contains the vector of signal
+    values coming into the neuron. This is the feature vector, such as a TF-IDF vector
+    for a natural language model. For a biological neuron, the inputs are the rate
+    of electrical pulses rippling through the dendrites. The input to one neuron is
+    often the output from another neuron.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: 'The sum of the pairwise multiplications of the inputs (`x`) and the weights
+    (`w`) is exactly the same as the dot product of the two vectors `x` and `y`. If
+    you use numpy, a neuron can be implemented with a single brief Python expression:
+    `w.dot(x) > 0`. This is why *linear algebra* is so useful for neural networks.
+    Neural networks are mostly just dot products of parameters by inputs. And GPUs
+    are computer processing chips designed to do all the multiplications and additions
+    of these dot products in parallel, one operation on each GPU core. So a 1-core
+    GPU can often perform a dot product 250 times faster than a 4-core CPU.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If you are familiar with the natural language of mathematics, you might prefer
+    the summation notation:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Equation 5.1: Threshold activation function**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![equation 5 1](images/equation_5_1.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Your perceptron hasn’t *learned* anything just yet. But you have achieved something
+    quite important. You’ve passed data into a model and received an output. That
+    output is likely wrong, given you said nothing about where the weight values come
+    from. But this is where things will get interesting.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: The base unit of any neural network is the neuron. The basic perceptron is a
+    special case of the more generalized neuron. We refer to the perceptron as a neuron
+    for now and come back to the terminology when it no longer applies.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.2 Example logistic neuron
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: It turns out you are already familiar with a very common kind of perceptron
+    or neuron. When you use the logistic function for the *activation function* on
+    a neuron, you’ve essentially created a logistic regression model. A single neuron
+    with the logistic function for its activation function is mathematically equivalent
+    to the `LogisticRegression` model in Scikit-Learn. The only difference is how
+    they’re trained. So you are going to first train a logistic regression model and
+    compare it to a single-neuron neural network trained on the same data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.2.1 The logistics of clickbait
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Software (and humans) often need to make decisions based on logical criteria.
+    For example, many times a day you probably have to decide whether to click on
+    a particular link or title. Sometimes those links lead you to a fake news article.
+    So your brain learns some logical rules that it follows before clicking on a particular
+    link.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Is it a topic you’re interested in?
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Does the link look promotional or spammy?
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Is it from a reputable source that you like?
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Does it look true or factual?
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Each one of these decisions could be modeled in an artificial neuron within
+    a machine. And you could use that model to create a logic gate in a circuit board
+    or a conditional expression (`if` statement) in software. If you did this with
+    artificial neurons, the smallest artificial "brain" you could build to handle
+    these 4 decisions would use 4 logistic regression gates.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To mimic your brain’s *clickbait* filter you might decide to train a logistic
+    regression model on the length of the headline. Perhaps you have a hunch that
+    longer headlines are more likely to be sensational and exaggerated. Here’s a scatter
+    plot of fake and authentic news headlines and their headline length in characters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The neuron input weight is equivalent to the maximum slope in the middle of
+    the logistic regression plot in Figure 5.3 for a fake news classifier with a single
+    feature, title length.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 5.5 Logistic regression - fakeness vs title length
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![fake news title len logistic regression](images/fake_news_title_len_logistic_regression.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 5.2.2 Sex education
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: How’s that for clickbait? Because the fake news (clickbait) dataset has been
+    fully exploited on Kaggle, you’re going to switch to a more fun and useful dataset.
+    You’re going to predict the sex of a name with perceptrons (artificial neurons).
+  prefs: []
+  type: TYPE_NORMAL
+- en: The problem you’re going to solve with this simple architecture is an everyday
+    NLU problem that your brain’s millions of neurons try to solve every day. Your
+    brain is strongly incentivized to identify the birth sex of the people you interact
+    with on social media. (If you’re interested in why this is, Richard McElreath
+    and Robert Boyd have a fascinating book on the subject.^([[13](#_footnotedef_13
+    "View footnote.")])) A single artificial neuron can solve this challenge with
+    about 80% accuracy using only the characters in the first name of a person. You’re
+    going to use a sample of names from a database of 317 million birth certificates
+    across US states and territories over more than 100 years.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Biologically, identifying someone’s sex is useful to your genes because they
+    only survive if you reproduce them by finding a sexual partner to blend your genes
+    with. Social interaction with other humans is critical to your genes' existence
+    and survival. And your genes are the blueprint for your brain. So your brain is
+    likely to contain at least a few neurons dedicated to this critical task. And
+    you’re going to find out how many artificial neurons it takes to predict the sex
+    associated with a baby’s given name (first name).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Sex
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: The word *sex* here refers to the label a doctor assigns to a baby at birth.
+    In the US, the name, sex and date of birth are recorded on a birth certificate
+    according to the laws that state. And the sex category is subject to interpretation
+    and judgment by the person who fills out and signs the birth certificate. In datasets
+    derived from US birth certificates, "sex at birth" is usually equivalent to one’s
+    *genetic sex*, but that is not always the case. It is possible to create a relatively
+    well-defined "genetic sex" category based on the presence of XX chromosomes (female)
+    or XY chromosomes (male). But biology and life have a way of blurring the boundaries
+    of even this seemingly precise definition of "genetic sex".
+  prefs: []
+  type: TYPE_NORMAL
+- en: Male and female are not the last word in *birth sex* classification. The CDC
+    (Center for Disease Control) in recommends that USCDI (US Core Data Interoperability)
+    standards include several nonbinary sex categories for clinical or medical use.^([[14](#_footnotedef_14
+    "View footnote.")]) In addition to 'female' and 'male', the categories 'unknown',
+    and 'something not listed (specify)' are recommended by most western medical systems.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You want to make sure that your test set names don’t appear anywhere in your
+    training set. You also want to make sure that your test set only has one "right"
+    label for each name. But this isn’t what you think. There is not one correct binary
+    sex label for any particular name. There is indeed a correct probability score
+    (continuous value) of maleness or femaleness of a name based on the ratio of the
+    counts of names with a particular sex designation on their birth certificates.
+    But that "correct" score will change as you add new examples to your dataset.
+    Natural language processing is messy and fluid because the natural world and the
+    language that describes it is dynamic and impossible to "pin on the wall."^([[15](#_footnotedef_15
+    "View footnote.")])
+  prefs: []
+  type: TYPE_NORMAL
+- en: This will enable the possibility that your model could *theoretically* achieve
+    100% accuracy. Obviously, this isn’t really possible for a problem like this where
+    even humans can’t achieve 100% accuracy. But your accuracy on the test set will
+    tell you how close you are to this ideal, but only if you delete the duplicate
+    names from your test set.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.2.3 Pronouns and gender vs sex
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Some states in the US allow one to indicate their child’s *gender* on a birth
+    certificate. Gender is often what people use to decide what pronouns they prefer.
+    And there are various ways that people think about their gender. There’s the apparent
+    gender that they present to the world and there’s the gender identity that they
+    assign to themselves at various stages of their lives. Identifying either of these
+    genders is a sensitive subject because it is fraught with legal and social ramifications.
+    In many repressive cultures, it can even be a matter of life and death. And gender
+    is a very difficult thing to predict for a machine learning algorithm. For this
+    chapter, we utilized a simplified binary sex dataset to prepare the scaffolding
+    you need to build your natural language processing skills from the ground up.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'And there are practical uses for sex-estimation model even for machines that
+    don’t need it to spread their genes. A sex estimation model can be used to solve
+    an important and difficult challenge in NLP called *coreference resolution*.^([[16](#_footnotedef_16
+    "View footnote.")]) Coreference resolution is when an NLP algorithm identifies
+    the object or words associated with pronouns in natural language text. For example,
+    consider the pronouns in these sentences: "Maria was born in Ukraine. Her father
+    was a physicist. 15 years later she left there for Israel." You may not realize
+    it, but you resolved three coreferences in the blink of an eye. Your brain did
+    the statistics on the likelihood that "Maria" was a "she/her" and that "Ukraine"
+    is a "there".'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Coreference resolution isn’t always that easy, for machines or for humans. It
+    is more difficult to do in languages where pronouns do not have gender. It can
+    be even more difficult in languages with pronouns that do not discriminate between
+    people and inanimate objects. Even languages with genderless objects like English
+    sometimes arbitrarily assign gender to important things, such as sailing ships.
+    Ships are referred to with feminine pronouns such as "she" and "her." And they
+    are often given feminine names.
+  prefs: []
+  type: TYPE_NORMAL
+- en: So knowing the sex associated with the names of people (and ships) in your text
+    can be helpful in improving your NLU pipeline. This can be helpful even when that
+    sex identification is a poor indicator of the presented gender of a person mentioned
+    in the text. The author of the text will often expect you to make assumptions
+    about sex and gender based on names. In gender-bending SciFi novels, visionary
+    authors like Gibson use this to keep you on your toes and expand your mind.^([[17](#_footnotedef_17
+    "View footnote.")])
+  prefs: []
+  type: TYPE_NORMAL
+- en: Important
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: Make sure your NLP pipelines and chatbots are kind, inclusive and accessible
+    for all human beings. In order to ensure your algorithms are unbiased you can
+    *normalize* for any sex and gender information in the text data you process. In
+    the next chapter you will see all the surprising ways in which sex and gender
+    can affect the decisions your algorithms make. And you will see how gender affects
+    the decisions of businesses or employers you deal with every day.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.2.4 Sex logistics
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: First, import Pandas and set the `max_rows` to display only a few rows of your
+    `DataFrame`s.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now download the raw data from the `nlpia2` repository and sample only 10,000
+    rows, to keep things fast on any computer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The data spans more than 100 years of US birth certificates, but only includes
+    the baby’s first name:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '|  | region | sex | year | name | count | freq |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 6139665 | WV | F | 1987 | Brittani | 10 | 0.000003 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 2565339 | MD | F | 1954 | Ida | 18 | 0.000005 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 22297 | AK | M | 1988 | Maxwell | 5 | 0.000001 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| …​ | …​ | …​ | …​ | …​ | …​ | …​ |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 4475894 | OK | F | 1950 | Leah | 9 | 0.000003 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 5744351 | VA | F | 2007 | Carley | 11 | 0.000003 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 5583882 | TX | M | 2019 | Kartier | 10 | 0.000003 |'
+  prefs: []
+  type: TYPE_TB
+- en: You can ignore the region and birth year information for now. You only need
+    the natural language name to predict sex with reasonable accuracy. If you’re curious
+    about names, you can explore these variables as features or targets. Your target
+    variable will be sex ('M' or 'F'). There are no other sex categories provided
+    in this dataset besides male and female.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You might enjoy exploring the dataset to discover how often your intuition about
+    the names parents choose for their babies. Machine learning and NLP are a great
+    way to dispell stereotypes and misconceptions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: That’s what makes NLP and DataScience so much fun. It gives us a broader view
+    of the world that breaks us out of the limited perspective of our biological brains.
+    I’ve never met a woman named "Timothy" but at least .1% of babies named Timothy
+    in the US have female on their birth certificate.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To speed up the model training, you can aggregate (combine) your data across
+    regions and years if those are not aspects of names that you’d like your model
+    to predict. You can accomplish this with a Pandas `DataFrame’s `.groupby()` method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: Because we’ve aggregated the numerical data for the column "count", the `counts`
+    object is now a Pandas `Series` object rather than a `DataFrame`. It looks a little
+    funny because we created a multilevel index on both name and sex. Can you guess
+    why?
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now the dataset looks like an efficient set of examples for training a logistic
+    regression. In fact, if we only wanted to predict the likely sex for the names
+    in this database, we could just use the max count (the most common usage) for
+    each name.
+  prefs: []
+  type: TYPE_NORMAL
+- en: But this is a book about NLP and NLU (Natural Language Understanding). You’d
+    like your models to *understand* the text of the name in some way. And you’d like
+    it to work on odd names that are not even in this database, names such as "Carlana",
+    a portmanteau of "Carl" and "Ana", her grandparents, or one-of-a-kind names such
+    as "Cason." Examples that are not part of your training set or test set are called
+    "out of distribution." In the real world, your model will almost always encounter
+    words and phrases never seen before. It’s called "generalization" when a model
+    can extrapolate to these out-of-distribution examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: But how can you tokenize a single word like a name so that your model can generalize
+    to completely new made-up names that its never seen before? You can use the character
+    n-grams within each word (or name) as your tokens. You can set up a `TfidfVectorizer`
+    to count characters and character n-grams rather than words. You can experiment
+    with a wider or narrower `ngram_range` but 3-grams are a good bet for most TF-IDF-based
+    information retrieval and NLU algorithms. For example, the state-of-the-art database
+    PostgreSQL defaults to character 3-grams for its full-text search indexes. In
+    later chapters, you’ll even use word piece and sentence piece tokenization which
+    can optimally select a variety of character sequences to use as your tokens.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: Shouldn’t you normalize the token counts by something like document frequency?
+    You will use the counts of births for that. For name TF-IDF vectors you want to
+    use counts of births or people as your *document* frequencies. This will help
+    your vector represent the frequency of the name outside of your corpus of unique
+    names.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now that you’ve indexed our `names` series by `name` *and* `sex` aggregating
+    counts across states and years, there will be fewer unique rows in your `Series`.
+    You can de-duplicate the names before calculating TF-IDF character n-gram term
+    frequencies. Don’t forget to keep track of the number of birth certificates so
+    you use that as your document frequency.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: You’ve aggregated 10,000 name-sex pairs into only 4238 unique name-sex pairings.
+    Now you are ready to split the data into training and test sets.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To ensure you don’t accidentally swap the sexes for any of the names, recreate
+    the `name, sex` multiindex:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: As you saw earlier, this dataset contains conflicting labels for many names.
+    In real life, many names are used for both male and female babies (or other human
+    sex categories). Like all machine learning classification problems, the math treats
+    it as a regression problem. The model is actually predicting a continuous value
+    rather than a discrete binary category. Linear algebra and real life only work
+    on real values. In machine learning all dichotomies are false.^([[18](#_footnotedef_18
+    "View footnote.")]) Machines don’t think of words and concepts as hard categories,
+    so neither should you.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: Because of the duplicates the test set flag can be created from the `not` of
+    the `istrain`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now you can transfer the `istest` and `istrain` flags over to the original Dataframe,
+    being careful to fill `NaNs` with False for both the training set and the test
+    set.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now you can use the training set to fit `TfidfVectorizer` without skewing the
+    n-gram counts with the duplicate names.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: You need to be careful when working with sparse data structures. If you convert
+    them to normal dense arrays with `.todense()` you may crash your computer by using
+    up all its RAM. But this sparse matrix contains only about 17 million elements
+    so it should work fine within most laptops. You can use `toarray()` on sparse
+    matrices to create a DataFrame and give meaningful labels to the rows and columns.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: Aah, notice that the column labels (character n-grams) all start with lowercase
+    letters. It looks like the `TfidfVectorizer` folded the case (lowercased everything).
+    It’s likely that capitalization will help the model, so let’s revectorize the
+    names without lowercasing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: That’s better. These character 1, 2, and 3-grams should have enough information
+    to help a neural network guess the sex for names in this birth certificate database.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Choosing a neural network framework
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: Logistic regressions are the perfect machine learning model for any high-dimensional
+    feature vector such as a TF-IDF vector. To turn a logistic regression into a neuron
+    you just need a way to connect it to other neurons. You need a neuron that can
+    learn to predict the outputs of other neurons. And you need to spread the learning
+    out so one neuron doesn’t try to do all the work. Each time your neural network
+    gets an example from your dataset that shows it the right answer it will be able
+    to calculate just how wrong it was, the loss or error. But if you have more than
+    one neuron working together to contribute to that prediction, they’ll each need
+    to know how much to change their weights to move the output closer to the correct
+    answer. And to know that you need to know how much each weight affects the output,
+    the gradient (slope) of the weights relative to the error. This process of computing
+    gradients (slopes) and telling all the neurons how much to adjust their weights
+    up and down so that the loss will go down is called *backpropagation* or backprop.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A deep learning package like PyTorch can handle all that for you automatically.
+    In fact, it can handle any computational graph (network) you can dream up. PyTorch
+    can handle any network of connections between mathematical operations. This flexibility
+    is why most researchers use it rather than TensorFlow (Keras) for their breakthrough
+    NLP algorithms. TensorFlow is designed with a particular kind of computational
+    graph in mind, one that can be efficiently computed on specialized chips manufactured
+    by one of the BigTech companies. Deep Learning is a powerful money-maker for Big
+    Tech and they want to train your brain to use only their tools for building neural
+    networks. I had no idea BigTech would assimilate Keras into the TensorFlow "Borg",
+    otherwise I would not have recommended it in the first edition.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The decline in portability for Keras and the rapidly growing popularity of PyTorch
+    are the main reasons we decided a second edition of this book was in order. What’s
+    so great about PyTorch?
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Wikipedia has an unbiased and detailed comparison of all DeepLearning frameworks.
+    And Pandas lets you load it directly from the web into a `DataFrame`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here is how you can use some basic NLP to score the top 10 deep learning frameworks
+    from the Wikipedia article that lists each of their pros and cons. You will find
+    this kind of code useful whenever you want to turn semi-structured natural language
+    into data for your NLP pipelines.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now that the Wikipedia table is cleaned up, you can compute some sort of "total
+    score" for each deep learning framework.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: PyTorch got nearly a perfect score because of its support for Linux, Android
+    and all popular deep learning applications.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Another promising one you might want to check out is ONNX. It’s really a meta
+    framework and an open standard that allows you to convert back and forth between
+    networks designed on another framework. ONNX also has some optimization and pruning
+    capabilities that will allow your models to run inference much faster on much
+    more limited hardware, such as portable devices.
+  prefs: []
+  type: TYPE_NORMAL
+- en: And just for comparison, how does SciKit Learn stack up to PyTorch for building
+    a neural network model?
+  prefs: []
+  type: TYPE_NORMAL
+- en: Table 5.1 Scikit-Learn vs PyTorch
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '| Scikit-Learn | PyTorch |'
+  prefs: []
+  type: TYPE_TB
+- en: '| for Machine Learning | for Deep Learning |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Not GPU-friendly | Made for GPUs (parallel processing) |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `model.predict()` | `model.forward()` |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `model.fit()` | trained with custom `for`-loop |'
+  prefs: []
+  type: TYPE_TB
+- en: '| simple, familiar API | flexible, powerful API |'
+  prefs: []
+  type: TYPE_TB
+- en: Enough about frameworks, you are here to learn about neurons. PyTorch is just
+    what you need. And there’s a lot left to explore to get familiar with your new
+    PyTorch toolbox.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.2.5 A sleek sexy PyTorch neuron
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Finally, it’s time to build a neuron using the PyTorch framework. Let’s put
+    all this into practice by predicting the sex of the names you cleaned earlier
+    in this chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can start by using PyTorch to implement a single neuron with a logistic
+    activation function - just like the one you used to learn the toy example at the
+    beginning of the chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: Let’s see what happened here. Our model is a *class* that extends the PyTorch
+    class used to define neural networks, `torch.nn.Module`. As with every Python
+    class, it has a *constructor* method called `*init*`. The constructor is where
+    you can define all the attributes of your neural network - most importantly, the
+    model’s layers. In our case, we have an extremely simple architecture - one layer
+    with a single neuron, which means there will be only one output. And the number
+    of inputs, or features, will be equal to the length of your TF-IDF vector, the
+    dimensionality of your features. There were 3663 unique 1-grams, 2-grams, and
+    3-grams in our names dataset, so that’s how many inputs you’ll have for this single-neuron
+    network.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The second crucial method you need to implement for your neural network is the
+    `forward()` method. This method defines how the input to your model propagates
+    through its layers - the *forward propagation*. If you are asking yourself where
+    the backward propagation (backprop) is, you’ll soon see, but it’s not in the constructor.
+    We decided to use the logistic, or sigmoid, activation function for our neuron
+    - so our `forward()` method will use PyTorch’s built-in function `sigmoid`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Is this all you need to train our model? Not yet. There are two more crucial
+    pieces that your neuron needs to learn. One is the loss function, or cost function
+    that you saw earlier in this chapter. The Mean Square Error (MSE) you learned
+    about in chapter 4 would be a good candidate for the error metric if this were
+    a regression problem. For this problem you are doing binary classification, so
+    Binary Cross Entropy is a more common error (loss) metric to use.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here’s what Binary Cross Entropy looks like for a single classification probability
+    *p*:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Equation 5.2: Binary Cross Entropy**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`BCE = -(_y_ log _p_ + (1 - _y_) log1 - _p_)`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The logarithmic nature of the function allows it to penalize a "confidently
+    wrong" example, when your model predicts with high probability the sex of a particular
+    name is male, when it is actually more commonly labeled as female. We can help
+    it to make the penalties even more related to reality by using another piece of
+    information available to us - the frequency of the name for a particular sex in
+    our dataset.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: The last thing we need to choose is how to adjust our weights based on the loss
+    - the optimizer algorithm. Remember our discussion about "skiing" down the gradient
+    of the loss function? The most common way to implement skiing downward called
+    Stochastic Gradient Descent (SGD). Instead of taking all of your dataset into
+    account, like your Pythonic perceptron did, it only calculates the gradient based
+    on one sample at a time or perhaps a mini-batch of samples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Your optimizer needs two parameters to know how fast or how to ski along the
+    loss slope - *learning rate* and *momentum*. The learning rate determines how
+    much your weights change in response to an error - think of it as your "ski velocity".
+    Increasing it can help your model converge to the local minimum faster, but if
+    it’s too large, you may overshoot the minimum every time you get close. Any optimizer
+    you would use in PyTorch would have a learning rate.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Momentum is an attribute of our gradient descent algorithm that allows it to
+    "accelerate" when it’s moving in the right direction and "slow down" if it’s getting
+    away from its target. How do we decide which values to give these two attributes?
+    As with other hyperparameters you see in this book, you’ll need to optimize your
+    them to see what’s the most effective one for your problem. For now, you can chose
+    some arbitrary values for the hyperparameters `momentum` and `lr` (learning rate).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: The last step before running our model training is to get the testing and training
+    datasets into a format that PyTorch models can digest.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: Finally, you’re ready for the most important part of this chapter - the sex
+    learning! Let’s look at it and understand what happens at each step.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: That was fast! It should take only a couple of seconds to train this single
+    neuron for about 200 epochs and thousands of examples for each epoch.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Looks easy, right? We made it as simple as possible so that you can see the
+    steps clearly. But we don’t even know how our model is performing! Let’s add some
+    utility functions that will help us see if our neuron improves over time. This
+    is called instrumentation. We can of course look at the loss, but it’s also good
+    to gauge how our model is doing with a more intuitive score, such as accuracy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, you’ll need a function to convert the PyTorch tensors we get from the
+    module back into `numpy` arrays:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now you use this utility function to measure the accuracy of each iteration
+    on the tensors for your outputs (predictions):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now you can rerun your training using this utility function to see the progress
+    of the model’s loss and accuracy with each epoch:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: With just a single set of weights for a single neuron, your simple model was
+    able to achieve more than 70% accuracy on our messy, ambiguous, real-world dataset.
+    Now you can add some more examples from the real world of Tangible AI and some
+    of our contributors.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: Earlier we chose to use the value 1 to represent "female" and 0 to represent
+    "male." The first three example names, "John," "Greg," and "Vishvesh," are the
+    names of men who have generously contributed to open source projects that are
+    important to me, including the code in this book. It looks like Vish’s name doesn’t
+    appear on as many US birth certificates for male babies as John’s or Greg’s. The
+    model is more certain of the maleness in the character n-grams for "John" than
+    those for "Vishvesh."
+  prefs: []
+  type: TYPE_NORMAL
+- en: The next three names, "Sarah," "Carlana," and 'Ruby', are the first names of
+    women at the top of my mind when writing this book.^([[19](#_footnotedef_19 "View
+    footnote.")]) ^([[20](#_footnotedef_20 "View footnote.")]) The name "Ruby" may
+    have some maleness in its character n-grams because a similar name "Rudy" (often
+    used for male babies) is only 1 edit away from "Ruby." Oddly the name "Carlana,"
+    which contains within it a common male name "Carl," is confidently predicted to
+    be a female name.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.3 Skiing down the error slope
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The goal of training in neural networks is to minimize a loss function by finding
+    the best parameters (weights) for your model. At each step of the optimization
+    loop your algorithm finds the steepest way down the slope. Keep in mind, this
+    error slope is not the error for just one particular example from your data set.
+    It is minimizing the cost (loss) for the mean of all the errors on all the points
+    in a batch of data taken together.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Creating a visualization of this side of the problem can help build a mental
+    model of what you’re doing when you adjust the weights of the network as you go.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In chapter 4 you learned about Root Mean Square Error (RMSE), which is the most
+    common cost function for regression problems. If you imagine plotting the error
+    as a function of the possible weights, given a specific input and a specific expected
+    output, a point exists where that function is closest to zero; that is your *minimum* — the
+    spot where your model has the least error.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This minimum will be the set of weights that gives the optimal output for a
+    given training example. You will often see this represented as a three-dimensional
+    bowl with two of the axes being a two-dimensional weight vector and the third
+    being the error (see figure 5.8). That description is a vast simplification, but
+    the concept is the same in higher dimensional spaces (for cases with more than
+    two weights).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 5.6 Convex error curve
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![smooth error](images/smooth_error.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Similarly, you can graph the error surface as a function of all possible weights
+    across all the inputs of a training set. But you need to tweak the error function
+    a little. You need something that represents the aggregate error across all inputs
+    for a given set of weights. For this example, you’ll use *mean squared error*
+    as the *z* axis. Here again, you’ll find a location on the error surface where
+    the coordinates at that location are the vector of weights that minimize the average
+    error between your predictions and the classification labels in your training
+    set. That set of weights will configure your model fit the entire training set
+    as well as possible.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.3.1 Off the chair lift, onto the slope - gradient descent and local minima
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: What does this visualization represent? At each epoch, the algorithm is performing
+    *gradient descent* in trying to minimize the error. Each time you adjust the weights
+    in a direction that will hopefully reduce your error the next time. A convex error
+    surface will be great. Stand on the ski slope, look around, find out which way
+    is down, and go that way!
+  prefs: []
+  type: TYPE_NORMAL
+- en: But you’re not always so lucky as to have such a smooth-shaped bowl; it may
+    have some pits and divots scattered about. This situation is what is known as
+    a *nonconvex error curve*. And, as in skiing, if these pits are big enough, they
+    can suck you in and you might not reach the bottom of the slope.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Again the diagrams represent the weights for two-dimensional input. But the
+    concept is the same if you have a 10-dimensional input, or 50, or 1000\. In those
+    higher dimensional spaces, visualizing it doesn’t make sense anymore, so you trust
+    the math. Once you start using neural networks, visualizing the error surface
+    becomes less important. You get the same information from watching (or plotting)
+    the error or a related metric over the training time and seeing if it is tending
+    toward zero. That will tell you if your network is on the right track or not.
+    But these 3D representations are a helpful tool for creating a mental model of
+    the process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: But what about the nonconvex error space? Aren’t those divots and pits a problem?
+    Yes, yes they are. Depending on where you randomly start your weights, you could
+    end up at radically different weights and the training would stop, as there is
+    no other way to go down from this *local minimum* (see Figure 5.9).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 5.7 Nonconvex error curve
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![lumpy error](images/lumpy_error.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: And as you get into even higher-dimensional space, the local minima will follow
+    you there as well.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '5.3.2 Shaking things up: stochastic gradient descent'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Up until now, you have been aggregating the error for all the training examples
+    and skiing down the steepest route as fast as you can. But training on the entire
+    training set one sample at a time is a little nearsighted. It’s like choosing
+    the downhill sections of a snow park and ignoring all the jumps. Sometimes a good
+    ski jump can help you skip over some rough terrain.
+  prefs: []
+  type: TYPE_NORMAL
+- en: And if you try to train on the entire dataset at once, you may run out of RAM,
+    bogging down your training in SWAP — swapping data back and forth between RAM
+    and your much slower persistent disk storage. And this single static error surface
+    can have traps. Because you are starting from a random starting point (the initial
+    model weights) you could blindly ski downhill into some local minima (divot, hole,
+    or cave). You may not know that better options exist for your weight values. And
+    your error surface is static. Once you reach a local minimum in the error surface,
+    there is no downhill slope to help your model ski out and on down the mountain.
+  prefs: []
+  type: TYPE_NORMAL
+- en: So to shake things up you want to add some randomization to the process. You
+    want to periodically shuffle the order of the training examples that your model
+    is learning from. Typically you reshuffle the order of the training examples after
+    each pass through your training dataset. Shuffling your data changes the order
+    in which your model considers the prediction error for each sample. So it will
+    change the path it follows in search of the global minimum (smallest model error
+    for that dataset). This shuffling is the "stochastic" part of stochastic gradient
+    descent.
+  prefs: []
+  type: TYPE_NORMAL
+- en: There’s still some room for improving the "gradient" estimation part of gradient
+    descent. You can add a little humility to your optimizer so it doesn’t get overconfident
+    and blindly follow every new guess all the way to where it thinks the global minimum
+    should be. It’s pretty rare that the ski slope where you are is going to point
+    in a straight line directly to the ski lodge at the bottom of the mountain. So
+    your model goes a short distance in the direction of the downward slope (gradient)
+    without going all the way. This way the gradient for each individual sample doesn’t
+    lead your model too far astray and your model doesn’t get lost in the woods. You
+    can adjust the *learning rate* hyperparameter of the SGD optimizer (stochastic
+    gradient descent) to control how confident your model is in each individual sample
+    gradient.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Another training approach is *batch learning*. A batch is a subset of the training
+    data, like maybe 0.1%, 1%, 10% or 20% of your dataset. Each batch creates a new
+    error surface to experiment with as you ski around searching for the unknown "global"
+    error surface minimum. Your training data is just a sample of the examples that
+    will occur in the real world. So your model shouldn’t assume that the "global"
+    real-world error surface is shaped the same as the error surface for any portion
+    of your training data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'And this leads to the best strategy for most NLP problems: *mini-batch learning*.^([[21](#_footnotedef_21
+    "View footnote.")]) Geoffrey Hinton found that a batch size of around 16 to 64
+    samples was optimal for most neural network training problems.^([[22](#_footnotedef_22
+    "View footnote.")]) This is the right size to balance the shakiness of stochastic
+    gradient descent, with your desire to make significant progress in the correct
+    direction towards the global minimum. And as you move toward the changing local
+    minima on this fluctuating surface, with the right data and right hyperparameters,
+    you can more easily bumble toward the global minimum. Mini-batch learning is a
+    happy medium between *full batch* learning and individual example training. Mini-batch
+    learning gives you the benefits of both *stochastic* learning (wandering randomly)
+    and *gradient descent* learning (speeding headlong directly down the presumed
+    slope).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Although the details of how *backpropagation* works are fascinating ^([[23](#_footnotedef_23
+    "View footnote.")]), they aren’t trivial, and we won’t explain the details here.
+    A good mental image that can help you train your models is to imagine the error
+    surface for your problem as the uncharted terrain of some alien planet. Your optimizer
+    can only look at the slope of the ground at your feet. It uses that information
+    to take a few steps downhill, before checking the slope (gradient) again. It may
+    take a long time to explore the planet this way. But a good optimization algorithm
+    helps your neural network remember all the good locations on the map and use them
+    to guess a new place on the map to explore in search of the global minimum. On
+    Earth this lowest point on the planet’s surface is the bottom of the canyon under
+    Denman Glacier in Antarctica — 3.5 km below sea level.^([[24](#_footnotedef_24
+    "View footnote.")]) A good mini-batch learning strategy will help you find the
+    steepest way down the ski slope or glacier (not a pleasant image if you’re scared
+    of heights) to the global minimum. Hopefully, you’ll soon find yourself by the
+    fire in the ski lodge at the bottom of the mountain or a campfire in an ice cave
+    below Denman Glacier.
+  prefs: []
+  type: TYPE_NORMAL
+- en: See if you can add additional layers to the perceptron you created in this chapter.
+    See if the results you get improve as you increase the network complexity. Bigger
+    is not always better, especially for small problems.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.4 Test yourself
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: What is the simple AI logic "problem" that Rosenblatt’s artificial neurons couldn’t
+    solve?
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: What minor change to Rosenblatt’s architecture "fixed" perceptrons and ended
+    the first "AI Winter"?
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: What is the equivalent of a PyTorch `model.forward()` function in Scikit-Learn
+    models?
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: What test set accuracy can you achieve with the sex-predicting `LogisticRegression`
+    model if you aggregate names across year and region? Don’t forget to stratify
+    your test set to avoid cheating.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 5.5 Summary
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Minimizing a cost function is how machines gradually learn more and more about
+    the words.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A backpropagation algorithm is the means by which a network *learns*.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The amount a weight contributes to a model’s error is directly related to the
+    amount it needs to updated.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Neural networks are at their heart optimization engines.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Watch out for pitfalls (local minima) during training by monitoring the gradual
+    reduction in error.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[[1]](#_footnoteref_1) See analysis by Dario Amodei and Danny Hernandez here
+    ( [https://openai.com/blog/ai-and-compute/](ai-and-compute.html))'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[2]](#_footnoteref_2) See the lemmatizing FAQ chatbot example in chapter 3
+    failed on the question about "overfitting."'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[3]](#_footnoteref_3) Wikipedia article about Julie Beth Lovins: [https://en.wikipedia.org/wiki/Julie_Beth_Lovins](wiki.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[4]](#_footnoteref_4) [https://nlp.stanford.edu/IR-book/html/htmledition/stemming-and-lemmatization-1.html](htmledition.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[5]](#_footnoteref_5) [https://proai.org/middle-button-subreddit](proai.org.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[6]](#_footnoteref_6) Robin Jia, *Building Robust NLP Systems* ( [https://robinjia.GitHub.io/assets/pdf/robinjia_thesis.pdf](pdf.html))'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[7]](#_footnoteref_7) *Not Even Wrong: The Failure of String Theory and the
+    Search for Unity in Physical Law* by Peter Woit'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[8]](#_footnoteref_8) Lex Fridman interview with Peter Woit ( [https://lexfridman.com/peter-woit/](peter-woit.html))'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[9]](#_footnoteref_9) Rosenblatt, Frank (1957), The perceptron—​a perceiving
+    and recognizing automaton. Report 85-460-1, Cornell Aeronautical Laboratory.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[10]](#_footnoteref_10) [https://en.wikipedia.org/wiki/Universal_approximation_theorem](wiki.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[11]](#_footnoteref_11) The logistic activation function can be used to turn
+    a linear regression into a logistic regression: ( [https://scikit-learn.org/stable/auto_examples/linear_model/plot_logistic.html](linear_model.html))'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[12]](#_footnoteref_12) [https://scikit-learn.org/stable/modules/linear_model.html#logistic-regression](modules.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[13]](#_footnoteref_13) McElreath, Richard, and Robert Boyd, *Mathematical
+    Models of Social Evolution: A guide for the perplexed*, University of Chicago
+    Press, 2008.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[14]](#_footnoteref_14) USCDI (US Core Data Interoperability) ISA (Interoperability
+    Standards Advisory) article on "Sex (Assigned at Birth)" ( [https://www.healthit.gov/isa/uscdi-data/sex-assigned-birth](uscdi-data.html))'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[15]](#_footnoteref_15) from "When I am pinned and wriggling on the wall"
+    in "The Love Song of J. Alfred Prufrock" by T. S. Eliot ( [https://www.poetryfoundation.org/poetrymagazine/poems/44212/the-love-song-of-j-alfred-prufrock](44212.html))'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[16]](#_footnoteref_16) Overview of Coreference Resolution at The Stanford
+    Natural Language Processing Group: ( [https://nlp.stanford.edu/projects/coref.shtml](projects.html))'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[17]](#_footnoteref_17) The Perifpheral by William Gibson on wikipedia ( [https://en.wikipedia.org/wiki/The_Peripheral](wiki.html))'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[18]](#_footnoteref_18) False dichotomy article on wikipedia ( [https://en.wikipedia.org/wiki/False_dilemma](wiki.html))'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[19]](#_footnoteref_19) Sarah Goode Wikipedia article ( [https://en.wikipedia.org/wiki/Sarah_E._Goode](wiki.html))'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[20]](#_footnoteref_20) Ruby Bridges Wikipedia article ( [https://en.wikipedia.org/wiki/Ruby_Bridges](wiki.html))'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[21]](#_footnoteref_21) "Faster SGD training by minibatch persistency", by
+    Fischetti et al ( [https://arxiv.org/pdf/1806.07353.pdf](pdf.html))'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[22]](#_footnoteref_22) Neural Networks for Machine Learning - Overview of
+    mini-batch gradient descent by Geoffrey Hinton ( [https://www.cs.toronto.edu/~hinton/coursera/lecture6/lec6.pdf](lecture6.html))'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[23]](#_footnoteref_23) Wikpedia, [https://en.wikipedia.org/wiki/Backpropagation](wiki.html)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[[24]](#_footnoteref_24) Wikipedia list of places below sea level ( [https://en.wikipedia.org/wiki/List_of_places_on_land_with_elevations_below_sea_level](wiki.html))'
+  prefs: []
+  type: TYPE_NORMAL
