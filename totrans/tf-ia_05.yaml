@@ -1,0 +1,1801 @@
+- en: 4 Dipping toes in deep learning
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter covers
+  prefs: []
+  type: TYPE_NORMAL
+- en: Implementing and training fully connected neural networks using Keras
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Implementing and training convolutional neural networks to classify images
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Implementing and training a recurrent neural network to solve a time-series
+    problem
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In chapter 3, you learned about the different model-building APIs provided by
+    TensorFlow and their advantages and disadvantages. You also learned about some
+    of the options in TensorFlow to retrieve and manipulate data. In this chapter,
+    you will learn how to leverage some of that to build deep neural networks and
+    use them to solve problems.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Deep learning* is a broad term that has many different algorithms under its
+    wings. Deep learning algorithms come in many different flavors and colors and
+    can be classified by many criteria: the type of data they consume (e.g., structured
+    data, images, time-series data), depth (shallow, deep, and very deep), and so
+    on. The main types of deep networks we are going to discuss and implement are
+    as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Fully connected networks (FCNs)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Convolutional neural networks (CNNs)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Recurrent neural networks (RNNs)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Being able to comfortably implement these neural networks is a key skill to
+    be successful in the field, whether you are a graduate student, a data scientist,
+    or a research scientist. This knowledge directly extends to becoming skillful
+    in implementing more complex deep neural networks that deliver state-of-the-art
+    performance in various problem domains.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In chapter 2, we discussed FCN and various operations in CNNs, such as convolution
+    and pooling operations. In this chapter, you will see the FCNs again, as well
+    as a holistic implementation of CNNs showing how convolution and pooling operations
+    coalesce to form a CNN. Finally, you will learn about a new type of model: RNNs.
+    RNNs are typically used to solve time-series problems, where the task is to learn
+    patterns in data over time so that, by looking at the past patterns, we can leverage
+    them to forecast the future. We will also see how RNNs are used to solve an exciting
+    real-world time-series problem.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.1 Fully connected networks
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '*You* *have found some precious photos of your grandmother while going through
+    some storage boxes you found in the attic. Unfortunately, they have seen better
+    days. Most of the photos are scratched, smudged, and even torn. You know that
+    recently deep networks have been used to restore old photos and videos. In the
+    hope of restoring these photos, you decide to implement an image restoration model*
+    using TensorFlow. You will first develop a model that can restore corrupted images
+    of handwritten digits, as this data set is readily available, in order to understand
+    the model and the training process. You believe an autoencoder model (a type of
+    FCN) would be a great starting point. This autoencoder will have the following
+    specifications:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Input layer with 784 nodes
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A hidden layer with 64 nodes, having ReLU activation
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A hidden layer with 32 nodes, having ReLU activation
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A hidden layer with 64 nodes, having ReLU activation
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: An output layer with 784 nodes with tanh activation
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Hyperparameter optimization for deep learning
+  prefs: []
+  type: TYPE_NORMAL
+- en: You might have noticed that when defining neural networks, we are choosing structural
+    hyperparameters (e.g., number of units in hidden layers) somewhat arbitrarily.
+    These values have, in fact, been chosen empirically through a few rounds of trial
+    and error.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Typically, in machine learning, these hyperparameters are chosen using a principled
+    approach, such as hyperparameter optimization. But hyperparameter optimization
+    is an expensive process that needs to evaluate hundreds of models with different
+    hyperparameter choices to choose the best set of hyperparameters. This makes it
+    very difficult to use for deep learning methods, as these methods usually deal
+    with large, complex models and large amounts of data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Therefore, in deep learning, you will commonly see the following trends, in
+    order to limit the time spent on hyperparameter optimization:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Optimizing a subset of hyperparameters to limit the exploration space (e.g.,
+    type of activation instead of number of hidden units, regularization parameters,
+    etc.)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using robust optimizers, early stopping, learning rate decay, and so on, which
+    are designed to reduce or prevent overfitting
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using model specifications from published models that have delivered state-of-the-art
+    performance
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Following rules of thumb such as reducing the output size as you go deeper into
+    the network
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In this chapter, we will use model architectures chosen empirically. The focus
+    of this chapter is to show how a given architecture can be implemented using TensorFlow
+    2 and not to find the architectures themselves.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s examine the data we’ll use to implement the FCN.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.1.1 Understanding the data
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: For this scenario, we will use the MNIST digit data set, a simple data set that
+    contains the black-and-white images of hand-written digits and the corresponding
+    labels representing the digits. Each image has a single digit and goes from 0-9\.
+    Therefore, the data set has 10 different classes. Figure 4.1 shows several samples
+    from the data set along with the digit it represents.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![04-01](../../OEBPS/Images/04-01.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.1 Sample digit images. Each image contains a number from 0 to 9.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In TensorFlow, you can load the MNIST data set with a single line. Loading
+    this data set has become an integral part of various machine learning libraries
+    (including TensorFlow) due to its extremely common usage:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The load_data() method returns two tuples: training data and testing data.
+    Here, we will only use the training images (i.e., x_train) data set. As we covered
+    earlier, this is an unsupervised task. Because of that, we will not need the labels
+    (i.e., y_train) of the images to complete this task.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Better than MNIST?
+  prefs: []
+  type: TYPE_NORMAL
+- en: It should be noted that, due to advancements in the field of computer vision
+    over the last decade, MNIST is considered too easy, where a test accuracy of more
+    than 92% can be achieved with a simple logistic regression model ([http://mng.bz/j2l9](http://mng.bz/j2l9))
+    and a 99.84% accuracy with a state-of-the-art model ([http://mng.bz/d2Pv](http://mng.bz/d2Pv)).
+    Furthermore, it’s being overused in the computer vision community. Because of
+    this, a new data set known as Fashion-MNIST ([https://github.com/zalandoresearch/fashion-mnist](https://github.com/zalandoresearch/fashion-mnist))
+    has emerged. This is a black-and-white data set containing images belonging to
+    10 classes. Instead of digits, it contains images of various fashion categories
+    (e.g., T-shirt, sandal, bag, etc.), which poses a much harder problem than recognizing
+    digits.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can print x_train and y_train to understand those arrays a bit better using
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: This will produce
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'And do the same for y_train:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: This will give
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Then we will do some basic data preprocessing. We will normalize all samples
+    in the data set by bringing their pixel values from [0, 255] to [-1, 1]. This
+    is done by subtracting 128 and dividing the result by 128 element-wise for all
+    pixels. This is important because the final layer of the autoencoder has a tanh
+    activation, which ranges between (-1, 1). Tanh is a nonlinear activation function
+    like the sigmoid function, and for a given input, *x* is computed as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![04_01a](../../OEBPS/Images/04_01a.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Therefore, we need to make sure we feed something to the model that is within
+    the range of values that can be produced by the final layer. Also, if you look
+    at the shape of x_train, you will see that it has a shape of (60000, 28, 28).
+    The autoencoder takes a one-dimensional input, so we need to reshape the image
+    to a one-dimensional vector of size 784\. Both these transformations can be achieved
+    by the following line:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here, reshape([-1, 784]) will unwrap the two-dimensional images (size 28 × 28)
+    in the data set to a single dimensional vector (size 784). When reshaping, you
+    do not need to provide all the dimensions of the reshaped tensor. If you provide
+    the sizes of all dimensions except one, NumPy can still infer the size of the
+    missing dimension as it knows the dimensions of the original tensor. The dimension
+    that you want NumPy to infer is denoted by -1.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You might be wondering, “These images look crisp and clean. How on earth can
+    we train our model to restore corrupted images?” That’s a very easy fix. All we
+    need to do is synthesize a corresponding corrupted set of images from the original
+    set of images. For that, we will define the generate_masked_inputs(...) function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This function will set pixels randomly (with 50% probability) to zero. But
+    let’s inspect what we are doing in more detail. First, we will give the option
+    to set a random seed so that we can deterministically change the generated random
+    masks. We are creating a mask of 1s and 0s using the binomial distribution, which
+    is the same size as norm_x_train. In simple words, the binomial distribution represents
+    the probability of heads (1) or tails (0) if you flip a coin several times. The
+    binomial distribution has several important parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: N—Number of trials
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: P—Probability of a success (1)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Size—The number of tests (i.e., trial sets)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Here, we have x.shape tests and one trial in each with a 50% success probability.
+    Then this mask is multiplied element-wise with the original tensor. This will
+    result in black pixels randomly distributed over the image (figure 4.2).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![04-02](../../OEBPS/Images/04-02.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.2 Some of the synthetically corrupted images
+  prefs: []
+  type: TYPE_NORMAL
+- en: Next, let’s discuss the fully connected network we’ll be implementing. It’s
+    called an autoencoder model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.1.2 Autoencoder model
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Both the autoencoder model and the multilayer perceptron (MLP) model (from chapter
+    1) are FCNs. These are called FCNs because all the input nodes are connected to
+    all the output nodes, in every layer of the network. Autoencoders operate in a
+    similar way to the multilayer perceptron. In other words, the computations (e.g.,
+    forward pass) you see in an autoencoder are exactly the same as in an MLP. However,
+    the final objectives of the two are different. An MLP is trained to solve a supervised
+    task (e.g., classifying flower species), whereas an autoencoder is trained to
+    solve an unsupervised task (e.g., reconstructing the original image, given a corrupted/noisy
+    image). Let’s now delve into what an autoencoder actually does.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Supervised versus unsupervised learning
+  prefs: []
+  type: TYPE_NORMAL
+- en: In supervised learning, a model is trained using a labeled data set. Each input
+    (e.g., image/audio/movie review) has a corresponding label (e.g., object class
+    for images, sentiment of the review) or continuous value(s) (e.g., bounding boxes
+    of an object for images). Some examples of supervised tasks are image classification,
+    object detection, speech recognition, and sentiment analysis.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In unsupervised learning, the models are trained using unlabeled data (e.g.,
+    images/audio/text extracted from websites without any labeling). The training
+    process varies significantly depending on the final expected outcome. For example,
+    autoencoders are trained to reconstruct images as a pretraining step for an image-based
+    supervised learning task. Some examples of unsupervised tasks are image reconstruction,
+    image generation using generative adversarial networks, text clustering, and language
+    modeling.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![04-03](../../OEBPS/Images/04-03.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.3 A simple autoencoder with one layer for compression and another layer
+    for reconstruction. The black and white rectangles in the input image are the
+    pixels present in the image.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Figure 4.3 depicts a simple autoencoder with two layers. An autoencoder has
+    two phases in its functionality:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Compression phase*—Compresses a given image (i.e., the corrupted image) to
+    a compressed hidden (i.e., latent) representation'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Reconstruction phase*—Reconstructs the original image from the hidden representation'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In the compression phase, a compressed hidden representation is computed as
+    follows
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*h*[1] = *ReLU*(*xW*[1] + *b*[1])'
+  prefs: []
+  type: TYPE_NORMAL
+- en: where *W*[1],*b*[1] are the weights and biases of the first compression layer
+    and *h*[1] is the final hidden representation of the layer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Similarly, we compute the output of the reconstruction layers:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*ŷ* = *ReLU*(*h*[1] *W*[2] + *b*[2])'
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is known as the forward pass, as you are going from the input to the output.
+    Then you compute a loss (e.g., mean squared error [MSE]) between the expected
+    output (i.e., target) and the prediction. For example, mean squared error for
+    a single image is computed as
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![04_03a](../../OEBPS/Images/04_03a.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: where *D* is the dimensionality of the data (784 in our example), *y*[j] is
+    the *j*^(th) pixel in our image, and (*ŷ*[j]) is the *j*^(th) pixel of the predicted
+    image. We compute this loss for each batch of images and optimize the model parameters
+    to minimize the computed loss. This is known as the backward pass.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can have an arbitrary number of compression and reconstruction layers. In
+    our assignment, we need to have two compression layers and two reconstruction
+    layers (see the next listing).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.1 The denoising autoencoder model
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Defining four Dense layers, three with ReLU activation and one with tanh activation
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Compiling the model with a loss function and an optimizer
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Printing the summary
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s go over what we did in more detail. The first thing you should notice
+    is that we used the Keras Sequential API for this task. This makes sense as this
+    is a very simple deep learning model. Next, we added four Dense layers. The first
+    Dense layer takes an input with 784 features and produces a 64-elements-long vector.
+    Then the second layer takes the 64-elements-long vector and produces a 32-elements-long
+    vector. The third dense layer takes the 32-elements-long vector and produces a
+    64-elements-long vector, passing it on to the final layer, which produces a 784-elements-long
+    vector (i.e., size of the input). The first three layers have ReLU activation,
+    and the last layer has a tanh activation, as the last layer needs to produce values
+    between (-1, 1). Let’s remind ourselves how the ReLU and tanh activations are
+    computed:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*ReLU*(*x*) = max (0, *x*)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![04_03b](../../OEBPS/Images/04_03b.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Finally, we compile the model using the mean squared error as the loss function
+    and adam as the optimizer. The model we just described has the specifications
+    we defined at the beginning of the section. With the model defined, you can now
+    train the model. You will train the model for 10 epochs with batches of size 64:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The masked inputs we generated become the input, and the original images will
+    be the ground truth. When you train the model, you will see a loss that goes down
+    over time:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: It seems the error (i.e., loss value) has gone down from approximately 0.15
+    to roughly 0.078\. This is a strong indication that the model is learning to reconstruct
+    images. You can get similar results by setting the seed using the fix_random_seed(...)
+    function we used in chapter 2 (provided in the notebook). Note that for this task
+    we cannot define a metric like accuracy, as it is an unsupervised task.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Denoising autoencoders
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Normally an autoencoder maps a given input to a small latent space and then
+    back to the original input space to reconstruct the original images. However,
+    here we use the autoencoder for a special purpose: to restore original images
+    or denoise original images. Such autoencoders are known as *denoising*. Read more
+    about denoising autoencoders at [http://mng.bz/WxyX](http://mng.bz/WxyX).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s now see what the trained model can do! It should now be able to decently
+    restore an image of a corrupted digit. And to make things interesting, let’s make
+    sure we generate a mask that the training data has not seen:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here, we will be using the first 10 images in the data set to test out the model
+    we just trained. However, we are making sure that the random mask is different
+    by changing the seed. You can display some information about y_pred using
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: which will give
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: Finally, you can visualize what the model does by plotting the images (the code
+    provided in the notebook). Figure 4.4 illustrates the corrupted images (top row)
+    and the outputs of the model (bottom row). Though you are not yet restoring real-world
+    photos of your grandmother, this a great start, as you now know the approach to
+    follow.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![04-04](../../OEBPS/Images/04-04.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.4 Images restored by the model. It seems our model is doing a good
+    job.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You might be wondering, “What do autoencoders help you to achieve in general?”
+    Autoencoders are a great tool for learning unsupervised features from unlabeled
+    data, which is handy when solving more interesting downstream tasks like image
+    classification. When autoencoders are trained on an unsupervised task, they learn
+    useful features for other tasks (e.g., image classification). Therefore, training
+    an autoencoder model to classify images will get you to a well-performing model
+    faster and with less labeled data than training a model from scratch. As you are
+    probably aware, there’s much more unlabeled data in the world than labeled data,
+    as labeling usually requires human intervention, which is time-consuming and expensive.
+    Another use of autoencoders is that the hidden representation it produces can
+    be used as a low-dimensional proxy to cluster the images.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this section, you learned about the autoencoder model, which is a type of
+    FCN and is used to reconstruct/restore damaged images in an unsupervised manner.
+    This is a great way to leverage copious amounts of unlabeled data to pretrain
+    models, which becomes useful in more downstream interesting tasks (e.g., image
+    classification). You first learned the architecture and then how to implement
+    an autoencoder model with the Keras Sequential API. Finally, you trained the model
+    on a hand-written image data set (MNIST) to reconstruct the images in the data
+    set. During the training process, to ensure the model was learning, you monitored
+    the loss to make sure it decreased over time. Finally, you used the model to predict
+    restorations of corrupted images and ensured the model was performing well.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the next section, we will discuss a different type of deep learning network
+    that has revolutionized the field of computer vision: CNNs.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Exercise 1
+  prefs: []
+  type: TYPE_NORMAL
+- en: Implement an autoencoder model that takes in a 512-elements-long vector. The
+    network has a 32-node layer, a 16-node layer, and finally an output layer. In
+    total, there are three layers. All these layers have the sigmoid activation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.2 Convolutional neural networks
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: You have been working at a startup as a data scientist trying to model traffic
+    congestion on the road. One important model in the company’s solution is building
+    a model to predict whether a vehicle is present, given a patch or image, as a
+    part of a larger plan. You plan to develop a model first on the cifar-10 data
+    set and see how well it classifies vehicles. This is a great idea, as it will
+    give a rough approximation of the feasibility of the idea while spending minimal
+    time and money on labeling custom data. If we can achieve good accuracy on this
+    data set, that is a very positive sign. You have learned that CNNs are great for
+    computer vision tasks. So, you are planning to implement a CNN.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.2.1 Understanding the data
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: We will use is the cifar-10 data set. We briefly looked at this data set in
+    the previous chapter, and it is a great cornerstone for this task. It has various
+    vehicles (e.g., automobile, truck) and other objects (e.g., dog, cat) as classes.
+    Figure 4.5 illustrates some of the classes and corresponding samples for them.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![04-05](../../OEBPS/Images/04-05.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.5 Sample images from cifar-10 data set along with their labels
+  prefs: []
+  type: TYPE_NORMAL
+- en: The data set consists of 50,000 training instances and 10,000 testing instances.
+    Each instance is a 32 × 32 RGB image. There are 10 different classes of objects
+    in this data set.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s first load the data by executing the following line:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: print(data) will yield
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: If you explore the data a bit, you will realize that
+  prefs: []
+  type: TYPE_NORMAL
+- en: Images are provided with the data type as unsigned eight-bit integers.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Labels are provided as integer labels (i.e., not one-hot encoded).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Therefore, we will write a very simple function to convert the images to data
+    type float32 (to make the data type consistent with the model parameters) and
+    labels to one-hot encoded vectors:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Finally, we will create a batched data set by applying this function to all
+    the training data:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: We can again look at the data with
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: which will produce
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now our data is ready to be fed to a model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.2.2 Implementing the network
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'To classify these images, we will employ a CNN. CNNs have gained a stellar
+    reputation for solving computer vision tasks and are a popular choice for image-related
+    tasks for two main reasons:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: CNNs process the images while preserving their spatial information (i.e., while
+    keeping the height and width dimensions as is), while a fully connected layer
+    will need to unwrap the height and width dimensions to a single dimension, losing
+    precious locality information.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Unlike a fully connected layer where every input is connected to every output,
+    the convolution operation shifts a smaller kernel over the entire image, demanding
+    only a handful of parameters in a layer, making CNNs very parameter efficient.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'A CNN consists of a set of interleaved convolution and pooling layers followed
+    by several fully connected layers. This means there are three main types of layers
+    in a CNN:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Convolution layers
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Pooling layers
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Fully connected layers
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A convolution layer consists of several filters (i.e., convolution kernels)
+    that are convolved over the image to produce a *feature map*. The feature map
+    is a representation of how strongly a given filter is present in the image. For
+    example, if the filter represents a vertical edge, the feature map represents
+    where (and how strongly) in the image vertical edges are present. As another example,
+    think of a neural network that is trained to identify faces. A filter might represent
+    the shape of an eye and activate the corresponding area of the output highly when
+    an eye is present in a given image (figure 4.6). We will discuss the convolution
+    operation in more detail later in the chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![04-06](../../OEBPS/Images/04-06.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.6 The result of a convolution operation at a very abstract level. If
+    we have an image of a human face and a convolution kernel that represents the
+    shape/color of an eye, then the convolution result can be roughly thought of as
+    a heatmap of where that feature (i.e., the eyes) are present in the image.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Another important characteristic of the convolution layers is that the deeper
+    you go in the network (i.e., further away from the input), the more high-level
+    features the layers learn. Going back to our face recognition example, the lower
+    layers might learn various edges present; the next layer, the shape of an eye,
+    ear, and a nose; the next layer, how two eyes are positioned, the alignment of
+    the nose and mouth; and so on (figure 4.7).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![04-07](../../OEBPS/Images/04-07.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 4.7 Features learned by a convolutional neural network. The lower layers
+    (closest to the input) are learning edges/lines, whereas the upper layers (furthest
+    from input) are learning higher-level features. (Source: [http://mng.bz/8MPg](http://mng.bz/8MPg))'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Next, the pooling layer takes in feature maps generated by a convolution layer
+    and reduces their height and width dimensions. Why is it useful to reduce the
+    height and width of the feature maps? It helps the model be translation invariant
+    during the machine learning task. For instance, if the task is image classification,
+    even if the objects appear several pixels offset from what was seen during training,
+    the network is still able to identify the object.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Finally, to get the final probability distribution, you have several fully connected
+    layers. But you might have suspected an issue we face here. A convolution/pooling
+    layer produces a three-dimensional output (i.e., height, width, and channel dimensions).
+    But a fully connected layer accepts a one-dimensional input. How do we connect
+    the three-dimensional output of a convolution/pooling layer to a one-dimensional
+    fully connected layer? There’s a simple answer to this problem. You squash all
+    three dimensions into a single dimension. In other words, it is analogous to unwrapping
+    a two-dimensional RGB image to a one-dimensional vector. This provides the fully
+    connected layer with a one-dimensional input. Finally, a softmax activation is
+    applied to the outputs of the final fully connected layer (i.e., scores of the
+    network) to obtain a valid probability distribution. Figure 4.8 depicts a simple
+    CNN.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![04-08](../../OEBPS/Images/04-08.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.8 A simple CNN. First, we have an image with height, width, and channel
+    dimensions, followed by a convolution and pooling layer. Finally, the last convolution/pooling
+    layer output is flattened and fed to a set of fully connected layers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: With a good understanding of what a CNN comprises, we will create the following
+    CNN using the Keras Sequential API. However, if you run this code, you will get
+    an error. We will investigate and fix this error in the coming sections (see the
+    next listing).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.2 Defining a CNN with the Keras Sequential API
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Clearing any existing Keras states (e.g., models) to start fresh
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Defining a convolution layer; it takes parameters like filters, kernel_size,
+    strides, activation, and padding.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Before feeding the data to a fully connected layer, we need to flatten the
+    output of the last convolution layer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Creating an intermediate fully connected layer
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Final prediction layer
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You can see that the network consists of three convolution layers and two fully
+    connected layers. Keras provides all the layers you need to implement a CNN. As
+    you can see, it can be done in a single line of code for our image classification
+    network. Let’s explore what is happening in this model in more detail. The first
+    layer is specified as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: Hyperparameters of convolutional neural networks
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the CNN network from listing 4.2, filters, kernel_size, and strides of the
+    Conv2D layers, the number of hidden units in the Dense layers (except the output
+    layer) and the activation function are known as the hyperparameters of the model.
+    Ideally, these hyperparameters need to be selected using a hyperparameter optimization
+    algorithm, which would run hundreds (if not thousands) of models with different
+    hyperparameter values and choose the one that maximizes a predefined metric (e.g.,
+    model accuracy). However, here we have chosen the values for these hyperparameters
+    empirically and will not be using hyperparameter optimization.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, the Conv2D layer is the Keras implementation of the 2D convolution operation.
+    As you’ll remember from chapter 1, we achieved this using the tf.nn.convolution
+    operation. The Conv2D layer executes the same functionality under the hood. However,
+    it hides some of the complexities met when using the tf.nn.convolution operation
+    directly (e.g., defining the layer parameters explicitly) There are several important
+    arguments you need to provide to this layer:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: filters—The number of output channels that will be present in the output.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: kernel_size—The convolution window size on the height and width dimensions,
+    in that order.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: strides—Represents how many pixels are skipped on height and with dimensions
+    (in that order) every time the convolution window shifts on the input. Having
+    a higher value here helps to reduce the size of the convolution output quickly
+    as you go deeper.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: activation—The nonlinear activation of the convolution layer.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: padding—Type of padding used for the border while performing the convolution
+    operation. Padding borders gives more control over the size of the output.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: input_shape—A three-dimensional tuple representing the input size on (height,
+    width, channels) dimensions, in that order. Remember that Keras adds an unspecified
+    batch dimension automatically when specifying the shape of the data using this
+    argument.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Let’s now go over the convolution function and its parameters in more detail.
+    We already know that the convolution operation shifts a convolution window (i.e.,
+    a kernel) over the image, while taking the sum of an element-wise product between
+    the kernel and the portion of the image that overlaps the kernel at a given time
+    (figure 4.9). Mathematically, the convolution operation can be stated as follows
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![04_08a](../../OEBPS/Images/04_08a.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: where *x* is a *n* × *n* input matrix, *f* is a *m* × *m* filter, and *y* is
+    the output.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![04-09](../../OEBPS/Images/04-09.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.9 The computations that happen in the convolution operation while shifting
+    the window
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Apart from the computations that take place during the convolution operation,
+    there are four important hyperparameters that affect the size and values produced
+    when using the Conv2D layer in Keras:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Number of filters
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Kernel height and width
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Kernel stride (height and width)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Type of padding
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The first aspect we will discuss is the number of filters in the layer. Typically,
+    a single convolution layer has multiple filters. For example, think of a neural
+    network that is trained to identify faces. One of the layers in the network might
+    learn to identify the shape of an eye, shape of a nose, and so on. Each of these
+    features might be learned by a single filter in the layer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The convolution layer takes an image, which is a three-dimensional tensor of
+    some height, width, and channels. For example, if the image is an RGB image, there
+    will be three channels. If the image is a grayscale image, the number of channels
+    will be one. Then, convolving this tensor with n number of filters will result
+    in a three-dimensional output of some height, width, and n channels. This is shown
+    in figure 4.10\. When used in a CNN, the filters are the parameters of a convolution
+    layer. These filters are initialized randomly, and over time they evolve to become
+    meaningful features that help solve the task at hand.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As we have said before, deep neural networks process data in batches. CNNs are
+    no exception. You can see that we have set the input_shape parameter to (32, 32,
+    3), where an unspecified batch dimension is automatically added, making it (None,
+    32, 32, 3). The unspecified dimension is denoted by None, and it means that the
+    model can take any arbitrary number of items on that dimension. This means that
+    a batch of data can have 3, 4, 100, or any number of images (as the computer memory
+    permits) at run time while feeding data to the model. Therefore, the input/output
+    of a Conv2D layer is, in fact, a four-dimensional tensor with a batch, height,
+    width, and channel dimension. Then the filters will be another four-dimensional
+    tensor with a kernel height, width, incoming channel, and outgoing channel dimension.
+    Table 4.1 summarizes this information.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Table 4.1 The dimensionality of the input, filters, and the output of a Conv2D
+    layer
+  prefs: []
+  type: TYPE_NORMAL
+- en: '|  | **Dimensionality** | **Example** |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Input | [batch size, height, width, in channels] | [32, 64, 64, 3] (i.e.,
+    a batch of 32, 64 × 64 RGB images) |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Convolution filters | [height, width, in channels, out channels] | [5, 5,
+    3, 16] (i.e., 16 convolution filters of size 5 × 5 with 3 incoming channels) |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Output | [batch size, height, width, out channels] | [32, 64, 64, 16] (i.e.,
+    a batch of 32, 64 × 64 × 16 tensors) |'
+  prefs: []
+  type: TYPE_TB
+- en: Figure 4.10 depicts how the inputs and outputs look in a convolution layer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![04-10](../../OEBPS/Images/04-10.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.10 A computation of a convolution layer with multiple filters (randomly
+    initialized). We left the batch dimension of the tensor representation to avoid
+    clutter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, kernel height and width are the size of the filter on height and width
+    dimensions. Figure 4.11 depicts how different kernel sizes lead to different outputs.
+    Typically, when implementing CNNs, we keep kernel height and width equal. With
+    that, we will refer to both the height and width dimensions of the kernel generally
+    as the *kernel size*. We can compute the output size as a function of the kernel
+    and input size as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*size*(*y*) = *size*(*x*) - *size*(*f*) + 1'
+  prefs: []
+  type: TYPE_NORMAL
+- en: For example, if the image is a 7 × 7 matrix and the filter is a 3 × 3 matrix,
+    then the output will be a (7 - 3 + 1, 7 - 3 + 1) = 5 × 5 matrix. Or, if the image
+    is a 7 × 7 matrix and the filter is a 5 × 5 matrix, then the output will be a
+    3 × 3 matrix.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![04-11](../../OEBPS/Images/04-11.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.11 Convolution operation with a kernel size of 2 and kernel size of
+    3\. Increasing the kernel size leads to a reduced output size.
+  prefs: []
+  type: TYPE_NORMAL
+- en: From a modeling perspective, increasing the kernel size (i.e., filter size)
+    translates to an increased number of parameters. Typically, you should try to
+    reduce the number of parameters in your network and target smaller-sized kernels.
+    Having small kernel sizes encourages the model to learn more robust features with
+    a small number of parameters, leading to better generalization of the model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The next important parameter is the stride. Just like the kernel size, the
+    stride has two components: height and width. Intuitively, the stride defines how
+    many pixels/ values you skip while shifting the convolution operation. Figure
+    4.12 illustrates the difference between having stride = 1 (i.e., no stride versus
+    stride = 2). As before, we can specify the output size as a function of the input
+    size, kernel size, and stride:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![04_11a](../../OEBPS/Images/04_11a.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: '![04-12](../../OEBPS/Images/04-12.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.12 Convolution operation with stride = 1 (i.e., no stride) versus stride
+    = 2\. An increased stride leads to a smaller output.
+  prefs: []
+  type: TYPE_NORMAL
+- en: From a modeling perspective, striding is beneficial, as it helps you to control
+    the amount of reduction you need in the output. You might have noticed that, even
+    without striding, you still get an automatic dimensionality reduction during convolution.
+    However, when using striding, you can control the reduction you want to gain without
+    affecting the kernel size.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Finally, padding decides what happens near the borders of the image. As you
+    have already seen, when you convolve an image, you don’t get a same-sized output
+    as the input. For example, if you have a 4 × 4 matrix and a 2 × 2 kernel, you
+    get a 3 × 3 output (i.e., following the equation *size*(*y*) = *size*(*x*) - *size*(*f*
+    ) + 1 we saw earlier, where *x* is the input size and *f* is the filter size).
+    This automatic dimensionality reduction creates an issue when creating deep models.
+    Specifically, it limits the number of layers you can have, as at some point the
+    input will become a 1 × 1 pixel due to this automatic dimension reduction. Consequentially,
+    this will create a very narrow bottleneck in passing information to the fully
+    connected layers that follow, causing massive information loss.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You can use padding to alleviate this issue. With padding, you create an imaginary
+    border of zeros around the image, such that you get the same-sized output as the
+    input. More specifically, you append a border that is a *size*(*f* ) - 1-thick
+    border of zeros in order to get an output of same size as the input. For example,
+    if you have an input of size 4 × 4 and a kernel of size 2 × 2, then you would
+    apply a border of size 2 - 1 = 1 vertically and horizontally. This means that
+    the kernel is essentially processing a 5 × 5 input (i.e., (4 + 1) × (4 + 1)-sized
+    input), resulting in a 4 × 4-sized output. This is called *same padding*. Note
+    that it does not always have to be zeros that you are padding. Though currently
+    not supported in Keras, there are different padding strategies (some examples
+    are available here: [https://www.tensorflow.org/api_docs/python/tf/pad](https://www.tensorflow.org/api_docs/python/tf/pad)),
+    such as padding with'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A constant value
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A reflection of the input
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The nearest value
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If you don’t apply padding, that is called *valid padding*. Not applying padding
+    leads to the standard convolution operation we discussed earlier. The differences
+    in padding are shown in figure 4.13.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![04-13](../../OEBPS/Images/04-13.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.13 Valid versus same padding. Valid padding leads to a reduced output
+    size, whereas same padding results in an output with equal dimensions to the input.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'With that, we conclude our discussion about various hyperparameters of the
+    Conv2D layer. Now let’s circle back to the network we implemented. Unfortunately
+    for you, if you try to run the code we discussed, you will be presented with a
+    somewhat cryptic error like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'What have we done wrong here? It seems TensorFlow is complaining about a negative
+    dimension size while trying to compute the output of a convolution layer. Since
+    we have learned all about how to compute the size of the output under various
+    circumstances (e.g., with stride, with padding, etc.), we will compute the final
+    output of the convolution layers. We have the following layers:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: We are starting with an input of size 32 × 32 × 3\. Then, after the convolution
+    operation, which has 16 filters, a kernel size of 9, and stride 2, we get an output
+    of size (height and width)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Here, we focus only on the height and width dimensions. The next layer has
+    32 filters, a kernel size of 7, and no stride:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: This layer produces an output of size
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: The final convolution layer has 64 filters, a kernel size of 7, and no stride
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: which will produce an output of size
+  prefs: []
+  type: TYPE_NORMAL
+- en: 6 - 7 + 1= 0
+  prefs: []
+  type: TYPE_NORMAL
+- en: We figured it out! With our chosen configuration, our CNN is producing an invalid
+    zero-sized output. The term *negative dimension* in the error refers to an output
+    with invalid dimensions (i.e., less than one) being produced. The output always
+    needs to be greater than or equal to 1.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s correct this network by making sure the outputs will never have negative
+    dimensions. Furthermore, we will introduce several interleaved max-pooling layers
+    to the CNN, which helps the network to learn translation-invariant features (see
+    the next listing).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.3 The corrected CNN model that has positive dimensions
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ The first convolution layer. The output size reduces from 32 to 16.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ The first max-pooling layer. The output size reduces from 16 to 8.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ The second convolution layer. The output size stays the same as there is no
+    stride.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ The second max-pooling layer. The output size reduces from 8 to 4.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Squashing the height, width, and channel dimensions to a single dimension
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❻ The two intermediate Dense layers with ReLU activation
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❼ The final output layer with softmax activation
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Max-pooling is provided by the tensorflow.keras.layers.MaxPool2D layer. The
+    hyperparameters of this layer are very similar to tensorflow.keras.layers.Conv2D:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: pool_size—This is analogous to the kernel size parameter of the Conv2D layer.
+    It is a tuple representing (window height, window width), in that order.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Strides—This is analogous to the strides parameter of the Conv2D layer. It is
+    a tuple representing (height stride, width stride), in that order.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Padding—Padding can be same or valid and has the same effect as it has in the
+    Conv2D layer.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Let’s analyze the changes we made to our CNN:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We used padding='same' for all the Conv2D and MaxPool2D layers, meaning that
+    there won’t be any automatic reduction of the output size. This eliminates the
+    risk of mistakenly going into negative dimensions.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: We used stride parameters to control the reduction of the output size as we
+    go deeper into the model.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: You can follow the output sizes in listing 4.1 and make sure that the output
+    will never be less than or equal to zero for the input images we have.
+  prefs: []
+  type: TYPE_NORMAL
+- en: After the Conv2D and MaxPool2D layers, we have to have at least one Dense layer,
+    as we are solving an image classification task. To get the final prediction probabilities
+    (i.e., the probabilities of a given input belonging to the output classes), a
+    Dense layer is essential. But before having a Dense layer, we need to flatten
+    our four-dimensional output (i.e., [batch, height, width, channel] shaped) of
+    the Conv2D or MaxPool2D layers to a two-dimensional input (i.e., [batch, features]
+    shaped) to the Dense layer. That is, except for the batch dimension, everything
+    else gets squashed to a single dimension. For this, we use the tensorflow.keras.layers.Flatten
+    layer provided by Keras. For example, if the output of our last Conv2D layer was
+    [None, 4, 4, 64], then the Flatten layer will flatten this output to a [None,
+    1024]-sized tensor. Finally, we add three Dense layers, where the first two dense
+    layers have 64 and 32 output nodes and an activation of type ReLU. The final Dense
+    layer will have 10 nodes (1 for each class) and a softmax activation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Performance bottleneck of CNNs
+  prefs: []
+  type: TYPE_NORMAL
+- en: Typically, in a CNN the very first Dense layer after the convolution/pooling
+    layers is considered a *performance bottleneck*. This is because this layer will
+    usually contain a large proportion of the parameters of the network. Assume you
+    have a CNN where the last pooling layer produces an 8 × 8 × 256 output followed
+    by a Dense layer with 1,024 nodes. This Dense layer would contain 16,778,240 (more
+    than 16 million) parameters. If you don’t pay attention to the first Dense layer
+    of the CNN, you can easily run into out-of-memory errors while running the model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'It’s time to test our first CNN on the data. But before that we have to compile
+    the model with appropriate parameters. Here, we will monitor the training accuracy
+    of the mode:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: Finally, you can use the training data we created earlier and train the model
+    on the data by calling
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'You should get the following output:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: It seems we are getting good at training accuracies (denoted by acc) and creating
+    a steady reduction of the training loss (denoted by loss) for the task of identifying
+    vehicles (around 72.2% accuracy). But we can go for far better accuracies by employing
+    various techniques, as you will see in later chapters. This is very promising
+    news for the team, as this means they can continue working on their full solution.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this section, we looked at CNNs. CNNs work extremely well, especially in
+    computer vision problems. In this instance, we looked at using a CNN to classify
+    images to various classes (e.g., animals, vehicles, etc.) as a feasibility study
+    for a model’s ability to detect vehicles. We looked at the technical aspects of
+    the CNN in detail, while scrutinizing various operations like convolution and
+    pooling, as well as the impact of the parameters associated with these operations
+    (e.g., window size, stride, padding). We saw that if we do not pay attention to
+    how the output changes while using these parameters, it can lead to errors in
+    our code. Next, we went on to fix the error and train the model on the data set.
+    Finally, we saw that the model showed promising results, quickly reaching for
+    a training accuracy above 70%. Next, we will discuss RNNs, which are heavily invested
+    in solving time-series problems.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Exercise 2
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Consider the following network:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: What is the final output size (ignoring the batch dimension)?
+  prefs: []
+  type: TYPE_NORMAL
+- en: '4.3 One step at a time: Recurrent neural networks (RNNs)'
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: You are working for a machine learning consultant for the National Bureau of
+    Meteorology. They have data for CO2 concentration over the last three decades.
+    You have been tasked with developing a machine learning model that predicts CO2
+    concentration for the next five years. You are planning to implement a simple
+    RNN that takes a sequence of CO2 concentrations (in this case, the values from
+    the last 12 months) and predicts the next in the sequence.
+  prefs: []
+  type: TYPE_NORMAL
+- en: It can be clearly seen that what we have in front of us is a time series problem.
+    This is quite different from the tasks we have been solving so far. In previous
+    tasks, one input did not depend on the previous inputs. In other words, you considered
+    each input to be *i.i.d* (independent and identically distributed) inputs. However,
+    in this problem, that is not the case. The CO2 concentration today will depend
+    on what the CO2 concentration was over the last several months.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Typical feed-forward networks (i.e., fully connected networks, CNNs) cannot
+    learn from time series data without special adaptations. However, there is a special
+    type of neural network that is designed to learn from time series data. These
+    networks are generally known as RNNs. RNNs not only use the current input to make
+    a prediction, but also use the *memory* of the network from past time steps, at
+    a given time step. Figure 4.14 depicts how a feed-forward network and an RNN differ
+    in predicting CO2 concentration over the months. As you can see, if you use a
+    feed-forward network, it has to predict the CO2 level for the next month based
+    *only* on the previous month, whereas an RNN looks at all the previous months.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![04-14](../../OEBPS/Images/04-14.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.14 The operational difference between a feed-forward network and an
+    RNN in terms of a CO2 concentration-level prediction task
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.3.1 Understanding the data
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The data set is very simple (downloaded from [https://datahub.io/core/co2-ppm/r/co2-mm-gl.csv](https://datahub.io/core/co2-ppm/r/co2-mm-gl.csv)).
+    Each datapoint has a date (YYYY-MM-DD format) and a floating-point value representing
+    the CO2 concentration in CSV format. The data is provided to us as a CSV file.
+    Let’s download the file as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We can easily load this data set using pandas:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now we can see what the data looks like, using the head() operation, which
+    will provide the first few entries in the data frame:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: This will give something like figure 4.15.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![04-15](../../OEBPS/Images/04-15.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.15 Sample data in the data set
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this data set, the only two columns we are interested in are the Date column
+    and the Average column. Out of these, the Date column is important for visualization
+    purposes only. Let’s set the Date column as the index of the data frame. This
+    way, when we plot data, the *x*-axis will be automatically annotated with the
+    corresponding date:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: We can now visualize the data (figure 4.16) by creating a line plot with
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: '![04-16](../../OEBPS/Images/04-16.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.16 CO2 concentration plotted over time
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The obvious features of the data are that it has an upward trend and short
+    repetitive cycles. Let’s see what sort of improvements we can do to this data.
+    The clear upward trend the data is showing poses a problem. This means that the
+    data is not distributed in a consistent range. The range increases as we go further
+    and further down the timeline. If you feed data as it is to the model, usually
+    the model will underperform, because any new data the model has to predict is
+    out of the range of the data it saw during training. But if you forget the absolute
+    values and think about this data relative to the previous value, you will see
+    that it moves between a very small range of values (appx -2.0 to +1.5). In fact,
+    we can test this idea easily. We will create a new column called Average Diff,
+    which will contain the relative difference between two consecutive time steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: If you do a data.head() at this stage, you will see something similar to table
+    4.2.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Table 4.2 Sample data in the data set after introducing the Average diff column
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| **Date** | **Decimal data** | **Average** | **Trend** | **Average diff**
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 1980-01-01 | 1980.042 | 338.45 | 337.83 | 0.00 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 1980-02-01 | 1980.125 | 339.15 | 338.10 | 0.70 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 1980-031-01 | 1980.208 | 339.48 | 338.13 | 0.33 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 1980-04-01 | 1980.292 | 339.87 | 338.25 | 0.39 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 1980-05-01 | 1980.375 | 340.30 | 338.78 | 0.43 |'
+  prefs: []
+  type: TYPE_TB
+- en: Here, we are subtracting a version of the Average column, where values are shifted
+    forward by one time step, from the original average column. Figure 4.17 depicts
+    this operation visually.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![04-17](../../OEBPS/Images/04-17.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.17 Transformations taking place going from the original Average series
+    to the Average Diff series
+  prefs: []
+  type: TYPE_NORMAL
+- en: Finally, we can visualize how the values behave (figure 4.18) using the data["Average
+    Diff"].plot(figsize=(12,6)) line.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![04-18](../../OEBPS/Images/04-18.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.18 Relative change of values (i.e., Average[t]-Average[t-1]) of CO2
+    concentration over time
+  prefs: []
+  type: TYPE_NORMAL
+- en: Can you see the difference? From an ever-increasing data stream, we have gone
+    to a stream that changes within a short vertical span. The next step is creating
+    batches of data for the model to learn. How do we create batches of data for a
+    time series problem? Remember, we cannot just randomly sample data naively, as
+    each input depends on its predecessors.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s assume we want to use 12 past CO2 concentration values (i.e., 12 time
+    steps) to predict the current CO2 concentration value. The number of time steps
+    is a hyperparameter you must choose carefully. In order to choose this hyperparameter
+    confidently, you must have a solid understanding of the data and the memory limitations
+    of the model you are using.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We first randomly choose a position in the sequence and take the 12 values from
+    that point on as the inputs and the 13^(th) value as the output we’re interested
+    in predicting so that the total sequence length (n_seq) you sample at a time is
+    13\. If you do this process 10 times, you will have a batch of data with 10 elements.
+    As you can see, this process exploits the randomness while preserving the temporal
+    characteristics of the data, and while feeding data to the model. Figure 4.19
+    visually describes this process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![04-19](../../OEBPS/Images/04-19.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.19 Batching time series data. n_seq represents the number of time steps
+    we see at a given time to create a single input and an output.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To do this in Python, let’s write a function that gives the data at all positions
+    as a single data set. In other words, this function returns all possible consecutive
+    sequences with 12 elements as x and the corresponding next value for each sequence
+    as y. It is possible to perform the shuffling while feeding this data to the model,
+    as the next listing shows.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.4 The code for generating time-series data sequences for the model
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Extracting a sequence of values n_seq long
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Extracting the next value in the sequence as the output
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Combining everything into an array
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.3.2 Implementing the model
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'With a good understanding of the data, we can start implementing the network.
+    We will implement a network that has the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A rnn layer with 64 hidden units
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A Dense layer with 64 hidden units and a ReLU activation
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A Dense layer with a single output and a linear activation
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note that the hyperparameters of the network (e.g., number of hidden units)
+    have been chosen empirically to work well for the given problem. The first layer
+    is the most crucial component of the network, as it is the element that makes
+    it possible to learn from time series data. The SimpleRNN layer encapsulates the
+    functionality shown in figure 4.20.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![04-20](../../OEBPS/Images/04-20.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.20 The functionality of a SimpleRNN cell. The cell goes from one input
+    to another while producing a memory at every time step. The next step consumes
+    the current input as well as the memory from the previous time step.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The computations that happen in an RNN are more sophisticated than in an FCN.
+    An RNN goes from one input to the other in the input sequence (i.e., x1, x2, x3)
+    in the given order. At each step, the recurrent layer produces an output (i.e.,
+    o1, o2, o3) and passes the hidden computation (h0, h1, h2, h3) to the next time
+    step. Here, the first hidden state (h0) is typically set to zero.
+  prefs: []
+  type: TYPE_NORMAL
+- en: At a given time step, the recurrent layer computes a hidden state, just like
+    a Dense layer. However, the specific computations involved are bit more complex
+    and are out of the scope of this book. The hidden state size is another hyperparameter
+    of the recurrent layer. The recurrent layer takes the current input as well as
+    the previous hidden state computed by the cell. A larger-sized hidden state helps
+    to maintain more memory but increases the memory requirement of the network. As
+    the hidden state is dependent on itself from the previous time step, these networks
+    are called RNNs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The algorithm used for SimpleRNN
+  prefs: []
+  type: TYPE_NORMAL
+- en: The computations mimicked by the SimpleRNN layer are also known as *Elman networks*.
+    To learn more about specific computations taking place in recurrent layers, you
+    can read the paper “Finding Structure in Time” by J.L. Elman (1990). For a more
+    high-level overview of later variations of RNNs and their differences, see [http://mng.bz/xnJg](http://mng.bz/xnJg)
+    and [http://mng.bz/Ay2g](http://mng.bz/Ay2g)
+  prefs: []
+  type: TYPE_NORMAL
+- en: By default, the SimpleRNN does not expose the hidden state to the developer
+    and will be propagated between time steps automatically. For this task, we only
+    need the final output produced by each time step, which is the output of that
+    layer by default. Therefore, you can simply connect the SimpleRNN in the Sequential
+    API to a Dense layer without any additional work.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Did you notice that we haven’t provided an input_shape to the first layer? This
+    is possible, as long as you provide the data in the correct shape during model
+    fitting. Keras builds the layers lazily, so until you feed data to your model,
+    the model doesn’t need to know the input sizes. But it is always safer to set
+    the input_shape argument in the first layer of the model to avoid errors. For
+    example, in the model we defined, the first layer (i.e., the SimpleRNN layer)
+    can be changed to layers.SimpleRNN(64, input_shape=x), where x is a tuple containing
+    the shape of the data accepted by the model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Another important difference in this model is that it is a regression model,
+    not a classification model. In a classification model, there are distinct classes
+    (represented by output nodes), and we try to associate a given input with a distinct
+    class (or a node). A regression model predicts a continuous value(s) as the output.
+    Here, in our regression model, there is no notion of classes in the outputs, but
+    a real continuous value representing CO2 concentration. Therefore, we have to
+    choose the loss function appropriately. In this case, we will use mean squared
+    error (MSE) as the loss. MSE is a very common loss function for regression problems.
+    We will compile the rnn with the MSE loss and the adam optimizer:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Let’s cross our fingers and train our model:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'You’ll get the following exception:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: It seems we have done something wrong. The line we just ran resulted in an exception,
+    which says something is wrong with the dimensionality of the data given to the
+    layer sequential_1 (i.e., the SimpleRNN layer). Specifically, the sequential_1
+    layer expects a three-dimensional input but has a two-dimensional input. We need
+    to investigate what’s happening here and solve this.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The problem is that the SimpleRNN (or any other sequential layer in tf.keras)
+    only accepts data in a very specific format. The data needs to be three-dimensional,
+    with the following dimensions, in this order:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Batch dimension
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Time dimension
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Feature dimension
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Even when you have a single element for any of these dimensions, they need to
+    be present as a dimension of size 1 in the data. Let’s look at what the dimensionality
+    of x is by printing x.shape. You will get x.shape = (429, 12). Now we know what
+    went wrong. We tried to pass a two-dimensional data set when we should have passed
+    a three-dimensional one. In this case, we need to reshape x into a tensor of shape
+    (492, 12, 1). Let’s change our generate_data(...) function to reflect this change
+    in the following listing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.5 The previous generate_data() function with data in the correct shape
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Create two lists to hold input sequences and scalar output targets.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Iterate through all the possible starting points in the data for input sequences.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Create the input sequence and the output target at the ith position.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Convert x from a list to an array and make x a 3D tensor to be accepted by
+    the RNN.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s try training our model now:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE44]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'You should see the MSE of the model going down:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE45]'
+  prefs: []
+  type: TYPE_PRE
+- en: We start with a loss of approximately 0.5 and end up with a loss of roughly
+    0.015\. This is a very positive sign, as it indicates the model is learning the
+    trends present in the data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.3.3 Predicting future CO2 values with the trained model
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Thus far, we have focused on classification tasks. It is much easier to evaluate
+    models on classification tasks than regression tasks. In classification tasks
+    (assuming a balanced data set), by computing the overall accuracy on the data,
+    we can get a decent representative number on how well our model is doing. In regression
+    tasks it’s not so simple. We cannot measure an accuracy on regressed values, as
+    the predictions are real values, not classes. For example, the magnitude of the
+    mean squared loss depends on values we are regressing, which makes them difficult
+    to objectively interpret. To address this, we predict the values for the next
+    five years and visually inspect what the model is predicting (see the next listing).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.6 The future CO2 level prediction logic using the trained model
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE46]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ The first data sequence to start predictions from, which is reshaped to the
+    correct shape the SimpleRNN accepts
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Save the very last absolute CO2 concentration value to compute the actual
+    values from the relative predictions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Predict for the next 60 months.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Make a prediction using the data sequence.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Modify the history so that the latest prediction is included.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❻ Compute the absolute CO2 concentration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❼ Update prev_true so that the absolute CO2 concentration can be computed in
+    the next time step.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s review what we have done. First, we extracted the last 12 CO2 values
+    (from the Average Diff column) from our training data to predict the first future
+    CO2 value and reshaped it to the correct shape the model expects the data to be
+    in:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE47]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Then, we captured the predicted CO2 values in true_vals list. Remember that
+    our model only predicts the relative movement of CO2 values with respect to the
+    previous CO2 values. Therefore, after the model predicts, to get the absolute
+    CO2 value, we need the last CO2 value. prev_true captures this information, which
+    initially has the very last value in the Average column of the data:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE48]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, for the next 60 months (or 5 years), we can recursively predict CO2 values,
+    while making the last predicted the next input to the network. To do this we first
+    predict a value using the predict(...) method provided in Keras. Then, we need
+    to make sure the prediction is also a three-dimensional tensor (though it’s a
+    single value). Then we modify the history variable:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE49]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We are taking all but the first value from the history and appending the last
+    predicted value to the end. Then we append the absolute predicted CO2 value by
+    adding the prev_true value to p_diff:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE50]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Finally, we update prev_true to the last absolute CO2 value we predicted:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE51]'
+  prefs: []
+  type: TYPE_PRE
+- en: By doing this set of operations recursively, we can get the predictions for
+    the next 60 months (captured in true_vals variable). If we visualize the predicted
+    values, they should look like figure 4.21.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![04-21](../../OEBPS/Images/04-21.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.21 The CO2 concentration predicted over the next five years. Dashed
+    line represents the trend from the current data, and the solid line represents
+    the predicted trend.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Great work! Given the simplicity of the model, predictions look very promising.
+    The model has definitely captured the annual trend of the CO2 concentration and
+    has learned that the CO2 level is going to keep going up. You can now go to your
+    boss and explain factually why we should be worried about climate change and dangerous
+    levels of CO2 in the future. We end our discussion about different neural networks
+    here.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Exercise 3
+  prefs: []
+  type: TYPE_NORMAL
+- en: Impressed by your work on predicting the CO2 concentration, your boss has provided
+    you the data and asked you to enhance the model to predict both CO2 and temperature
+    values. Keeping the other hyperparameters the same, how would you change the model
+    for this task? Make sure you specify the input_shape parameter for the first layer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Fully connected networks (FCNs) are one of the most straightforward neural networks.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: FCNs can be implemented using the Keras Dense layer.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Convolutional neural networks (CNNs) are a popular choice for computer vision
+    tasks.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: TensorFlow offers various layers, such as Conv2D, MaxPool2D, and Flatten, that
+    help us implement CNNs quickly.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: CNNs have parameters such as kernel size, stride, and padding that must be set
+    carefully. If not, this can lead to incorrectly shaped tensors and runtime errors.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Recurrent neural networks (RNNs) are predominantly used to learn from time-series
+    data.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The typical RNN expects the data to be organized into a three-dimensional tensor
+    with a batch, time, and feature dimension.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The number of time steps the RNN looks at is an important hyperparameter that
+    should be chosen based on the data.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Answers to exercises
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '**Exercise 1:** You can do this using the Sequential API, and you will be using
+    only the Dense layer.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Exercise 2**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE52]'
+  prefs: []
+  type: TYPE_PRE
+- en: '**Exercise 3**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE53]'
+  prefs: []
+  type: TYPE_PRE

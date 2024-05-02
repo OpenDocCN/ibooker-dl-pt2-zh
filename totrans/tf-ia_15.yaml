@@ -1,0 +1,864 @@
+- en: '12 Sequence-to-sequence learning: Part 2'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter covers
+  prefs: []
+  type: TYPE_NORMAL
+- en: Implementing the attention mechanism for the seq2seq model
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Generating visualizations from the attention layer to glean insights from the
+    model
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'In the previous chapter, we built an English-to-German machine translator.
+    The machine learning model was a sequence-to-sequence model that could learn to
+    map arbitrarily long sequences to other arbitrarily long sequences. It had two
+    main components: an encoder and a decoder. To arrive at that, we first downloaded
+    a machine translation data set, examined the structure of that data set, and applied
+    some processing (e.g., adding SOS and EOS tokens) to prepare it for the model.
+    Next, we defined the machine translation model using standard Keras layers. A
+    special characteristic of this model is its ability to take in raw strings and
+    convert them to numerical representations internally. To achieve this, we used
+    the Keras’s TextVectorization layer. When the model was defined, we trained it
+    using the data set we processed and evaluated it on two metrics: per-word accuracy
+    of the sequences produced and BLEU. BLEU is a more advanced metric than accuracy
+    that mimics how a human would evaluate the quality of a translation. To train
+    the model, we used a technique known as teacher forcing. When teacher forcing
+    is used, we feed the decoder, with the target translation offset by 1\. This means
+    the decoder predicts the next word in the target sequence given the previous word(s),
+    instead of trying to predict the whole target sequence without any knowledge of
+    the target sequence. This leads to better performance. Finally, we had to redefine
+    our model to suit inference. This is because we had to modify the decoder such
+    that it predicted one word at a time instead of a sequence. This way, we can create
+    a recursive decoder at inference time, which predicts a word and feeds the predicted
+    word as an input to predict the next word in the sequence.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this chapter, we will explore ways to increase the accuracy of our model.
+    To do that, we will use the attention mechanism. Without attention, machine translation
+    models rely on the last output produced after processing the input sequence. Through
+    the attention mechanism, the model is able to obtain rich representations from
+    all the time steps (while processing the input sequence) during the generation
+    of the translation. Finally, we will conclude the chapter by visualizing the attention
+    mechanisms that will give insights into how the model pays attention to words
+    provided to it during the translation process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The data and the processing we do in this chapter are going to be identical
+    to the last chapter. Therefore, we will not discuss data in detail. You have been
+    provided all the code necessary to load and process data in the notebook. But
+    let’s refresh the key steps we performed:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Download the data set manually from [http://www.manythings.org/anki/deu-eng.zip](http://www.manythings.org/anki/deu-eng.zip).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The data is in tab-separated format and <German phrase><tab><English phrase><tab><Attribution>
+    format. We really care about the first two tab-separated values in a record. We
+    are going to predict the German phrase given the English phrase.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: We randomly sample 50,000 data points from the data set and use 5,000 (i.e.,
+    10%) as validation data and another 5,000 (i.e., 10%) as test data.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: We add a start token (e.g., SOS) and an end token (e.g., EOS) to each German
+    phrase. This is an important preprocessing step, as this helps us to recursively
+    infer words from our recursive decoder at inference time (i.e., provide SOS as
+    the initial seed and keep predicting until the model outputs EOS or reaches a
+    maximum length).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: We look at summary statistics of vocabulary size and sequence length, as these
+    hyperparameters are very important for our TextVectorization layer (the layer
+    can be found at tensorflow.keras.layers.experimental.preprocessing.TextVectorization*).*
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The vocabulary size is set as the number of unique words that appear more than
+    10 times in the corpus for both languages, and the sequence length is set as the
+    99% quantile (plus a buffer of 5) for both languages.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '12.1 Eyeballing the past: Improving our model with attention'
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: You have a working prototype of the translator but still think you can push
+    the accuracy up by using attention. Attention provides a richer output from the
+    encoder to the decoder by allowing the decoder to look at all the outputs produced
+    by the encoder over the entire input sequence. You will modify the previously
+    implemented model to incorporate an attention layer that takes all the encoder
+    outputs (one for each time step) and produces a sequence of outputs for each decoder
+    step that will be concatenated with the standard output produced by the decoder.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We have a working machine translator model that can translate from English to
+    German. Performance of this model can be pushed further using something known
+    as *Bahdanau attention*. Bahdanau attention was introduced in the paper “Neural
+    Machine Translation by Jointly Learning to Align and Translate” by Bahdanau et
+    al. ([https://arxiv.org/pdf/1409.0473.pdf](https://arxiv.org/pdf/1409.0473.pdf)).
+    We already discussed self-attention in chapter 5\. The underlying principle between
+    the two attention mechanisms is the same. They both allow the model to get a rich
+    representation of historical/future input in a sequence to facilitate the model
+    in understanding the language better. Let’s see how the attention mechanism can
+    be tied in with the encoder-decoder model we have.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The attention mechanism produces an output for each decoder time step, similar
+    to how the decoder’s GRU model produces an output at each time step. The attention
+    output is combined with the decoder’s GRU output and fed to the subsequent hidden
+    layer in the decoder. The attention output produced at each time step of the decoder
+    combines the encoder’s outputs from all the time steps, which provides valuable
+    information about the English input sequence to the decoder. The attention layer
+    is allowed to mix the encoder outputs differently to produce the output for each
+    decoder time step, depending on which part of the translation the decoder model
+    is working on at a given moment. You should be able to see how powerful the attention
+    mechanism is. Previously, the context vector was the only input from the encoder
+    that was accessible to the decoder. This is a massive performance bottleneck,
+    as it is impractical for the encoder to encode all the information present in
+    a sentence using a small-sized vector.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s probe a bit more to understand the specific computations that transpire
+    during the computation of the attention outputs. Let’s assume that the encoder
+    output at position *j* (1 < *j* < *T*[e]) is denoted by *h*[j], and the decoder
+    RNN output state at time i (1 < *i* < *T*[d]) is denoted by *s*[i] ; then the
+    attention output *c*[i] for the *i*^(th) decoding step is computed by
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*e*[ij] = *v*^T *tanh*(*s*[i -1] *W* + *h*[j]*U*)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![12_00a](../../OEBPS/Images/12_00a.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: '![12_00b](../../OEBPS/Images/12_00b.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Here, W, U, and v are weight matrices (initialized randomly just like neural
+    network weights). Their shapes are defined in accordance with the dimensionality
+    of hidden representations s and h, which will be discussed in detail soon. In
+    summary, this set of equations, for a given decoder position
+  prefs: []
+  type: TYPE_NORMAL
+- en: Computes energy values representing how important each encoder output is for
+    that decoding step using a small fully connected network whose weights are W,
+    U, and v
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Normalizes energies to represent a probability distribution over the encoder
+    steps
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Computes a weighted sum of encoder outputs using the probability distribution
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 12.1.1 Implementing Bahdanau attention in TensorFlow
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Unfortunately, TensorFlow does not have a built-in layer to readily use in
+    our models to enable the attention mechanism. Therefore, we will implement an
+    Attention layer using the Keras subclassing API. We will call this the DecoderRNNAttentionWrapper
+    and will have to implement the following functions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: __init__—Defines various initializations that need to happen before the layer
+    can operate correctly
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: build()—Defines the parameters (e.g., trainable weights) and their shapes associated
+    with the computation
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: call()—Defines the computations and the final output that should be produced
+    by the layer
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The __init__() function initializes the layer with any attributes it requires
+    to operate correctly. In this case, our DecoderRNNAttentionWrapper takes in a
+    cell_fn as the argument. cell_fn needs to be a Keras layer object that implements
+    the tf.keras .layers.AbstractRNNCell interface ([http://mng.bz/pO18](http://mng.bz/pO18)).
+    There are several options, such as tf.keras.layers.GRUCell, tf.keras.layers.LSTMCell,
+    and tf.keras.layers.RNNCell. In this case, we will use the tf.keras.layers.GRUCell.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Difference between tf.keras.layers.GRUCell and tf.keras.layers.GRU
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The GRUCell can be thought of as an abstraction of the GRU layer. The GRUCell
+    encompasses the most minimalist computation you can think of in an RNN layer.
+    Given an input and a previous state, it computes the next output and the next
+    state. This is the most primitive computation that governs an RNN layer:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: In other words, a GRUCell encapsulates the computations required to compute
+    a single time step in an input sequence. The GRU layer is a fully fledged implementation
+    of the GRUCell that can process the whole sequence. Furthermore, the GRU layer
+    gives options like return_state and return_sequence to control the output produced
+    by the GRU layer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In short, the GRU layer provides the convenience for processing input sequences,
+    and the GRUCell exposes the more fine-grained implementation details that allow
+    one to process a single time step in the sequence.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here, we have decided to go with GRU, as the GRU model is a lot simpler than
+    an LSTM (meaning there is reduced training time) but achieves roughly similar
+    results on NLP tasks:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Next, the build() function is defined. The build function declares the three
+    weight matrices used in the attention computation: W, U and v. The argument input_shape
+    contains the shapes of the inputs. Our input will be a tuple containing encoder
+    outputs and the decoder RNN inputs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: The most important argument to note in the weight definitions is the shape argument.
+    We are defining them so that
+  prefs: []
+  type: TYPE_NORMAL
+- en: W_a (representing W) has a shape of [ <encoder hidden size>, <attention hidden
+    size>]
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: U_a (representing U) has a shape of [<decoder hidden size>, <attention hidden
+    size>]
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: V_a (representing v) has a shape of [<attention hidden size>, 1]
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Here, the <encoder hidden size> and <decoder hidden size> are the number of
+    units in the final output of the RNN layer of the encoder or the decoder, respectively.
+    We typically keep the encoder and decoder RNN sizes the same to simplify the computations.
+    The <attention hidden size> is a hyperparameter of the layer that can be set to
+    any value and represents the dimensionality of internal computations of the attention.
+    Finally, we define the call() method (see listing 12.1). The call() method encapsulates
+    the computations that take place when the layer is called with inputs. This is
+    where the heavy lifting required to compute the attention outputs happens. At
+    a high level, the attention layer needs to traverse all the encoder inputs (i.e.,
+    each time step) for each decoder input.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 12.1 Attention computation in the DecoderRNNAttentionWrapper
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ When calling the _step function, we are passing encoder_outputs as a constant,
+    as we need access to the full encoder sequence. Here we access it within the _step
+    function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Computes S.Wa where S represents all the encoder outputs and S=[s0, s1, ...,
+    si]. This produces a [batch size, en_seq_len, hidden size]-sized output.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Computes hj.Ua, where hj represent the j^{th} decoding step. This produces
+    a [ batch_size, 1, hidden size]-sized output
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Computes tanh(S.Wa + hj.Ua). This produces a [batch_size, en_seq_len, hidden
+    size]-sized output
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Computes the energies and normalizes them. Produces a [batch_size, en_seq_len]
+    sized output
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❻ Computes the final attention output (c_i) as a weighted sum of h_j (for all
+    j), where weights are denoted by a_i. Produces a [batch_size, hidden_size] output
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❼ Concatenate sthe current input and c_i and feeds it to the decoder RNN to
+    get the output
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❽ The inputs to the attention layer are encoder outputs and decoder RNN inputs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❾ The K.rnn() function executes the _step() function for every input in the
+    decoder inputs to produce attention outputs for all the decoding steps.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '❿ The final output is two-fold: attention outputs of a [batch size, de_seq_len,
+    hidden size]-sized output and attention energies [batch dize, de_seq_len, en_seq_len]-sized
+    outputs'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s demystify what’s done in this function. The input to this layer is an
+    iterable of two elements: encoder output sequence (encoder_outputs) and decoder
+    RNN input sequence (decoder_inputs). Next, we use a special backend function of
+    Keras called K.rnn() ([http://mng.bz/OoPR](http://mng.bz/OoPR)) to iterate through
+    these inputs while computing the final output required. In our example, it is
+    called as'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here, it applies the step_function to each time step slice of the inputs tensor.
+    For example, the decoder_inputs is a [<batch size>, <decoder time steps>, <embedding
+    size>]-sized input. Then the K.rnn() function applies the step_function to every
+    [<batch size>, <embedding size>] output for <decoder time steps> number of times.
+    The update this function does is a recurrent update, meaning that it takes an
+    initial state and produces a new state until it reaches the end of the input sequence.
+    For that, initial_states provides the starting states. Finally, we are passing
+    encoder_outputs as a constant to the step_function. This is quite important as
+    we need the full sequence of the encoder’s hidden outputs to compute attention
+    at each decoding step. Within the step_function, constants gets appended to the
+    value of the states argument. So, you can access encoder_outputs as the last element
+    of states.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The _step function does the computations we outlined in listing 12.1 for a single
+    decoder time step. It takes inputs (a slice of the time dimension of the original
+    input) and states (initialized with the initial_states value in the K.rnn() function).
+    Next, using these two entities, the normalized attention energies (i.e., α[ij])
+    for a single time step are computed (a_i). Following that, c_i is computed, which
+    is a weighted sum of encoder_outputs weighted by a_i. Afterward, it updates the
+    cell_fn (i.e., GRUCell) with the current input and the state. Note that the current
+    input to the cell_fn is a concatenation of the decoder input and c_i (i.e., the
+    weighted sum of encoder inputs). The cell function then outputs the output state
+    along with the next state. We return this information out. In other words, the
+    _step() function outputs the output for that time step (i.e., a tuple of decoder
+    RNN output and normalized energies that computed the weighted sum of encoder inputs)
+    and the next state of the decoder RNN.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Finally, you can obtain the full output of the _step function for all the decoder
+    time steps using the K.rnn() function as shown. We are only interested in the
+    output itself (denoted by attn_outputs) and will ignore the other things output
+    by the function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The K.rnn() function outputs the following outputs when called:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: last_output—The last output produced by the _step_function after it reaches
+    the end of the sequence
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: outputs—All the outputs produced by the step_function
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: new_states—The last states produced by the step_function after it reaches the
+    end of the sequence
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Finally, the call() function produces two outputs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: attn_out—Holds all the attention outputs for all the decoding steps
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: attn_energy—Provides the normalized energy values for a batch of data, where
+    the energy matrix for one example contains energy values for all the encoder time
+    steps for every decoder time step
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: We have discussed the most important functions of the DecoderRNNAttentionWrapper
+    layer. If you want to see the full sub-classed implementation of the DecoderRNNAttentionWrapper,
+    please refer to the code at Ch11/11.1_seq2seq_machine_translation .ipynb.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 12.1.2 Defining the final model
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: When defining the final model, the get_vectorizer() and get_encoder() functions
+    remain identical to what was shown in the previous section. All the modifications
+    required need to happen in the decoder. Therefore, let’s define a function, get_
+    final_seq2seq_model_with_attention(), that provides us the decoder with Bahdanau
+    attention in place, as shown in the next listing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 12.2 Defining the final sequence-to-sequence model with attention
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Get the encoder outputs for all the timesteps.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ The input is (None,1) shaped and accepts an array of strings.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Vectorize the data (assign token IDs).
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Define an embedding layer to convert IDs to word vectors.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Define the initial state to the decoder as the concatenation of the last forward
+    and backward encoder states.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❻ Define a GRUCell, which will then be used for the Attention layer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❼ Get the attention outputs. The GRUCell is passed as the cell_fn, where the
+    inputs are en_states (i.e., all of the encoder states) and d_emb_out (input to
+    the decoder RNN).
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❽ Define the intermediate and final Dense layer outputs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❾ Define a model that takes encoder and decoder inputs as inputs and outputs
+    the final predictions (d_final_out).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We already have done all the hard work. Therefore, changes to the decoder can
+    be summarized in two lines of code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: We first define a GRUCell object with 256 hidden units. Then we define the DecoderRNNAttentionWrapper,
+    where the cell_fn is the GRUCell we defined and units is set to 512\. units in
+    the DecoderRNNAttentionWrapper defines the dimensionality of the weights and the
+    intermediate attention outputs. We pass en_states (i.e., encoder output sequence)
+    and d_emb_out (i.e., decoder input sequence to the RNN) and set the initial state
+    as the final state of the encoder (i.e., d_init_state).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Next, as before, we have to define a get_vectorizer() function (see the next
+    listing) to get the English/German vectorizers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 12.3 Defining the TextVectorizers for the encoder-decoder model
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Define an input layer that takes a list of strings (or an array of strings).
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ When defining the vocab size, there are two special tokens, (Padding) and
+    '[UNK]' (OOV tokens), added automatically.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Fit the vectorizer layer on the data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Get the token IDs for the data fed to the input.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Return only the model, which takes an array of a string and outputs a tensor
+    of token IDs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❻ Return the vocabulary in addition to the model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The get_encoder() function shown in the following listing builds the encoder.
+    As these have been discussed in detail, they will not be repeated here.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 12.4 The function that returns the encoder
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ The input is (None,1) shaped and accepts an array of strings.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Vectorize the data (assign token IDs).
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Define an embedding layer to convert IDs to word vectors.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Get the embeddings of the token IDs
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Define a bidirectional GRU layer. The encoder looks at the English text (i.e.,
+    the input) both backward and forward; this leads to better performance.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❻ Get the output of the GRU layer (the last output state vector returned by
+    the model).
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❼ Define the encoder model; this takes in a list/array of strings as the input
+    and returns the last output state of the GRU model as the output.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As the very last step, we define the final model and compile it using the same
+    specifications we used for the earlier model:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 12.1.3 Training the model
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Training the model is quite straightforward as it remains the same as before.
+    All we need to do is call the train_model() function with the arguments model
+    (a Keras model to be trained/evaluated), vectorizer (a target language vectorizer
+    to convert token IDs to text), train_df (training data), valid_df (validation
+    data), test_df (testing data), epochs (an int to represent how many epochs the
+    model needs to be trained) and batch_size (size of a training/evaluation batch):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: This will output
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: Compared to the last model we had, this is quite an improvement. We have almost
+    doubled the validation and testing BLEU scores. All this was possible because
+    we introduced the attention mechanism to alleviate a huge performance bottleneck
+    in the encoder-decoder model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: NOTE On an Intel Core i5 machine with an NVIDIA GeForce RTX 2070 8 GB, the training
+    took approximately five minutes to run five epochs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Finally, for later use, we save the trained model, along with the vocabularies:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: State-of-the-art results for English-German translation
+  prefs: []
+  type: TYPE_NORMAL
+- en: One way to know where our model stands is to compare it to the state-of-the-art
+    result that has been achieved on English-German translation. In 2021, at the time
+    of writing this book, a BLEU score of 0.3514 has been achieved by one of the models.
+    The model is introduced in the paper “Lessons on Parameter Sharing across Layers
+    in Transformers” by Takase et al. ([https://arxiv.org/pdf/2104.06022v1.pdf](https://arxiv.org/pdf/2104.06022v1.pdf)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: This should not be taken as an exact comparison to our model, as the benchmarked
+    models are typically trained on the WMT English-German data set ([https://nlp.stanford.edu/projects/nmt/](https://nlp.stanford.edu/projects/nmt/)),
+    which is a much larger and more complex data set. However, given that we have
+    a relatively simple model with no special training time optimizations, 0.1978
+    is a decent score.
+  prefs: []
+  type: TYPE_NORMAL
+- en: With that, we will discuss how we can visualize the attention weights to see
+    the attention patterns the model uses when decoding inputs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Exercise 1
+  prefs: []
+  type: TYPE_NORMAL
+- en: You have invented a novel attention mechanism called AttentionX. Unlike Bahdanau
+    attention, this attention mechanism takes encoder inputs and the decoder’s RNN
+    outputs to produce the final output. The fully connected layers take this final
+    output instead of the usual decoder’s RNN output. Given that, you’ve implemented
+    the new attention mechanism in a layer called AttentionX. For encoder input x
+    and decoder’s RNN output y, it can be called as
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: where the final output z is a [<batch size>, <decoder time steps>, <hidden size>]-sized
+    output. How would you change the following decoder to use this new attention mechanism?
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 12.2 Visualizing the attention
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: You have determined that the attention-based model works better than the one
+    without attention. But you are skeptical and want to understand if the attention
+    layer is producing meaningful outputs. For that, you are going to visualize attention
+    patterns generated by the model for several input sequences.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Apart from the performance, one of the lucrative advantages of the attention
+    mechanism is the interpretability it brings along to the model. The normalized
+    energy values, one of the interim outputs of the attention mechanism, can provide
+    powerful insights into the model. Since the normalized energy values represent
+    how much each encoder output contributed to decoding/translating at each decoding
+    timestep, it can be used to generate a heatmap, highlighting the most important
+    words in English that correspond to a particular German word.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If we go back to the DecoderRNNAttentionWrapper, by calling it on a certain
+    input, it produces two outputs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Decoder RNN output sequence
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Alpha (i.e., normalized energy values) for all the encoder positions for every
+    decoder position
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The second output is what we are after. That tensor holds the key to unlocking
+    the powerful interpretability brought by the attention mechanism.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s write a function called the attention_visualizer() that will load the
+    saved model and outputs not only the predictions of the model, but also the attention
+    energies that will help us generate the final heatmap. In this function, we will
+    load the model and create outputs by using the trained layers to retrace the interim
+    and final outputs of the decoder, as shown in the next listing. This is similar
+    to how we retraced the various steps in the model to create an inference model
+    from the trained model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 12.5 A model that visualizes attention patterns from input text
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Load the model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Define the encoder input for the model and get the final outputs of the encoder.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Get the encoder vectorizer (required to interpret the final output).
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Define the decoder input.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Get the decoder vectorizer and the output.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❻ The next few steps just reiterate the steps in the trained model. We simply
+    get the corresponding layers and pass the output of the previous step to the current
+    step.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❼ Here we define the final model to visualize attention patterns; we are interested
+    in the attn_states output (i.e., normalized energy values). We will also need
+    the vectorized token IDs to annotate the visualization.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Note how the final model we defined returns four different outputs, as opposed
+    to the trained model, which only returned the predictions. We will also need a
+    get_ vocabulary() function that will load the saved vocabularies:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Finally, call these functions so that we have the vocabularies and the model
+    ready:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: Next, we’ll move on to visualizing the outputs produced by the visualizer_model;
+    we will be using the Python library matplotlib to visualize attention patterns
+    for several examples. Let’s define a function called visualize_attention() that
+    takes in the visualizer_model, the two vocabularies, a sample English sentence,
+    and the corresponding German translation (see the next listing). Then it will
+    make a prediction on the inputs, retrieve the attention weights, generate a heatmap,
+    and annotate the two axes with the English/German tokens.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 12.6 Visualizing attention patterns using input text
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Get the model predictions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Get the token IDs of the predictions of the model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Our y tick labels will be the input English words. We stop as soon as we see
+    padding tokens.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Our x tick labels will be the predicted German words. We stop as soon as we
+    see the EOS token.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ We are going to visualize only the useful input and predicted words so that
+    things like padded values and anything after the EOS token are discarded.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❻ Generate the attention heatmap.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❼ Set the x ticks, y ticks, and tick labels.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❽ Generate the color bar to understand the value range found in the heat map.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❾ Save the figure to the disk.
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, we input the English and German input text to the model to generate a
+    prediction. We need to input both the English and German inputs as we are still
+    using the teacher-forced model. You might be wondering, “Does that mean I have
+    to have the German translation ready and can only visualize attention patterns
+    in the training mode?” Of course not! You can have an inference model defined,
+    like we did in a previous section in this chapter, and still visualize the attention
+    patterns. We are using the trained model itself to visualize patterns, as I want
+    to focus on visualizing attention patterns rather than defining the inference
+    model (which we already did for another model).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Once the predictions and attention weights are obtained, we define two lists:
+    x_ticklabels and y_ticklabels. They will be the labels (i.e., English/German words)
+    you see on the two axes in the heatmap. We will have the English words on the
+    row dimension and German words in the column dimension (figure 12.1). We will
+    also do a simple filtering to get rid of paddings (i.e., "") and German text appearing
+    after the EOS token and get the attention weights within the range that satisfy
+    these two criteria. You can then simply call the matplotlib’s imshow() function
+    to generate the heatmap and set the axes’ ticks and the labels for those ticks.
+    Finally, the figure is saved to the disk.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s give this a trial run! Let’s take a few examples from our test DataFrame
+    and visualize attention patterns. We will create 10 visualizations and will also
+    make sure that those 10 examples we choose have at least 10 English words to make
+    sure we don’t visualize very short phrases:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: If you run this code successfully, you should get 10 attention visualizations
+    shown and stored on the disk. In figures 12.1 and 12.2, we show two such visualizations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![12-01](../../OEBPS/Images/12-01.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 12.1 Attention patterns visualized for an input English text
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the figures, the lighter the color, the more the model has paid attention
+    to that word. In figure 12.1, we can see that, when translating the words, “und”
+    and “maria,” the model has mostly paid attention to “and” and “mary,” respectively.
+    If you go to Google Translate and do the German translations for the word “and,”
+    for example, you will see that this is, in fact, correct. In figure 12.2, we can
+    see that when generating “hast keine nicht,” the model has paid attention to the
+    phrase “have no idea.” The other observation we can make is that the attention
+    pattern falls roughly diagonally. This makes sense as both these languages roughly
+    follow the same writing style.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![12-02](../../OEBPS/Images/12-02.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 12.2 Attention patterns visualized for an input English text
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This concludes our discussion about sequence-to-sequence models. In the next
+    chapter, we will discuss a family of models that has been writing the state-of-the-art
+    of machine learning for a few years: Transformers.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Exercise 2
+  prefs: []
+  type: TYPE_NORMAL
+- en: You have an attention matrix given by attention_matrix, with English words given
+    by english_text_labels and German words given by german_text_labels. How would
+    you create a visualization similar to figure 12.1? Here, you will need to use
+    the imshow(), set_xticks(), set_yticks(), set_xticklabels(), and set_yticklabels()
+    functions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Using attention in sequence-to-sequence models can greatly help shoot their
+    performance up.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using attention at each decoding time step, the decoder gets to see all the
+    historical outputs of the encoder and select and mix these outputs to come up
+    with an aggregated (e.g., summed) representation of that, which gives a holistic
+    view of what was in the encoder input.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: One of the intermediate products in the attention computation is the normalized
+    energy values, which give a probability distribution of how important each encoded
+    position was for decoding a given time step for every decoding step. In other
+    words, this is a matrix that has a value for every encoder time step and decoder
+    time step combination. This can be visualized as a heatmap and can be used to
+    interpret which words the decoder paid attention to when translating a certain
+    token in the decoder.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Answers to exercises
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '**Exercise 1**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: '**Exercise 2**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE

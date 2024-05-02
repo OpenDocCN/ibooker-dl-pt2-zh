@@ -1,0 +1,2791 @@
+- en: 13 Transformers
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter covers
+  prefs: []
+  type: TYPE_NORMAL
+- en: Implementing a full Transformer model with all the components
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Implementing a spam classifier using a pretrained BERT model from TFHub
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Implementing a question-answering model using Hugging Face’s Transformer library
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In chapters 11 and 12, you learned about sequence-to-sequence models, a powerful
+    family of models that allows us to map an arbitrary-length sequence to another
+    arbitrary-length sequence. We exemplified this ability through a machine translation
+    task. Sequence-to-sequence models consist of an encoder and a decoder. The encoder
+    takes in the input sequence (a sentence in the source language) and creates a
+    compact representation of that (known as the context vector). The decoder takes
+    in the context vector to produce the final target (i.e., a sentence in the target
+    language). But we saw how limiting the context vector makes the model and looked
+    at two techniques to improve model performance. First, teacher forcing allows
+    the decoder to see not only the context vector but also the previous words in
+    the target at a given time. This provides the decoder much more information to
+    produce the final prediction accurately. Second, the attention mechanism allows
+    the decoder to peek into any part of the encoder history of outputs and use that
+    information to produce the output as well. However, LSTM and GRU models are still
+    quite restrictive as they can only see one output in the sequence at a given time
+    and need to rely on a limited state vector (i.e., memory) to remember what they
+    have seen.
+  prefs: []
+  type: TYPE_NORMAL
+- en: But there’s a new rival in town. If there’s one word that most recent state-of-the-art
+    NLP and computer vision research have been brimming with, it’s Transformer. Transformer
+    models are the latest type of deep learning models that made an unforgettable
+    entrance by being crowned as state of the art for many NLP tasks, beating previous
+    leaders such as LSTM- and GRU-based models. Inspired by their unprecedented success
+    in NLP, they are now being introduced to solve various computer vision problems.
+  prefs: []
+  type: TYPE_NORMAL
+- en: By design, Transformer models make remembering or using information present
+    in long sequences of data (e.g., a sequence of words) trivial. Unlike LSTM models,
+    which have to look at one time step at a time, Transformer models can see the
+    full sequence at once. This enables Transformer models to understand language
+    better than other models. Furthermore, Transformer models enjoy high parallelizability
+    due to the minimization of longitudinal (i.e., temporal) computations that require
+    sequential processing of text.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, continuing our conversation from chapter 5, we will discuss
+    some more details of the Transformer model so that our understanding of it is
+    holistic. We will see how the Transformer model employs several embeddings to
+    represent tokens as well as the position of those tokens in the sequence. Then
+    we will learn BERT, a variant of the Transformer model that has been trained on
+    a large corpus of text, ready to be used as a base layer to solve downstream NLP
+    tasks easily without the need for complex models. BERT is essentially the encoder
+    section of the Transformer model pretrained on large amounts of text using two
+    techniques: masked language modeling (i.e., words in the sequence are randomly
+    masked where BERT must predict the masked words) and next-sentence prediction
+    (i.e., given two sentences, A and B, predict whether B entails A). We will see
+    BERT in action when we use it to implement a spam classifier in TensorFlow. Next,
+    Hugging Face’s transformers library ([https://huggingface.co/transformers/](https://huggingface.co/transformers/))
+    is a popular choice for implementing state-of-the-art Transformer models with
+    ease. It is one of the most valuable libraries to look at if you are planning
+    to implement Transformer models in TensorFlow. For this reason, we will implement
+    a question-answering model using the Transformers library by Hugging Face. Finally,
+    we will end the chapter with a discussion about how Transformer models are used
+    in computer vision.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: As the first step, let’s revisit what we have already learned about Transformer
+    models (see figure 13.1) and expand our understanding a bit further.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![13-01](../../OEBPS/Images/13-01.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 13.1 How Transformer models are used to solve NLP problems
+  prefs: []
+  type: TYPE_NORMAL
+- en: 13.1 Transformers in more detail
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: You are working as a data scientist, and it’s been suggested that you use a
+    Transformer model in your NLP workflow. You look at the Transformer models provided
+    in TensorFlow. However, you are struggling to understand the model from the documentation.
+    You think implementing a Transformer network from scratch would be a great way
+    to grok the concepts that give life to the Transformer models. Therefore, you
+    decide to implement a Transformer model with all the components specified in the
+    paper “Attention Is All You Need” ([https://arxiv.org/pdf/1706.03762.pdf](https://arxiv.org/pdf/1706.03762.pdf)).
+    This model will have components like embedding layers (token and positional embeddings),
+    self-attention layers, normalization layers, and so on.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 13.1.1 Revisiting the basic components of the Transformer
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: In chapter 5, we talked about the basics of the Transformer model to implement
+    a simplified Transformer. Now let’s deepen our discussion and look at all the
+    components that coexist in a Transformer model. The Transformer model is an encoder-decoder-based
+    model. The encoder takes a sequence of inputs (e.g., Dogs are great) to create
+    a hidden (or latent) representation of those tokens. Next, the decoder consumes
+    the encoder’s generated representation of input tokens and generates an output
+    (e.g., the French translation of the input).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The encoder consists of a stack of layers, where each layer consists of two
+    sublayers:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*A self-attention layer*—Generates a latent representation for each input token
+    in the sequence. For each input token, this layer looks at the entire input sequence
+    and selects other tokens in the sequence that enrich the semantics of the generated
+    hidden output for that token (i.e., *attended representation*).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*A fully connected layer*—Generates an element-wise hidden representation of
+    the attended representation.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The decoder consists of three sublayers:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*A masked self-attention layer*—For each input token, it looks at all the tokens
+    to the left of it. The decoder needs to mask words to the right to prevent the
+    model from seeing words in the future, making the prediction task trivial for
+    the decoder.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*An encoder-decoder attention layer*—For each input token in the decoder, it
+    looks at both the encoder’s outputs as well as the decoder’s masked attended output
+    to generate a semantically rich hidden output'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*A fully connected layer*—Generates an element-wise hidden representation of
+    the attended representation of the decoder.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The hardest thing to navigate in our previous discussions was understanding
+    the self-attention layer. Therefore, it’s worthwhile revisiting the computations
+    transpiring in the self-attention layer. Computations in the self-attention layer
+    revolve around three weight matrices:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Query weight matrix (*W*[q])
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Key weight matrix (*W*[k])
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Value weight matrix (*W*[v])
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Each of these weight matrices produces three outputs for a given token (at
+    position *i*) in a given input sequence: a query, a key, and a value, respectively.
+    Let’s refresh our memory on what we said about these entities in chapter 5:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Query* (*q*[i])—Helps to build a probability matrix that is eventually used
+    for indexing values (*v*). Query affects the rows of the matrix and represents
+    the index of the current word that’s being processed.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Key* (*k*[i])—Helps to build a probability matrix that is eventually used
+    for indexing values (*v*). Key affects the columns of the matrix and represents
+    the candidate words that need to be mixed depending on the query word.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Value* (*v*[i])—Hidden (i.e., latent) representation of the inputs that are
+    used to compute the final output by indexing from the probability matrix created
+    using query and key. As explained earlier, the final output at position *i* is
+    generated not only by using the *i*^(th) token, but also by using other tokens
+    in the input sequence, which enhances the semantics captured in the final representation.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The high-level purpose of these elements is to generate an attended representation
+    (i.e., a latent or hidden representation for a given token that is enriched by
+    the information in other tokens of the input sequence) of a given input token.
+    To do that, the model
+  prefs: []
+  type: TYPE_NORMAL
+- en: Generates a query for each position in the input sequence
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: For each query, determines how much each key should contribute (the key also
+    represents individual tokens)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Based on the contributions of the keys for a given query, mixes the values corresponding
+    to those keys to generate the final attended representation
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'All three of the query, key, and values are generated by multiplying a trainable
+    weight matrix with an input token’s numerical representation. All this needs to
+    happen in a differentiable way to ensure the gradients can be backpropagated through
+    the model. The paper proposes the following computation to compute the final representation
+    of the self-attention layer for the input tokens:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![13_01a](../../OEBPS/Images/13_01a.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Here, Q represents the queries, K represents the keys, and V represents values
+    for all the inputs and all the tokens in each input in a batch of data. This is
+    what makes Transformer models so powerful: unlike LSTM models, Transformer models
+    aggregate looking at all tokens in a sequence to a single matrix multiplication,
+    making these models highly parallelizable.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 13.1.2 Embeddings in the Transformer
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: One thing we overlooked when discussing the Transformer model is the embeddings
+    used in it. We briefly touched on the word embeddings used. Let’s discuss this
+    topic in more detail here. Word embeddings provide a semantic-preserving representation
+    of words based on the context in which words are used. In other words, if two
+    words are used in the same context, they will have similar word vectors. For example,
+    the words “cat” and “dog” will have similar representations, whereas “cat” and
+    “volcano” will have vastly different representations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Word vectors were initially introduced in the paper titled “Efficient Estimation
+    of Word Representations in Vector Space” by Mikolov et al. ([https://arxiv.org/pdf/1301.3781.pdf](https://arxiv.org/pdf/1301.3781.pdf)).
+    It came in two variants, skip-gram and continuous bag-of-words (CBOW). Because
+    skip-gram is somewhat more widely accepted than CBOW, let’s discuss the crux of
+    the skip-gram algorithm.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The first step is to define a large matrix of size *V* × *E*, where *V* is the
+    size of the vocabulary and *E* is the size of the embeddings. The size of the
+    embeddings (E) is a user-defined hyperparameter, where a larger E typically leads
+    to more powerful word embeddings. In practice, you do not need to increase the
+    size of embeddings beyond 300.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Next, you create inputs and targets in a completely unsupervised manner. Given
+    a large corpus of text, you select a word form as the input (probe word) and the
+    words surrounding the probe word as targets. The surrounding words are captured
+    by defining a fixed-sized window around the probe word. For example, for a window
+    size of 2 (on each side of the probe word), you can generate the following input-target
+    pairs from the sentence “angry John threw a pizza at me.”
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: With the labeled data, you can frame the problem of learning word embeddings
+    as a classification problem. In other words, you train a model (i.e., a function
+    of the word-embedding matrix) to predict the target word, given the input word.
+    The model consists of two components, the embedding matrix and a fully connected
+    layer with a softmax activation to output the predictions. Once the embeddings
+    are learned, you can discard the other things around it (e.g., the fully connected
+    layer) and use the embedding matrix for a downstream NLP task such as sentiment
+    analysis, machine translation, and so on. You just have to look up the embedding
+    vector corresponding to a word in order to obtain a numerical representation for
+    this word.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Motivated by the original word vector algorithms, modern deep learning models
+    combine learning word embeddings and the actual decision-support NLP problem to
+    a single model training task. In other words, the following general approach is
+    taken to incorporate word embeddings to a machine learning model:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Define a randomly initialized word-embedding matrix (or pretrained embeddings
+    available to download for free).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Define the model (randomly initialized) that uses word embeddings as the inputs
+    and produces an output (e.g., sentiment, a language translation, etc.).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Train the whole model (embeddings + the model) end to end on the task.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The same technique is used in Transformer models. However, in Transformer models,
+    there are two different embeddings:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Token embeddings (which provide a unique representation for each token seen
+    by the model in an input sequence)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Positional embeddings (which provide a unique representation for each position
+    in the input sequence)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The token embeddings have a unique embedding vector for each token (e.g., character,
+    word, sub-word), depending on the model’s tokenizing mechanism.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The positional embeddings are used to signal the model where a token is appearing.
+    The primary purpose is for the positional embeddings server to tell the Transformer
+    model where a word is appearing. This is because, unlike LSTMs/GRUs, Transformer
+    models don’t have a notion of sequence, as they process the whole text at once.
+    Furthermore, a change to the position in word can alter the meaning of a sentence
+    or a word. For example, in the two versions of
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'the word “it” refers to different things, and the position of the word “it”
+    can be used as a cue to identify this difference. The original Transformer paper
+    uses the following equations to generate positional embeddings:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*PE*(*pos*,2*i*) = sin(*pos*/10000^(21/d[model]))'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*PE*(*pos*,2*i +* 1) = cos(*pos*/10000^(21/d[model]))'
+  prefs: []
+  type: TYPE_NORMAL
+- en: where pos denotes the position in the sequence and *i* denotes the *i*^(th)
+    feature dimension (0 ≤ *i* < *d*[model]). Even-numbered features use a sine function,
+    whereas odd-numbered features use a cosine function. Figure 13.2 presents how
+    positional embeddings change as the time step and the feature position change.
+    It can be seen that feature positions with higher indices have lower frequency
+    sinusoidal waves. It is not entirely clear how the authors came up with the exact
+    equation. However, they do mention that they did not see a significant performance
+    difference between the previous equation and letting the model learn positional
+    embeddings jointly during the training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![13-02](../../OEBPS/Images/13-02.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 13.2 How positional embeddings change with the time step and the feature
+    position. Even-numbered feature positions use the sine function, whereas odd-numbered
+    positions use the cosine function. Additionally, the frequency of the signals
+    decreases as the feature position increases.
+  prefs: []
+  type: TYPE_NORMAL
+- en: It is important to note that both token and positional embeddings will have
+    the same dimensionality (i.e., *d*[model]). Finally, as the input to the model,
+    the token embeddings and the positional embeddings are summed to form a single
+    hybrid embedding vector (figure 13.3).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![13-03](../../OEBPS/Images/13-03.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 13.3 The embeddings generated in a Transformer model and how the final
+    embeddings are computed
+  prefs: []
+  type: TYPE_NORMAL
+- en: 13.1.3 Residuals and normalization
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Another important characteristic of the Transformer models is the existence
+    of the residual connections and the normalization layers in between the individual
+    layers. We discussed residual connections in depth in chapter 7 when we discussed
+    advance techniques for image classification. Let’s briefly revisit the mechanics
+    and the motivation for residual connections.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Residual connections are formed by adding a given layer’s output to the output
+    of one or more layers ahead. This, in turn, forms “shortcut connections” through
+    the model and provides a stronger gradient flow by reducing the changes of the
+    phenomenon known as the *vanishing gradients* (figure 13.4). Vanishing gradients
+    cause the gradients in the layers closest to the inputs to be very small so that
+    the training in those layers is hindered.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![13-04](../../OEBPS/Images/13-04.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 13.4 Mathematical view of residual connections
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In Transformer models, in each layer, residual connections are created in the
+    following way:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The input to the multi-head self-attention sublayer is added to the output of
+    the multi-head self-attention sublayer.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The input to the fully connected sublayer is added to the output of the fully
+    connected sublayer.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Next, the output reinforced by residual connections goes through a layer normalization
+    layer. *Layer normalization*, similar to batch normalization, is a way to reduce
+    the “covariate shift” in neural networks, allowing them to be trained faster and
+    achieve better performance. Covariate shift refers to changes in the distribution
+    of neural network activations (caused by changes in the data distribution) that
+    transpire as the model goes through model training. Such changes in the distribution
+    hurt consistency during model training and negatively impact the model. Layer
+    normalization was introduced in the paper “Layer Normalization” by Ba et al. ([https://arxiv.org/pdf/1607.06450.pdf](https://arxiv.org/pdf/1607.06450.pdf)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Batch normalization computes the mean and variance of activations as an average
+    over the samples in the batch, causing its performance to rely on mini batch sizes,
+    which are used to train the model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: However, layer normalization computes the mean and variance (i.e., the normalization
+    terms) of the activations in such a way that the normalization terms are the same
+    for every hidden unit. In other words, layer normalization has a single mean and
+    a variance value for all the hidden units in a layer. This is in contrast to batch
+    normalization, which maintains individual mean and variance values for each hidden
+    unit in a layer. Moreover, unlike batch normalization, layer normalization does
+    not average over the samples in the batch, but rather leaves the averaging out
+    and has different normalization terms for different inputs. By having a mean and
+    variance per sample, layer normalization gets rid of the dependency on the mini
+    batch size. For more details about this method, please refer to the original paper.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Layer normalization in TensorFlow/Keras
+  prefs: []
+  type: TYPE_NORMAL
+- en: TensorFlow provides a convenient implementation of the layer normalization algorithm
+    at [http://mng.bz/YGRB](http://mng.bz/YGRB). You can use this layer with any model
+    you define using TensorFlow Keras APIs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 13.5 depicts how residual connections and layer normalization are used
+    in Transformer models.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![13-05](../../OEBPS/Images/13-05.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 13.5 How residual connections and layer normalization layers are used
+    in the Transformer model
+  prefs: []
+  type: TYPE_NORMAL
+- en: With that, we end the discussion about the components in the Transformer model.
+    We have discussed all the bells and whistles of the Transformer model, namely
+    self-attention layers, fully connected layers, embeddings (token and positional),
+    layer normalization, and residual connections. In the next section, we will discuss
+    how we can use a pretrained Transformer model known as BERT to solve a spam classification
+    task.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Exercise 1
+  prefs: []
+  type: TYPE_NORMAL
+- en: You are given the following code for the Transformer encoder
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: where the EncoderLayer defines a typical Transformer encoder layer that has
+    a self-attention sublayer and a fully connected sublayer. You are asked to integrate
+    positional encoding using the equation
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*PE*(*pos*, 2*i*) = sin(*pos*/10000^(2*i*/d[model]))'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*pos* goes from 0 to 511 (d=512 features) and *i* goes from 0 to 24 (n_steps=25
+    time steps) and denotes the time step. In other words, our positional encoding
+    will be a tensor of shape [n_steps, d]. You can use tf.math.sin() to generate
+    the sin value element-wise for a tensor. You can define the positional embeddings
+    as a tensor and not the product of a tf.keras.layers.Layer. The final embedding
+    should be generated by summing the token embeddings and the positional embeddings.
+    How would you do that?'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 13.2 Using pretrained BERT for spam classification
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: You are working as a data scientist for a mail service company, and the company
+    is dying to implement a spam classification functionality. They want to implement
+    this functionality in house and save dollars. Having read about BERT and how powerful
+    it is for solving NLP tasks, you explain to the team that all you need to do is
+    download the BERT model, fit a classification layer on top of BERT, and train
+    the whole model end to end on labeled data. The labeled data consists of a spam
+    message and a label indicating whether the message is spam or ham (i.e., not spam).
+    You have been put in charge of implementing this model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now that we have discussed all the moving elements of the Transformer architecture,
+    it puts us in a very strong position to understand BERT. BERT is a Transformer-based
+    model introduced in the paper “BERT: Pre-Training of Deep Bidirectional Transformers
+    for Language Understanding” by Devlin et al. ([https://arxiv.org/pdf/1810.04805.pdf](https://arxiv.org/pdf/1810.04805.pdf)),
+    and it represents a very important milestone in the history of NLP as it’s a pioneering
+    model that proved the ability to apply “transfer learning” in the domain of NLP.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: BERT is a Transformer model that is pretrained on large amounts of textual data
+    in an unsupervised fashion. Therefore, you can use BERT as the basis to get rich,
+    semantically sound numerical representations for textual input sequences that
+    can be readily fed to your downstream NLP models. Because of the rich textual
+    representations provided by BERT, you’re relieving your decision support model
+    of the need to understand the language and instead can directly focus on the problem
+    at hand. From a technical perspective, if you’re solving a classification problem
+    with BERT, all you need to do is
+  prefs: []
+  type: TYPE_NORMAL
+- en: Fit a classifier(s) (e.g., a logistic regression layer) on top of BERT, which
+    takes BERT’s output(s) as the input(s)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Train the model (i.e., BERT + classifier(s)) end to end on the discriminative
+    task
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: History of BERT
+  prefs: []
+  type: TYPE_NORMAL
+- en: Before models like BERT, solving natural language processing (NLP) tasks was
+    both repetitive and time-consuming. Every time, you had to train a model from
+    scratch. And to exacerbate this suboptimal way of tackling problems, most models
+    struggled with long sequences of text, limiting their ability to understand language.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In 2017, Transformer models for NLP tasks were proposed in the paper “Attention
+    Is All You Need” ([https://arxiv.org/pdf/1706.03762.pdf](https://arxiv.org/pdf/1706.03762.pdf)).
+    Transformer models beat previous dominants like LSTMs and GRUs across the board
+    on a collection of NLP tasks. Transformer models, unlike recurrent models that
+    look at one word at a time and maintain a state (i.e., memory), look at the whole
+    sequence at once.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Then, in 2018, the “ImageNet moment” arrived for NLP (i.e., transfer learning
+    in NLP). The ImageNet moment refers to the moment when ML practitioners realized
+    that using a computer vision model that is already trained on the large ImageNet
+    image classification data set on other tasks (e.g., object detection, image segmentation)
+    yields better performance faster. This essentially gave rise to the concept of
+    transfer learning that is heavily used in the computer vision domain. So, until
+    2018, the NLP domain did not have a very good way to employ transfer learning
+    to uplift the performance on tasks. The paper “Universal Language Model Fine-Tuning
+    for Text Classification” ([https://arxiv.org/pdf/1801.06146.pdf](https://arxiv.org/pdf/1801.06146.pdf))
+    introduced the idea of using pretraining on a language modeling task and then
+    training the model on a discriminative task (e.g., a classification problem).
+    The advantage of this approach was that you did not need as many samples as if
+    you were to train the model from scratch.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In 2018, BERT was introduced. It was a marriage of two of the finest moments
+    in the history of NLP. In other words, BERT is a Transformer model that is pretrained
+    on large amounts of textual data in an unsupervised fashion.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We will now examine the BERT model in more detail.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 13.2.1 Understanding BERT
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Let’s now inspect BERT more microscopically. As I alluded to earlier, BERT is
+    a Transformer model. To be exact, it’s the encoder part of the Transformer model.
+    This means that BERT takes an input sequence (a collection of tokens) and produces
+    an encoded output sequence. Figure 13.6 depicts the high-level architecture of
+    BERT.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![13-06](../../OEBPS/Images/13-06.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 13.6 The high-level architecture of BERT. It takes a set of input tokens
+    and produces a sequence of hidden representations generated using several hidden
+    layers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When BERT takes an input, it inserts some special tokens into the input. First,
+    at the beginning, it inserts a [CLS] (an abbreviated form of the term classification)
+    token that is used to generate the final hidden representation for certain types
+    of tasks (e.g., sequence classification). It represents the output after attending
+    to all the tokens in the sequence. Next, it also inserts an [SEP] (i.e., “separation”)
+    token depending on the type of input. The [SEP] token marks the end and beginning
+    of different sequences in the input. For example, in question answering, the model
+    takes a question and a context (e.g., paragraph) that may have the answer as an
+    input, and [SEP] is used in between the question and the context.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Next, the final embedding of the tokens is generated using three different embedding
+    spaces. The token embedding has a unique vector for each token in the vocabulary.
+    The positional embeddings encode the position of each token, as discussed earlier.
+    Finally, the segment embedding provides a distinct representation for each subcomponent
+    in the input when the input consists of multiple components. For example, in question
+    answering, the question will have a unique vector as its segment embedding vector,
+    whereas the context will have a different embedding vector. This is done by having
+    *n* different embedding vectors for the *n* different components in the input
+    sequence. Depending on the component index specified for each token in the input,
+    the corresponding segment-embedding vector is retrieved. *n* needs to be specified
+    in advance.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The real value of BERT comes from the fact that it has been pretrained on a
+    large corpus of data in a self-supervised fashion. In the pretraining stage, BERT
+    is trained on two different tasks:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Masked language modeling (MLM)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Next-sentence prediction (NSP)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The masked language modeling (MLM) task is inspired by the *Cloze task* or the
+    *Cloze test*, where a student is given a sentence with one or more blanks and
+    is asked to fill the blanks. Similarly, given a text corpus, words are masked
+    from sentences and then the model is asked to predict the masked tokens. For example,
+    the sentence
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: might become
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: NOTE There has been a plethora of Transformer-based models, each building on
+    the previous. You can read more about these models in appendix C.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Figure 13.7 illustrates the main components of BERT during the training of
+    the masked language modeling task. BERT uses a special token ([MASK]) to represent
+    masked words. Then the target for the model will be the word “bakery.” But this
+    introduces a practical issue to the model. The special token [MASK] does not appear
+    in the actual text. This means that the text the model will see during the fine-tuning
+    phase (i.e., when training on a classification problem) will be different than
+    what it will see during pretraining. This is sometimes referred to as the *pretraining-fine-tuning
+    discrepancy*. Therefore, the authors of BERT suggest the following approach to
+    cope with the issue. When masking a word, do one of the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Use the [MASK] token as it is (with 80% probability).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Use a random word (with 10% probability).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Use the true word (with 10% probability).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '![13-07](../../OEBPS/Images/13-07.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 13.7 The methodology used for pretraining BERT. BERT is pretrained on
+    two tasks: a masked language modeling task and the next sentence prediction task.
+    In the masked language modeling task, the tokens in the input are masked and the
+    model is asked to predict masked tokens. In the next sentence prediction task,
+    the model is asked to predict if given two sentences are next to each other.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, in the next sentence prediction task, the model is given a pair of sentences,
+    A and B (in that order), and is asked to predict whether B is the next sentence
+    after A. This can be done by fitting a binary classifier on top of BERT and training
+    the whole model end to end on selected pairs of sentences. Generating pairs of
+    sentences as inputs to the model is not hard and can be done in an unsupervised
+    manner:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A sample with the label TRUE is generated by picking two sentences that are
+    adjacent to each other.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A sample with the label FALSE is generated by picking two sentences randomly
+    that are not adjacent to each other.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Following this approach, a labeled data set is generated for the next sentence
+    prediction task. Then BERT, along with the binary classifier, is trained end to
+    end using the labeled data set. Figure 13.7 highlights the data and the model
+    architecture in the next sentence prediction task.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You might have noticed in figure 13.6 that the input to BERT has special tokens.
+    There are two special tokens (in addition to the [MASK] token we already discussed)
+    that serve special purposes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [CLS] token is appended to any input sequence fed to BERT. This denotes
+    the beginning of the input. It also forms the basis for the input fed into the
+    classification head used on top of BERT to solve your NLP task. As you know, BERT
+    produces a hidden representation for each input token in the sequence. As a convention,
+    the hidden representation corresponding to the [CLS] token is used as the input
+    to the classification model that sits on top of BERT.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The task-specific NLP tasks solved by BERT can be classified into four different
+    categories. These are based on the tasks found in the General Language Understanding
+    Evaluation (GLUE) benchmark task suite ([https://gluebenchmark.com](https://gluebenchmark.com)):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Sequence classification*—Here, a single input sequence is given and the model
+    is asked to predict a label for the whole sequence (e.g., sentiment analysis,
+    spam identification).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Token classification*—Here, a single input sequence is given and the model
+    is asked to predict a label for each token in the sequence (e.g., named entity
+    recognition, part-of-speech tagging).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Question answering*—Here, the input consists of two sequences: a question
+    and a context. The question and the context are separated by an [SEP] token. The
+    model is trained to predict the starting and ending indices of the span of tokens
+    belonging to the answer.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Multiple choice*—Here the input consists of multiple sequences: a question
+    followed by multiple candidates that may or may not be the answer to the question.
+    These multiple sequences are separated by the token [SEP] and provided as a single
+    input sequence to the model. The model is trained to predict the correct answer
+    (i.e., the class label) for that question.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'BERT is designed in such a way that it can be used to solve these tasks without
+    any modifications to the base model. In tasks that involve multiple sequences
+    (e.g., question answering, multiple-choice questions), you need to tell the model
+    different inputs separately (e.g., which tokens are the question and which tokens
+    are the context in the question-answering task). In order to make that distinction,
+    the [SEP] token is used. An [SEP] token is inserted between the different sequences.
+    For example, if you are solving a question-answering task, you might have an input
+    as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: Then the input to BERT might look like
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'BERT also uses a segment-embedding space to denote which sequence a token belongs
+    to. For example, inputs having only one sequence have the same segment-embedding
+    vector for all the tokens (e.g., spam classification task). Inputs having two
+    or more sequences use the first or second space depending on which sequence the
+    token belongs to. For example, in question answering, the model will use a unique
+    segment-embedding vector to encode tokens of the question, where it will use a
+    different segment-embedding vector to encode the tokens of the context. Now we
+    have discussed all the elements of BERT needed to use it successfully to solve
+    a downstream NLP task. Let’s reiterate the key points about BERT:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: BERT is an encoder-based Transformer that is pretrained on large amounts of
+    text.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: BERT uses masked language modeling and next-sentence prediction tasks to pretrain
+    the model.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: BERT outputs a hidden representation for every token in the input sequence.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'BERT has three embedding spaces: token embedding, positional embedding, and
+    segment embedding.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: BERT uses a special token [CLS] to denote the beginning of an input and is used
+    as the input to a downstream classification model.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'BERT is designed to solve four types of NLP tasks: sequence classification,
+    token classification, free-text question answering, and multiple-choice question
+    answering.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: BERT uses the special token [SEP] to separate sequence A and sequence B.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Next, we will learn how we can classify spam messages with BERT.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 13.2.2 Classifying spam with BERT in TensorFlow
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: It’s now time to show off your skills by implementing a spam classifier with
+    minimal effort. First, let’s download data. The data we will use for this exercise
+    is a collection of spam and ham (non-spam) SMS messages available at [http://mng.bz/GE9v](http://mng.bz/GE9v).
+    The Python code for downloading the data has been provided in the Ch13-Transormers-with-TF2-and-Huggingface/13.1_Spam_Classification_with_BERT.ipynb
+    notebook.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Understanding the data
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Once you download the data and extract it, we can quickly look at what’s in
+    the data. It will be a single tab-separated text file. The first three entries
+    of the file are as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: As shown, each line starts with the word ham or spam, indicating whether it’s
+    safe or spam. Then the text in the message is given, followed by a tab. Our next
+    task is to load this data into memory and store the inputs and labels in NumPy
+    arrays. The following listing shows the steps to do so.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 13.1 Loading the data from the text file into NumPy arrays
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Inputs (messages) are stored here.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ The label (0/1) is stored here.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Counts the total number of ham/spam examples
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Read every row in the file.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ If the line starts with ham, it’s a ham example.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❻ Assign it a label of 0.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❼ Input is the text in the line (except for the word starting ham).
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❽ Increase the count n_ham.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❾ If the line starts with spam, it’s spam.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❿ Assign it a label of 1.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ⓫ Input is the text in the line (except for the word that starts spam).
+  prefs: []
+  type: TYPE_NORMAL
+- en: ⓬ Append the input text to inputs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ⓭ Append the labels to labels.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ⓮ Convert inputs to a NumPy array (and reshape it to a matrix with one column).
+  prefs: []
+  type: TYPE_NORMAL
+- en: ⓯ Convert the labels list to a NumPy array.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can print the n_ham and n_spam variables and verify that there are 4,827
+    ham examples and 747 spam examples. In other words, there are fewer spam examples
+    than ham examples. Therefore, we have to make sure to account for this imbalance
+    when training the model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Treating class imbalance in the data
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To counteract class imbalance, let’s create balanced training/validation and
+    testing data sets. To do that, we will use the imbalanced-learn library, which
+    is a great library for manipulating imbalanced data sets (e.g., sampling various
+    amounts of data from different classes). There are two primary strategies for
+    restoring balance in a data set:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Undersampling the majority class (fewer samples from that class are selected
+    for the final data set)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Oversampling the minority class (more samples from that class are generated
+    for the final data set)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: We will use the first strategy here (i.e., undersampling the majority class).
+    More specifically, we will first
+  prefs: []
+  type: TYPE_NORMAL
+- en: Create balanced testing and validation data sets by randomly sampling data from
+    the data set (n examples per each class)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Assign the rest of the data to a training set and undersample the majority class
+    in the training set using an algorithm known as the *near-miss* algorithm
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The creation of the training validation and testing data is illustrated in figure
+    13.8.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![13-08](../../OEBPS/Images/13-08.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 13.8 How the training, validation, and testing data sets are created
+    from the original data set
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, let’s import a few under-samplers from the library and the NumPy library:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Next, we will define a variable, n, which denotes how many examples per class
+    we will keep in the validation and testing data sets:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Then we will define a random under-sampler. The most important parameter is
+    the sampling_strategy parameter, which takes a dictionary with the label as the
+    key and the number of samples required for that label as the value. We will also
+    pass random_seed to the random_state argument to make sure we get the same result
+    every time we run the code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Then we call the fit_resample() function of the under-sampler, with the inputs
+    and labels arrays we created, to sample data:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Once you fit the under-sampler, you can get the indices of the selected samples
+    using the under-sampler’s sample_indices_ attribute. Using those indices, we will
+    create a new pair of arrays, test_x and test_y, to hold the test data:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The indices that are not in the test data set are assigned to separate arrays:
+    rest_x and rest_y. These will be used to create the validation data set and the
+    training data set:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Following the same approach, we undersample data from rest_x and rest_y to
+    create the validation data set (valid_x and valid_y). Note that we are not using
+    the inputs and labels arrays, but rather the remaining data of those arrays after
+    separating the test data:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Finally, we create the training data set, which will hold all the remaining
+    elements after creating the test and validation data sets:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We also have to make sure that the training data set is balanced. In order
+    to do that, let’s use a smarter way to undersample data than randomly selecting
+    elements. The undersampling algorithm we will use here is called the near-miss
+    algorithm. The near-miss algorithm removes samples from the majority class that
+    are too close to the samples in the minority class. This helps to increase the
+    distance between minority and majority class examples. Here, the minority class
+    refers to the class having less data and the majority class refers to the class
+    that has more data. To use the near-miss algorithm, it needs to able to compute
+    the distance between two samples. Therefore, we need to convert our text into
+    some numerical representation. We will represent each message as a bag-of-words
+    representation. By using scikit-learn’s CountVectorizer, we can easily do that:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'train_bow will contain the bag-of-word representations of our data. Then we
+    can pass this to a NearMiss instance. The way to obtain the data is the same as
+    before:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Let’s print the sizes of our data sets and see if they have the sizes we wanted
+    in the first place:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: Excellent! Our data sets are all balanced, and we are ready to press ahead with
+    the rest of the workflow.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Defining the model
+  prefs: []
+  type: TYPE_NORMAL
+- en: With the data prepared and ready, we will download the model. The BERT model
+    we will use is from the TensorFlow hub ([https://www.tensorflow.org/hub](https://www.tensorflow.org/hub)).
+    The TensorFlow hub is a model repository for various models trained on various
+    tasks. You can get models for a multitude of tasks, including image classification,
+    object detection, language modeling, question answering, and so on. To see the
+    full list of available models, check out [https://tfhub.dev/](https://tfhub.dev/).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In order for us to successfully use BERT for an NLP task, we need three important
+    things to work:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*A tokenizer*—Determines how to split the provided input sequence to tokens'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*An encoder*—Takes in the tokens, computes numerical representations, and finally
+    generates a hidden representation for each token as well as a pooled representation
+    (a single representation of the whole sequence)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*A classification head*—Takes in the pooled representation and generates a
+    label for the input'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: First, let’s examine the tokenizer. The tokenizer takes a single input string
+    or a list of strings and converts it to a list of strings or a list of lists of
+    strings, respectively. It does this by breaking each string into smaller elements.
+    For example, a sentence can be broken into words by splitting it on the space
+    character. The tokenizer in BERT uses an algorithm known as the *WordPiece* algorithm
+    ([http://mng.bz/z40B](https://static.googleusercontent.com/media/research.google.com/en//pubs/archive/37842.pdf)).
+    It uses an iterative approach to find sub-words (i.e., parts of words) that appear
+    commonly in a data set. The details of the WordPiece algorithm are out of scope
+    for this book. Feel free to consult the original paper to learn more details.
+    The most important characteristic of the tokenizer for this discussion is that
+    it will break a given input string (e.g., a sentence) into a list of smaller tokens
+    (e.g., sub-words).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Advantage of sub-word approaches like the WordPiece algorithm
+  prefs: []
+  type: TYPE_NORMAL
+- en: Sub-word approaches like the WordPiece algorithm learn smaller, commonly occurring
+    parts of words and use them to define the vocabulary. There are two main advantages
+    to this approach compared to having whole words in our vocabulary.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Using sub-words often reduces the size of the vocabulary. Assume the words
+    [“walk”, “act”, “walked”, “acted”, “walking”, “acting”]. If individual words are
+    used, each word needs to be a single item in the vocabulary. However, if a sub-word
+    approach is used, the vocabulary can be reduced to [“walk”, “act”, “##ed”, “##ing”],
+    which only has four words. Here, the ## means that it needs to be prefixed with
+    another sub-word.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Secondly, a sub-word approach can handle out-of-vocabulary words. This means
+    the sub-word approach can represent words that appear in the test data set, but
+    not in the training set. A word-based approach will not be able to do so and will
+    simply replace the unseen word with a special token. Assume the sub-word vocabulary
+    [“walk”, “act”, “##ed”, “##ing”, “develop”]. Even if the words “developed” or
+    “developing” don’t appear in the training data, the vocabulary can still represent
+    these words by combining two sub-words from the vocabulary (e.g., developed =
+    develop + ##ed).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To set up the tokenizer, let’s first import the tf-models-official library:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Then you can define a tokenizer as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here, you first get the location of the vocabulary file and define some configurations,
+    such as whether the text should be converted to lowercase before tokenizing it.
+    The vocabulary file is a text file with one sub-word in each line. This tokenizer
+    uses Fast WordPiece Tokenization ([https://arxiv.org/abs/2012.15524.pdf](https://arxiv.org/abs/2012.15524.pdf)),
+    an efficient implementation of the original WordPiece algorithm. Note that the
+    vocab_file and do_lower_case are settings found in the model artifacts we will
+    be downloading from TensorFlow hub in the next step. But for ease of understanding,
+    we define them as constants here. You will find the code to automatically extract
+    them from the model in the notebook. Next, we can use the tokenizer as follows
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: which returns
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'You can see here how BERT’s tokenizer is tokenizing the sentence. Some words
+    are kept as they are, whereas some words are split into sub-words (e.g., seas
+    + ##hell + ##s). As discussed earlier, the ## means that it does not mark the
+    beginning of a word. In other words, ## shows that this sub-word needs to be prefixed
+    with another sub-word to get an actual word. Now, let’s look at the special tokens
+    that are used by the BERT model and what IDs are assigned to them. This also validates
+    that these tokens exist in the tokenizer:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: This returns
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here, the [PAD] is another special token used by BERT to denote padded tokens
+    (0s). Padding is used very commonly in NLP to bring sentences with different lengths
+    to the same length by padding the sentences with zeros. Here, the [PAD] token
+    corresponds to zero.
+  prefs: []
+  type: TYPE_NORMAL
+- en: With the basic functionality of the tokenizer understood, we can define a function
+    called encode_sentence() that will encode a given sentence to an input understood
+    by the BERT model (see the next listing).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 13.2 Encoding a given input string using BERT’s tokenizer
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Add the special [CLS] and [SEP] tokens to the sequence and get the token IDs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Return the token IDs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this function, we return the tokenized output, first adding the [CLS] token,
+    then tokenizing the given string to a list of sub-words, and finally adding the
+    [SEP] token to mark the end of the sentence/sequence. For example, the sentence
+    “I like ice cream”
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: will return
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: As we can see, token ID 101 (i.e., [CLS]) is at the beginning, and 102 (i.e.,
+    [SEP]) is at the end. The rest of the token IDs correspond to the actual string
+    we input. It is not enough to tokenize inputs for BERT; we also have to define
+    some extra inputs to the model. For example, the sentence
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'should return a data structure like the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: Let’s discuss the various elements in this data structure. BERT takes in an
+    input in the form of a dictionary where
+  prefs: []
+  type: TYPE_NORMAL
+- en: The key input_ids represents the token_ids obtained from the encode_sentence
+    function previously defined
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The key input_mask represents a mask the same size as the input_ids of 1s and
+    0s, where ones indicate values that should not be masked (e.g., actual tokens
+    in the input sequence and special tokens like [CLS] token ID 101 and [SEP] token
+    ID 102), and where zero indicates tokens that should be masked (e.g., the [PAD]
+    token ID 0).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The key input_type_ids is a matrix/vector of 1s and 0s having the same size
+    as input_ids. This indicates which sentence each token belongs to. Remember that
+    BERT can take two types of inputs: inputs with one sequence and inputs with two
+    sequences, A and B. The input_type_ids matrix denotes which sequence (A or B)
+    each token belongs to. Since we only have one sequence in our inputs, we simply
+    create a matrix of zeros having the same size as input_ids.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The function get_bert_inputs() will generate the input in this format using
+    a set of documents (i.e., a list of strings, where each string is an input; see
+    the next listing).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 13.3 Formatting a given input to the format BERT accepts
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Use BertPackInputs to generate token IDs, mask and segment IDs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Generate outputs for all the messages in docs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Convert the output of BertPackInputs to a dictionary with keys as string and
+    value as a numpy array.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Return the result.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here we are using the BertPackInputs object that takes in an array where each
+    item is a string containing the message. Then BertPackInputs generates a dictionary
+    that contains the following processed outputs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: input_word_ids—Token IDs with [CLS] and [SEP] token IDs automatically added.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: input_mask—An integer array with each element representing whether it is a real
+    token (1) or a padded token (0) at that position.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: input_type_ids—An integer array with each element representing which segment
+    each token belongs to. It will be an array of all zeros in this case.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: BertPackInputs does a lot of different preprocessing required by the BERT model.
+    You can read about various inputs accepted by this layer at [https://www.tensorflow.org/api_docs/python/tfm/nlp/layers/BertPackInputs](https://www.tensorflow.org/api_docs/python/tfm/nlp/layers/BertPackInputs).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To generate the prepared training, validation, and testing data for the model,
+    simply call the get_bert_inputs() function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'After this, let’s shuffle the data in train_inputs as a precaution. Currently,
+    the data is ordered such that spam messages appear after ham messages:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Remember to use the same shuffling for both inputs and labels to maintain their
+    association. We have done everything to prepare the inputs for the model. Now
+    it’s time for the grand unveiling of the model. We need to define BERT with a
+    classification head so that the model can be trained end to end on the classification
+    data set we have. We will do this in two steps. First, we will download the encoder
+    part of BERT from TensorFlow hub and then use the tfm.nlp.models.BertClassifier
+    object in the tensorflow-models-official library to generate the final BERT model
+    with the classifier head. Let’s examine how we do the first part:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Here, we first define three input layers, where each input layer has one of
+    the outputs of the BertPackInputs mapped to. For example, the input_word_ids input
+    layer will receive the output found at the key input_word_ids in the dictionary
+    produced by the function get_bert_inputs(). Next, we download the pretrained BERT
+    encoder by passing a URL to the hub.KerasLayer object. This layer produces two
+    outputs: sequence_output, which contains hidden representations of all the time
+    steps, and pooled_output, which contains the hidden representation corresponding
+    to the position of the [CLS] token. For this problem, we need the latter to pass
+    it to a classification head sitting on top of the encoder. We will finally define
+    a Keras model using the Functional API. This model needs to have a specific input
+    and output signature defined via dictionaries as shown previously. We will use
+    this model to define a classifier model based on this encoder:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: As you can see, it’s quite straightforward to define the classifier. We simply
+    pass our hub_encoder to the BertClassifier and say we have two classes, spam and
+    ham (i.e. num_classes=2).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Alternative way to get the BERT encoder
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There’s another method you can use to get a BERT encoder. However, it requires
+    manually loading pretrained weights; therefore, we will keep this method as an
+    alternative. Firstly, you start with a configuration file containing the encoder
+    model’s various hyperparameters. I have provided you with the original configuration
+    used for the model as a YAML file (Ch12/data/bert_en_uncased_base.yaml). It contains
+    various hyperparameters used by BERT (e.g., hidden dimension size, nonlinear activation,
+    etc.). Feel free to look at them to understand the different parameters used for
+    the model. We will load these configurations using the yaml library as a dictionary
+    and store it in config_dict. Next, we generate encoder_config, an EncoderConfig
+    object initiated with the configuration we loaded. With encoder_config defined,
+    we will build an encoder BERT model that is able to generate feature representations
+    of tokens, and then call bert.bert_models.classifier_model() with this encoder
+    as the network. Note that this method gets a randomly initialized BERT model:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: If you want a pretrained version of BERT like this, then you need to download
+    the TensorFlow checkpoint. You can do this by going to the link found in bert_url
+    and then clicking download. Finally, you load the weights with
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now you have a pretrained BERT encoder.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Next, let’s discuss how we can compile the built model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Compiling the model
+  prefs: []
+  type: TYPE_NORMAL
+- en: Here we will define the optimizer to train the model. So far, we have not changed
+    much from the default optimizer options provided in TensorFlow/Keras. This time,
+    let’s use the optimizer provided in the tf-models-official library. The optimizer
+    can be instantiated by calling the nlp.optimization.create_optimizer() function.
+    This is outlined in the next listing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 13.4 Optimizing BERT on the spam classification task
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: As the default optimizer, *Adam with weight decay* ([https://arxiv.org/pdf/1711.05101.pdf](https://arxiv.org/pdf/1711.05101.pdf))
+    is used. Adam with weight decay is a variant of the original Adam optimizer we
+    used, but with better generalization properties. The num_warmup_steps denotes
+    the duration of the learning rate warm-up. During the warm-up, the learning rate
+    is brought up linearly from a small value to init_lr (defined in linear_decay)
+    within num_ warmup_steps. After that, the learning rate is decayed all the way
+    to end_lr (defined in linear_decay) during num_train_steps using a polynomial
+    decay ([http://mng.bz/06lN](http://mng.bz/06lN)). This is depicted in figure 13.9.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![13-09](../../OEBPS/Images/13-09.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 13.9 The behavior of the learning rate as training progresses through
+    iterations (i.e., steps)
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now we can compile the model just like we did before. We will define a loss
+    (sparse categorical cross-entropy loss) and a metric (accuracy computed using
+    labels rather than one-hot vectors) and then pass the optimizer, loss, and metric
+    to the hub_ classifier.compile() function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: Training the model
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We’ve come a long way, and now all that’s left is training the model. Model
+    training is quite simple and similar to how we trained models using the tf.keras.Model.fit()
+    function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: We are passing the train_inputs we prepared using the get_bert_inputs() function
+    to the argument x and train_y (i.e., a vector of 1s and 0s indicating whether
+    the input is a spam or a ham, respectively) to y. Similarly, we define validation_data
+    as a tuple containing valid_inputs and valid_y. We also pass in the batch_size
+    (training batch size), validation_batch_size, and the number of epochs to train
+    for.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Evaluating and interpreting the results
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When you run the training, you should get a result close to the following.
+    Here you can see the training loss and the accuracy as well as the validation
+    loss and the accuracy:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: The console output clearly shows that the training loss went down steadily,
+    whereas the accuracy rose from 45% to 76%. The model has reached a validation
+    accuracy of 85%. This clearly shows the power of a model like BERT. If you were
+    to train an NLP model from scratch, it would be impossible to reach a validation
+    accuracy of 85% in such a short time. Since BERT has very strong language understanding,
+    the model can focus on learning the task at hand. Note that you may get a different
+    level of accuracy from what’s shown here as our validation and testing sets are
+    quite small (each having only 200 records).
+  prefs: []
+  type: TYPE_NORMAL
+- en: NOTE On an Intel Core i5 machine with an NVIDIA GeForce RTX 2070 8 GB, the training
+    took approximately 40 seconds to run 3 epochs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Finally, let’s test the model on the test data by calling the evaluate() function
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: which will return
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: Again, it’s a great result. After just three epochs and no fancy parameter tweaking,
+    we have achieved 79.5% accuracy on the test data. And all we did was fit a logistic
+    regression layer on top of BERT.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The next section will discuss how we can define a model that can find answers
+    to a given question from a paragraph. To do this, we will use one of the most
+    popular libraries for Transformer models to date: Hugging Face’s transformers
+    library.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Exercise 2
+  prefs: []
+  type: TYPE_NORMAL
+- en: You have a classification problem that has five classes, and you would like
+    to modify the bert_classifier. Given the data in the correct format, how would
+    you change the bert_classifier object defined?
+  prefs: []
+  type: TYPE_NORMAL
+- en: 13.3 Question answering with Hugging Face’s Transformers
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Your friend is planning to kick off a start-up that uses ML to find answers
+    to open-domain questions. Lacking the ML background, he turns to you to ask whether
+    it is feasible to do so using ML. Knowing that question answering is machine learnable
+    given labeled data, you decide to create a question-answering prototype using
+    a BERT variant and demonstrate it. You will be using the SQUAD v1 question-answering
+    data set and training a DistilBERT (a variant of BERT) on the data set. For this,
+    you are going to use the Hugging Face’s transformers library ([https://huggingface.co/transformers/](https://huggingface.co/transformers/)).
+    Hugging Face’s transformers library provides implementations of different Transformer
+    models and easy-to-use APIs to train/evaluate models on data sets.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'BERT is designed to solve two different types of tasks:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tasks having a single sequence of text as the input
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Tasks having two sequences of text (A and B) as the input
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Spam classification falls under the first type. Question answering is a type
+    of task that has two input sequences. In question answering, you have a question
+    and a context (a paragraph, a sentence, etc.), which may contain the answer to
+    the question. Then a model is trained to predict the answer for a given question
+    and a context. Let’s get to know the process a bit better. Each record in the
+    data set will consist of following elements:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A question (a sequence of text)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A context (a sequence of text)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A starting index of the answer from the context (an integer)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: An ending index of the answer from the context (an integer)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: First, we need to combine the question and the context and add several special
+    tokens. At the beginning, we need to add a [CLS] token and then a [SEP] to separate
+    the question and the context, as well as an [SEP] to mark the end of the input.
+    Furthermore, the question and the context are broken down into tokens (i.e., sub-words)
+    using the model’s tokenizer. For the input having
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Question: What did the dog barked at'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Answer: The dog barked at the mail man'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'if we assume individual words as tokens, the input will look as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE44]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Next, these tokens are converted to IDs and fed to the BERT model. The output
+    of the BERT model is connected to two downstream classification layers: one layer
+    predicts the starting index of the answer, whereas the other layer predicts the
+    ending index of the answer. Each of these two classification layers has its own
+    weights and biases.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The BERT model will output a hidden representation for each token in the input
+    sequence. The token output representations across the entire span of the context
+    are fed to the downstream models. Each classification layer then predicts the
+    probability of each token being the starting/ending token of the answer. The weights
+    of these layers are shared across the time dimension. In other words, the same
+    weight matrix is applied to every output representation to predict the probabilities.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For this section, we are going to use Hugging Face’s transformers library. Please
+    refer to the sidebar for more details.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Hugging Face’s transformers library
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Hugging Face is a company that focuses on solving NLP problems. The company
+    provides libraries to train NLP models as well as host data sets and train models
+    in a publicly accessible repository. We will use two Python libraries provided
+    by Hugging Face: transformers and datasets.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'At the time of writing this book, the transformers library ([https://huggingface.co/transformers/](https://huggingface.co/transformers/))
+    is the most versatile Python library that provides instant access to many Transformer
+    models that have been released (e.g., BERT, XLNet, DistilBERT, Albert, RoBERT,
+    etc.) as well as to community-released NLP models ([https://huggingface.co/models](https://huggingface.co/models)).
+    The transformers library supports both TensorFlow and PyTorch deep learning frameworks.
+    PyTorch ([https://pytorch.org/](https://pytorch.org/)) is another deep learning
+    framework like TensorFlow that offers a comprehensive suite of functionality to
+    implement and productionize deep learning models. The following are the key advantages
+    I see in the transformers library:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: An easy-to-understand API to pretrain and fine-tune models that is consistent
+    across all the models
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The ability to download TensorFlow versions of various Transformer models and
+    use them as Keras models
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The ability to convert TensorFlow and PyTorch models
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Powerful features such as the Trainer ([http://mng.bz/Kx9j](http://mng.bz/Kx9j)),
+    which allows users to create and train models with lot of flexibility
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Highly active community-contributing models and data sets
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 13.3.1 Understanding the data
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'As mentioned, we will use the SQuAD v1 data set ([https://rajpurkar.github.io/SQuAD-explorer/](https://rajpurkar.github.io/SQuAD-explorer/)).
+    It’s a question-answering data set created by Stanford University. You can easily
+    download the data set using Hugging Face’s datasets library as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE45]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Let’s print the data set and see the available attributes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE46]'
+  prefs: []
+  type: TYPE_PRE
+- en: This will return
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE47]'
+  prefs: []
+  type: TYPE_PRE
+- en: There are 87,599 training examples and 10,570 validation samples. We will use
+    these examples to create the train/validation/test split. We are interested in
+    the last three columns in the features section only (i.e., context, question,
+    and answers). From these, context and question are simply strings, whereas answers
+    is a dictionary. Let’s analyze answers a bit further. You can print a few answers
+    with
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE48]'
+  prefs: []
+  type: TYPE_PRE
+- en: which gives
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE49]'
+  prefs: []
+  type: TYPE_PRE
+- en: We can see that each answer has a starting index (character based) and a text
+    containing the answer. With this information, we can easily calculate the answer’s
+    ending index (i.e., end index = start index + len(text)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: GLUE benchmark task suite
+  prefs: []
+  type: TYPE_NORMAL
+- en: The GLUE benchmark ([https://gluebenchmark.com/tasks](https://gluebenchmark.com/tasks))
+    is a popular collection of tasks for evaluating NLP models. It tests the natural
+    language understanding of models on a variety of tasks. The following tasks are
+    included in the GLUE tasks collection.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![13_table1](../../OEBPS/Images/13_table1.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 13.3.2 Processing data
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This data set has several integrity issues that need to be taken care of. We
+    will fix those issues and then create a tf.data pipeline to pump the data. The
+    first issues that need to be fixed are alignment issues between the given answer_start
+    and the actual answer_start. Some examples tend to have an offset of around two
+    characters between the given and the actual answer_start positions. We will write
+    a function to correct for this offset, as well as add the end index. The next
+    listing outlines the code to perform this operation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 13.5 Fixing the unwanted offsets in the answer start/end indices
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE50]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Track how many were correct and fixed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ New fixed answers will be held in this variable.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Iterate through each answer context pair.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Convert the answer from a list of strings to a string.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Convert the start of the answer from a list of integers to an integer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❻ Compute the end index by adding the answer’s length to the start_idx.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❼ If the slice from start_idx to end_idx exactly matches the answer text, no
+    changes are required.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❽ If the slice from start_idx to end_idx needs to be offset by 1 to match the
+    answer, offset accordingly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❾ If the slice from start_idx to end_idx needs to be offset by 2 to match the
+    answer, offset accordingly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❿ Print the number of correct answers (requires no change).
+  prefs: []
+  type: TYPE_NORMAL
+- en: ⓫ Print the number of answers that required fixing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now we can call this function on the two subsets (train and validation) of
+    the data set. We will use the validation subset as our testing set (unseen examples).
+    A proportion of the training examples will be set aside as validation samples:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE51]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When you run this code, you will see the following statistics:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Training data corrections
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 87,341/87,599 examples had the correct answer indices.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 258/87,599 examples had the wrong answer indices.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Validation data correction
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 10,565/10,570 examples had the correct answer indices.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 5/10,570 examples had the wrong answer indices.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: We have to make sure that the required number of corrections is not drastically
+    high. If the number of corrections is significantly high, typically it could mean
+    a bug in the code or problems with the data-loading logic. Here, we can clearly
+    see that the number of examples that required corrections is low.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Defining and using the tokenizer
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'All the data we need to solve the problem is available to us. Now it’s time
+    to tokenize the data like we did before. Remember that these pretrained NLP models
+    come in two parts: the tokenizer and the model itself. The tokenizer tokenizes
+    the text into smaller parts (e.g., sub-words) and presents those to the model
+    in the form of a sequence of IDs. Then the model takes in those IDs and performs
+    embedding lookups on them, as well as various computations, to come up with the
+    final token representation that will be used as inputs to the downstream classification
+    model (i.e., the question-answering classification layer). In a similar fashion,
+    in the transformers library, you have the tokenizer object and the model object:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE52]'
+  prefs: []
+  type: TYPE_PRE
+- en: You can see that we are using a tokenizer called DistilBertTokenizerFast. This
+    tokenizer comes from a model known as the DistilBERT. DistilBERT is a smaller
+    version of BERT that shows similar performance as BERT but smaller in size. It
+    has been trained using a transfer learning technique known as *knowledge distillation*
+    ([https://devopedia.org/knowledge-distillation](https://devopedia.org/knowledge-distillation)).
+    To get the tokenizer, all we need to do is call the DistilBertTokenizerFast.from_pretrained()
+    function with the model tag (i.e., distilbert-base-uncased). This tag says the
+    model is a DistilBERT-type model with base size (there are different-sized models
+    available) and ignores the case of the characters (denoted by uncased). The model
+    tag points to a model available in Hugging Face’s model repository ([https://huggingface.co/models](https://huggingface.co/models))
+    and downloads it for us. It will be stored on your computer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Hugging Face provides two different variants of tokenizers: standard tokenizers
+    (PreTrainedTokenizer objects; [http://mng.bz/95d7](http://mng.bz/95d7)) and fast
+    tokenizers (PreTrainedTokenizerFast objects; [http://mng.bz/j2Xr](http://mng.bz/j2Xr)).
+    You can read about their differences on [http://mng.bz/WxEa](http://mng.bz/WxEa)).
+    They are significantly faster when encoding (i.e., converting strings to token
+    sequences) in a batch-wise fashion. Furthermore, fast tokenizers have additional
+    methods that will help us to process inputs easily for the question-answering
+    model.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: What is DistilBERT?
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Following BERT, DistilBERT is a model introduced by Hugging Face in the paper
+    “DistilBERT, a distilled version of BERT: smaller, faster, cheaper and lighter”
+    by Sanh et al. ([https://arxiv.org/pdf/1910.01108v4.pdf](https://arxiv.org/pdf/1910.01108v4.pdf))
+    in 2019\. It is trained using a transfer learning technique known as knowledge
+    distillation. The idea is to have a teacher model (i.e., BERT), where a smaller
+    model (i.e., DistilBERT) is trying to mimic the teacher’s output, which becomes
+    the learning objective for DistilBERT. DistilBERT is smaller compared to BERT
+    and has only six layers, as opposed to BERT’s 12\. Another key difference of DistilBERT
+    is that it is only trained on the masked language modeling task and not on the
+    next-sentence prediction task. This decision is backed up by several studies that
+    question the contribution made by next-sentence prediction tasks (compared to
+    the masked language modeling task) toward natural language understanding.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'With the tokenizer downloaded, let’s examine the tokenizer and how it transforms
+    the inputs by providing some sample text:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE53]'
+  prefs: []
+  type: TYPE_PRE
+- en: This returns
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE54]'
+  prefs: []
+  type: TYPE_PRE
+- en: Next, print the tokens corresponding to the IDs with
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE55]'
+  prefs: []
+  type: TYPE_PRE
+- en: This will give
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE56]'
+  prefs: []
+  type: TYPE_PRE
+- en: We can now encode all the training and test data we have with the code in the
+    next listing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 13.6 Encoding training and test data
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE57]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Encode train data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Encode test data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Note that we are using several arguments when calling the tokenizer. When truncation
+    and padding are enabled (i.e., set to True), the tokenizer will pad/truncate input
+    sequences as necessary. You can pass an argument to the tokenizer (model_max_length)
+    during the creation to pad or truncate text to a certain length. If this argument
+    is not given, it will use the default length available to the tokenizer as one
+    of the configurations set when it was pretrained. When padding/truncation is enabled,
+    your inputs will go through one of the following changes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: If the sequence is shorter than the length, add the special token [PAD] to the
+    end of the sequence until it reaches the length.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If the sequence is longer than the length, it will be truncated.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If the sequence has exactly the same length, no change will be introduced.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: When you run the code in listing 13.6, it prints
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE58]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We can see that all sequences are either padded or truncated until they reach
+    a length of 512, the sequence length set during the model pretraining. Let’s look
+    at some of the important arguments you need to be aware of when defining a tokenizer
+    with the transformers library:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: model_max_length (int, *optional*)—The maximum length (in number of tokens)
+    for the inputs to be padded to.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: padding_side (str, *optional*)—To which side the model should apply padding.
+    Can be ['right', 'left']. The default value is picked from the class attribute
+    of the same name.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: model_input_names (List[string], *optional*)—The list of inputs accepted by
+    the forward pass of the model (e.g., "token_type_ids" or "attention_mask"). The
+    default value is picked from the class attribute of the same name.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: bos_token (str or tokenizers.AddedToken, *optional*)—A special token representing
+    the beginning of a sentence.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: eos_token (str or tokenizers.AddedToken, *optional*)—A special token representing
+    the end of a sentence.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: unk_token (str or tokenizers.AddedToken, *optional*)—A special token representing
+    an out-of-vocabulary token. Out-of-vocabulary tokens are important if the model
+    encounters words it has not seen before.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Most of these arguments can be safely ignored as we are using a pretrained tokenizer
+    model, which already had these attributes set before the training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Unfortunately for us, we still have to do a few more things. One important
+    transformation we have to do is to how we represent the start and end of the answer
+    to the model. As I said earlier, we are given the starting and ending character
+    positions of the answer. But our model understands only token-level decomposition,
+    not character-level decomposition. Therefore, we have to find the token positions
+    from the given character positions. Fortunately, the fast tokenizers provide a
+    convenient function: char_to_token(). Note that this function is only available
+    for fast tokenizers (i.e., PreTrainedTokenizerFast objects), not the standard
+    tokenizers (i.e., PreTrainedTokenizer objects). The char_to_token() function takes
+    in the following arguments:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: batch_or_char_index (int)—The example index in the batch. If the batch has one
+    example, it will be used as the character index we’re interested in converting
+    to a token index.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: char_index (int, optional—If the batch index is provided, this will denote the
+    character index we want to convert to a token index.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: sequence_index (int, optional—If the input has multiple sequences, this denotes
+    which sequence the character/token belongs to.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using this function, we will write the update_char_to_token_positions_inplace()
+    function to convert the char-based indices to token-based indices (see the next
+    listing)..
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 13.7 Converting the char indices to token-based indices
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE59]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Go through all the answers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Get the token position for both start and end char positions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Keep track of how many samples were missing answers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ If a starting position was not found, set it to the last available index.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ If an ending position was not found, set it to the last available index.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❻ Update the encodings in place.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This will print
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE60]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the code in listing 13.7, we go through every answer in the data set and
+    call the char_to_token() method on every answer_start and answer_end element that
+    marks the start and end (char index) of answers, respectively. The new starting
+    and ending token indices of the answers are assigned to new keys, start_positions
+    and end_positions. Furthermore, you can see that there is a validation step that
+    checks if the starting or ending indices are None (i.e., a suitable token ID was
+    not found). This can happen if the answer has been truncated from the context
+    when preprocessing. If that’s the case, we assign the very last index of the sequence
+    as the positions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: How many rotten eggs?
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can see that we are printing the number of examples that needed modifications
+    (e.g., needed correction) or were corrupted (truncated answers). This is an important
+    sanity check, as a very high number can indicate problems with data quality or
+    a bug in your data processing workflow. Therefore, always print these numbers
+    and make sure they are low enough to be safely ignored.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We will now see how we can define a tf.data pipeline.
+  prefs: []
+  type: TYPE_NORMAL
+- en: From tokens to the tf.data pipeline
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'After all the cleaning and required transformations, our data set is as good
+    as new. All that’s left for us is to create a tf.data.Dataset from the data. Our
+    data pipeline will be very simple. It will create a training data set, which will
+    be broken into two subsets, training and validation, and batch the data set. Then
+    the test data set will be created and batched. First let’s import TensorFlow:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE61]'
+  prefs: []
+  type: TYPE_PRE
+- en: Then we will define a generator that will produce the inputs and outputs necessary
+    for our model to be trained. As you can see, our input is a tuple of two items.
+    It has
+  prefs: []
+  type: TYPE_NORMAL
+- en: The padded input token IDs (having the shape [<dataset size>, 512])
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The attention mask (having the shape [<dataset size>, 512])
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The outputs will be comprised of
+  prefs: []
+  type: TYPE_NORMAL
+- en: The starting token positions (having the shape [<dataset size>])
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The ending token positions (having the shape [<dataset size>]
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE62]'
+  prefs: []
+  type: TYPE_PRE
+- en: Our data generator returns data in a very specific format. It returns an input
+    tuple and an output tuple. The input tuple has the token IDs (input_ids) returned
+    by the tokenizer and the attention mask (attention_mask), in that order. The output
+    tuple has the answer’s start positions (start_positions) and end positions (end_positions)
+    of all the inputs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We must define our data generator as a callable (i.e., it returns a function,
+    not the generator object). This is a requirement for the tf.data.Dataset we will
+    be defining. To get a callable function from the generator we defined earlier,
+    let’s use the partial() function,. partial() function takes in a callable, optional
+    keyword argument of the callable and returns a partially populated callable, to
+    which you only need to provide the missing arguments (i.e., arguments not specified
+    during the partial call):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE63]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'train_data_gen can be treated as a function that has no arguments, as we have
+    already provided all arguments in the partial call. As we have defined our data
+    in the form of a generator, we can use the tf.data.Dataset.from_generator() function
+    to generate the data. Remember that we have to pass the output_types argument
+    when defining the data through a generator. All our outputs are int32 type. But
+    they come as a pair of tuples:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE64]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Next, we shuffle the data to make sure there’s no order. Make sure you pass
+    the buffer_size argument that specifies how many samples are brought into memory
+    for the shuffle. We will set the buffer_size to 20,000 as we plan to use 10,000
+    samples from that as validation samples:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE65]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'It’s time to split the train_dataset into training and validation data, as
+    we will be using the original validation data subset as the testing data. To split
+    the train_dataset into training and validation subsets, we will take the following
+    approach. After the shuffle, define the first 10,000 samples as the valid data
+    set. We will be batching the data using the tf.data.Dataset.batch() function with
+    a batch size of 8:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE66]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Skip the first 10,000 datapoints, as they belong to the validation set, and
+    have the rest as the train_dataset. We will be batching the data using the tf.data.Dataset.batch()
+    function with a batch size of 8:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE67]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Finally, the test data is defined using the same data generator:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE68]'
+  prefs: []
+  type: TYPE_PRE
+- en: Next we will work through defining the model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 13.3.3 Defining the DistilBERT model
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'We have looked closely at the data, cleaned and processed it using a tokenizer,
+    and defined a tf.data.Dataset to quickly retrieve batches of examples in the format
+    our model will accept. It’s time to define the model. To define the model, we
+    will import the following module:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE69]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The transformers library provides you with a remarkable selection of ready-made
+    model templates that you can download and train on the task. In other words, you
+    don’t have to fiddle around with the library to find out how to plug downstream
+    models on top of the pretrained transformers. For example, we are solving a question-answering
+    problem and we want to use the DistilBERT model for that. The transformers library
+    has the built-in question-answering adaptation of the DistilBERT model. All you
+    need to do is import the module and call the from_pretrained() function with the
+    model tag to download it:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE70]'
+  prefs: []
+  type: TYPE_PRE
+- en: This will download the model and save it on your local computer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: What other ready-to-use models does the Transformers library provide?
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can a look at [http://mng.bz/8Mwz](http://mng.bz/8Mwz) to get an idea about
+    what you can and cannot easily do with the DistilBERT model. transformers is a
+    fully fledged library that you can use to solve almost all the common NLP tasks
+    with Transformer models. Here we will look at the options for the DistilBERT model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**TFDistilBertForMaskedLM**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: This allows you to pretrain the DistilBERT model using the masked language modeling
+    task. In the masked language modeling task, in a given corpus of text, words are
+    masked at random and the model is asked to predict the masked words.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**TFDistilBertForSequenceClassification**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: If your problem has a single input sequence and you want to predict a label
+    for the input (e.g., spam classification, sentiment analysis, etc.), you can use
+    this model to train the model end to end.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**TFDistilBertForMultipleChoice**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: DistilBERT can be used to solve multiple-choice problems with this variant.
+    The input consists of a question and several answers. These are typically combined
+    into a single sequence (i.e., [CLS] [Question] [SEP] [Answer 1] [SEP] [Answer
+    2] [SEP], etc.), and the model is asked to predict the best answer to the question,
+    which is typically done by feeding the representation for the [CLS] token to a
+    classification layer that will predict the index of the correct answer (e.g.,
+    first answer, second answer, etc.).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**TFDistilBertForTokenClassification**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tasks like named-entity recognition or part-of-speech tagging require the model
+    to predict a label (e.g., person, organization, etc.) for every token in the input
+    sequence. For such tasks, this type of model can be used simply.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**TFDistilBertForQuestionAnswering**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is the model we will use in our scenario. We have a question and a context,
+    and the model needs to predict the answer (or the starting/ending positions of
+    the answer in the context). Such problems can be solved using this module.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Table 13.1 is a summary of the models in this sidebar and their usage.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Table 13.1 Different models in Hugging Face’s transformers library and their
+    usage
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![13_table2](../../OEBPS/Images/13_table2.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: The blog [http://jalammar.github.io/illustrated-bert/](http://jalammar.github.io/illustrated-bert/)
+    provides a very informative diagram of how BERT-like models can be used for different
+    tasks (as outlined under the “Task-specific models” section).
+  prefs: []
+  type: TYPE_NORMAL
+- en: The training and evaluation of these models will be very similar to how you
+    would use them if they were Keras models. You can call model.fit(), model.predict()
+    or model.evaluate() on these models given that the data is in the correct format
+    the model expects.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To train these models, you also have the ability to use an advanced Trainer
+    ([http://mng.bz/EWZd](http://mng.bz/EWZd)). We will discuss the Trainer object
+    in more detail later.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The next part of this came from a wakeup call that I had while using the library.
+    Typically, once the model is defined, you can use it just like a Keras model.
+    This means you can call model.fit() with a tf.data.Dataset and train the model.
+    TensorFlow and Keras, when training models, expect the model output to be a tensor
+    or a tuple of tensors. However, Transformer models’ outputs are specific objects
+    (a descendant of the transformers.file_utils.ModelOutput object), as outlined
+    in [http://mng.bz/N6Rn](http://mng.bz/N6Rn). This will throw an error like
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE71]'
+  prefs: []
+  type: TYPE_PRE
+- en: To fix this, the transformers library allows you to set a certain configuration
+    called return_dict and make sure the model returns a tuple, not an object. Then
+    we define a Config object that has return_dict=False and override the default
+    config of the model with the new config object. For example, for the DistilBERT
+    model, this can be done with
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE72]'
+  prefs: []
+  type: TYPE_PRE
+- en: Unfortunately, I was not able to get the model to behave in the way I expected
+    it to by using this configuration. This goes to show that when writing code, you
+    need to anticipate things that can go wrong even when using top-notch libraries.
+    The easiest fix would be to let the transformers library output an ModelOutput
+    object and write a wrapper function that will extract the required outputs of
+    that object and create a tf.keras.Model from those outputs. The function in the
+    following listing does that for us.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 13.8 Wrapping the model in a tf.keras.models.Model object to prevent
+    errors
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE73]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Define an input layer that will take a batch of a token sequence.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Define an input for the attention mask returned when encoding with the tokenizer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Get the model output given the input_ids and the attention_mask.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Define a wrapper model that takes the defined inputs as the inputs and output
+    logits of the start and end indices’ prediction layers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You can generate the model that generates the corrected outputs by calling
+    the function in listing 13.8:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE74]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Finally, compile the model with a loss function (sparse categorical cross-entropy,
+    as we are using integer labels), metric(s) (sparse accuracy), and an optimizer
+    (Adam optimizer):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE75]'
+  prefs: []
+  type: TYPE_PRE
+- en: Transformers in vision
+  prefs: []
+  type: TYPE_NORMAL
+- en: Transformer models typically thrive in the NLP domain. Until recently, little
+    effort was put into understanding their place in the computer vision domain. Then
+    came several notable papers from Google and Facebook AI that investigated how
+    Transformer models could be used in the computer vision domain.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Vision Transformer (ViT)**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, the paper “An Image Is Worth 16X16 Words: Transformers for Image Recognition
+    at Scale” by Dosovitskiy et al. was published in October 2020 ([https://arxiv.org/pdf/2010.11929.pdf](https://arxiv.org/pdf/2010.11929.pdf)).
+    This can be considered the first substantial step toward vision transformers.
+    In this paper, the authors adapt the original Transformer model proposed for the
+    NLP domain to a computer vision with minimal changes to the architecture. This
+    model is called the Vision Transformer (ViT).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The idea is to decompose an image to small patches of 16 × 16 and consider each
+    as a separate token. Each image path is flattened to a 1D vector, and its position
+    is encoded by a positional-encoding mechanism similar to the original Transformer.
+    It is important to note that the positional encoding in the original Transformer
+    is 1D. However, images are 2D. The authors argue that a 1D positional encoding
+    was adequate and there was no major performance difference between 1D and 2D positional
+    encoding. Once the image is broken into patches of 16 × 16 and flattened, each
+    image can be presented as a sequence of tokens, just like a textual input sequence.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Then the model is pretrained in a self-supervised fashion, using a vision data
+    set called JFT-300M ([https://paperswithcode.com/dataset/jft-300m](https://paperswithcode.com/dataset/jft-300m)).
+    It is not trivial to formulate a self-supervised task in vision as it is in NLP.
+    In NLP, you can form an objective simply to predict masked tokens in a text sequence.
+    However, in the context of computer vision, a token is a sequence of continuous
+    values (normalized pixel values). Therefore, ViT is pretrained to predict the
+    mean three-bit RGB color of a given image patch. Each channel (i.e., red, green,
+    and blue) is represented with three bits (i.e., each bit having the value of 0
+    or 1), which gives 512 possibilities or classes. In other words, for a given image,
+    patches are masked randomly (using the same approach as BERT), and the model is
+    asked to predict the mean three-bit RGB color of that image patch.
+  prefs: []
+  type: TYPE_NORMAL
+- en: After pretraining, the model can be fine-tuned for a task-specific problem by
+    fitting a classification or a regression head on top of ViT, just like BERT. ViT
+    also has the [CLS] token at the beginning of the sequence, which will be used
+    as the input representation for downstream vision models that are plugged on top
+    of ViT. The following figure illustrates the mechanics of ViT.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The original code for ViT is written with a framework known as Jax ([https://github
+    .com/google-research/vision_transformer](https://github.com/google-research/vision_transformer)).
+    However, there are several third-party TensorFlow wrappers for the model (e.g.,
+    [https://github.com/emla2805/vision-transformer](https://github.com/emla2805/vision-transformer)).
+    If using a third-party version, make sure you read the code and verify the correctness
+    as the third party is not affiliated with the original research team.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![13-09-unnumb-1](../../OEBPS/Images/13-09-unnumb-1.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: The Vision Transformer (ViT) model architecture and how it is used for a downstream
+    image classification task
+  prefs: []
+  type: TYPE_NORMAL
+- en: Unified Transformer (UniT)
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Then came an even more groundbreaking paper from Facebook AI called “Transformer
+    Is All You Need: Multimodal Multitask Learning with a Unified Transformer” by
+    Hu et al. ([https://arxiv.org/pdf/2102.10772.pdf](https://arxiv.org/pdf/2102.10772.pdf)).
+    The model is called the Unified Transformer (UniT). UniT can perform a plethora
+    of tasks in both computer vision and NLP domains, just by changing the classification
+    head.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The model, even though it is complex, is straightforward. There are three Transformer
+    models. One Transformer encodes the image input (if present) to generate an encoded
+    representation of an image. The next Transformer encodes the text input (if present).
+    Finally, another Transformer takes a task index as the input, gets the embedding,
+    and passes it to a cross self-attention layer that takes the concatenated image
+    and text encoding as the query and key and the task embedding (after passing through
+    a self-attention layer) as the value. This is similar to how the Transformer decoder,
+    in its encoder-decoder attention layer, uses the last encoder output to generate
+    the query and key and uses the decoder’s input as the value. This model is depicted
+    in the figure on the next page.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'UniT is evaluated on seven tasks involving eight data sets. These tasks include
+    object detection, visual question answering, object annotation, and four language-only
+    tasks. The four language-only tasks are from the GLUE benchmarking data sets,
+    which include the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Tasks**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Object detection*—The model predicts the rectangular coordinates of objects
+    present in images (data sets COCO and Visual Genome Detection [VGD]).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Visual question answering* (VQAv2)—An image and a question is given, and then
+    the model predicts the answer to the question, which can be found in the image
+    (data set: VQAv2).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Visual entailment task*—A visual entailment task where an image and a text
+    sequence are given and the model predicts whether the sentence semantically entails
+    the image (SNLI-VE).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Question Natural Language Inference* (QNLI)—Question answering by extracting
+    the answer from a given context.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Quora Question Pairs* (QQP)—Identify duplicate questions from a given pair
+    of questions.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Textual entailment*—Textual entailment focuses on predicting if sentence A
+    entails/ contradicts/is neutral to sentence B. (data set MNLI).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Sentiment analysis*—Predicts a sentiment (positive/negative/is neutral) for
+    a given review/text (data set Stanford Sentiment Treebank [SST-2]).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![13-09-unnumb-2](../../OEBPS/Images/13-09-unnumb-2.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'The overall architecture of UniT. The model consists of three components: an
+    image encoder, a text encoder, and a task decoder. Finally, there are several
+    classification heads fitted on top of the task decoder.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Next we will train the model we just defined.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 13.3.4 Training the model
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'We have been patiently chipping away at this problem to arrive at this moment.
+    Finally, we can train the model we just defined with the train_dataset data set
+    we created earlier and use the valid_dataset to monitor the accuracy of the model:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE76]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This will print the following output:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE77]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The training updates are quite long, so let’s break them down a bit. There
+    are two losses:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: tf_distil_bert_for_question_answering_loss—Measures the loss on the starting
+    index prediction head
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: tf_distil_bert_for_question_answering_1_loss—Measures the loss on the ending
+    index prediction head
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'As mentioned earlier, for question answering, we have two classification heads:
+    one to predict the starting index and one to predict the ending index. We have
+    something similar for the accuracy. There are two accuracies to measure the performance
+    of individual heads:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: tf_distil_bert_for_question_answering_sparse_categorical_accuracy—Measures the
+    accuracy of the classification head predicting the starting index
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: tf_distil_bert_for_question_answering_1_sparse_categorical_accuracy—Measures
+    the accuracy of the classification head predicting the ending index
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: We can see that the model has achieved a training accuracy of around 77% for
+    both starting and ending index prediction, where the validation accuracy is around
+    70% and 72% for starting/ending index prediction, respectively. These are good
+    accuracies given that we only trained the model for three epochs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: NOTE On an Intel Core i5 machine with an NVIDIA GeForce RTX 2070 8 GB, the training
+    took approximately 2 hours and 45 minutes to run three epochs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can see that there are several warnings produced during the model training.
+    Since this is a new library, it is extremely important to pay attention to these
+    warnings to make sure they make sense in the context we’re using these models.
+    You don’t need to worry about these as you would if you saw an error, as warnings
+    do not always indicate a problem. Depending on the problem we’re solving, some
+    warnings are not applicable and can be safely ignored. The first warning says
+    that the parameters output_attentions, output_hidden_states and use_cache cannot
+    be updated when calling the model but need to be passed in as config objects.
+    We are not worried about this as we are not interested in introducing any custom
+    modifications to the model, and we are using one that is already designed for
+    question answering.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The second warning says that return_dict will always be set to TRUE. Setting
+    return_dict=True means that the Transformer model will return a ModelOutput object
+    that is not understood by TensorFlow or Keras. This creates problems down the
+    road when we want to use the model with a Keras API. This is one of the reasons
+    we create the tf_wrap_model() function: to make sure we get a tf.keras.Model that
+    always outputs a tuple and not a ModelOutput object.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Finally, we will save the model:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE78]'
+  prefs: []
+  type: TYPE_PRE
+- en: Make sure to save both the tokenizer and the model. To save the tokenizer, you
+    can simply call the save_pretrained() function and provide it a folder path. The
+    tokenizer will be saved in that directory. Saving the model requires a bit more
+    work. We will not be able to save the model (model_v2) as is, because when your
+    model has a custom layer, to be saved correctly, the layer needs to implement
+    the get_config() function and specify all the attributes of that layer. However,
+    doing this for the Transformer model, which is there as a custom layer, would
+    be extremely difficult. Therefore, we will only save the Transformer model by
+    calling the model_v2.get_layer() function with the layer name (i.e., tf_distil_bert_for_question_answering)
+    and then calling the save_pretrained() method with a folder path. Any time we
+    have to build the full model, we can simply call the tf_wrap_model() function
+    on that saved model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 13.3.5 Ask BERT a question
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Evaluating the model is also a matter of calling the model_v2.evaluate() function
+    with the test_dataset we created earlier:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE79]'
+  prefs: []
+  type: TYPE_PRE
+- en: This will print
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE80]'
+  prefs: []
+  type: TYPE_PRE
+- en: This is wonderful news! We have achieved around 65.7% accuracy on predicting
+    the start index of the answer, where the model can predict the end index with
+    approximately 69.4% accuracy. Two things to observe are that both starting and
+    ending accuracies are similar, meaning that the model gets the answer correct
+    (start to end) around that accuracy. Finally, this accuracy falls close to the
+    validation accuracy, meaning that we don’t have unusual overfitting occurring.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As I have alluded to numerous times, it is usually not enough to look at a number
+    alone to judge a model on its performance. Visual inspection has always been a
+    natural tendency for humans when evaluating an object. Therefore, as a scrupulous
+    data scientist or a machine learning engineer, it should be a part of the machine
+    learning workflow whenever possible. In the next listing, we will provide our
+    model a question from the test set and see what the model produces.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 13.9 Inferring the textual answer from the model for a given question
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE81]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Define a sample question, context, and answer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Predict with the model for the sample input. This returns the starting and
+    ending index probability vectors.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Get the predicted starting index by getting the maximum index from the starting
+    index probability vector.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Get the predicted ending index by getting the maximum index from the ending
+    index probability vector.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Get the string answer tokens by getting the text between the starting/ending
+    indices.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❻ Return the list of tokens as a single string.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❼ Print the inputs to the model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❽ Call the ask_bert function on the defined input.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❾ Print the answer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s flesh out the details of the code in listing 13.9\. First, we define
+    an index i. This index will be used to retrieve a sample from the test set. sample_q,
+    sample_c, and sample_a represent the question, context, and answer of the sample
+    we have selected. With these, we can define the sample_input, which will contain
+    the encoded representation of the input understood by the model. The function
+    ask_bert() takes in an input prepared for the model with the tokenizer (denoted
+    by the sample_input) to convert token IDs of the answer back to readable tokens.
+    The function first predicts the output for the input and gets the starting and
+    ending token IDs of the answer. Finally, the function converts these IDs along
+    with the words in between into a single comprehensible answer and returns the
+    text. If you print the output of this process, you will get the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE82]'
+  prefs: []
+  type: TYPE_PRE
+- en: This ends our conversation about using Hugging Face’s Transformer library to
+    implement Transformer models. We have gone through all the steps you are likely
+    to come across while solving any NLP task with a Transformer model. And Hugging
+    Face’s transformers library still enjoys its reputation as one of the best libraries
+    for implementing Transformer models in TensorFlow or PyTorch.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Visualizing attention heads
+  prefs: []
+  type: TYPE_NORMAL
+- en: Whenever there’s a chance for us to interpret deep learning models and understand
+    why a model made a certain decision, it is important to make the most of it. Having
+    the ability to dissect and interpret models helps to build trust among users.
+    Interpreting Transformer models is made very easy due to the presence of the self-attention
+    layers. Using the self-attention layer, we can find out which words the model
+    paid attention to while coming up with a hidden representation of a token.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We can use the bert_viz library ([https://github.com/jessevig/bertviz](https://github.com/jessevig/bertviz))
+    to visualize the attention patterns in any attention head found in any layer.
+    It is important to note that bert_viz does not support TensorFlow but uses the
+    PyTorch library. Despite this small technical difference, using bert_viz is easy
+    and straightforward.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, import the required libraries:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE83]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Next, define a BERT model. Make sure to pass the output_attentions=True config
+    to output attention outputs, as it is turned off by default:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE84]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Encode the input text and then get the output of the model:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE85]'
+  prefs: []
+  type: TYPE_PRE
+- en: Finally call the head_view() function. You can get the attention outputs by
+    simply calling output.attentions, which will return a tuple of 12 tensors. Each
+    tensor corresponds to a separate layer in BERT. Also, make sure you convert them
+    to torch tensors. Otherwise, this function errors out. The output is visualized
+    in figure 13.10.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE86]'
+  prefs: []
+  type: TYPE_PRE
+- en: This ends our discussion about Transformer models. However, it’s important to
+    keep in mind that Transformer models are evolving and becoming better even as
+    we speak. In the next chapter, we will discuss an important visualization tool,
+    called TensorBoard, that is shipped with TensorFlow.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![13-10](../../OEBPS/Images/13-10.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 13.10 The attention output of the bert_viz library. You can select different
+    layers from the dropdown menu. The different shades represent different attention
+    heads in that layer, which can be switched on or off. The lines between the two
+    columns represent which words the model paid attention to when generating the
+    hidden representation of a given token.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Exercise 3
+  prefs: []
+  type: TYPE_NORMAL
+- en: You are asked to implement a named-entity recognition model. Named-entity recognition
+    is a token classification task, where each token is assigned a label (e.g., person,
+    organization, geographical, other, etc.). There are seven different labels. If
+    you want to use the distilbert-base-uncased model for this, how would you define
+    the model? Remember that in the transformers library, you can pass the num_labels
+    as a keyword to define the number of output classes. For example, if you have
+    a config "a" that you would like to set to "abc", you can do
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE87]'
+  prefs: []
+  type: TYPE_PRE
+- en: Summary
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The main subcomponents of a Transformer model are embeddings (token and positional),
+    a self-attention sublayer, a fully connected sublayer, residual connections, and
+    layer normalization sublayers.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: BERT is a Transformer encoder model that produces a hidden (attended) representation
+    for each token passed in the input.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: BERT uses special tokens like [CLS] (denotes the beginning and is used to generate
+    the output for classification heads), [SEP] (to mark the separation between two
+    subsequences; e.g., question and the context in question answering), [PAD] (to
+    denote padded tokens to bring all sequences to a fixed length), and [MASK] (to
+    mask out tokens in the input sequence; e.g., padded tokens).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: BERT can be used for downstream, task-specific classification tasks by fitting
+    a classification head (e.g., a logistic regression layer) on top of the final
+    output of BERT. Depending on the type of task, multiple classification heads might
+    be required, and the utilization of the classification head might differ.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Hugging Face’s transformers library provides implementations of all the NLP-related
+    Transformer models and can be easily downloaded and used in the workflow. The
+    pretrained models available for download have two main components: the tokenizer
+    that will tokenize a provided string to a sequence of tokens and the model that
+    takes in the sequence of tokens to generate the final hidden output.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Answers to exercises
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '**Exercise 1**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*PE*(*pos*,2*i* ) = sin(*pos*/10000^(21/d[model]))'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE88]'
+  prefs: []
+  type: TYPE_PRE
+- en: '**Exercise 2**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE89]'
+  prefs: []
+  type: TYPE_PRE
+- en: '**Exercise 3**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE90]'
+  prefs: []
+  type: TYPE_PRE

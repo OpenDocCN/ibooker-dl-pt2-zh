@@ -1,0 +1,2068 @@
+- en: '7 Teaching machines to see better: Improving CNNs and making them confess'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter covers
+  prefs: []
+  type: TYPE_NORMAL
+- en: Reducing overfitting of image classifiers
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Boosting model performance via better model architectures
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Image classification using pretrained models and transfer learning
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Modern ML explainability techniques to dissect image classifiers
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: We have developed and trained a state-of-the-art image classifier known as the
+    Inception net v1 on an object classification data set. Inception net v1 is a well-recognized
+    image classification model in computer vision. You learned how Inception blocks
+    are created by aggregating convolution windows at multiple scales, which encourages
+    sparsity in the model. You further saw how 1 × 1 convolutions are employed to
+    keep the dimensionality of layers to a minimum. Finally, we observed how Inception
+    net v1 uses auxiliary classification layers in the middle of the network to stabilize
+    and maintain the gradient flow throughout the network. However, the results didn’t
+    really live up to the reputation of the model, which was heavily overfit with
+    ~30% validation and test accuracies and a whopping ~94% training accuracy. In
+    this chapter, we will discuss improving the model by reducing overfitting and
+    improving validation and test accuracies, which will ultimately leave us with
+    a model that reaches ~80% accuracy (equivalent to being able to accurately identify
+    160/200 classes of objects) on validation and test sets. Furthermore, we will
+    look at techniques that allow us to probe the model’s brain to gain insights.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This chapter takes you through an exciting journey where we turn a suboptimal
+    machine learning model to a significantly superior model. This process will be
+    reminiscent of what we did in the previous chapter. We will add an additional
+    step to explain/interpret the decisions the model made. We will use special techniques
+    to see which part of the image the model paid most attention to in order to make
+    a prediction. This helps us to build trust in the model. During this process,
+    we identify lurking issues in the model and systematically fix them to increase
+    performance. We will discuss several important techniques, including the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Augmenting the data by using various image transformation techniques such as
+    brightness/contrast adjustment, rotation, and translation to create more labeled
+    data for the model
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Implementing a variant of Inception net that is more suited for the size and
+    type of data used
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using transfer learning to leverage a model already trained on a larger data
+    set and fine-tuning it to perform well on the data set we have
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This chapter might deeply resonate with you if you have ever had to implement
+    a deep learning solution to an unfamiliar problem. Typically, implementing “some”
+    deep network will not place you on the apex of success. The novelty of the problem
+    or the bespoke nature of the problem at hand can impede your progress if you are
+    not careful. Such problems send you into uncharted territory where you need to
+    tread carefully to find a solution without exhausting yourself. This chapter will
+    provide guidance for anyone who might come face-to-face with such situations in
+    computer vision.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.1 Techniques for reducing overfitting
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: We are pursuing the ambitious goal of developing an intelligent shopping assistant
+    app that will use an image/object classifier as a vital component. For this, we
+    will use the data set tiny-imagenet-200, which is a smaller version of the large
+    ImageNet image classification data set, and consists of images and a class that
+    represents the object present in that image. The data set has a training subset
+    and a testing subset. You split the training subset further into a training set
+    (90% of the original) and a validation set (10% of the original).
+  prefs: []
+  type: TYPE_NORMAL
+- en: You have developed a model based on the famous Inception net model, but it is
+    overfitting heavily. Overfitting needs to be alleviated, as it leads to models
+    that perform exceptionally well on training data but poorly on test/real-world
+    data. You know several techniques to reduce overfitting, namely data augmentation
+    (creating more data out of existing data; for images this includes creating variants
+    of the same image by introducing random brightness/contrast adjustments, translations,
+    rotations, etc.), dropout (i.e., turning nodes randomly in the network during
+    training), and early stopping (i.e., terminating model training before overfitting
+    takes place). You wish to leverage these methods with the Keras API to reduce
+    overfitting.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Usually, reducing overfitting requires close scrutiny of the machine learning
+    pipeline end to end. This involves looking at the data fed in, the model structure,
+    and the model training. In this section, we will look at all these aspects and
+    see how we can place guards against overfitting. The code for this is available
+    at Ch07-Improving-CNNs-and-Explaining/7.1.Image_Classification_Advance.ipynb.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.1.1 Image data augmentation with Keras
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'First in line is augmenting data in the training set. Data augmentation is
+    a prevalent method for increasing the amount of data available to deep learning
+    networks without labeling new data. For example, in an image classification problem,
+    you can create multiple data points from a single image by creating various transformed
+    versions of the same image (e.g., shift the image, change brightness) and having
+    the same label as for the original image (figure 7.1). As previously stated, more
+    data conduces the strength of deep learning models by increasing generalizability
+    (and reducing overfitting), leading to reliable performance in the real world.
+    For image data, there are many different augmentation techniques you can use:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Randomly adjusting brightness, contrast, and so on
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Randomly zooming in/out, rotations, translations, and so on
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '![07-01](../../OEBPS/Images/07-01.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.1 Difference between training data and validation data after the augmentation
+    step. The figure clearly shows various transformations applied on the training
+    data and not on the validation data, as we expected.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Such augmentation can be easily applied by providing several additional parameters
+    to the ImageDataGenerator that we used earlier. Let’s define a new Keras ImageDataGenerator
+    with data augmentation capability. In Keras you can perform most of these augmentations,
+    and there’s hardly a need to look elsewhere. Let’s look at various options an
+    ImageDataGenerator provides (only the most important parameters are shown). Figure
+    7.2 illustrates the effects of the different parameters listed here.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: where
+  prefs: []
+  type: TYPE_NORMAL
+- en: featurewise_center specifies whether the images are centered by subtracting
+    the mean value of the whole data set (e.g., True/False).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: samplewise_center specifies whether the images are centered by subtracting individual
+    mean values of each image (e.g., True/False).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: featurewise_std_normalization is the same as featurewise_center, but instead
+    of subtracting, the mean images are divided by the standard deviation (True/False).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: samplewise_std_normalization is the same as samplewise_center, but instead of
+    subtracting, the mean images are divided by the standard deviation (True/ False).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: zca_whitening is a special type of image normalization that is geared toward
+    reducing correlations present in the image pixels (see [http://mng.bz/DgP0](http://mng.bz/DgP0))
+    (True/False).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: rotation_range specifies the bounds of the random image rotations (in degrees)
+    done during data augmentation. There is a float with values between (0, 360);
+    for example, 30 means a range of -30 to 30; 0 is disabled.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: width_shift_range specifies the bounds for random shifts (as proportions or
+    pixels) done on the width axis during data augmentation.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A tuple with values between (-1, 1) is considered as a proportion of the width
+    (e.g., (-0.4, 0.3)).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A tuple with values between (-inf, inf) is considered as pixels (e.g., (-150,
+    250)).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: height_shift_range is the same as width_shift_range except for the height dimension.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: brightness_range specifies the bounds of the random brightness adjustments made
+    to data during data augmentation.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A tuple with values between (-inf, inf) is, for example, (-0.2, 0.5) or (-5,
+    10); 0 is disabled.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: shear_range is the same as brightness_range but for shearing (i.e., skewing)
+    images during data augmentation
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A float in degrees is, for example, 30.0.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: zoom_range is the same as brightness_range except for scaling the images during
+    data augmentation.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: horizontal_flip specifies whether to randomly flip images horizontally during
+    data augmentation (True/False).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: vertical_flip is the same as horizontal_flip but flips vertically (True/False)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: fill_mode defines how the empty spaces created by various image transformations
+    (e.g., translating the image to the left creates an empty space on the right)
+    are handled. Possible options are “reflect,” “nearest,” and “constant.” The last
+    row of figure 7.2 depicts the differences.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: rescale rescales the inputs by a constant value.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: preprocessing_function takes a Python function that can be used to introduce
+    additional data augmentation/preprocessing steps that are not readily available.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: validation_split addresses how much data should be used as validation data.
+    We don’t use this parameter, as we create a data generator for the validation
+    set separately because we do not want an augmentations app. A float is, for example,
+    0.2.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '![07-02](../../OEBPS/Images/07-02.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.2 Effects of different augmentation parameters and their values of
+    the ImageDataGenerator
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'With a good understanding of different parameters, we will define two image
+    data generators: one with data augmentation (training data) and the other without
+    (testing data). For our project, we will augment the data in the following ways:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Randomly rotate images
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Randomly translate on width dimension
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Randomly translate on height dimension
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Randomly adjust brightness
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Randomly shear
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Randomly zoom
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Randomly flip images horizontally
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Random gamma correct (custom implementation)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Random occlude (custom implementation)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The following listing shows how theImageDataGenerator is defined with a validation
+    split.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 7.1 Defining the ImageDataGenerator with validation split
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Defines the ImageDataGenerator for training/validation data
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ We will switch off samplewise_center temporarily and reintroduce it later.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Various augmentation arguments previously discussed (set empirically)
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Uses a 10% portion of training data as validation data
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Defines a separate ImageDataGenerator for testing data
+  prefs: []
+  type: TYPE_NORMAL
+- en: We chose the parameters for these arguments empirically. Feel free to experiment
+    with other arguments and see the effect they have on the model’s performance.
+    One important thing to note is that, unlike previous examples, we set samplewise_center=False.
+    This is because we are planning to do few custom preprocessing steps before the
+    normalization. Therefore, we will turn off the normalization in the ImageDataGenerator
+    and reintroduce it later (through a custom function). Next, we will define the
+    training and testing data generators (using a flow function). Following a similar
+    pattern as the previous chapter, we will get the training and validation data
+    generators through the same data generator (using the validation_split and subset
+    arguments; see the following listing).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 7.2 Defining the data generators for training, validation, and testing
+    sets
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Define a partial function that has all the arguments fixed except for the
+    subset argument.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Get the training data subset.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Get the validation data subset.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Read in the test labels stored in a txt file.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Define the test data generator.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To refresh our memory, the flow_from_directory(...) has the following function
+    signature:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: The train_gen and valid_gen uses image_gen_aug (with data augmentation) to retrieve
+    data. train_gen and valid_gen are defined as partial functions of the original
+    image_gen.flow_from_directory(), where they share all the arguments except for
+    the subset argument. However, it is important to keep in mind that augmentation
+    is only applied to training data and must not be applied on the validation subset.
+    This is the desired behavior we need, as we want the validation data set to remain
+    fixed across epochs. Next, test_gen uses image_gen (without data augmentation).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Why should we not augment validation/test data?
+  prefs: []
+  type: TYPE_NORMAL
+- en: When augmenting data, you should only augment the training data set and not
+    the validation and test sets. Augmentation on validation and test sets will lead
+    to inconsistent results between trials/runs (due to the random modifications introduced
+    by data augmentation). We want to keep our validation and testing data sets consistent
+    from the start to the end of training. Therefore, data augmentation is only done
+    to the training data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Remember that Inception Net v1 has three output layers; therefore, the output
+    of the generator needs to be a single input and three outputs. We do this by defining
+    a new Python generator off the Keras generator that modifies the content accordingly
+    (see the next listing).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 7.3 Defining the data generator with several modifications
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Define a new function that introduces two new augmentation techniques and
+    modifies the format of the final output.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Check if the Gamma correction augmentation is needed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Perform Gamma correction-related augmentation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Check if random occlusion augmentation is needed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Defines the starting x/y pixels randomly for occlusion
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❻ Apply a white/gray/black color randomly to the occlusion.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❼ Perform the sample-wise centering that was switched off earlier.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❽ Makes sure we replicate the target (y) three times
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❾ Training data is augmented with random gamma correction and occlusions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❿ Validation/testing sets are not augmented.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You can see how the data_gen_augmented_inceptionnet_v1 returns a single input
+    (x) and three replicas of the same output (y). In addition to modifying the format
+    of the output, this data_gen_augmented_inceptionnet_v1 will include two extra
+    data augmentation steps using a custom implementation (which are not available
+    as built-ins):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Gamma correction*—A standard computer vision transformation performed by raising
+    the pixel values to the power of some value ([http://mng.bz/lxdz](http://mng.bz/lxdz)).
+    In our case, we chose this value randomly between 0.9 and 1.08.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Random occlusions*—We will occlude a random patch on the image (10 × 10) with
+    white, gray, or black pixels (chosen randomly).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: You also need to center the images, as we set the samplewise_center argument
+    to False when we defined the ImageDataGenerator. This is done by subtracting the
+    mean pixel value of each image from its pixels. With the data_gen_augmented_inceptionnet_v1
+    function defined, we can create the modified data generators train_gen_aux, valid_
+    gen_aux, and test_gen_aux for training/validation/testing data, respectively.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Check, check, check to avoid model performance defects
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you don’t check to see if just the training data is augmented, you can be
+    in trouble. If it doesn’t work as intended, it can easily fly under the radar.
+    Technically, your code is working and free of functional bugs. But this will leave
+    you scratching your head for days trying to figure out why the model is not performing
+    as intended in the real world.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Finally, the most important step in this process is verifying that the data
+    augmentation is working as we expect and not corrupting the images in unexpected
+    ways, which would impede the learning of the model. For that, we can plot some
+    of the samples generated by the train data generator as well as the validation
+    data generator. Not only do we need to make sure that the data augmentation is
+    working properly, but we also need to make sure that data augmentation is not
+    present in the validation set. Figure 7.3 ensures that this is the case.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![07-03](../../OEBPS/Images/07-03.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.3 Difference between training data and validation data after the augmentation
+    step. The figure clearly shows various transformations applied on the training
+    data and not on the validation data, as we expected.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Next, we discuss another regularization technique called dropout.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '7.1.2 Dropout: Randomly switching off parts of your network to improve generalizability'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: We will now learn a technique called *dropout* to reduce further overfitting.
+    Dropout was part of Inception net v1, but we avoided dropout in the previous chapter
+    to improve clarity.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Dropout is a regularization technique for deep networks. A regularization technique’s
+    job is to control the deep network in such a way that the network is rid of numerical
+    errors during training or troublesome phenomena like overfitting. Essentially,
+    regularization keeps the deep network well behaved.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Dropout switches off output neurons randomly during each training iteration.
+    This helps the model learn redundant features during training as it will not always
+    have the previously learned features at its disposal. In other words, the network
+    only has a subset of parameters of the full network to learn at a given time,
+    and it forces the network to learn multiple (i.e., redundant) features to classify
+    objects. For example, if the network is trying to identify cats, in the first
+    iteration it might learn about whiskers. Then, if the nodes that correspond to
+    the knowledge on whiskers are switched off, it might learn about cats’ pointy
+    ears (figure 7.4). This leads to a network that learns redundant/different features
+    like whiskers, two pointed ears, and so on, leading to better performance at test
+    time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![07-04](../../OEBPS/Images/07-04.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.4 How dropout might change the network when learning to classify cat
+    images. In the first iteration, it might learn about whiskers. In the second iteration,
+    as the part containing information about whiskers is turned off, the network might
+    learn about pointy ears. This leads the network to having knowledge about both
+    whiskers and ears when it’s time for testing. That’s good in this case, because
+    in the test image, you cannot see the cat’s whiskers!
+  prefs: []
+  type: TYPE_NORMAL
+- en: The nodes are switched off by applying a random mask of 1s and 0s on each layer
+    you want to apply dropout on (figure 7.5). There is also a vital normalization
+    step you perform on the active nodes during training. Let’s assume we are training
+    a network with 50% dropout (i.e., dropping half of the nodes on every iteration).
+    When 50% of your network is switched off, conceptually your network’s total output
+    is reduced by half, compared to having the full network on. Therefore, you need
+    to multiply the output by a factor of 2 to make sure the total output remains
+    constant. Such computational details of dropout are highlighted in figure 7.5\.
+    The good news is that you don’t have to implement any of the computational details,
+    as dropout is provided as a layer in TensorFlow.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![07-05](../../OEBPS/Images/07-05.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.5 A computational perspective on how dropout works. If dropout is set
+    to 50%, then half the nodes in every layer (except for the last layer) will be
+    turned off. But at testing time, all the nodes are switched on.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Inception net v1 (figure 7.6) only has dropout for fully connected layers and
+    the last average pooling layer. Remember not to use dropout on the last layer
+    (i.e., the layer that provides final predictions). There are two changes to perform:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Apply 70% dropout to the intermediate fully connected layer in the auxiliary
+    outputs.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Apply 40% dropout to the output of the last average pooling layer.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '![07-06](../../OEBPS/Images/07-06.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.6 Abstract architecture of Inception net v1\. Inception net starts
+    with a stem, which is an ordinary sequence of convolution/pooling layers that
+    you will find in a typical CNN. Then Inception net introduces a new component
+    known as Inception block. Finally, Inception net also makes use of auxiliary output
+    layers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In TensorFlow, applying dropout is as easy as writing a single line. Once you
+    get the output of the fully connected layer, dense1, you can apply dropout with
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here, we’re using a 70% dropout rate (as suggested in the original Inception
+    net v1 paper) for the auxiliary output.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Dropout on convolution layers
+  prefs: []
+  type: TYPE_NORMAL
+- en: Dropout is mostly applied to dense layers, so one cannot help but wonder, “Why
+    are we not applying dropout on convolution layers?” It is still an open debate.
+    For example, the original dropout paper by Nitish Srivastava et al. ([http://mng.bz/o2Nv](http://mng.bz/o2Nv))
+    argues that using dropout on lower convolution layers provides a performance boost.
+    In contrast, the paper “Bayesian CNNs with Bernoulli Approximate Variational Inference”
+    by Yarin Gal et al. ([https://arxiv.org/pdf/1506.02158v6.pdf](https://arxiv.org/pdf/1506.02158v6.pdf))
+    argues that dropout on convolution layers doesn’t help much as, due to their low
+    number of parameters (compared to a dense layer), they are already regularized
+    well. Consequentially, dropout can hinder the learning in convolution layers.
+    One thing you need to take into account is the time of publication. The dropout
+    paper was written two years before the Bayesian CNN paper. Regularization and
+    other improvements introduced in that duration could have had a major impact on
+    improving deep networks, so the benefit of having dropout in convolution layers
+    could become negligible. You can find a more casual discussion on [http://mng.bz/nNQ4](http://mng.bz/nNQ4).
+  prefs: []
+  type: TYPE_NORMAL
+- en: The final code for the auxiliary output is shown in the following listing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 7.4 Modifying the auxiliary output of Inception net
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Applying a dropout layer with 70% dropout
+  prefs: []
+  type: TYPE_NORMAL
+- en: Next, we will apply dropout to the output of the last average pooling layer
+    before the final prediction layer. We must flatten the output of the average pooling
+    layer (flat_out) before feeding into a fully connected (i.e., dense) layer. Then
+    dropout is applied on flat_out using
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We are using a dropout rate of 40% for this layer, as prescribed by the paper.
+    The final code (starting from the average pooling layer) looks like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: This concludes the discussion on dropout. One final note to keep in mind is
+    that you should not naively set the dropout rate. It should be chosen via a hyperparameter
+    optimization technique. A very high dropout rate can leave your network severely
+    crippled, whereas a very low dropout rate will not contribute to reducing overfitting.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '7.1.3 Early stopping: Halting the training process if the network starts to
+    underperform'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The final technique we will be looking at is called early stopping. As the name
+    suggests, early stopping stops training the model when the validation accuracy
+    stops increasing. You may be thinking, “What? I thought the more training we do
+    the better.” Until you reach a certain point, more training is better, but then
+    training starts to reduce the model’s generalizability. Figure 7.7 depicts the
+    typical training accuracy and validation accuracy curves you will obtain over
+    the course of training a model. As you can see, after a point, the validation
+    accuracy stops increasing and starts dropping. This is the start of overfitting.
+    You can see that the training accuracy keeps going up, regardless of the validation
+    accuracy. This is because modern deep learning models have more than enough parameters
+    to “remember” data instead of learning features and patterns present in the data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![07-07](../../OEBPS/Images/07-07.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.7 An illustration of overfitting. At the start, as the number of training
+    iterations increases, both training and validation accuracies increase. But after
+    a certain point, the validation accuracy plateaus and starts to go down, while
+    the training accuracy keeps going up. This behavior is known as overfitting and
+    should be avoided.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The early stopping procedure is quite simple to understand. First, you define
+    a maximum number of epochs to train for. Then the model is trained for one epoch.
+    After the training, the model is evaluated on the validation set using an evaluation
+    metric (e.g., accuracy). If the validation accuracy has gone up and hasn’t reached
+    the maximum epoch, the training is continued. Otherwise, training is stopped,
+    and the model is finalized. Figure 7.8 depicts the early stopping workflow.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![07-08](../../OEBPS/Images/07-08.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.8 The workflow followed during early stopping. First the model is trained
+    for one epoch. Then, the validation accuracy is measured. If the validation accuracy
+    has increased and the training hasn’t reached maximum epoch, training is continued.
+    Otherwise, training is halted.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Implementing early stopping requires minimal changes to your code. First, as
+    before, we will set up a function that computes the number of steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Next, we will use the EarlyStopping callback provided by Keras ([http://mng.bz/v6lr](http://mng.bz/v6lr))
+    to enable early stopping during the training. A Keras callback is an easy way
+    to make something happen at the end of each epoch during training. For example,
+    for early stopping, all we need to do is analyze the validation accuracy at the
+    end of each epoch and, if it hasn’t shown any improvement, terminate the training.
+    Callbacks are ideal for achieving this. We have already used the CSVLogger callback
+    to log the metric quantities over the epochs. The EarlyStopping callback has several
+    arguments:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: monitor—Which metric needs to be monitored in order to terminate the training.
+    You can get the list of defined metric names using the model.metric_names attribute
+    of a Keras model. In our example, this will be set to val_loss (i.e., the loss
+    value computed on the validation data).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: min_delta—The minimum change required in the monitored metric to be considered
+    an improvement (i.e., any improvement < min_delta will be considered a “no improvement”
+    [defaults to zero]).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: patience—If there’s no improvement after this many epochs, training will stop
+    (defaults to zero).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: mode—Can be auto/min/max. In min, training will stop if the metric has stopped
+    decreasing (e.g., loss). In max, training will stop if the metric has stopped
+    increasing (e.g., accuracy). The mode will be automatically inferred from the
+    metric name (defaults to auto).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: baseline—Baseline value for the metric. If the metric doesn’t improve beyond
+    the baseline, training will stop (defaults to none).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: restore_best_weights—Restores the best weight result in between the start of
+    the training and the termination that showed the best value for the chosen metric
+    (defaults to false).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'First, we will create a directory called eval if it doesn’t exist. This will
+    be used to store the CSV, returned by the CSVLogger:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Then we define the EarlyStopping callback. We chose val_loss as the metric
+    to monitor and a patience of five epochs. This means the training will tolerate
+    a “no improvement” for five epochs. We will leave the other parameters in their
+    defaults:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Finally call model.fit() with the data and the appropriate callbacks. Here,
+    we use the previously defined train_gen_aux and valid_gen_aux as the training
+    and validation data (respectively). We also set epochs to 50 and the training
+    steps and the validations steps using the get_steps_per_epoch function. Finally,
+    we provide the EarlyStopping and CSVLogger callbacks, so the training stops when
+    there’s no improvement under the specified conditions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: The next listing shows a summary of the training logs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 7.5 Training logs provided during training the model
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Because we used a high dropout rate of 70% for some layers, TensorFlow warns
+    us about it, as unintended high dropout rates can hinder model performance.
+  prefs: []
+  type: TYPE_NORMAL
+- en: It seems the model doesn’t see a benefit in training the model for 50 epochs.
+    After epoch 38, it has decided to terminate the training. This is evident by the
+    fact that training stopped before reaching epoch 50 (as shown in the line Epoch
+    38/50). The other important observation is that you can see that the training
+    accuracy doesn’t explode to large values, as we saw in the last chapter. The training
+    accuracy has remained quite close to the validation accuracy (~30%). Though we
+    don’t see much of a performance increase, we have managed to reduce overfitting
+    significantly. With that, we can focus on getting the accuracy higher.
+  prefs: []
+  type: TYPE_NORMAL
+- en: NOTE On an Intel Core i5 machine with an NVIDIA GeForce RTX 2070 8GB, the training
+    took approximately 1 hour and 30 minutes to run 38 epochs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Next, we will revisit our model. We will dig into some research and implement
+    a model that has proven to work well for this specific classification problem.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Exercise 1
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You have the following model presented to you, and you see that it is heavily
+    underfitting. Underfitting occurs when your model is not approximating the distribution
+    of the data closely enough. Suggest how you can change the dropout layer to reduce
+    underfitting. You can choose between 20%, 50%, and 80% as dropout rates:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: Exercise 2
+  prefs: []
+  type: TYPE_NORMAL
+- en: Define an early stopping callback to terminate the training if the validation
+    loss value (i.e., val_loss) has not increased by 0.01 after five epochs. Use tf.keras.callbacks.EarlyStopping
+    callback for this purpose.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '7.2 Toward minimalism: Minception instead of Inception'
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: We now have a model where overfitting is almost nonexistent. However, test performance
+    of the model is still not where we want it to be. You feel like you need a fresh
+    perspective on this problem and consult a senior data scientist on your team.
+    You explain how you have trained an Inception net v1 model on the tiny-imagenet-200
+    image classification data set, as well as the poor performance of the model. He
+    mentions that he recently read a paper ([cs231n.stanford.edu/reports/2017/pdfs/930.pdf](http://cs231n.stanford.edu/reports/2017/pdfs/930.pdf))
+    that uses a modified version of the Inception net that’s motivated by Inception-ResNet
+    v2 and has achieved better performance on the data set.
+  prefs: []
+  type: TYPE_NORMAL
+- en: He further explains two new techniques, batch normalization and residual connections
+    (that are used in the modified inception net as well as Inception-ResNet v2),
+    and the significant impact they have in helping the model training, especially
+    in deep models. Now you will implement this new modified model and see if it will
+    improve performance.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We have seen a slight increase in the validation and test accuracies. But we
+    still have barely scratched the surface when it comes to performance. For example,
+    there are reports of ~85% test accuracy for this data set ([http://mng.bz/44ev](http://mng.bz/44ev)).
+    Therefore, we need to look for other ways to improve the model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: That session you had with the senior data scientist on your team couldn’t have
+    been more fruitful. We are going to try the new network he read about.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This network is predominantly inspired by the Inception-Resnet-v2 network that
+    was briefly touched on in the previous chapter. This new network (which we will
+    call Minception) leverages all the state-of-the-art components used in the Inception-ResNet
+    v2 model and modifies them to suit the problem at hand. In this section, you will
+    learn this new model in depth. Particularly, Minception net has the following
+    elements:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A stem
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Inception-ResNet block A
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Inception-ResNet block B
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Reduction blocks (a new type of block to reduce output size)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Average pooling layer
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Final prediction layer
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Just like other Inception models, this has a stem and Inception blocks. However,
+    Minception differs from Inception Net v1 because it does not have auxiliary outputs,
+    as they have other techniques to stabilize the training. Another notable difference
+    is that Minception has two types of Inception blocks, whereas Inception Net v1
+    reuses the same format throughout the network. While discussing the different
+    aspects of Minception, we will compare it to Inception Net v1 (which we implemented)
+    in more detail. In a later section, we will discuss the architecture of the Inception-ResNet
+    v2 model in more detail and compare that to Minception. The code for this is available
+    at Ch07-Improving-CNNs-and-Explaining/7.1.Image_Classification_Advance.ipynb.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.2.1 Implementing the stem
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: First and foremost, we should focus on the stem of the model. To refresh our
+    knowledge, a stem is a sequence of convolution and pooling layers and resembles
+    a typical CNN. Minception, however, has a more complex layout, as shown in figure
+    7.9.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![07-09](../../OEBPS/Images/07-09.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.9 Comparing the stems of Minception and Inception-v1\. Note how Minception
+    separates the nonlinear activation of convolution layers. This is because batch
+    normalization must be inserted in between the convolution output and the nonlinear
+    activation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can see that it has parallel streams of convolution layers spread across
+    the stem. The stem of the Minception is quite different from Inception Net v1\.
+    Another key difference is that Minception does not use local response normalization
+    (LRN) but something far more powerful known as *batch normalization*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Batch normalization: A versatile normalization technique to stabilize and accelerate
+    the training of deep networks'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Batch normalization (BN) was introduced in the paper “Batch Normalization:
+    Accelerating Deep Network Training by Reducing Internal Covariate Shift” by Sergey
+    Ioffe et al. ([http://proceedings.mlr.press/v37/ioffe15.pdf](http://proceedings.mlr.press/v37/ioffe15.pdf)).
+    As the name suggests, it is a normalization technique that normalizes the intermediate
+    outputs of deep networks.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '“Why is this important?” you might ask. It turns out deep networks can cause
+    massive headaches if not properly cared for. For example, a batch of improperly
+    scaled/ anomalous inputs during training or incorrect weight initialization can
+    lead to a poor model. Furthermore, such problems can amplify along the depth of
+    the network or over time, leading to changes to the distribution of the inputs
+    received by each layer over time. The phenomenon where the distribution of the
+    inputs is changed over time is known as a *covariate shift*. This is very common,
+    especially in streaming data problems. Batch normalization was invented to solve
+    this problem. Let’s understand how BN solves this problem. The batch normalization
+    layer does the following things:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Normalize *x*^((k)), the outputs of the *k*^(th) layer of the network using
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '![07_09a](../../OEBPS/Images/07_09a.png)'
+  prefs:
+  - PREF_UL
+  type: TYPE_IMG
+- en: Here, *E*[*x*^((k))] represents the mean of the output, and *Var*[*x*^((k))]
+    is the variance of the output. Both *E*[*x*^((k))] and *Var*[*x*^((k))] are vectors.
+    For a fully connected layer with n nodes, both *E*[*x*^((k))] and *Var*[*x*^((k))]
+    are n-long vectors (computed by taking mean-over-batch dimension). For a convolutional
+    layer with f filters/kernels, *E*[*x*^((k))] and *Var*[*x*^((k))] will be f-long
+    vectors (computed by taking mean over batch, height, and width dimensions).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Scale and offset the normalized output using two trainable hyperparameters,
+    γ and β (defined separately for each layer), as
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*y*^((k)) = *γ*^((k))*x̂*^((k)) + *β^((k))*'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In this process, computing *E*(*x*) and *Var*(*x*) gets a bit tricky, as these
+    need to be treated differently in the training and testing phases.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: During training, following the stochastic (i.e., looking at a random batch of
+    data instead of the full data set at a given time) nature of the training for
+    each batch, *E*(*x*) and *Var*(*x*) are computed using only that batch of data.
+    Therefore, for each batch, you can compute *E*(*x*) (mean) and *Var*(*x*) (variance)
+    without worrying about anything except the current batch.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Then, using each *E*(*x*) and *Var*(*x*) computed for each batch of data, we
+    estimate *E*(*x*) and *Var*(*x*) for the population. This is achieved by computing
+    the running mean of *E*(*x*) and *Var*(*x*). We will not discuss how the running
+    mean works. But you can imagine the running mean as an efficiently computed approximate
+    representation of the true mean for a large data set.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: During the testing phase, we use the population-based *E*(*x*) and *Var*(*x*)
+    that we computed earlier and perform the earlier defined computations to get *y*^((k)).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Due to the complex steps involved in the batch normalization, it will take quite
+    some effort to implement this from the scratch. Luckily, you don’t have to. There
+    is a batch normalization layer provided in TensorFlow ([http://mng.bz/Qv0Q](http://mng.bz/Qv0Q)).
+    If you have the output of some dense layer (let’s call it dense1) to inject batch
+    normalization, all you need to do is
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: Then TensorFlow will automatically take care of all the complex computations
+    that need to happen under the hood for batch normalization to work properly. Now
+    it’s time to use this powerful technique in our Minception model. In the next
+    listing, you can see the implementation of the stem of Minception net. We will
+    write a function called stem, which allows us to turn on/off batch normalization
+    at will.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 7.6 Defining the stem of Minception
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Defines the function. Note that we can switch batch normalization on and off.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ The first part of the stem until the first split
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Note that first batch normalization is applied before applying the nonlinear
+    activation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Nonlinear activation is applied to the layer after the batch normalization
+    step.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ The two parallel streams of the first split
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❻ Concatenates the outputs of the two parallel streams in the first split
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❼ First stream of the second split
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❽ Second stream of the second split
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❾ Concatenates the outputs of the two streams in the second split
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❿ The third (final split) and the concatenation of the outputs
+  prefs: []
+  type: TYPE_NORMAL
+- en: A key change you should note is that the nonlinear activation of each layer
+    is separated from the layers. This is so that batch normalization can be inserted
+    in between the output of the layer and the nonlinear activation. This is the original
+    way to apply batch normalization, as discussed in the original paper. But whether
+    BN should come before or after the nonlinearity is an ongoing discussion. You
+    can find a casual discussion on this topic at [http://mng.bz/XZpp](http://mng.bz/XZpp).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.2.2 Implementing Inception-ResNet type A block
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: With the stem of the network behind us, let’s move forward to see what the Inception
+    blocks look like in Minception net. Let’s quickly revisit what the Inception block
+    is and why it was developed. The Inception block was developed to maximize the
+    representational power of convolution layers while encouraging sparsity in model
+    parameters and without shooting the memory requirements through the roof. It does
+    this by having several parallel convolution layers with varying receptive field
+    sizes (i.e., kernel sizes). The Inception block in Minception net uses mostly
+    the same framework. However, it introduces one novel concept, known as *residual
+    connections*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Residual/skip connections: Shortcuts to stable gradients'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We have already touched lightly on residual connections, which introduce one
+    of the simplest operations you can think of in mathematics: element-wise adding
+    of an input to an output. In other words, you take a previous output of the network
+    (call it x) and add it to the current output (call it y), so you get the final
+    output z as z = x + y.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![07-09-unnumb-1](../../OEBPS/Images/07-09-unnumb-1.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: How skip/residual connections are added between convolution layers
+  prefs: []
+  type: TYPE_NORMAL
+- en: One thing to be aware of when implementing residual connections is to make sure
+    their sizes match, as this is an element-wise addition.
+  prefs: []
+  type: TYPE_NORMAL
+- en: What is residual about residual connections? Mathematical view
+  prefs: []
+  type: TYPE_NORMAL
+- en: It might not be obvious at first, but it’s not clear what is residual about
+    skip connections. Assume the following scenario. You have an input x; next you
+    have some layer, F(x) = y, that takes an input x and maps it to y. You implement
+    the following network.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![07-09-unnumb-2](../../OEBPS/Images/07-09-unnumb-2.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Mathematical view of residual connections
+  prefs: []
+  type: TYPE_NORMAL
+- en: y[k] = F(x)
+  prefs: []
+  type: TYPE_NORMAL
+- en: y[k] [+ 1] = F(y[k])
+  prefs: []
+  type: TYPE_NORMAL
+- en: y[k] [+ 2] = y[k] [+ 1] + x
+  prefs: []
+  type: TYPE_NORMAL
+- en: y[k] [+ 2] = y[k] [+ 1] + G(x); let us consider the residual connections as
+    a layer that does identity mapping and call it G.
+  prefs: []
+  type: TYPE_NORMAL
+- en: y[k] [+ 2] - y[k] [+ 1] = G(x) or
+  prefs: []
+  type: TYPE_NORMAL
+- en: G(x) = y[k] [+ 2] - y[k] [+ 1]; G, in fact, represents the residual between
+    the final output and the previous output.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'By considering final output as a layer H that takes x and y[k] [+ 1] as inputs,
+    we obtain the following equation:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: G(x) = H(x, y[k] [+ 1]) - F(y[k])
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can see how the residual enters the picture. Essentially, G(x) is a residual
+    between the final layer output and the previous layer’s output
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'It could not be easier to implement residual connections. Assume you have the
+    following network:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: You’d like to create a residual connection from d1 to d3. Then all you need
+    to do is
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: or, if you want to use a Keras layer (equivalent to the previous operation),
+    you can do
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'There you have it: d4 is the output of a residual connection. You might remember
+    that I said the output sizes must match in order for the residual connections
+    to be added. Let’s try adding two incompatible shapes. For example, let’s change
+    the Dense layer to have 30 nodes instead of 20:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If you try to run this code, you’ll get the following error:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As you can see, TensorFlow is complaining that it was not able to broadcast
+    (in this context, this means performing element-wise addition) two tensors with
+    shapes 30 and 20\. This is because TensorFlow doesn’t know how to add a (batch_size,
+    20) tensor to (batch_size, 30). If you see a similar error when trying to implement
+    residual connections, you should go through the network outputs and make sure
+    they match. To get rid of this error, all you need to do is change the code as
+    follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Minception has two types of Inception blocks (type A and type B). Now let’s
+    write Inception-ResNet block (type A) as a function inception_resnet_a. Compared
+    to the Inception block you implemented earlier, this new inception block has the
+    following additions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Uses batch normalization
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Uses a residual connection from the input to the final output of the block
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Figure 7.10 compares Inception-ResNet block type A of Minception to Inception
+    Net v1\. An obvious difference is that Inception Net v1 does not harness the power
+    of residual connections.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![07-10](../../OEBPS/Images/07-10.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.10 Comparison between Inception-ResNet block A (Minception) and Inception
+    net v1’s Inception block
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s now implement the Minception-ResNet block A. Figure 7.11 shows the type
+    of computations and their connectivity that need to be implemented (listing 7.7).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![07-11](../../OEBPS/Images/07-11.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.11 Illustration of the Minception-ResNet block A with annotations from
+    code listing 7.7
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 7.7 Implementation of Minception-ResNet block A
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ The first parallel stream in the block
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ The second parallel stream in the block
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ The third parallel stream in the block
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Concatenate the outputs of the three separate streams.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Incorporate the residual connection (which is multiplied by a factor to improve
+    the gradient flow).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Though the function appears long, it is mostly playing Legos with convolution
+    layers. Figure 7.11 provides you the mental map between the visual inception layer
+    and the code. A key observation is how the batch normalization and the nonlinear
+    activation (ReLU) are applied in the top part of the block. The last 1 × 1 convolution
+    uses batch normalization, not nonlinear activation. Nonlinear activation is only
+    applied after the residual connections.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We are now going to see how to implement the Inception-ResNet B block.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.2.3 Implementing the Inception-ResNet type B block
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Next up is the Inception-ResNet type B block in the Minception network. We will
+    not talk about this at length as it is very similar to the Inception-ResNet A
+    block. Figure 7.12 depicts the Inception-ResNet B block and compares it to Inception-ResNet
+    A block. Block B looks relatively simpler than block A, with only two parallel
+    streams. The code-related annotations help you map the mental model of the Inception
+    block to the code, as shown in the following listing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![07-12](../../OEBPS/Images/07-12.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.12 Minception’s Inception-ResNet block B (left) and Minception’s Inception-ResNet
+    block A (right) side by side
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 7.8 The implementation of Minception-ResNet block B
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ The first parallel stream in the block
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ The second parallel stream in the block
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Concatenate the results from the two parallel streams.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ The final convolution layer on top of the concatenated result
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Applies the weighted residual connection
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is quite similar to the function inception_resnet_a(...), with two parallel
+    streams and residual connections. The differences to note are that the type A
+    block has a larger number of convolution layers than the type B block. In addition,
+    the type A block uses a 5 × 5 convolution (factorized to two 3 × 3 convolution
+    layers) and type B uses a 7 × 7 convolution (factorized to 1 × 7 and 7 × 1 convolution
+    layers). I will leave it up to the reader to explore the function in detail.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.2.4 Implementing the reduction block
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Inspired by Inception-ResNet models, Minception also uses reduction blocks.
+    Reduction blocks are quite similar to Resnet blocks, with the exception of not
+    having residual connections in the blocks (see the next listing).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 7.9 Implementation of the reduction block of Minception
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ First parallel stream of convolutions
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Second parallel stream of convolutions
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Third parallel stream of pooling
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Concatenates all the outputs
+  prefs: []
+  type: TYPE_NORMAL
+- en: I will let figure 7.13 speak for itself in terms of explaining listing 7.9\.
+    But as you can see, at an abstract level it uses the same types of connections
+    and layers as the Inception blocks we discussed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![07-13](../../OEBPS/Images/07-13.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.13 Illustration of the reduction block
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now we’re going to see how we can complete the puzzle of Minception by collating
+    all the different elements we have implemented thus far.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.2.5 Putting everything together
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Great work so far. With all the basic blocks ready, our Minception model is
+    taking shape. Next, it’s a matter of putting things where they belong. The final
+    model uses the following components:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A single stem
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 1x Inception-ResNet block A
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 2x Inception-ResNet block B
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Average pooling
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Dropout
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Final prediction layer with 200 nodes and softmax activation
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'In addition, we will make a few more changes to the inputs of the model. According
+    to the original paper, the model takes in a 56 × 56 × 3-sized input instead of
+    a 64 × 64 × 3-sized input. This is done by the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Training phase*—Randomly cropping a 56 × 56 × 3-sized image from the original
+    64 × 64 × 3-sized image'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Validation/testing phase*—Center cropping a 56 × 56 × 3-sized image from the
+    original image'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Furthermore, we will introduce another augmentation step to randomly contrast
+    images during the training (as used in the paper). Unfortunately, you cannot achieve
+    either of these steps with the ImageDataGenerator. The good news is that since
+    TensorFlow 2.2, there have been several new image preprocessing layers introduced
+    ([http://mng.bz/yvzy](http://mng.bz/yvzy)). We can incorporate these layers just
+    like any other layer in the model. For example, we start with the input just like
+    before:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Then you import the RandomCrop and RandomContrast layers and use them as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: The final model looks like the following listing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 7.10 The final Minception model
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Define the 64 × 64 Input layer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Perform random cropping on the input (randomness is only activated during
+    training).
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Perform random contrast on the input (randomness is only activated during
+    training).
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Define the output of the stem.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Define the Inception-ResNet block (type A).
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❻ Define a reduction layer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❼ Define 2 Inception-ResNet block (type B).
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❽ Define the final prediction layer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❾ Define the model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❿ Compile the model with categorical crossentropy loss and the adam optimizer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Finally, our Minception model is ready for battle. It takes in a 64 × 64 × 3-sized
+    input (like the other models we implemented). It then randomly (during training)
+    or center (during validation/testing) crops the image and applies random contrast
+    adjustments (during training). This is taken care of automatically. Next, the
+    processed input goes into the stem of the network, which produces the output stem_out,
+    which goes into an Inception-ResNet block of type A and flows into a reduction
+    block. Next, we have two Inception-ResNet type B blocks, one after the other.
+    This is followed by an average pooling layer, a Flatten layer that squashes all
+    dimensions except the batch dimension to 1\. Then a dropout layer with 50% dropout
+    is applied on the output. Finally, a dense layer with 200 nodes (one for each
+    class) with softmax activation produces the final output. Lastly, the model is
+    compiled using the categorical cross-entropy loss and the adam optimizer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This ends our conversation about the Minception model. Do you want to know how
+    much this will boost our model’s performance? In the next section, we will train
+    the Minception model we defined.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.2.6 Training Minception
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Now we’re on to training the model. The training process is very similar to
+    what you already did for the Inception Net v1 model, with one difference. We are
+    going to use a learning rate reduction schedule to further reduce overfitting
+    and improve generalizability. In this example, the learning rate scheduler will
+    reduce the learning rate if the model’s performance doesn’t improve within a predefined
+    duration (see the next listing).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 7.11 Training the Minception model
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Sets up an early stopping callback
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Sets up a CSV logger to record metrics
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Sets up a learning rate control callback
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Trains the model
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When training deep networks, using a learning rate schedule instead of a fixed
+    learning rate is quite common. Typically, we get better performance by using a
+    higher learning rate at the beginning of the model training and then using a smaller
+    learning rate as the model progresses. This is because, as the model converges
+    during the optimization process, you should make the step size smaller (i.e.,
+    the learning rate). Otherwise, large step sizes can make the model behave erratically.
+    We can be smart about this process and reduce the learning rate whenever we do
+    not see an increase in an observed metric instead of reducing the learning rate
+    in fixed intervals. In Keras you can easily incorporate this into model training
+    via the callback ReduceLROnPlateau ([http://mng.bz/M5Oo](http://mng.bz/M5Oo)):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When using the callback, you need to set the following keyword arguments:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: monitor—Defines the observed metric. In our example, we will decide when to
+    reduce the learning rate based on validation loss.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: factor—The multiplicative factor to reduce the learning rate by. If the learning
+    rate is 0.01, a factor of 0.1, this means, on reduction, that the learning rate
+    will be 0.001.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: patience—Similar to early stopping, how many epochs to wait before reducing
+    the learning rate with no improvement in the metric.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: mode—Similar to early stopping, whether the metric minimization/maximization
+    should be considered as an improvement.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'When you train your model, you should get an output like the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: Amazing! We get a tremendous accuracy boost just by tweaking the model architecture.
+    We now have a model that has around 50% accuracy on the validation set (which
+    is equivalent to identifying 100/200 classes of objects accurately, or 50% of
+    images classified that are accurate for each class). You can see the interventions
+    made by the ReduceLROnPlateau callback in the output.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Finally, we save the model using
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Next, we can measure the model’s performance on the test set:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: This should give around 51% accuracy on the test set. That’s very exciting news.
+    We have almost doubled the performance of the previous model by paying more attention
+    to the structure of the model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is a good lesson that teaches us the vital role played by the model architecture
+    in deep learning. There’s a misconception that deep learning is the silver bullet
+    that solves anything. It is not. For example, you shouldn’t expect any random
+    architecture that’s put together to work as well as some of the state-of-the-art
+    results published. Getting a well-performing deep network can be a result of days
+    or even weeks of hyperparameter optimization and empirically driven choices.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next section, we will leverage transfer learning to reach a higher degree
+    of accuracy faster. We will download a pretrained model and finetune it on the
+    specific data set.
+  prefs: []
+  type: TYPE_NORMAL
+- en: NOTE On an Intel Core i5 machine with an NVIDIA GeForce RTX 2070 8GB, the training
+    took approximately 1 hour and 54 minutes to run 50 epochs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Exercise 3
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You have the following convolution block that you are using to implement an
+    image classifier:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'You would like to make the following two changes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Introduce batch normalization after applying the activation
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Create a residual connection from the output of the convolution layer to the
+    output of the batch normalization layers output.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '7.3 If you can''t beat them, join ‘em: Using pretrained networks for enhancing
+    performance'
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: So far, you have developed a good image classification model, which uses various
+    methods to prevent overfitting. The company was happy until your boss let out
+    the news that there’s a new competitor in town that is performing better than
+    the model you developed. Rumor is that they have a model that’s around 70% accurate.
+    So, it’s back to the drawing board for you and your colleagues. You believe that
+    a special technique known as transfer learning can help. Specifically, you intend
+    to use a pretrained version of Inception-ResNet v2 that is already trained on
+    the original ImageNet image classification data set; fine-tuning this model on
+    the tiny-imagenet-200 data set will provide better accuracy than all the models
+    implemented thus far.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you want to come close to state of the art, you must use every bit of help
+    you can get. A great way to begin this quest is to start with a pretrained model
+    and then fine-tune it for your task. A pretrained model is a model that has already
+    being trained on a similar task. This process falls under the concept of *transfer
+    learning*. For example, you can easily find models that have been pretrained on
+    the ILSVRC task.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '7.3.1 Transfer learning: Reusing existing knowledge in deep neural networks'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Transfer learning is a massive topic and is something for a separate chapter
+    (or even a book). There are many variants of transfer learning. To understand
+    different facets of transfer learning, refer to [https://ruder.io/transfer-learning/](https://ruder.io/transfer-learning/).
+    One method is to use a pretrained model and fine-tune it for the task to be solved.
+    The process looks like figure 7.14.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![07-14](../../OEBPS/Images/07-14.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.14 How transfer learning works. First, we start with a model that is
+    pretrained on a larger data set that is solving a similar/relevant task to the
+    one we’re interested in. Then we transfer the model weights (except the last layer)
+    and fit a new prediction layer on top of the existing weights. Finally, we fine-tune
+    the model on a new task.
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, you train the model on a task for which you already have a large labeled
+    data set (known as the pretrained task). For example, in image classification,
+    you have several large labeled data sets, including the ImageNet data set. Once
+    you train a model on the large data set, you get the weights of the network (except
+    for the final prediction layer) and fit a new prediction layer that matches the
+    new task. This gives a very good starting point for the network to solve the new
+    task. You are then able to solve the new task with a smaller data set, as you
+    have already trained your model on similar, larger data sets.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'How can we use transfer learning to solve our problem? It is not that difficult.
+    Keras provides a huge model repository for image classification tasks ([http://mng.bz/aJdo](http://mng.bz/aJdo)).
+    These models have been trained predominantly on the ImageNet image classification
+    task. Let’s tame the beast produced in the lineage of Inception networks: Inception-ResNet
+    v2\. Note that the code for this section can be found at Ch07-Improving-CNNs-and-Explaining/7.2.Transfer_Learning.ipynb.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Inception-ResNet v2
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We briefly touched on the Inception-ResNet v2 model. It was the last Inception
+    model produced. Inception-ResNet v2 has the following characteristics that set
+    it apart from other inception models:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Redesigned stem that removes any representational bottlenecks
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Inception blocks that use residual connections
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Reduction modules that reduce the height/width dimensions of the inputs
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Does not use auxiliary outputs as in the early Inception nets
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: As you can see, the redesigned stem, Inception-ResNet blocks, and reduction
+    modules are being used in the Minception model. And if you compare the diagrams
+    of Minception that are provided to the diagrams in the original paper, you will
+    see how many similarities they share. Therefore, we will not repeat our discussion
+    of these components. If you still want to see the specific details and illustrations
+    of the different components, refer to the original paper ([https://arxiv.org/pdf/1602.07261.pdf](https://arxiv.org/pdf/1602.07261.pdf)).
+    However, the high-level architecture of Inception-ResNet v2 looks like the following
+    figure.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![07-14-unnumb-3](../../OEBPS/Images/07-14-unnumb-3.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: The overall architecture of Inception-ResNet v2 architecture
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You can download the Inception-ResNet v2 model with a single line:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here, include_top=False means that the final prediction layer will be discarded.
+    It is necessary because the original inception net is designed for 1,000 classes.
+    However, we only have 200 classes. pooling='avg' ensures that the last pooling
+    layer in the model is an average pooling layer. Next, we will create a new model
+    that encapsulates the pretrained Inception-ResNet v2 model as the essence but
+    is modified to solve the tiny-ImageNet classification task, as shown in the next
+    listing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 7.12 Implementing a model based on the pretrained Inception-ResNet v2
+    model
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Some important imports
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Defining an input layer for a 224 × 224 image
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ The pretrained weights of the Inception-ResNet v2 model
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Apply 40% dropout
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Final prediction layer with 200 classes
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❻ Using a smaller learning rate since the network is already trained on ImageNet
+    data (chosen empirically)
+  prefs: []
+  type: TYPE_NORMAL
+- en: Here, you can see that we are defining a sequential model that
+  prefs: []
+  type: TYPE_NORMAL
+- en: First defines an input layer of size 224 × 224 × 3 (i.e., height = 224, width
+    = 224, channels = 3)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Defines the Inception-ResNet v2 model as a layer
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Uses a dropout of 40% on the last average pooling layer
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Defines a dense layer that uses softmax activation and has 200 nodes
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: One crucial challenge we need to deal with is that the original input Inception-ResNet
+    v2 is designed to consume is size 224 × 224 × 3\. Therefore, we will need to find
+    a way to present our inputs (i.e., 64 × 64 × 3) in a way that complies with Inception-ResNet
+    v2’s requirements. In order to do that, we will make some changes to the ImageDataGenerator,
+    as the following listing shows.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 7.13 The modified ImageDataGenerator that produces 224 × 224 images
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Defines a data-augmenting image data generator and a standard image data generator
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Defines a partial function to avoid repeating arguments
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Uses a target size of 224 × 224
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Uses bilinear interpolation to make images bigger
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Defines the data generators for training and validation sets
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❻ Defines the test data generator
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❼ Uses a target size of 224 × 224 and bilinear interpolation
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❽ Defines the batch size and target size
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❾ Gets the train/valid/test modified data generators using the data_gen_augmented
+    function
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Finally, it’s time for the grand unveil! We will train the best model we’ve
+    come up with:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The training will be identical to the earlier training configuration we used
+    when training the Minception model. We will not repeat the details. We are using
+    the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Metric logging
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Early stopping
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Learning rate scheduling
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: NOTE On an Intel Core i5 machine with an NVIDIA GeForce RTX 2070 8GB, the training
+    took approximately 9 hours and 20 minutes to run 23 epochs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You should get a result similar to the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Isn’t this great news? We have reached around 74% validation accuracy by combining
+    all we have learned. Let’s quickly look at the test accuracy of the model:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: This should show you around ~79% accuracy. It hasn’t been an easy journey, but
+    you obviously have surpassed your competitor’s model of ~70% accuracy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next section, we will look at the importance of model explainability.
+    We will learn about a technique that we can use to explain the knowledge embedded
+    in our model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Inception-ResNet v2 versus Minception
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The stem of the Minception and Inception-Resnet-v2 are identical in terms of
+    the innovations they introduce (e.g., Inception-ResNet blocks, reduction blocks,
+    etc.). However, there are the following low-level differences:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Inception-ResNet v2 has three different Inception block types; Minception has
+    only two.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Inception-ResNet v2 has two different types of reduction blocks; Minception
+    has only one.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Inception-ResNet v2 has 25 Inception layers, but Minception (the version we
+    implemented) has only three.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'There are also other minor differences, such as the fact that Inception-ResNet
+    v2 uses valid padding in a few layers of the model. Feel free to consult the Inception-ResNet
+    v2 paper if you want to know the details. Another notable observation is that
+    neither the Minception nor the Inception-ResNet v2 uses local response normalization
+    (LRN), as they use something far more powerful: batch normalization.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Exercise 4
+  prefs: []
+  type: TYPE_NORMAL
+- en: You want to implement a network using a different pretrained network known as
+    VGGNet (16 layers). You can obtain the pretrained network from tf.keras.applications.VGG16.
+    Next, you discard the top layer and introduce a max pooling layer on top. Then
+    you want to add two dense layers on top of the pretrained network with 100 (ReLU
+    activation) and 50 (Softmax activation) nodes. Implement this network.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '7.4 Grad-CAM: Making CNNs confess'
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The company can’t be happier about what you have done for them. You have managed
+    to build a model that not only beat the performance of the competitor, but also
+    is one of the best in production. However, your boss wants to be certain that
+    the model is trustworthy before releasing any news on this. Accuracy alone is
+    not enough! You decide to demonstrate how the model makes predictions using a
+    recent model interpretation technique known as *Grad-CAM*. Grad-CAM uses the magnitude
+    of the gradients generated for a given input with respect to the model’s predictions
+    to provide visualizations of where the model focused. A large magnitude of gradients
+    in a certain area of an image means that the image focuses more in that area.
+    And by superimposing the gradient magnitudes depicted as a heatmap, you are able
+    to produce an attractive visualization of what the model is paying attention to
+    in a given input.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Grad-CAM (which stands for gradient class activation map) is a model interpretation
+    technique introduced for deep neural networks by Ramprasaath R. Selvaraju et al.
+    in “Grad-CAM: Visual Explanations from Deep Networks via Gradient-based Localization”
+    ([https://arxiv.org/pdf/1610.02391.pdf](https://arxiv.org/pdf/1610.02391.pdf)).
+    Deep networks are notorious for their inexplicable nature and are thus termed
+    *black boxes*. Therefore, we must do some analysis and ensure that the model is
+    working as intended.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The following code delineates how Grad-CAM works its magic, and the implementation
+    is available in the notebook Ch07-Improving-CNNs-and-Explaining/7.3 .Interpreting_CNNs_GradCAM.ipynb.
+    In the interest of conserving the length of this chapter, we will discuss only
+    the pseudocode of this approach and will leave the technical details to appendix
+    B (see the next listing).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 7.14 Pseudocode of Grad-CAM computations
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: The key computation that is performed by Grad-CAM is, given an input image,
+    taking the gradient of the node that corresponds to the true class of the image
+    with respect to the last convolution output of the model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The magnitude of the gradient at each pixel of the images represents the contribution
+    that pixel made to the final outcome. Therefore, by representing Grad-CAM output
+    as a heatmap, resizing to match the original image, and superimposing that on
+    the original image, you can get a very attractive and informative plot of where
+    the model focused to find different objects. The plots are self-explanatory and
+    show whether the model is focusing on the correct object to produce a desired
+    prediction. In figure 7.15, we show which areas the model focuses on strongly
+    (red/dark = highest focus, blue/light = less focus).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![07-15](../../OEBPS/Images/07-15.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.15 Visualization of the Grad-CAM output for several probe images. The
+    redder/darker an area in the image, the more the model focuses on that part of
+    the image. You can see that our model has learned to understand some complex scenes
+    and separate the model that it needs to focus on.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 7.15 (i.e., visualization of Grad-CAM) shows that our model is truly
+    an intelligent model. It knows where to focus to find a given object, even in
+    cluttered environments (e.g., classifying the dining table). As mentioned earlier,
+    the redder/ darker the area, the more the model focuses on that area to make a
+    prediction. Now it’s time for you to demonstrate the results to your boss and
+    build the needed confidence to go public with the new model!
+  prefs: []
+  type: TYPE_NORMAL
+- en: We will end our discussion about image classification here. We have learned
+    about many different models and techniques that can be used to solve the problem
+    effectively. In the next chapter, we will discuss a different facet of computer
+    vision known as image segmentation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Image augmentation, dropout, and early stopping are some of the common techniques
+    used to prevent overfitting in vision deep networks.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Most of the common image augmentation steps can be achieved through the Keras
+    ImageDataGenerator.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: It is important to pay attention to the architecture of the model chosen for
+    a given problem. One should not randomly choose an architecture but research and
+    identify an architecture that has worked for a similar problem. Otherwise, choose
+    the architecture through hyperparameter optimization. The Minception model’s architecture
+    has been proven to work well on the same data we used in this chapter.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Transfer learning enables us to use already trained models to solve new tasks
+    with better accuracy.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In Keras you can get a given model with a single line of code and adapt it to
+    the new task.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Various pretrained networks are available at [http://mng.bz/M5Oo](http://mng.bz/M5Oo).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Grad-CAM (gradient class activation map) is an effective way to interpret your
+    CNN.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Grad-CAM computes where the model focused the most based on the magnitude of
+    gradients produced with respect to the prediction made by the model.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Answers to exercises
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '**Exercise 1**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You should reduce the dropout rate to keep more nodes switched during training
+    if underfitting is occurring:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Early stopping is introduced using the EarlyStopping callback:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '**Exercise 2**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE44]'
+  prefs: []
+  type: TYPE_PRE
+- en: '**Exercise 3**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE45]'
+  prefs: []
+  type: TYPE_PRE
+- en: '**Exercise 4**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE46]'
+  prefs: []
+  type: TYPE_PRE

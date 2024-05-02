@@ -1,0 +1,1539 @@
+- en: 3 Keras and data retrieval in TensorFlow 2
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter covers
+  prefs: []
+  type: TYPE_NORMAL
+- en: Different APIs for building models in Keras
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Retrieving and manipulating persisted data
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: We have explored the details of the low-level TensorFlow API, such as defining
+    tf.Variable objects and tf.Tensor objects, which can be used to store things like
+    numbers and strings. We also looked at some of the commonly used functionality
+    provided in TensorFlow in the form of tf.Operation. Finally, we looked at some
+    complex operations, such as matrix multiplication and convolution, in detail.
+    If you analyze any standard deep neural network, you will see that it is made
+    from standard mathematical operations such as matrix multiplication and convolution.
+  prefs: []
+  type: TYPE_NORMAL
+- en: However, if you were to implement these networks using the low-level TensorFlow
+    API, you’d find yourself replicating these operations in code many times, costing
+    you valuable hours and making the code unmaintainable. But the good news is that
+    you don’t have to. TensorFlow provides a submodule called Keras that takes care
+    of this problem, and this is the focus of this chapter. Keras is a sub-library
+    in TensorFlow that hides building blocks and provides a high-level API for developing
+    machine learning models. In this chapter, we will see that Keras has several different
+    APIs to choose from, depending on the complexity of your solution.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We will conclude this chapter by discussing another important aspect of machine
+    learning: feeding data to models. Typically, we need to retrieve data from the
+    disk (or web) and clean and process the data before feeding it to the model. We
+    will discuss several different data retrieval facilities in TensorFlow such as
+    the tf.data and tensorflow-datasets APIs and how they simplify reading and manipulating
+    data that eventually feeds into models.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 3.1 Keras model-building APIs
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'You are developing a flower species classifier as part of a hackathon. Your
+    team is going to create several different variations of multilayer perceptron
+    to compare their performance against a flower species identification data set.
+    The goal is to train the models that can output the flower species given several
+    measurements of the flowers. The models you have to develop are as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Model A*—A model that learns only from the provided features (baseline)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Model B*—A model that uses the principal components of the features in addition
+    to the features themselves (details discussed in section 3.1.3)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Model C*—A model that uses an unorthodox hidden layer computation, which uses
+    a multiplicative bias, in addition to the additive bias, not typically found in
+    neural networks (details discussed in section 3.1.4)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: You are planning to use Keras, and you know it offers multiple model-building
+    APIs. In order to provide the results quickly, you need to know which Keras API
+    to use for which model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Keras ([https://keras.io/](https://keras.io/)) initially started as a high-level
+    API that can use multiple low-level backends (e.g., TensorFlow, Theano) and allow
+    developers to build machine learning models easily. In other words, Keras hides
+    the gory details of low-level operations and provides an intuitive API with which
+    you can build models with a few lines of code. Since TensorFlow 1.4, Keras has
+    been integrated into TensorFlow ([https://www.tensorflow.org/guide/keras/overview](https://www.tensorflow.org/guide/keras/overview)).
+    You can import Keras using import tensorflow.keras. Keras has three main APIs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Sequential
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Functional
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Sub-classing
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The Sequential API is the easiest to use. However, it is a very constrictive
+    API that only allows you to create a network that starts with one input, go through
+    a sequence of layers, and end with one input. Next, the functional API requires
+    more work to use. But it also provides more flexibility, such as having multiple
+    inputs, parallel layers, and multiple outputs. Finally, the sub-classing API can
+    be identified as the most difficult to wield. The idea is to create a Python object
+    that represents your model or a layer in your model while using the low-level
+    functionality provided by TensorFlow to achieve what’s needed. Let’s briefly go
+    over how you can use these APIs. But we won’t stop there; we will look at these
+    APIs in more detail in the coming chapters. Figure 3.1 highlights the main differences
+    between the APIs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![03-01](../../OEBPS/Images/03-01.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 3.1 Sequential, functional, and sub-classing APIs in comparison.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Here, for model A we will use the Sequential API, as it is the simplest. To
+    implement model B, which will have two input layers, we will use the functional
+    API. Finally, to implement model C, for which we will need to implement a custom
+    layer, we will use the sub-classing API.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 3.1.1 Introducing the data set
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Say you decided to use a popular machine learning data set known as the Iris
+    data set ([https://archive.ics.uci.edu/ml/datasets/Iris](https://archive.ics.uci.edu/ml/datasets/Iris)).
+    This data set records sepal length, sepal width, petal length, and petal width
+    for several different species of Iris flowers: Iris-setosa, Iris-versicolor, and
+    Iris-virginica. For each flower, we have the sepal length/width and the petal
+    length/width. As you can see, each input has four features, and each input can
+    belong to one of three classes. To start, let’s download the data, do some quick
+    analysis on it, and put it in a format that we can readily use for model training.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Initially, you need to make sure the environment is set up and the libraries
+    are installed, as outlined in appendix A. Next, open the Jupyter notebook found
+    at Ch03-Keras-and-Data-Retrieval/3.1.Keras_APIs.ipynb. Now, as shown in the code
+    found in the notebook, we need to import the requests library for downloading
+    data, pandas for manipulating that data, and, of course, TensorFlow:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now we will download the data and save the data to a file:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We then read the data using pandas library’s read_csv() function ([http://mng.bz/j2Op](https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.read_csv.xhtml)):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Here, iris_df is a pandas DataFrame ([http://mng.bz/Wxaw](https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.xhtml)).
+    In its simplest form, a data frame can be thought as an informative matrix organized
+    into rows and columns. You can inspect the first few rows of the data using the
+    iris_df.head() command, which produces the following result:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: Then, we will make some cosmetic changes to the data to make it look better.
+    We will provide appropriate column names (available from the data set’s webpage)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'and mapping the string label to an integer:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We end up with the following improved pandas DataFrame in our possession:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As the last step, we will shuffle the data by and separate the data features
+    as x and data labels as y. We will also center the data by subtracting the mean
+    from each column, as this usually leads to better performance:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here, print(x) will print out
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note how the indices are not in order after shuffling the data. print(y) will
+    output
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Shuffling the data is an important step: the data is in a very specific order,
+    with each class appearing one after another. But you achieve the best results
+    when data has been shuffled so that each batch presented to the network has a
+    good mix of all classes found in the full data set. You can also see that we used
+    a transformation on y (or labels), known as *one-hot encoding*. One-hot encoding
+    converts each label to a unique vector of zeros, where a single element is one.
+    For example, the labels 0, 1, and 2 are converted to the following one-hot encoded
+    vectors:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 0 → [1, 0, 0]
+  prefs: []
+  type: TYPE_NORMAL
+- en: 1 → [0, 1, 0]
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2 → [0, 0, 1]
+  prefs: []
+  type: TYPE_NORMAL
+- en: 3.1.2 The Sequential API
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: With the data ready to be fed in, it’s time to implement model A, the first
+    neural network. The first model is quite straightforward and only needs to take
+    the provided features and predict the flower species. You can use the Keras Sequential
+    API, as it is the simplest, and all we need to do is stack several layers on top
+    of each other sequentially. Figure 3.2 depicts the Sequential API compared to
+    other APIs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![03-02](../../OEBPS/Images/03-02.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 3.2 The Sequential API compared to other APIs (grayed out)
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s create a network that has the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: An input layer of 4 nodes
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A 32-node hidden layer
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A 16-node hidden layer
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A 3-node output layer
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Note The number of nodes for each layer is a hyperparameter of the model. In
+    this case, we chose these values arbitrarily. But to obtain the best results,
+    we should use a hyperparameter optimization algorithm ([http://mng.bz/8MJB](http://mng.bz/8MJB))
+    to find the best hyperparameters for a given problem.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Before we define the model, we need to import certain layers and the sequential
+    model from TensorFlow. Then you can implement this model using just a single line
+    of code (see the next listing).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 3.1 Model A implemented with the Sequential API
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Import necessary modules and classes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Clear the TensorFlow computational graph before creating the model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Define the model with the Sequential API.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s analyze what we just did. You can create a sequential model using the
+    Sequential object and then pass a sequence of layers, such as the Dense layer.
+    A layer encapsulates typical reusable computations you can find in a neural network
+    (e.g., hidden layer computation, convolution operations).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The Dense layer offers the core computation that happens in a fully connected
+    network (i.e., going from an input (x) to a hidden output (h) using *h* *=* *activation*(*xW*
+    *+* *b*)). The Dense layer has two important parameters: the number of hidden
+    units and the nonlinear activation. By stacking a set of Dense layers, you have
+    a multilayer, fully connected network. We are building the network using the following
+    layers:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Dense(32, activation='relu', input_shape=(4,))
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Dense(16, activation='relu')
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Dense(3, activation='softmax')
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In the first Dense layer you can see that an additional parameter called input_shape
+    has been passed. input_shape is a key attribute in any model you create with TensorFlow.
+    It is imperative that you know the exact shape of the input you want to pass to
+    a model because the output of all the layers that follow depends on the shape
+    of the input. In fact, certain layers can only process certain input shapes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this example, we are saying the input will be of shape [None, 4]. Though
+    we have only specified 4 in the shape, Keras automatically adds an unspecified
+    (i.e., None) dimension to the input_shape, which represents the batch dimension
+    of the input. As you probably already know, deep neural networks process data
+    in batches (i.e., more than a single example at once). The other dimension (of
+    size 4) is the feature dimension, meaning that the network can accept an input
+    that has four features in it. Having the batch dimension as None leaves the batch
+    dimension unspecified, allowing you to pass any arbitrary number of examples at
+    model training/ inference time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Another important aspect of a layer is the nonlinear activation used in the
+    layer. Here, we can see that the first two layers use ReLU (rectified linear units)
+    activation. It is a very simple yet powerful activation that’s prevalent in feed-forward
+    models. ReLU does the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*y* = max (0, *x*)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The final layer has a softmax activation. As previously discussed, softmax activation
+    normalizes the final scores of the last layer (i.e., logits) to a valid probability
+    distribution. Specifically,
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![03_02a](../../OEBPS/Images/03_02a.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: As an example, assume the final layer without the softmax activation produced
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: Applying the softmax normalization converts these values to
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now that the model is defined, we need to perform a crucial step, known as *model
+    compilation*, if we are to successfully use it. For our model we will use
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here, we are setting the model up with a loss function, optimizer, and metric.
+    The loss function says how good or bad the model is doing on the given data (e.g.,
+    categorical cross-entropy). The lower the loss, the better. Along with that loss
+    function, we use an optimizer, which knows how to change the weights and biases
+    of the model in such a way that the loss is reduced. Here, we chose the loss categorical_crossentropy
+    ([http://mng.bz/EWej](http://mng.bz/EWej)), which typically works well for multiclass
+    classification problems and the optimizer adam ([https://arxiv.org/pdf/1412.6980.pdf](https://arxiv.org/pdf/1412.6980.pdf)),
+    which is a common choice due to its remarkable performance in a variety of problems.
+    We can also optionally define metrics to keep an eye on the model (e.g., model
+    accuracy). Finally, we can inspect the model you just created using
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: which outputs
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The model summary clearly shows the number of layers, type of layers, output
+    shape of each layer, and number of parameters in each layer. Let’s train this
+    model to classify various iris flowers using the data set we prepared earlier.
+    We train a Keras model using the convenient fit() function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The fit() function accepts many different arguments:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: X—Data features
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Y—Data labels (one-hot encoded)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: batch size (optional)—Number of data points in a single batch
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: epochs (optional)—Number of times repeating the data set during model training
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The values, such as batch_size and epochs, have been chosen empirically. If
+    you run the previous code, you will get the following result:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: It looks like our mini project was reasonably successful, as we observe a steady
+    increase of the training accuracy (“acc”) up to 74% in just 25 epochs. However,
+    it is not advisable to rely only on the training accuracy to decide if a model
+    has performed better. There are various techniques to do so, which we will review
+    in the coming chapters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Reproducibility in machine learning
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Reproducibility is an important concept in machine learning. Reproducibility
+    means that you can run an experiment, publish the results, and ensure that someone
+    interested in your research can reproduce the results. It also means that you
+    will get the same result across multiple trials. If you look at the notebook ch02/1.Tensorflow_
+    Fundamentals.ipynb, you will see one such measure we have taken to make sure the
+    results are consistent across multiple trials. You will see the following code
+    in the “Library imports and some setups” section:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: The random seed is a common element that affects the reproducibility of the
+    research as neural networks ubiquitously use random initializations. By fixing
+    the seed, you make sure you will get the same random number sequence every time
+    you run your code. This means that the weight and bias initializations of your
+    model will be the same across multiple trials. This results in the same accuracy
+    values given the other conditions are not changed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To make sure that your code is producing consistent results, make sure you call
+    the fix_random_seed function (by running the first code cell) when you are trying
+    out the code exercises.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 3.1.3 The functional API
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Now it’s time to implement the second model (i.e., Model B) that uses principal
+    components as an extra set of inputs. The hope is that this additional input (the
+    principal components) will provide additional features to the model, which will
+    improve model performance. Principal components are extracted using an algorithm
+    known as *principal component analysis* (PCA). PCA is a dimensionality reduction
+    technique that will project high-dimensional data to a lower-dimensional space
+    while trying to preserve the variance present in the data. Now you need to create
+    a model that takes two different input feature sets.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You no longer can use the Sequential API as it is only designed to handle sequential
+    models (i.e., single input layer going through a sequence of layers to produce
+    a single output). Here, we have two different inputs: the raw features of flowers
+    and the PCA features. That means two layers work in parallel to produce two different
+    hidden representations, concatenate that, and finally produce the class probabilities
+    for the inputs, as highlighted in figure 3.3\. The functional API is a great choice
+    for these kind of models, as it can be used to define models with multiple inputs
+    or multiple outputs.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![03-03](../../OEBPS/Images/03-03.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 3.3 The functional API compared to other APIs (grayed out)
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s get started. First, we need to import the following layer and model objects,
+    as these will make the core of our model:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Next, we need to create two Input layers (for the raw input features and the
+    PCA features):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: The Input layer for the raw input features will have four feature columns, whereas
+    the Input layer for the PCA features will have two feature columns (as we are
+    only keeping the first two principal components). If you look back at how we defined
+    the model using the Sequential API, you will notice we didn’t use an Input layer.
+    This is automatically added when using the Sequential API. However, when using
+    the functional API, we need to explicitly specify the Input layers we need to
+    include in our model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'With the two Input layers defined, we can now compute individual hidden representations
+    for those layers:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Here, out1 represents the hidden representation of inp1 (i.e., raw features)
+    and out2 is the hidden representation of inp2 (i.e., PCA features). We then concatenate
+    the two hidden representations:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Let’s delve into what happens when you use the Concatenate layer in more detail.
+    The Concatenate layer simply concatenates two or more inputs along a given axis.
+    In this example, we have two inputs to the Concatenate layer (i.e., [None, 16]
+    and [None, 16]) and want to concatenate them along the second axis (i.e., axis=1).
+    Remember that Keras adds an additional batch dimension to the input/output tensors
+    when you specify the shape argument. This operation results in a [None, 32]-sized
+    tensor. From this point on, you only have a single sequence of layers. We will
+    define a 16-node Dense layer with relu activation and finally an output layer
+    that has three nodes with softmax normalization:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We need to do one extra step: create a Model object that says what the inputs
+    and outputs are. As of now, we have a bunch of layers and no Model object. Finally,
+    we compile the model as we did before. We will choose categorical_crossentropy
+    as the loss and adam as the optimizer, as we did before. We will also monitor
+    the training accuracy:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: The full code for this model is provided in the following listing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 3.2 Model B implemented with the Keras functional API
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Making sure we are clearing out the TensorFlow graph
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ The two input layers. One input layer has four features; the other has two.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ The two parallel hidden layers
+  prefs: []
+  type: TYPE_NORMAL
+- en: '❹ The concatenation layer that combines two parallel outputs: out1 and out2'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ The model definition
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❻ Compiling the model with a loss, an optimizer, and a metric
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now you can print the model summary
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: which gives
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: What do you think about this summary representation? Can you tell what kind
+    of a model it is by looking at it? Unfortunately, no. Though we have parallel
+    layers in our model, the summary looks like we have a sequence of layer-processing
+    inputs and outputs one after another. Can we obtain a better representation than
+    this? Yes, we can!
+  prefs: []
+  type: TYPE_NORMAL
+- en: Keras also offers the ability to visualize the model as a network diagram. You
+    can easily do this with
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: If you run this command on a Jupyter notebook, you will have the inline output
+    of the following graph (figure 3.4). It is now much clearer to see what’s going
+    on in our model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![03-04](../../OEBPS/Images/03-04.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 3.4 An illustration of the model we created with the functional API.
+    You can see the parallel input layers and hidden layers at the top. The final
+    output layer is at the bottom.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you need to save this diagram to a file, simply do
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: If you need to see input/output sizes in addition to the layer names and types,
+    you can do that by setting the show_shapes parameter to True
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: which will return figure 3.5.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![03-05](../../OEBPS/Images/03-05.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 3.5 Keras model plot with show_shapes=True
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Remember that we have two inputs, original features (x) and the first two principal
+    components of x (let’s call it x_pca). You can compute the first two principal
+    components as follows (using the scikit-learn library):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: PCA is already implemented in scikit-learn. You define a PCA object and pass
+    the value 2 to the n_components argument. You also fix the random seed to ensure
+    consistency across trials. Then you can call the method fit_transform(x) to get
+    the final PCA features. You can train this model as you did before by calling
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: Sadly, you will not see much of an accuracy improvement. The results will be
+    on par with what you achieved earlier. In the given code example, you would have
+    around 6% accuracy improvement when using this model. However, you will see that
+    this gap will become smaller and smaller if you increase the number of epochs.
+    This is mostly because adding PCA features doesn’t really add much value. We are
+    reducing four dimensions to two, which is unlikely to result in better features
+    than what we already have. Let’s try our luck in the next exercise.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 3.1.4 The sub-classing API
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Back in the research lab, it is a bit disheartening to see that adding principal
+    components did not improve the results. However, the team is impressed with your
+    knowledge of exactly which API to use for a given model. A team member suggested
+    a final model. Currently a dense layer computes its output using
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*h* = α(*xW + b*)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: where α is some nonlinearity. You want to see if results can be improved by
+    adding another bias (i.e., in addition to the additive bias, we add a multiplicative
+    bias) so that the equation becomes
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*h* = α([*xW + b*] × *b*[mul])'
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is where layer sub-classing will save the day, as there is no prebuilt
+    layer in Keras that readily offers this functionality. The final API offered by
+    Keras is the sub-classing API (figure 3.6), which will allow us to define the
+    required computations as a unit of computation (i.e., a layer) and reuse it with
+    ease when defining a model. Sub-classing comes from the software engineering concept
+    of *inheritance*. The idea is that you have a super class that provides general
+    functionality for a type of object (e.g., a Layer class), and you sub-class (or
+    inherit) from that layer to create a more specific layer that achieves a specific
+    functionality.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![03-06](../../OEBPS/Images/03-06.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 3.6 Sub-classing API compared to other APIs (grayed out)
+  prefs: []
+  type: TYPE_NORMAL
+- en: The sub-classing API is drastically different from the sequential and functional
+    APIs. Here, you are creating a Python class that defines the underlying operations
+    of a layer or a model. In this book we will focus on sub-classing layers (i.e.,
+    not models). In my opinion, there will be more instances where you subclass a
+    layer than a model because layer sub-classing is more commodious and can be needed
+    in cases where you have a single model or multiple models. However, model sub-classing
+    is only required if you are creating larger composite models that consist of many
+    smaller models. It is also worthwhile to note that once you learn layer sub-classing,
+    it’s relatively easy to extend to model sub-classing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When sub-classing a layer, there are three important functions that you need
+    to override from the Layer base class you inherit from:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: __init__()—Initializes the layer with any parameters it accepts
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: build()—Where the parameters of the model will be created
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: call()—Defines the computations that need to happen during the forward pass
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Here’s how you would write our new layer. We will call our custom layer MulBiasDense
+    appropriately. Notice how this layer inherits from the base layer Layer found
+    in the tensorflow.keras.layers submodule.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 3.3 Sub-classing a new layer with Keras
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Defines various hyperparameters required to define the layer
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Defines all the parameters in the layer as tf.Variable objects. self.b_mul
+    represents the multiplicative bias.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Defines the computation that needs to happen when data is fed to the layer
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, we have the __init__() function. There are two parameters for the layer:
+    the number of hidden units and the type of activation. The activation defaults
+    to None, meaning that if unspecified, there will be no nonlinear activation (i.e.,
+    only a linear transformation):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Next, we implement the build() function, a significant puzzle piece of sub-classing.
+    All the parameters (e.g., weights and biases) are created within this function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Here, the parameters w, b, and b_mul refer to *W*, *b*, and *b*[mul] in the
+    equation. For each parameter, we provide the shape, an initializer, and a Boolean
+    to indicate trainability. The initializer ''glorot_uniform'' ([http://mng.bz/N6A7](http://mng.bz/N6A7))
+    used here is a popular neural network initializer. Finally, we need to write the
+    call() function, which defines how the inputs are going to be transformed to produce
+    an output:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'There it is: our first subclassed layer. It is worth noting that there are
+    several other functions you need to be aware of when it comes to subclassing layers:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: compute_output_shape()—Typically, Keras will automatically infer the shape of
+    the output of the layer. But, if you do too many complex transformations, Keras
+    might lose track, and you will need to explicitly define what the output shape
+    is using this function.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: get_config()—If you plan to save your model to disk after training, you need
+    to implement this function, which returns a dictionary of the parameters taken
+    in by the layer.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: With the new layer defined, you can use the functional API as before to create
+    a model, as the following listing shows.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 3.4 Model C implemented with the Keras sub-classed API
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Importing necessary modules and classes
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Making sure we are clearing out the TensorFlow graph
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Defining the input layer
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Defining two layers with the new sub-classed layer MulBiasDense
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Defining the softmax output layer
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❻ Defining the final model
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❼ Compiling the model with a loss function, an optimizer, and accuracy as metrics
+  prefs: []
+  type: TYPE_NORMAL
+- en: Unfortunately, in our experiments, none of the architectural improvements we
+    tried delivered a significantly better result. But you have managed to impress
+    your colleagues by knowing which API to use for which model, enabling the group
+    to have the results ready for the paper deadline. Table 3.1 further summarizes
+    main advantages and disadvantages of the APIs we discussed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Table 3.1 Pros and cons of using various Keras APIs
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| Sequential API | Pros | Models implemented with the Sequential API are easy
+    to understand and are concise. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Cons | Cannot implement models having complex architectural characteristics
+    such as multiple inputs/outputs. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Functional API | Pros | Can be used to implement models with complex architectural
+    elements such as multiple inputs/outputs. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Cons | The developer needs to manually connect various layers correctly and
+    create a model. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Sub-classing API | Pros | Can create custom layers and models that are not
+    provided as standard layers. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Cons | Requires thorough understanding of low-level functionality provided
+    by TensorFlow. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Due to the user-defined nature, it can lead to instabilities and difficulties
+    in debugging. |'
+  prefs: []
+  type: TYPE_TB
+- en: In the next section, we will discuss different ways you can import and ingest
+    data in TensorFlow.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Exercise 1
+  prefs: []
+  type: TYPE_NORMAL
+- en: Say you need to create a fully connected neural network that has a single input
+    layer and two output layers. Which API you think is the most suitable for this
+    task?
+  prefs: []
+  type: TYPE_NORMAL
+- en: 3.2 Retrieving data for TensorFlow/Keras models
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: So far, we have looked at how to implement various models with different Keras
+    APIs. At this point, you should be comfortable with knowing which API to use (or
+    sometimes which API *not* to use) when you see the architecture of a model. Moving
+    forward, we will learn about reading data to train these models using TensorFlow/Keras.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s assume that you recently joined a startup as a data scientist who is experimenting
+    with software encompassing a machine learning model to identify flower species
+    (using images). They already have a custom-written data pipeline that can take
+    a batch of images and a batch of labels and train a model. However, this data
+    pipeline is quite obscure and difficult to maintain. You’re tasked with implementing
+    a replacement data pipeline that is easy to understand and maintain. This is a
+    golden opportunity to impress your boss by quickly prototyping a data pipeline
+    using TensorFlow.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A model doesn’t have any value unless it has been trained with data. As more
+    (quality) data means better performance, it is important to feed data to the model
+    in a scalable and efficient manner. It’s time to explore features of TensorFlow
+    that allow you to create input pipelines that achieve this. There are two popular
+    alternatives to retrieving data:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The tf.data API
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Keras data generators
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The data set you’ll be working with (downloaded from [http://mng.bz/DgVa](http://mng.bz/DgVa))
+    contains a collection of 210 flower images (in .png format) and a CSV (comma-separated
+    value) file that contains the filename and label.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note There is also a third method, which is to use a Python package to access
+    popular machine learning data sets. This package is known as the tensorflow-datasets.
+    This means that this method works only if you want to use a data set that is already
+    supported by the package.
+  prefs: []
+  type: TYPE_NORMAL
+- en: It’s time to crack some knuckles and get to implementing the data pipeline.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 3.2.1 tf.data API
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Let’s see what an input pipeline might look like. For example, an input pipeline
+    for your image classification task might look like figure 3.7\. Initially, the
+    integer labels are read from a text file (stored as [filename, label] records).
+    Next, the images corresponding to the filenames are read and resized to a constant
+    height and width. The labels are then converted to a one-hot encoded representation.
+    One-hot encoded representation converts an integer to a vector of zeros and ones.
+    Then the images and one-hot encoded labels are zipped together to keep the correct
+    correspondence between images and their respective labels. This data now can be
+    fed directly to a Keras model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![03-07](../../OEBPS/Images/03-07.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 3.7 The input pipeline that you’ll be developing using the tf.data API
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In our data set, we have a collection of flower images and a CSV file that
+    contains the filename and the corresponding label. We will perform the following
+    steps in order to create the data pipeline:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Read CSV file as a tf.data.Dataset.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Extract filenames and labels as separate data sets.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Read the image files corresponding to the filenames in the filename data set.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Decode the image data and convert it to a float32 tensor.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Resize the images to 64 × 64 pixels.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Convert labels to one-hot encoded vectors.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Zip the image data set and the one-hot vector data sets.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Batch the data set in batches of five samples.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'In order to read the CSV file as a data set entity, we will use the convenient
+    tf.data .experimental.CsvDataset object. You might see that this is, in fact,
+    an experimental object. This means it has not been tested as extensively as other
+    functionality in the tf.data API and might break in certain instances. But for
+    our small and simple example there won’t be any issues:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The tf.data.experimental.CsvDataset object expects two mandatory arguments:
+    one or more filenames and a default record, which will be used as the default
+    if a record is corrupted or unreadable. In our case, the default record is an
+    empty filename (“”) and the label -1\. You can print some of the records from
+    tf.data.Dataset by calling'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Here, take() is a function that takes a number as the argument and returns
+    that many records from the data set. This will output the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If you remember, the flower_labels.csv file contains two columns: filenames
+    and the corresponding labels. You can see in the data set output that each tuple
+    carries two elements: the filename and the label. Next, we will split these two
+    columns as two separate data sets. This can easily be done using the map() function,
+    which applies a given function across all the records in a data set:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: Lambda expressions
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Lambda expressions are a great tool that enables you to have anonymous functions
+    in the code. Just like normal functions, they take in arguments and return some
+    output. For example, the following function will add two given values (x and y):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: Lambda expressions are a great way to write functions if they are used only
+    once and thus require no name. Learning to use lambda expressions effectively
+    will keep your code clean and succinct.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here, we use a succinct lambda expression to tell the map() function what we
+    want to achieve. We can now focus on fetching the image data. In order to do that,
+    we will again use the map() function. But this time, we will write a separate
+    function defining what needs to happen:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To get the image tensors from the filename, all we need to do is apply this
+    function to all filenames in the fname_ds:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE44]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'With the image data set read, let’s convert the label data to one-hot encoded
+    vectors:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE45]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In order to train an image classifier, we need two items: an image and a label.
+    We do have both of these as two separate data sets. However, we need to combine
+    them into one data set in order to ensure consistency. For example, if we need
+    to shuffle data, it is immensely important to have the data sets combined into
+    one to avoid different randomly shuffled states, which will destroy the image-to-label
+    correspondence in the data. The tf.data.Dataset.zip() function lets you do this
+    easily:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE46]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We’ve done lots of work. Let’s recap:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Read a CSV file as a tf.data.Dataset, which contains filenames and labels
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Separated file names (fname_ds) and labels (label_ds) into two separate data
+    sets
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Loaded images from file names as a data set (images_ds) while doing some preprocessing
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Converted labels to one-hot encoded vectors
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Created a combined data set using the zip() function
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Let’s take a moment to see what we have created. A tf.data.Dataset behaves
+    like a normal python iterator. This means that you can iterate through items easily
+    using a loop (e.g., for/while) and also use functions such as next() to get items.
+    Let’s see how we can iterate data in a for loop:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE47]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This will return the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE48]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As you can see, item is a tuple, the first element being the image tensor (of
+    size 64 × 64 × 3) and the second being a one-hot encoded vector (of size 10).
+    There’s some more work to be done. First, let’s shuffle the data set to make sure
+    we are not introducing any consistent ordering of data when feeding to the model:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE49]'
+  prefs: []
+  type: TYPE_PRE
+- en: The buffer_size argument serves an important purpose. It specifies, at run time,
+    how many elements are loaded to memory for the shuffling. In this case, the input
+    pipeline will load 20 records to memory and randomly sample from that when you
+    iterate the data. A larger buffer_size will provide better randomization but will
+    increase the memory requirement. Next, we will look at how to create a batch of
+    data from the data set.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Remember that we said Keras adds a batch dimension automatically when you specify
+    either input_shape (Sequential API) or the shape (functional API) when creating
+    a model. That’s how deep networks process data: as batches of data (i.e., not
+    individual samples). Therefore, it is important to batch data before you feed
+    it to the model. For example, if you use a batch size of 5, you will get a 5 ×
+    64 × 64 × 3 image tensor and a 5 × 10 labels tensor if you iterate the previous
+    data set. With tf.data.Dataset, API batching data is quite straightforward:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE50]'
+  prefs: []
+  type: TYPE_PRE
+- en: You can print one element of this using
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE51]'
+  prefs: []
+  type: TYPE_PRE
+- en: which will show
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE52]'
+  prefs: []
+  type: TYPE_PRE
+- en: That’s the end of this exercise. The next listing shows what the final code
+    looks like.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 3.5 tf.data Input pipeline for the flower images data set
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE53]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Reading the data from the CSV file using TensorFlow
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Separating out the filenames and integer labels to two data set objects
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Reading in the images from filenames
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Converting the integer labels to one-hot encoded labels
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Combining the images and labels into a single data set
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❻ Shuffling and batching data, preparing it for the model
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that you won’t be able to use the models we created during the Iris data
+    set exercise, as those are fully connected networks. We need convolutional neural
+    networks for processing image data. To get your hands dirty, there is a very simple
+    convolutional neural network model provided in the exercise notebook 3.2.Creating_Input_
+    Pipelines.ipynb in the Ch03-Keras-and-Data-Retrieval folder. Don’t worry about
+    the various layers and their parameters used here. We will discuss convolutional
+    neural networks in detail in the next chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE54]'
+  prefs: []
+  type: TYPE_PRE
+- en: Using this input pipeline, you can conveniently feed data to an appropriate
+    model using
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE55]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Once you run this command, you’ll get the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE56]'
+  prefs: []
+  type: TYPE_PRE
+- en: With some great results achieved quickly in your very first week on the job,
+    you walk proudly up to your boss and demonstrate the work you have done. He is
+    quite impressed with the clarity and efficiency of the pipeline you have built.
+    However, you begin to wonder, can I do a better job with Keras data generators?
+  prefs: []
+  type: TYPE_NORMAL
+- en: Exercise 2
+  prefs: []
+  type: TYPE_NORMAL
+- en: Imagine you have a labels data set called labels_ds (i.e., a sequence of integer
+    labels), and there are corrupted labels with the value -1\. Can you write a lambda
+    function and use that with the tf.Dataset.map() function to remove these labels?
+  prefs: []
+  type: TYPE_NORMAL
+- en: 3.2.2 Keras DataGenerators
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Another avenue for fetching image data is to use a data generator provided
+    in Keras. Currently, Keras provides two data generators:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE57]'
+  prefs: []
+  type: TYPE_PRE
+- en: Though not as customizable as the tf.data API, these generators still provide
+    a quick and easy way to feed data into a model. Let’s see how we can use the ImageDataGenerator
+    to feed this data to the model. The ImageDataGenerator ([http://mng.bz/lxpB](http://mng.bz/lxpB))
+    has a very long list of allowed parameters. Here, we will only focus on how we
+    can adapt ImageDataGenerator to read the data we have.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Then, to fetch data, Keras ImageDataGenerator offers the flow_from_dataframe()
+    function. This function is ideal for us, as we have a CSV file that contains filenames
+    and their associated labels, which can be represented as a pandas DataFrame. Let’s
+    start with some variable definitions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE58]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Next, we’ll define an ImageDataGenerator with default parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE59]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now we can use the flow_from_dataframe() function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE60]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We first load the CSV file, which contains two columns: file (filenames) and
+    label (integer label). With that, we call the flow_from_dataframe() function,
+    along with the following important parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: dataframe—The data frame that contains label information
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: directory—The directory to locate images
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: x_col—The name of the column in the data frame that contains filenames
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: y_col—The name of the column containing the labels
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: class_mode—The nature of the labels (since we have the raw label, class_mode
+    is set to raw)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: You can see what the first sample looks like by running
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE61]'
+  prefs: []
+  type: TYPE_PRE
+- en: which will output
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE62]'
+  prefs: []
+  type: TYPE_PRE
+- en: Again, with a batch size of 5, you see a batch of images (i.e., of size 5 ×
+    64 × 64 × 3) and a one-hot encoded batch of labels (of size 5 × 6) generated as
+    a tuple. The full code looks like the following listing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 3.6 Keras ImageDataGenerator for the flower image data set
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE63]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Importing necessary modules
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Defining the data directory
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Defining the ImageDataGenerator to process the images and labels
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Defining the labels by reading the CSV as a data frame
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Reading the images and labels from the filenames and labels in the data frame
+  prefs: []
+  type: TYPE_NORMAL
+- en: This looks even better than the previous pipeline. In just three lines of code,
+    you have created a data pipeline. You have definitely impressed your boss with
+    your knowledge, and you are on track for a quick promotion.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We will discuss the parameters of the ImageDataGenerator, as well as some of
+    the other data retrieval functions this supports, in detail in a later chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: However, it is important to keep in mind that concise is not always better.
+    Usually, concise means that what you can achieve with that method is limited.
+    And that is true for the tf.data API and Keras data generators. The tf.data API,
+    despite requiring a bit more work than the Keras data generator, is much more
+    flexible (and can be made efficient) than Keras data generators.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 3.2.3 tensorflow-datasets package
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The easiest way to retrieve data in TensorFlow is to use the tensorflow-datasets
+    ([https://www.tensorflow.org/datasets/overview](https://www.tensorflow.org/datasets/overview))
+    package. However, a key limitation is that tensorflow-datasets only supports a
+    set of defined data sets, unlike the tf.data API or Keras data generators, which
+    can be used to feed data from a custom data set. This is a separate package and
+    is not a part of the official TensorFlow package. And if you have set up the Python
+    environment as instructed, you already have this package installed in your environment.
+    If not, you can easily install this by executing
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE64]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'in your virtual Python environment’s terminal (e.g., Anaconda command prompt).
+    To make sure the package is installed correctly, run the following line in your
+    Jupyter notebook and make sure you don’t get any errors:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE65]'
+  prefs: []
+  type: TYPE_PRE
+- en: tensorflow-datasets provides a plethora of data sets under many different categories.
+    You can find a comprehensive list of what’s available at [https://www.tensorflow.org/datasets/catalog](https://www.tensorflow.org/datasets/catalog).
+    Table 3.2 also outlines some popular data sets available in tensorflow-datasets.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Table 3.2 Several data sets available in tensorflow-datasets
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| **Data type** | **Dataset name** | **Task** |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Audio | librispeech | Speech recognition |'
+  prefs: []
+  type: TYPE_TB
+- en: '| ljspeech | Speech recognition |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Images | caltech101 | Image classification |'
+  prefs: []
+  type: TYPE_TB
+- en: '| cifar10 and cifar100 | Image classification |'
+  prefs: []
+  type: TYPE_TB
+- en: '| imagenet2012 | Image classification |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Text | imdb_reviews | Sentiment analysis |'
+  prefs: []
+  type: TYPE_TB
+- en: '| tiny_shakespeare | Language modelling |'
+  prefs: []
+  type: TYPE_TB
+- en: '| wmt14_translate | Machine translation |'
+  prefs: []
+  type: TYPE_TB
+- en: 'Let’s use tensorflow-datasets to retrieve the cifar10 data set, a widely used
+    image classification data set that has images (RGB images of size 32 × 32) belonging
+    to 10 categories (e.g., automobile, ship, cat, horse, etc.). First, let’s make
+    sure it’s available as a data set. Execute the following on your Jupyter notebook:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE66]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We can see that cifar10 is one of those data sets, as expected. Let’s load
+    the data set using the tfds.load() function. When you initially call this method,
+    TensorFlow will first download the data set and then load it for you:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE67]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When it is successfully downloaded, look at what information is available in
+    the (info) variable:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE68]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'It’s quite informative. We now know that there are 60,000 32 × 32 color images
+    that belong to 10 classes. The data set is split into 50,000 (training) and 10,000
+    (testing). Let’s now look at the data variable:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE69]'
+  prefs: []
+  type: TYPE_PRE
+- en: We can see that it is a dictionary with keys 'train' and 'test', and each key
+    has a tf.data.Dataset. Luckily, we have studied how tf.data.Dataset works, so
+    we can race forward to understand how to prepare data. Let’s look at the training
+    data. You can access this training data set using
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE70]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'However, if you try to iterate this data set, you will notice that the data
+    has not been batched. In other words, data is retrieved a single sample at a time.
+    But, as we have said many times, we need data in batches. And the fix is simple:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE71]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, to see what a batch of data looks like in train_ds, you can execute the
+    following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE72]'
+  prefs: []
+  type: TYPE_PRE
+- en: This will output
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE73]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'It will be a dictionary with three keys: id, image, and label. id is a unique
+    ID for each training record. image will have a tensor of size 16 × 32 × 32 × 3,
+    whereas label will have a tensor of size 16 (i.e., integer labels). When passing
+    a tf.data.Dataset to a Keras model, the model expects the data set object to produce
+    a tuple (x,y), where x would be a batch of images and y would be the labels (e.g.,
+    one-hot encoded). Therefore, we need to write one additional function that will
+    put data into the correct format:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE74]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'With that simple transformation, you can feed this data set to a model as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE75]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This is amazing work. Now you know three different ways to retrieve data for
+    your models: the tf.data API, Keras data generators, and the tensorflow-datasets
+    package. We will conclude our discussion about Keras APIs and different data import
+    APIs here.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Exercise 3
+  prefs: []
+  type: TYPE_NORMAL
+- en: Can you write a line of code to import the caltech101 data set? After you do
+    that, explore this data set.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Keras, now integrated into TensorFlow, provides several high-level model-building
+    APIs: the Sequential API, functional API and sub-classing API. These APIs have
+    different pros and cons.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The Sequential API is the easiest to use but can only be used to implement simple
+    models.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The functional and sub-classing APIs can be difficult to use but enable developers
+    to implement complex models.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'TensorFlow encompasses several methods for retrieving data: the tf.data API,
+    Keras data generators, and tensorflow-datasets. tf.data.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: An API provides the most customizable way to feed data to a model but requires
+    more work to fetch data.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: tensorflow-datasets is the easiest to use but is limited as it only supports
+    a limited set of data sets.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Answers to exercises
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '**Exercise 1:** The functional API. As there are two output layers, we cannot
+    use the Sequential API. There is no need to use the sub-classing API, as everything
+    we need can be done using Keras layers.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Exercise 2:** labels_ds.map(lambda x: x if x != -1). You can also use the
+    tf.Dataset .filter() method (i.e., labels_ds.filter(lambda x: x != -1)).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Exercise 3:** tfds.load("caltech101", with_info=True)'
+  prefs: []
+  type: TYPE_NORMAL

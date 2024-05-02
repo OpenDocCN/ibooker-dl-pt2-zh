@@ -1,0 +1,1905 @@
+- en: '14 TensorBoard: Big brother of TensorFlow'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter covers
+  prefs: []
+  type: TYPE_NORMAL
+- en: Running and visualizing image data in TensorBoard
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Monitoring model performance and behaviors in real time
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Performance profiling models using TensorBoard
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using tf.summary to log custom metrics during customized model training
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Visualizing and analyzing word vectors on TensorBoard
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Thus far we have focused on various models. We have talked about fully connected
+    models (e.g., autoencoders), convolutional neural networks, and recurrent neural
+    networks (e.g., LSTMs, GRUs). In chapter 13, we talked about Transformers, a powerful
+    family of deep learning models that have paved the way to a new state-of-the-art
+    performance in language understanding. Furthermore, inspired by the achievements
+    in the field of natural language processing, Transformers are making waves in
+    the computer vision field. We are past the modeling step, but we still have to
+    plough through several more steps to reap the final harvest. One such step is
+    making sure the data/features to the model are correct and the models are working
+    as expected.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, we will explore a new facet of machine learning: leveraging
+    a visualization tool kit to visualize high-dimensional data (e.g., images, word
+    vectors, etc.) as well as track and monitor model performance. Let’s understand
+    why this is a crucial need. Due to the success demonstrated by using machine learning
+    in many different fields, machine learning has become deeply rooted in many industries
+    and fields of research. Consequently, this means that we need more rapid cycles
+    in training new models and less friction when performing various steps in the
+    data science workflow (e.g., understanding data, model training, model evaluation,
+    etc.). TensorBoard is a step in that direction. It allows you to easily track
+    and visualize data, model performance, and even profile models to understand where
+    data spends the most time.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: You typically write data and model metrics or other things you want to visualize
+    to a logging directory. What is written to the logging directory is typically
+    organized into subfolders, which are named to have information like the date,
+    time, and a brief description of the experiment. This will help to identify an
+    experiment quickly in TensorBoard. TensorBoard will constantly search the designated
+    logging directory for changes and visualize them on the dashboard. You will learn
+    the specifics of these steps in the coming sections.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 14.1 Visualize data with TensorBoard
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Imagine you are working for a fashion company as a data scientist. They have
+    asked you to assess the feasibility of building a model that can identify clothing
+    items in a given photo. For this, you pick the Fashion-MNIST data set, which has
+    images of clothes in black and white belonging to one of 10 categories. Some categories
+    are T-shirt, trouser, and dress. You will first load the data and analyze it through
+    TensorBoard, a visualization tool for visualizing data and models. Here, you will
+    visualize a few images and make sure they have the correct class label assigned
+    after loading to memory.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The first thing we will do is download the Fashion-MNIST data set. Fashion-MNIST
+    is a labeled data set that contains images of various garments and corresponding
+    labels/categories. Fashion-MNIST is primarily inspired by the MNIST data set.
+    To refresh our memories, the MNIST data set consists of 28 × 28-sized images of
+    digits 0-9, and the corresponding digit is the label. Fashion-MNIST emerged as
+    a solution as many were recommending moving away from MNIST as a performance benchmarking
+    data set due to the easiness of the task. Fashion-MNIST is considered a more challenging
+    task compared to MNIST.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Downloading the Fashion-MNIST data set is a very easy step, as it is available
+    through the tensorflow_datasets library:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, let’s print to see the format of the data:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: This will return
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The data set has two components, a training data set and a testing data set.
+    The training set has two items: images, each of which is 28 × 28 × 1, and an integer
+    label. The same items are available for the test set. Next, we are going to create
+    three tf.data data sets: training, validation, and testing. We will split the
+    original training data set into two, a training and a validation set, and then
+    keep the test set as it is (see the next listing).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 14.1 Generating training, validation, and test data sets
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Get the training data set, shuffle it, and output a tuple of (image, label).
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Get the testing data set and output a tuple of (image, label).
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Flatten the images to a 1D vector for fully connected networks.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Make the validation data set the first 10,000 data points.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Make training data set the rest.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This is a simple data pipeline. Each record in the original data set is provided
+    as a dictionary with two keys: image and label. First, we convert dictionary-based
+    records to a tuple of (<image>, <label>) using the tf.data.Dataset.map() function.
+    Then, we have an optional step of flattening the 2D images to a 1D vector if the
+    data set is to be used for fully connected networks. In other words, the 28 ×
+    28 image will become a 784-sized vector. Finally, we create the valid set as the
+    first 10,000 data points in the train_ds (after shuffling) and keep the rest as
+    the training set.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The way to visualize data on TensorBoard is by logging information to a predefined
+    log directory through a tf.summary.SummaryWriter(). This writer will write the
+    data we’re interested in, in a special format the TensorBoard understands. Next,
+    you spin up an instance of TensorBoard, pointing it to the log directory. Using
+    this approach, let’s visualize some of the training data using the TensorBoard.
+    First, we define a mapping from the label ID to the string label:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'These mappings are obtained from [http://mng.bz/DgdR](http://mng.bz/DgdR).
+    Then we will define the logging directory. We are going to use date-timestamps
+    to generate a unique identifier for different runs, as shown:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If you’re wondering about the strange-looking format found in the log_datetimestamp_format
+    variable, it is a standard format used by Python’s datetime library to define
+    the format of dates and times ([http://mng.bz/lxM2](http://mng.bz/lxM2)), should
+    you use them in your code. Specifically, we are going to the time of running (given
+    by datetime .now()) as a string of digits with no separators in between. We will
+    get the year (%Y), month (%m), day (%d), hour in 24-hour format (%H), minutes
+    (%M), and seconds (%S) of a given time of the day. Then we append the string of
+    digits to the logging directory to create a unique identifier based on the time
+    of running. Next, we define a tf.summary.SummaryWriter() by calling the following
+    function, with the logging directory as an argument. With that, any write we do
+    with this summary writer will be logged in the defined directory:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Next, we open the defined summary writer as the default writer, using a with
+    clause. Once the summary writer is open, any tf.summary.<data type> object will
+    log that information to the log directory. Here, we use a tf.summary.image object.
+    There are several different objects you can use to log ([https://www.tensorflow.org/api_docs/python/tf/summary](https://www.tensorflow.org/api_docs/python/tf/summary)):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: tf.summary.audio—A type of object used to log audio files and listen to them
+    on TensorBoard
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: tf.summary.histogram—A type of object used to log histograms and view them on
+    TensorBoard
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: tf.summary.image—A type of object used to log images and view them on TensorBoard
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: tf.summary.scalar—A type of object used to log scalar values (e.g., model losses
+    computed over several epochs) and show them on TensorBoard
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: tf.summary.text—A type of object used to log raw textual data and show it on
+    TensorBoard
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Here, we will use* tf.summary.image() *to write and display images on TensorBoard.*
+    tf.summary.image() takes in several arguments:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: name—A description of the summary. This will be used as a tag when displaying
+    images on TensorBoard.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: data—A batch of images of size [b, h, w, c], where b is the batch size, h is
+    the image height, w is the image width, and c is the number of channels (e.g.,
+    RGB).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: step—An integer that can be used to show images belonging to different batches/iterations
+    (defaults to None).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: max_outputs—The maximum number of outputs to display at a given time. If there
+    are more images than max_outputs in the data, the first max_outputs images will
+    be shown, and the rest will be silently discarded (defaults to three).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: description—A detailed description of the summary (defaults to None)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'We will write two sets of image data in two ways:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, we will take 10 images, one by one, from the training data set and write
+    them with their class label tagged. Then, images with the same class label (i.e.,
+    category) are nested under the same section on TensorBoard.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Finally, we will write a batch of 20 images at once.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Then we are all set to visualize the TensorBoard. Initializing and loading
+    the TensorBoard can be done simply by running the following commands in a Jupyter
+    notebook code cell. As you know by now, a Jupyter notebook is made of cells, where
+    you can enter text/code. Cells can be code cells, Markdown cells, and so on:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: Figure 14.1 shows how the code will look in a notebook cell.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![14-01](../../OEBPS/Images/14-01.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 14.1 Jupyter magic commands in a notebook cell
+  prefs: []
+  type: TYPE_NORMAL
+- en: You might notice that this is not typical Python syntax. Commands such as these
+    that start with a % sign are known as Jupyter magic commands. Remember that Jupyter
+    is the name of the Python library that is producing notebooks that we have our
+    code in. You can see a list of such commands at [http://mng.bz/BMd1](http://mng.bz/BMd1).
+    The first command loads the TensorBoard Jupyter notebook extension. The second
+    command instantiates a TensorBoard with the provided logging directory (--logdir)
+    argument and a port (--port) argument. If you don’t specify a port, TensorBoard
+    will run on 6006 (or the first unused port greater than 6006) by default. Figure
+    14.2 shows how the TensorBoard looks with visualized images.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![14-02](../../OEBPS/Images/14-02.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 14.2 The TensorBoard visualizing logged images, displayed inline in the
+    Jupyter notebook. You can perform various operations on images, such as adjusting
+    brightness or contrast. Furthermore, the subdirectories to which the data is logged
+    are shown on the left-hand panel, allowing you to easily show/hide different subdirectories
+    for easier comparison.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Alternatively, you can also visualize the TensorBoard on a browser tab independent
+    of the Jupyter notebook. After you run the two commands in your browser, open
+    http://localhost:6006, which will display the TensorBoard as shown in figure 14.2\.
+    In the next section, we will see how TensorBoard can be used to track and monitor
+    model performance as models are trained.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Exercise 1
+  prefs: []
+  type: TYPE_NORMAL
+- en: You have a list of five batches of images in a variable called step_image_batches.
+    Each item in the list corresponds to the first five steps of the training. You
+    want to have these batches shown in the TensorBoard, each with the correct step
+    value. You can name each batch as batch_0, batch_1, and so on. How would you do
+    this?
+  prefs: []
+  type: TYPE_NORMAL
+- en: 14.2 Tracking and monitoring models with TensorBoard
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: With a good understanding of the data in the Fashion-MNIST data set, you will
+    use a neural network to train a model on this data to gauge how accurately you
+    can classify different types of apparel. You are planning to use a dense network
+    and a convolutional neural network. You will train both these models under the
+    same conditions (e.g., data sets) and visualize the model’s accuracy and loss
+    on the TensorBoard.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The primary purpose served by the TensorBoard is the ability to visualize a
+    model’s performance as it is trained. Deep neural networks are notoriously known
+    for their long training times. There is no doubt that identifying problems with
+    a model as early as possible pays off well. The TensorBoard plays a vital role
+    in that. You can pipe model performance (through evaluation metrics) to be displayed
+    in real time on TensorBoard. Therefore, you can spot any abnormal behaviors in
+    the model before spending too much time and take necessary actions quickly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this section, we will compare the performance of a fully connected network
+    and a convolutional neural network on the Fashion-MNIST data set. Let’s define
+    a small fully connected model as the first model we want to test with this data
+    set. It will have three layers:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A layer with 512 neurons and ReLU activation that takes a flattened image from
+    the Fashion-MNIST data set
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A layer with 256 neurons and ReLU activation that takes the previous layer’s
+    output
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A layer with 10 outputs (representing the categories) that has a softmax activation
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The model is compiled with sparse categorical cross-entropy loss and the Adam
+    optimizer. Since we’re interested in the model accuracy, we add that to the list
+    of metrics that are tracked:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'With the model fully defined, we train it on the training data and evaluate
+    it on the validation data set. First, let’s define the logging directory for the
+    fully connected model:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: As before, you can see that we are not only writing to subdirectories instead
+    of the plain flat directory, but we are also using a unique identifier that is
+    based on the time of running. Each of these subdirectories represents what is
+    called a *run* in TensorBoard terminology.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Organizing runs in TensorBoard
+  prefs: []
+  type: TYPE_NORMAL
+- en: Typically, users leverage some kind of run organization when visualizing them
+    via the TensorBoard. Other than having multiple runs for multiple algorithms,
+    a standard thing to do is add a date-time stamp to the runs to discriminate between
+    different runs of the same algorithm running at different occasions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example, you might test the same algorithm with different hyperparameters
+    (e.g., number of layers, learning rate, optimizer, etc.) and may want to see them
+    all in one place. Let’s say you want to test a fully connected layer with different
+    learning rates (0.01, 0.001, and 0.0005). You would have the following directory
+    structure in your main logging directory:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Or you could even use a more nested directory structure:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'I would like to stress that it is important to time stamp your runs, as explained
+    in the sidebar. This way you will have a unique folder for each run and can always
+    go back to previous runs to compare if needed. Next, let’s generate training/validation/testing
+    data sets using the get_train_valid_test() function. Make sure to set the flatten_
+    images=True:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Modeling metrics to the TensorBoard is very easy. There is a special callback
+    for the TensorBoard that you can pass during the model training/evaluation:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Let’s discuss some of the key arguments you can pass to the TensorBoard callback.
+    The default TensorBoard callback looks as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now we will look at the arguments provided:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: log_dir—The directory to log information to. Once the TensorBoard is spun up
+    using the log dir as this (or a parent of this) directory, the information can
+    be visualized on the TensorBoard (defaults to 'logs').
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: histogram_freq—Creates histograms of activation distribution in layers (discussed
+    in detail later). This specifies how frequently (in epochs) these histograms need
+    to be recorded (defaults to 0, meaning it’s disabled).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: write_graph—Determines whether to write the model as a graph to visualize on
+    the TensorBoard (defaults to True).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: write_image—Determines whether to write model weights as an image (i.e., a heat
+    map) to visualize the weights on the TensorBoard (defaults to False).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: write_steps_per_second—Determines whether to write the number of steps performed
+    in a second to the TensorBoard (defaults to False).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: update_freq ('batch', 'epoch' or an integer)—Determines whether to write updates
+    to the TensorBoard every batch (if the value is set to batch) or epoch (if value
+    is set to epoch). Passing an integer, TensorFlow will interpret it as “write to
+    the TensorBoard every x batches.” By default, updates will be written every epoch.
+    Writing to the disk is expensive; therefore, writing too frequently will slow
+    your training down.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: profile_batch (an integer or a list of two numbers)—Determines which batches
+    to use for profiling the model. Profiling computes computational and memory profiles
+    of the model (discussed in detail later). If an integer is passed, it will profile
+    a single batch. If a range (i.e., a list of two numbers) is passed, it will profile
+    batches in that range. If set to zero, profiling will not happen (defaults to
+    2).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: embedding_freq—If the model has an embedding layer, this parameter specifies
+    the interval (in epochs) to visualize the embedding layer. If set to zero, this
+    is disabled (defaults to 0).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: embedding_metadata—A dictionary that maps the embedding layer name to a file
+    name. The file should consist of the tokens corresponding to each row in the embedding
+    matrix (in that order; defaults to None).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Finally, we will train the model as we have done before. The only difference
+    is that we pass tb_callback as a callback to the model:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: The model should reach a validation accuracy of around 85%. Now open the TensorBoard
+    by visiting http:/ /localhost:6006\. It will display a dashboard similar to figure
+    14.3\. The dashboard will be refreshed automatically as new data appears in the
+    log directory.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![14-03](../../OEBPS/Images/14-03.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 14.3 How tracked metrics are displayed on the TensorBoard. You can see
+    the training and validation accuracy and the loss are plotted as line graphs.
+    Furthermore, you have various controls, such as maximizing the graph, switching
+    to a log-scale y-axis, and so on.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The TensorBoard dashboard has many controls that help users understand their
+    models in great depth with the help of logged metrics. You can turn different
+    runs on or off depending on what you want to analyze. For example, if you only
+    want to look at validation metrics, you can switch off dense/train run, and vice
+    versa. Data/train run does not affect this panel as it contains images we logged
+    from the training data. To view them, you can click on the IMAGES panel.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Next, you can change the smoothing parameter to control the smoothness of the
+    line. It helps to remove localized small changes in metrics and focus on global
+    trends by having a smoother version of the line. Figure 14.4 depicts the effect
+    of the smoothing parameter on line plots.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![14-04](../../OEBPS/Images/14-04.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 14.4 How the smoothing parameter changes the line plot. Here, we are
+    showing the same line plot under different smoothing parameters. You can see how
+    the line gets smoother as the smoothing parameter increases. The original line
+    is shown in faded colors.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Additionally, you have other controls such as switching to a log-scale y-axis
+    instead of a linear one. This is useful if metrics observe large changes over
+    time. In log scale, such large changes will become smaller. You can also toggle
+    between standard-sized plots and full-sized plots if you need to examine the graphs
+    in more detail. Figure 14.3 highlights these controls.
+  prefs: []
+  type: TYPE_NORMAL
+- en: After that, we will define a simple convolutional neural network and do the
+    same. That is, we will define the network first, and then train the model while
+    using a callback to the TensorBoard.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s define the next model we will compare our fully connected network to:
+    a convolutional neural network (CNN). Again, we are defining a very simple CNN
+    that encompasses'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A 2D convolution layer with 32 filters with a 5 × 5 kernel, 2 × 2 strides, and
+    ReLU activation that takes a 2D 28 × 28-sized image from the Fashion-MNIST data
+    set
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A 2D convolution layer with 16 filters with a 3 × 3 kernel, 1 × 1 strides, and
+    ReLU activation that takes the previous layer’s output
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A Flatten layer that will flatten the convolutional output to a 1D vector suitable
+    for a Dense layer
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A layer with 10 outputs (representing the categories) that has a softmax activation
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Moving onto the model training, we will log the CNN-related metrics to a separate
+    directory called ./logs/conv_{datetimestamp}. This way, we can plot the evaluation
+    metrics of the fully connected network and the CNN under two separate runs. We
+    will generate training and validation data sets and a TensorBoard callback, as
+    we did earlier. These are then passed to the model when calling the fit() method
+    to train the model:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: Notice the changes we have made when training the CNN. First, we do not flatten
+    the images like we did when training the fully connected network (i.e., we set
+    flatten_ images=False in the get_train_valid_test_datasets() function). Next,
+    we introduce a new argument to the TensorBoard callback. We will use the histogram_freq
+    argument to log layer activation histograms of the model during the training process.
+    We will discuss layer activation histograms in more depth shortly. This will display
+    the accuracy and loss metrics of both models (i.e., dense model and convolutional
+    model) in the same graph, so they can be easily compared (figure 14.5).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![14-05](../../OEBPS/Images/14-05.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 14.5 Viewing metrics of both the dense model and the convolutional model.
+    You can switch different runs off/on depending on what you want to compare.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s come back to activation histograms again. Activation histograms let us
+    visualize the neuron activation distribution of different layers as the training
+    progresses. This is an important check that allows you to see whether or not the
+    model is converging during the optimization, giving insights into problems in
+    model training or data quality.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s look at what these histograms show in more depth. Figure 14.6 illustrates
+    the histograms generated for the CNN we have trained. We have plotted histograms
+    every two epochs. Weights represented as histograms are stacked behind each other
+    so we can easily understand how they evolved over time. Each slice in the histogram
+    shows the weight distribution in a given layer and a given epoch. In other words,
+    it will provide information such as “there were x number of outputs, having a
+    value of y, approximately.”
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![14-06](../../OEBPS/Images/14-06.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 14.6 Activation histograms displayed by the TensorBoard. These graphs
+    indicate how the distribution of activations in a given layer changed over time
+    (lighter ones represent more recent epochs).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Typically, if you have a vector of values, it is quite straightforward to create
+    the histogram. For example, assume the values are [0.1, 0.3, 0.35, 0.5, 0.6, 0.61,
+    0.63], and say that you have four bins: [0.0, 0.2), [0.2, 0.4), [0.4, 0.6), and
+    [0.6, 0.8). You’d get the histogram shown in figure 14.7\. If you look at the
+    line connecting the midpoints of the bars, it’s similar to what you see in the
+    dashboard.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![14-07](../../OEBPS/Images/14-07.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 14.7 A histogram generated for the sequence [0.1, 0.3, 0.35, 0.5, 0.6,
+    0.61, 0.63]
+  prefs: []
+  type: TYPE_NORMAL
+- en: However, computing histograms involves more complex data manipulations when
+    data is large and sparse, like in a weight matrix. For example, computing histograms
+    in TensorBoard involves using exponential bin sizes (as opposed to uniform bin
+    sizes, as in the example), which gives more fine-grained bins near zero and wider
+    bins as you move away from zero. Then it resamples these uneven-sized bins to
+    uniformly sized bins for easier and more meaningful visualizations. The specific
+    details of these computations are beyond the scope of this book. If you want more
+    details, refer to [http://mng.bz/d26o](http://mng.bz/d26o).
+  prefs: []
+  type: TYPE_NORMAL
+- en: We can see in the graphs that the weights are converging to an approximate normal
+    distribution as the training progresses. But the bias converges to a multi-modal
+    distribution, with spikes appearing in many different places.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This section elucidated how you can use the TensorBoard for some of the primary
+    data visualization and model performance tracking. These are vital parts of the
+    core checkpoints you have to set up in your data science project. Visualizing
+    data needs to be done early in your project to help you understand the data and
+    its structure. Model performance tracking is important as deep learning models
+    take longer to train, and you need to complete that training within a limited
+    budget (of both time and cost). In the next section, we will discuss how we can
+    log custom metrics to the TensorBoard and visualize them.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Exercise 2
+  prefs: []
+  type: TYPE_NORMAL
+- en: You have a binary classification model represented by classif_model. You’d like
+    to track precision and recall for this model in the TensorBoard. Furthermore,
+    you’d like to visualize the activation histograms every epoch. How would you compile
+    the model and fit it with data using the TensorBoard callback to achieve this?
+    TensorFlow provides tf.keras.metrics.Precision() and tf.keras.metrics.Recall()
+    to compute precision and recall, respectively. You can assume that you are logging
+    directly to the ./logs directory. Assume that you have been provided training
+    data (tr_ds) and validation data (v_ds) as tf.data.Dataset objects.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 14.3 Using tf.summary to write custom metrics during model training
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Imagine you are a PhD student researching the effects of batch normalization.
+    Particularly, you need to analyze how the weights’ mean and standard deviation
+    in a given layer change over time, with and without batch normalization. For this,
+    you will use a fully connected network and log the weights’ mean and standard
+    deviation at every step on the TensorBoard. As this is not a typical metric that
+    you can produce using the Keras model, you will log it (for every step) during
+    model training in a custom training loop.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In order to compare the effects of batch normalization, we need to define two
+    different models: one without batch normalization and one with batch normalization.
+    Both these models will have the same specifications, apart from using batch normalization.
+    First, let’s define a model without batch normalization:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The model is quite straightforward and identical to the fully connected model
+    we defined earlier. It has three layers, with 512, 256, and 10 nodes, respectively.
+    The first two layers use ReLU activation, whereas the last layer uses softmax
+    activation. Note that we name the second Dense layer log_layer. We will use this
+    layer to compute the metrics we’re interested in. Finally, the model is compiled
+    with sparse categorical cross-entropy loss, the Adam optimizer, and accuracy as
+    metrics. Next, we define the same model with batch normalization:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: Introducing batch normalization means adding tf.keras.layers.BatchNormalization()
+    layers between the Dense layers. We name the layer of interest in the second model
+    as log_layer_bn, as we cannot have two layers with the same name at once.
+  prefs: []
+  type: TYPE_NORMAL
+- en: With the models defined, our task is to compute the mean and standard deviation
+    of weights at every step. To do that, we will observe the mean and standard deviation
+    of the weights in the second layer of both networks (log_layer and log_layer_bn).
+    As we have already discussed, we cannot simply pass a TensorBoard callback and
+    expect these metrics to be available. Since the metrics we’re interested in are
+    not commonly used, we have to do the heavy lifting and make sure the metrics are
+    logged every step.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We will define a train_model() function, to which we can pass the defined model
+    and train it on the data. While training, we will compute the mean and the standard
+    deviation of the weights in every step and log that to the TensorBoard (see the
+    next listing).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 14.2 Writing a tf.summary object while training the model in a custom
+    loop
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Define the writer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Open the writer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Train with one batch.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Get the weights of the layer. It’s a list of arrays [weights, bias] in that
+    order. Therefore, we’re only taking the weights (index 0).
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Log mean and std of absolute weights (which are two scalars for a given epoch).
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❻ Flush to the disk from the buffer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Note how we open a tf.summary.writer() and then log the metrics in every step
+    using the tf.summary.scalar() call. We are giving the metrics meaningful names
+    to make sure we know which is which when visualizing them on the TensorBoard.
+    With the function defined, we call it for the two different models we have compiled:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note that we are specifying different logging subdirectories to make sure the
+    two models that appear are different runs. After running this, you will see two
+    new additional sections called mean_weights and std_weights (figure 14.8). It
+    seems that the mean and variance of weights change more drastically when batch
+    normalization is used. This could be because, as batch normalization introduces
+    explicit normalization between layers, weights of layers have more freedom to
+    move around.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![14-08](../../OEBPS/Images/14-08.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 14.8 The mean and standard deviation of weights plotted in the TensorBoard
+  prefs: []
+  type: TYPE_NORMAL
+- en: The next section expands on how the TensorBoard can be used to profile models
+    and provides in-depth analysis of how time spent and memory are consumed when
+    models are executed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Exercise 3
+  prefs: []
+  type: TYPE_NORMAL
+- en: You are planning to compute Fibonacci numbers (i.e., 0, 1, 1, 2, 3, 5, 8, 13,
+    21, 34, 55, etc.), where the n^(th) number x_n is given by x_n = x_{n - 1} + x_{n
+    - 2}. Write a code to compute the Fibonacci series for 100 steps and plot it as
+    a line graph in TensorBoard. You can use the name “fibonacci” as the name for
+    the metric.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 14.4 Profiling models to detect performance bottlenecks
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: You are starting off as a data scientist at a bio-tech company that is identifying
+    endangered flower species. One of the previous data scientists developed a model,
+    and you are continuing that work. First, you want to determine if there are any
+    performance bottlenecks. To analyze such issues, you plan to use the TensorBoard
+    profiler. You will be using a smaller flower data set for the purpose of training
+    the model so that the profiler can capture various computational profiles.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We start with the model in listing 14.3\. It is a CNN model that has four convolutional
+    layers, with pooling layers in between and three fully connected layers, including
+    a final softmax layer with 17 output classes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 14.3 The CNN model available to you
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Define a Keras model using the sequential API.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Define the first convolutional layer that takes a 64 × 64 × 3-sized input.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ A batch normalization layer
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ A max pooling layer
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ A series of alternating convolution and batch normalization layers
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❻ An average pooling layer that marks the end of convolutional/pooling layers
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❼ Flatten the output of the last pooling layer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❽ A set of Dense layers (with leaky ReLU activation), followed by a layer with
+    softmax activation
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The data set we’re going to use is a flower data set found at [https://www.robots.ox.ac.uk/~vgg/data/flowers](https://www.robots.ox.ac.uk/~vgg/data/flowers),
+    specifically, the 17-category data set. It has a single folder with images of
+    flowers, and each image filename has a number. The images are numbered in such
+    a way that, when sorted by the filename, the first 80 images belong to class 0,
+    the next 80 images belong to class 1, and so on. You have been provided the code
+    to download the data set in the notebook Ch14/14.1_Tensorboard.ipynb, which we
+    will not discuss here. Next, we will write a simple tf.data pipeline to create
+    batches of data by reading these images in:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: Let’s analyze what we’re doing here. First, we read the files which have a .jpg
+    extension from a given folder. Then we have a nested function called get_image_and_label(),
+    which takes a file path of an image and produces the image by reading it from
+    the disk and the label. The label can be computed by
+  prefs: []
+  type: TYPE_NORMAL
+- en: Extracting the image ID
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Subtracting 1 (i.e., to make IDs zero-based indices) and dividing by 80
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'After that, we shuffle the data and take the first 250 as validation data and
+    the rest as training data. Next, we use these functions defined and train the
+    CNN model while creating various computational profiles of the model. In order
+    for the profiling to work, you need two main prerequisites:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Install the Python package tensorboard_plugin_profile.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Install libcupti, the CUDA Profiling Toolkit Interface.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Installing the CUDA Profiling Toolkit Interface (libcupti)
+  prefs: []
+  type: TYPE_NORMAL
+- en: TensorBoard requires the libcupti CUDA library in order for model profiling
+    to work. Installing this library requires different steps depending on which operating
+    system is used. This assumes that your computer is equipped with an NVIDIA GPU.
+    Unfortunately, you will not be able to perform this on a Mac, as the profiling
+    API for data collection is not available on Mac. (Look at the Requirements section
+    in [https://developer.nvidia.com/cupti-ctk10_1u1](https://developer.nvidia.com/cupti-ctk10_1u1).)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Installing libcupti on Ubuntu**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: To install libcupti on Linux, simply run sudo apt-get install libcupti-dev.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Installing libcupti on Windows**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Installing libcupti on Windows requires more work:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Make sure you have installed the recommended CUDA installation (e.g., CUDA 11
+    [>= TensorFlow 2.4.0]). For more information on the CUDA version, visit [https://www.tensorflow.org/install/source#gpu](https://www.tensorflow.org/install/source#gpu).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Next, open the NVIDIA control panel (by right-clicking on the desktop and selecting
+    the menu item) to make several changes ([http://mng.bz/rJVJ](http://mng.bz/rJVJ)):'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Make sure you set the developer mode by clicking Desktop > Set Developer Mode.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Make sure you enabled GRU profiling to all users and not just the administrator
+    (figure 14.9).
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: For more errors that you might face, refer to [http://mng.bz/VMxy](http://mng.bz/VMxy)
+    from the official NVIDIA website.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: To install libcupti ([http://mng.bz/xn2d](http://mng.bz/xn2d))
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Copy libcupti_<version>.dll, nvperf_host.dll, and nvperf_target .dll from extras\CUPTI\lib64
+    to the bin folder. Make sure the libcupti file has the name libcupti_110.dll.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Copy all files in extras\CUPTI\lib64 *to* lib\x64
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Copy all files in extras\CUPTI\include to include.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '![14-09](../../OEBPS/Images/14-09.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 14.9 Enabling GPU profiling for all users
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Make sure you have libcupti installed properly in the environment you are using
+    (e.g., Ubuntu or Windows). Otherwise, you will not see the expected results. Then,
+    to enable profiling, all you need to do is pass the argument profile_batch to
+    the TensorBoard callback. The value is a list of two numbers: the starting step
+    and the ending step. Profiling is typically done across a span of several batches
+    and therefore requires a range as the value. However, profiling can be done for
+    a single batch too:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: Once the training finishes, you can view the results on the TensorBoard. TensorBoard
+    provides a large collection of valuable information and insights on model performance.
+    It breaks down the computation into smaller subtasks and provides fine-grained
+    computational time decomposition based on those subtasks. Furthermore, TensorBoard
+    provides recommendations on where there is room for improvement (figure 14.10).
+    Let’s now delve into more details about the information provided on this page.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![14-10](../../OEBPS/Images/14-10.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 14.10 TensorBoard profiling interface. It gives a valuable collection
+    of information on various subtasks involved in running models on the GPU. In addition,
+    it provides recommendations on how to improve the performance of the models.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The average step time is a summation of several smaller tasks:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Input time*—Time spent on reading data-related operations (e.g., tf.data.Dataset
+    operations).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Host compute time*—Model-related computations done on the host (e.g., CPU).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Device-to-device time*—To run things on the GPU, data first needs to be transferred
+    to the GPU. This subtask measures the time taken for such transfers.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Kernel launch time*—For the GPU to execute operations on the transferred data,
+    the CPU needs to launch the kernels for the GPU. A kernel encapsulates a primitive
+    computation performed on data (e.g., matrix multiplication). This measures the
+    time taken for launching kernels.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Device compute time*—Model-related computations that happen on the device
+    (e.g., GPU).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Device collective communication time*—Relates to time spent on communicating
+    in multi-device (e.g., multiple GPUs) or multi-node environments.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: All the other times (e.g., compilation time, output time, all other remaining
+    time).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Here we can see that the most time is spent on device computations. This is,
+    in a way, good, as it means that most computations happen on the GPU. The next-biggest
+    time consumer is the input time. This makes sense as we are not using any optimizations
+    for our tf.data pipeline and it is a highly disk-bound pipeline as images are
+    read from the disk.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Then, right below that, you can see some more information. Close to 80% of the
+    TensorFlow ops were placed on this host, whereas only 20% ran on the GPU. Furthermore,
+    all the operations were 32-bit operations, and none were 16-bit; 16-bit (half-precision
+    floating point) operations run faster and save a lot of memory compared to 32-bit
+    (single-precision floating point) data types. GPUs and Tensor Processing Units
+    (TPUs) are optimized hardware that can run 16-bit operations much faster than
+    32-bit operations. Therefore, they must be incorporated whenever possible. Having
+    said that, we must be careful how we use 16-bit operations, as incorrect usage
+    can hurt model performance (e.g., model accuracy) significantly. Incorporating
+    16-bit operations along with 32-bit operations to train the model is known as
+    *mixed precision training*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If you look at the recommendation section, you can see two main recommendations:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Optimize the input data pipeline.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Utilize more 16-bit operations in model training.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Brain Floating Point data type (bfloat16)
+  prefs: []
+  type: TYPE_NORMAL
+- en: Brain Floating Point values, or bfloat16 values, are a data type proposed by
+    Google. It has the same number of bits as float16 (i.e., 16 bits) but is able
+    to represent the dynamic range of float32 values with some loss in precision.
+    This change is implemented by having more exponent bits (left side of the decimal
+    point) and less fraction bits (right side of the decimal point). This data type
+    can give significant advantages on optimized hardware like TPUs and GPUs (given
+    they have Tensor Cores; [https://developer.nvidia.com/tensor-cores)](https://developer.nvidia.com/tensor-cores).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s see how we can use these recommendations to reduce model training time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 14.4.1 Optimizing the input pipeline
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'To optimize the data pipeline, we will introduce two changes to our get_flower_
+    datasets() function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Use data prefetching to avoid the model having to wait for the data to become
+    available.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Use the parallelized map function when calling the get_image_and_label() function.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In terms of how these changes are reflected in the code, they are minor changes.
+    In the following listing, the changes are in bold.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 14.4 The function generating training/validation data sets from flower
+    data set
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Get the training data set, shuffle it, and output a tuple of (image, label).
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Define a function to get the image and the label given a file name.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Get the tokens in the file path and compute the label from the image ID.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Read the image and convert to a tensor.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Parallelize the map function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❻ Incorporate prefetching.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To parallelize the dataset.map() function, we add the num_parallel_calls=tf.data
+    .AUTOTUNE argument, which will cause TensorFlow to execute the map function in
+    parallel, where the number of threads will be determined by the workload carried
+    out by the host at the time. Next, we invoke the prefetch() function on the data
+    after batching to make sure the model training is not hindered by waiting for
+    the data to become available.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, we will set a special environment variable called TF_GPU_THREAD_MODE.
+    To understand the effects of this variable, you first need to grok how GPUs execute
+    instructions at a high level. When you run deep learning models on a machine with
+    a GPU, most of the data-parallel operations (i.e., operations that can be parallelly
+    executed on data) get executed on the GPU. But how do data and instructions get
+    to the GPU? Assume use of a GPU to execute an element-wise multiplication between
+    two matrices. Since individual elements can be multiplied in parallel, this is
+    a data-parallel operation. To execute this operation (defined as a set of instructions
+    and referred to as a *kernel*) on the GPU, the host (CPU) first needs to launch
+    the kernel in order for the GPU to use that function on data. Particularly, a
+    thread in the CPU (a modern Intel CPU has around two threads per core) will need
+    to trigger this. Think about what will happen if all the threads in the CPU are
+    very busy. In other words, if there are a lot of CPU-bound operations happening
+    (e.g., doing lot of reads from the disk), it can create CPU contention, causing
+    these GPU kernel launches to be delayed. This, in turn, delays code getting executed
+    on the GPU. With the TF_GPU_THREAD_MODE *variable, you can alleviate the delays
+    on the GPU caused by CPU contention*. More concretely, this variable controls
+    how CPU threads are allocated to launch kernels on the GPU. It can take three
+    different values:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Global—There is no special preference as to how threads are allocated for the
+    different processes (default).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: gpu_private—A number of dedicated threads are allocated to launch kernels for
+    the GPU. This way, kernel launch will not be delayed, even when a CPU is executing
+    a significant load. If there are multiple GPUs, they will have their own private
+    threads. The number of threads defaults to two and can be changed by setting the
+    TF_GPU_THREAD_COUNT variable.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: shared—Same as gpu_private, except in multi-GPU environments, a pool of threads
+    will be shared between the GPUs.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: We will set this variable to gpu_private. We will keep the number of dedicate
+    threads to two, so it will not create the TF_GPU_THREAD_COUNT variable.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Setting environment variables
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To set the TF_GPU_THREAD_MODE environment variable, you can do the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Linux operating systems (e.g., Ubuntu)**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: To set the environment variable
+  prefs: []
+  type: TYPE_NORMAL
+- en: Open a terminal.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Run export TF_GPU_THREAD_MODE=gpu_private.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Verify the environment variable is set by calling echo $TF_GPU_THREAD_MODE.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Open a new shell and start the Jupyter notebook server.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Windows operating system**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: To the environment variable
+  prefs: []
+  type: TYPE_NORMAL
+- en: From the start menu, select Edit the system environment variables.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Click the button called environment variables.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Add a new environment variable, TF_GPU_THREAD_MODE=gpu_private, in the opened
+    dialog.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Open a new command prompt and start the Jupyter notebook server.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**conda environment (Anaconda)**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: To set environment variables in a conda environment
+  prefs: []
+  type: TYPE_NORMAL
+- en: Activate the conda environment with conda activate manning.tf2.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Run conda env config vars set TF_GPU_THREAD_MODE=gpu_private.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Deactivate and reactivate the environment for the variable to take effect.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Start the Jupyter notebook server.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: It is important to restart the notebook server after changing environment variables
+    in your operating system or the conda environment. Refer to the following sidebar
+    for more details.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Important: Restart the notebook server after setting the environment variable'
+  prefs: []
+  type: TYPE_NORMAL
+- en: When you create the notebook server from a shell (e.g., Command prompt on Windows
+    or Terminal on Linux), the notebook server is created as a child process of the
+    shell. The changes you do to the environment (e.g., adding an environment variable)
+    after starting the notebook server will not be reflected in that child process.
+    Therefore, you have to kill any existing notebook servers, change the environment
+    variables, and then restart the notebook server to see the effects.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We introduced three optimizations to our tf.data pipeline:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Prefetching batches of data
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using the parallelized map() function instead of the standard map() function
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using dedicated kernel launch threads by setting TF_GPU_THREAD_MODE=gpu_ private
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 14.4.2 Mixed precision training
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: As explained earlier, mixed precision training refers to employing a combination
+    of 16-bit and 32-bit operations in model training. For example, the trainable
+    parameters (i.e., variables) are kept as 32-bit floating point values and operations
+    (e.g., matrix multiplication) and produce 16-bit floating point outputs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In Keras, it’s very easy to enable mixed precision training. You simply import
+    the mixed_precision namespace from Keras and create a policy that uses mixed precision
+    data types by passing mixed_float16. Finally, you set it as a global policy. Then,
+    whenever you define a new model, it will use this policy to determine the data
+    types for the model:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Let’s redefine the CNN model we defined and do a quick check on data types
+    to understand how this new policy has changed the model data types:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now we will pick a layer and check the data types of the inputs/internal parameters
+    (e.g., trainable weights) and outputs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: This will print
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: As you can see, the inputs and outputs have the float16 data type, whereas the
+    variables have the float32 type. This is a design principle incorporated by mixed
+    precision training. The variables are kept as type float32 to make sure the precision
+    is preserved as the weights are updated.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Loss scaling to avoid numerical underflow
+  prefs: []
+  type: TYPE_NORMAL
+- en: When mixed precision training is used, the loss needs to be treated with care.
+    Half precision floating point (float16) values have a smaller dynamic range than
+    single precision floating point values (float32). Dynamic range refers to the
+    range of values each data type can represent. For example, the maximum value that
+    can be represented by float16 is 65,504 (minimum positive 0.000000059604645),
+    whereas float32 can go up to 3.4 × 10^38 (minimum positive 1.4012984643 × 10 −
+    45). Due to this small dynamic range of the float16 data type, the loss value
+    can easily underflow (or overflow), causing numerical issues during back propagation.
+    To avoid this, the loss needs to be scaled by an appropriate value, such that
+    the gradients stay within the dynamic range of float16 values. Fortunately, Keras
+    automatically takes care of this.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When the policy is set to mixed_float16 and you call model.compile(), the optimizer
+    is automatically wrapped in a tf.keras.mixed_precision.LossScaleOptimizer() *(*[http://mng.bz/Aydo](http://mng.bz/Aydo)*)*.
+    The LossScaleOptimizer() will automatically scale the loss dynamically during
+    model optimization to avoid numerical issues. If you did not using Keras to build
+    the model, then you have to manually take care of this.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'With that, rerun the model training:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: After running the model training with the various optimization steps that we
+    introduced, we can compare the results by changing the run on the TensorBoard.
+    For example, we show a side-by-side comparison of the elements on the overview
+    page with and without optimizations. We can see that the time has reduced significantly
+    after introducing the tf.data pipeline-related optimizations (figure 14.11).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![14-11](../../OEBPS/Images/14-11.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 14.11 Side-by-side comparison of the profiling overview with and without
+    data- and model-related optimizations. We can see a significant reduction of the
+    input time after introducing the optimizations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You might be thinking that the device compute time has not gone down much after
+    incorporating the 16-bit operations. The largest benefit of using 16-bit operations
+    is in the memory consumption of the GPU. The TensorBoard provides a separate view
+    called the *memory profile* to analyze the memory profile of the model (figure
+    14.12). You can use this view to analyze memory bottlenecks or memory leaks of
+    the model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![14-12](../../OEBPS/Images/14-12.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 14.12 Memory profile with and without the optimizations. The difference
+    from using 16-bit operations is very clear, as it has reduced the memory consumption
+    of the model significantly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can clearly see how the memory requirements have taken a plunge after incorporating
+    mixed precision training. The model’s appetite for memory has gone down by approximately
+    76% when mixed precision training is used (from 5.48 GB to 1.25 GB).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The graph specifically refers to two types of memory: *heap* and *stack*. These
+    are fundamental memory spaces used by programs to keep track of variables a function
+    calls when a program is executed. From these, the heap will help us to learn about
+    memory usage patterns or memory-related issues, as that’s where various objects
+    and variables created during program execution are kept. For example, if memory
+    leaks are present, you will see an increasing amount of memory used by the heap.
+    Here, we can see that the memory usage is quite linear and can assume that there
+    are no significant memory leaks. You can read more about heaps and stacks in the
+    sidebar on the next page.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Stack vs. heap
+  prefs: []
+  type: TYPE_NORMAL
+- en: Memory of a running program is kept either in the stack or in the heap. For
+    example, function calls are kept in a stack, where the last call is on top of
+    the stack and the oldest is at the bottom. When these function calls create objects,
+    for example, they are written to the heap (the term “heap” comes from a collection
+    of objects that has nothing to do with the heap data structure). You can imagine
+    that the heap contains many objects and attributes, without a particular order
+    (thus the term “heap”). Items are automatically popped out from the stack as function
+    calls end. But it is up to the programmer to free up the heap when objects are
+    no longer used, as they persist even after the function call has ended. However,
+    in modern programming languages, the garbage collector automatically takes care
+    of this. (See [http://mng.bz/VMZ5](http://mng.bz/VMZ5) and [http://mng.bz/ZAER](http://mng.bz/ZAER).)
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You probably have heard the term “stack overflow,” which happens when recursive
+    function calls in the code do not meet termination conditions in a reasonable
+    manner, leading the large number of function calls to spill the stack. On a different
+    note, we cannot ignore how the name of a popular website among developers came
+    to be ([stackoverflow.com](http://stackoverflow.com)). I can’t think of a better
+    resource than Stack Overflow itself to explain this: [http://mng.bz/R4ZZ](http://mng.bz/R4ZZ).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We also can see fine-grained details about which operations used how much memory.
+    For example, we know that the main bottleneck of a CNN is the first Dense layer
+    after a series of convolutional/pooling layers. Table 14.1 confirms that. That
+    is, it shows that the Dense layer, with a shape of [115200, 512] (i.e., first
+    Dense layer), uses the most memory.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Table 14.1 Memory breakdown table. The table shows the memory usage of various
+    TensorFlow operations along with their data shape.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| **Op name** | **Allocation size (GiBs)** | **Requested size (GiBs)** | **Occurrences**
+    | **Region type** | **Data type** | **Shape** |'
+  prefs: []
+  type: TYPE_TB
+- en: '| preallocated/unknown | 0.743 | 0.743 | 1 | persist/dynamic | INVALID | unknown
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| gradient_tape/sequential/dense/MatMul/Cast/Cast | 0.220 | 0.220 | 1 | output
+    | float | [115200,512] |'
+  prefs: []
+  type: TYPE_TB
+- en: '| gradient_tape/sequential/batch_normalisation_3/FusedBatchNormGradV3 | 0.051
+    | 0.029 | 1 | temp | half | [32,512,31,31] |'
+  prefs: []
+  type: TYPE_TB
+- en: '| gradient_tape/sequential/average_pooling2d/AvgPool/AvgPoolGrad | 0.036 |
+    0.029 | 1 | output | half | [32,31,31,512] |'
+  prefs: []
+  type: TYPE_TB
+- en: '| gradient_tape/sequential/batch_normalisation_3/FusedBatchNormGradV3 | 0.029
+    | 0.029 | 1 | output | half | [32,31,31,512] |'
+  prefs: []
+  type: TYPE_TB
+- en: '| gradient_tape/sequential/batch_normalisation_3/FusedBatchNormGradV3 | 0.029
+    | 0.029 | 2 | temp | half | [32,512,31,31] |'
+  prefs: []
+  type: TYPE_TB
+- en: Finally, you have the *trace viewer*. This gives a longitudinal view of how
+    various operations were executed on the CPU or GPU and how much time it took.
+    This gives a very detailed view of when and how various operations were scheduled
+    and executed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: On your left, you can see what was executed on your CPU versus on the GPU. For
+    example, you can see that most model-related operations (e.g., convolution) were
+    executed on the GPU, whereas tf.data operations (e.g., decoding images) were executed
+    on the GPU. You can also note that the trace viewer shows GPU private threads
+    separately.
+  prefs: []
+  type: TYPE_NORMAL
+- en: TensorBoard has far more uses than what we have listed here. To know more about
+    these, please refer the following sidebar.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Other views on the TensorBoard
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There are many different views available for the TensorBoard. We have discussed
+    the most used view, and I will leave it to the readers to explore the views we
+    haven’t discussed. However, out of the ones left out, there are views that are
+    worth noting:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Debugger v2**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Debugger v2 is a tool introduced since TensorFlow 2.3\. The primary purpose
+    of it is to debug numerical issues in models. For example, NaN values creeping
+    in during model training are a very common issue for deep networks. Debugger v2
+    will provide a comprehensive step-by-step breakdown of various elements in your
+    model (e.g. ,input and output tensors) and which ones produced numerical errors.
+    For more information, visit [https://www.tensorflow.org/tensorboard/debugger_v2](https://www.tensorflow.org/tensorboard/debugger_v2).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**HParams**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Hparams is a view that helps hyperparameter optimization and allows you to dive
+    into individual runs to understand which parameters help improve model performance.
+    The tensorboard.plugins.hparams.api provides various useful functions and callbacks
+    to hyperparameter-optimize Keras models easily. Then, the trials that happened
+    during the hyperparameter optimization can be viewed in the HParams view. For
+    more information, visit [http://mng.bz/2nKg](http://mng.bz/2nKg).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**What-If Tool**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: What-If is a tool that can give valuable insights into black-box models, helping
+    with the interpretability of such models. For example, you can run a model inference
+    with some data. Then you can modify the data and see how the output changes through
+    the What-If tool. Furthermore, it provides various tools for analyzing the performance
+    and fairness of models. For more information, visit [http://mng.bz/AyjW](http://mng.bz/AyjW).
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next section, we will discuss how we can visualize and interact with
+    word vectors on the TensorBoard.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Exercise 4
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You have a model that you have already profiled. You have seen the following
+    overview of times:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Input time: 1.5 ms'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Device compute time: 6.7 ms'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Kernel launch time: 9.8 ms'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Output time: 10.1 ms'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Host compute time: 21.2 ms'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: For this scenario, assume a time recorded more than 5 ms is an opportunity for
+    improvement. List three code/environment change recommendations to improve the
+    model performance.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 14.5 Visualizing word vectors with the TensorBoard
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: You are working as an NLP engineer for a movie recommendation company and have
+    been tasked with developing a movie recommendation model that can be trained on
+    small devices. To reduce the training overhead, one of the techniques used is
+    using pretrained word vectors and freezing them (i.e., not training them). You
+    think GloVe word vectors will give a good initial point and plan to use them.
+    But before that, you have to make sure the vectors capture the semantics/relationships
+    in the movie-specific terminology/words adequately. For that, you need to visualize
+    word vectors for these words on TensorBoard and analyze whether GloVe vectors
+    represent sensible relationships between words.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The first thing we need to do is download the GloVe word vectors. You have
+    been provided the code to download GloVe vectors in the notebook, and it is very
+    similar to how we have downloaded datasets in the past. Therefore, we will not
+    discuss the download in detail. The GloVe word vectors are obtained from [https://nlp.stanford.edu/projects/glove/](https://nlp.stanford.edu/projects/glove/).
+    There are several different versions of GloVe vectors; they have different dimensionalities
+    and vocabulary sizes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Trained on Wikipedia 2014 + Gigaword 5 data sets with 6 billion tokens; 400,000
+    vocabulary; uncased tokens; and 50D, 100D, 200D, and 300D vectors
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Trained on the Common Crawl data set with 42 billion tokens, 1,900,000 vocabulary,
+    uncased tokens, and 300D vectors
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Trained on the Common Crawl data set with 840 billion tokens, 2,200,000 vocabulary,
+    cased tokens, and 300D vectors
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Trained on the Twitter data set with 2 billion tweets; 27 billion tokens; 1,200,000
+    vocabulary; uncased tokens; and 25D, 50D, 100D, and 200D vectors
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: GloVe word vectors
+  prefs: []
+  type: TYPE_NORMAL
+- en: GloVe (standing for *Glo*bal *Ve*ctors) is a word vector algorithm that generates
+    word vectors by looking at both global and local statistics of a corpus. For example,
+    word vector algorithms such as Skip-gram or Continuous Bag-of-Words rely only
+    on the local context of a given word to learn the word vector for that word. The
+    lack of attention to global information about how the word is used in a larger
+    corpus leads to suboptimal word vectors. GloVe incorporates the global statistics
+    by computing a large co-occurrence matrix to indicate the co-occurrence frequency
+    (i.e., if a given word appears in the context of another word) between all words.
+    For more information about GloVe vectors, see [http://mng.bz/1oGX](http://mng.bz/1oGX).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We will use the 50-dimensional word vectors from the first category (which
+    is the smallest). A 50-dimensional word vector will have 50 values in each word
+    vector designated for each token in the corpus. Once the data is extracted by
+    running the code in the notebook, you will see a file with the name glove.6B.50d.txt
+    in the data folder. Let’s load that as a pandas DataFrame using the pd.read_csv()
+    function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This will return table 14.2\. Now we will download the IMDB movie reviews data
+    set ([https://ai.stanford.edu/~amaas/data/sentiment/](https://ai.stanford.edu/~amaas/data/sentiment/)).
+    Since this data set is readily available as a TensorFlow data set (through the
+    tensorflow_datasets library), we can use that:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Once we download the data, we will create a corpus that contains all the reviews
+    (text) in the training set as a list of strings:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Next, we want to get the most common 5,000 words in this corpus so that we
+    can compare the GloVe vectors of these common words to see if they contain sensible
+    relationships. To get the most common words, we will use the built-in Counter
+    object. The Counter object counts the frequencies of the words in the vocabulary:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: This will print
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: '![14-12_table_14-2](../../OEBPS/Images/14-12_table_14-2.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'With both the GloVe vectors and the corpus containing the most common 5,000
+    words in the IMDB movie reviews data set, we find the common tokens between the
+    two sets for visualization:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: This will give a list of roughly 3,600 tokens that appear in both sets.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Next, we can visualize these vectors on the TensorBoard. To reiterate, word
+    vectors are numerical representations of tokens in a given corpus. The specialty
+    of these word vectors (as opposed to one-hot encoding words) is that they capture
+    the semantics of words. For example, if you compute the distance between the word
+    vector of “cat” and “dog,” they will be a lot closer than “cat” and “volcano.”
+    But when analyzing relationships between a larger set of tokens, we prefer a visual
+    aid. It would be great if there was a way to visualize these word vectors on a
+    2D or 3D plane, which is much easier to visualize and understand. There are dimensionality-reduction
+    algorithms such as Principal Component Analysis (PCA) ([http://mng.bz/PnZw](http://mng.bz/PnZw))
+    or t-SNE ([https://distill.pub/2016/misread-tsne/](https://distill.pub/2016/misread-tsne/))
+    that can achieve this. The specific algorithms used for this are out of scope
+    for this book. The good news is that with TensorBoard, you can do this. TensorBoard
+    can map these high-dimensional vectors to a smaller projection space. To do that,
+    we have to first load these weights as a TensorFlow variable and then save it
+    to the disk as a TensorFlow checkpoint. Then we also save the words or tokens
+    as a new file, with one token per line, corresponding to each vector in the set
+    of word vectors we just saved. With that, you can visualize the word vectors on
+    the TensorBoard (see the next listing).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 14.5 Visualizing word vectors on TensorBoard
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Create a tf.Variable with the embeddings we captured.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Save the embeddings as a TensorFlow checkpoint.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Save the metadata (a TSV file), where each word corresponding to the embeddings
+    is appended as a new line.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Create a configuration specific to the projector and embeddings (details are
+    discussed in the text).
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Set the metadata path so that TensorBoard can incorporate that in the visualization.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To visualize the word vectors from the saved TensorFlow checkpoint and the
+    metadata (i.e., tokens corresponding to the word vectors saved), we use the tensorboard.plugins
+    .projector object. We then define a ProjectorConfig object and an embedding config.
+    We will keep them with the default configurations, which suit our problem. When
+    config.embeddings.add() is invoked, it will generate an embedding config (of type
+    EmbeddingInfo object) with default configuration. The ProjectorConfig contains
+    information such as the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: model_checkpoint_directory—The directory to which the checkpoint containing
+    embeddings was saved
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The EmbeddingInfo contains
+  prefs: []
+  type: TYPE_NORMAL
+- en: tensor_name—If a special tensor name was used for embeddings
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: metadata_path—The path to a TSV file that contains the labels of the embeddings
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: To see a full list of available configurations, refer to the file at [http://mng.bz/J2Zo](http://mng.bz/J2Zo).
+    In its current state, the projector’s config does not support a lot of customizations.
+    For this reason, we will keep them as default. One config we will set in the EmbeddingInfo
+    config is the metadata_path. We will set the metadata_path to the file containing
+    the tokens and finally pass it to the projecter.visualize_embeddings() function.
+    We give it a logging directory, and the projector will automatically detect the
+    TensorFlow checkpoint and load it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We’re all good to go. On your notebook, execute the following line to bring
+    up the TensorBoard:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: To visualize word vectors, they need to be in the exact directory the --logdir
+    is pointing to (i.e., not in a nested folder). Therefore, we need a new TensorBoard
+    server. This line will open a new TensorBoard server on port 6007\. Figure 14.13
+    depicts what is displayed in the TensorBoard.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Interesting facts about the %tensorboard magic command
+  prefs: []
+  type: TYPE_NORMAL
+- en: The %tensorboard magic command is smart enough to know when to open a new TensorBoard
+    server and when not to. If you are executing the same command over and over again,
+    it will reuse the existing TensorBoard. However, if you execute a command with
+    a different --logdir or a --port, it will open a new TensorBoard server.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![14-13](../../OEBPS/Images/14-13.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 14.13 The word vector view on the TensorBoard. You have the ability to
+    pick which dimensionality-reduction algorithm (along with parameters) to use in
+    order to get a 2D or 3D representation of the word vectors. Hovering over the
+    dots in the visualization will show the word represented by the dot.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can hover over the dots shown in the visualization, and they will show which
+    word in the corpus they represent. You have the ability to visualize the word
+    vectors in a 2D or a 3D space by toggling the dimensionality controller. You might
+    be wondering about the word vectors that we chose. They initially had 50 dimensions—how
+    can we visualize such high-dimensional data in a 2D or 3D space? There’s a suite
+    of dimensionality-reduction algorithms that can do this for us. A few examples
+    are t-SNE ([http://mng.bz/woxO](http://mng.bz/woxO)), PCA (principal component
+    analysis; [http://mng.bz/ZAmZ](http://mng.bz/ZAmZ)), and UMAP (Uniform Manifold
+    Approximation and Projection; [https://arxiv.org/pdf/1802.03426.pdf](https://arxiv.org/pdf/1802.03426.pdf)).
+    Refer to the accompanied links to learn more about these algorithms.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can do more than a plain visualization of word vectors on the TensorBoard.
+    You can do more detailed analysis by highlighting specific words in the visualization.
+    For that, you can employ regular expressions. For example, the visualization shown
+    in figure 14.14 is generated using the regular expression (?:fred|larry|mrs\.|mr\
+    .|michelle|sea|denzel|beach|comedy|theater|idiotic|sadistic|marvelous| loving|gorg|bus|truck|lugosi).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![14-14](../../OEBPS/Images/14-14.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 14.14 Searching words in the visualizations. You can use regular expressions
+    to search combinations of words.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This concludes our discussion about the TensorBoard. In the next chapter, we
+    will discuss how TensorFlow can help us to create machine learning pipelines and
+    deploy models with ease.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Exercise 5
+  prefs: []
+  type: TYPE_NORMAL
+- en: Instead of just the word, say you want to include a unique ID when displaying
+    word vectors in the TensorBoard. For example, instead of the word “loving” you
+    want to see “loving; 218,” where 218 is the unique ID given to the word. To do
+    this, you need to change what’s written to the metadata.tsv file. Instead of just
+    the word, write an incrementing ID separated by a semicolon on each line. For
+    example, if the words are [“a”, “b”, “c”], in that order, then the new lines should
+    be [“a;1”, “b;2”, “c;3”]. How would you make changes?
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: TensorBoard is a great visualization aid for visualizing data (e.g., images)
+    and tracking model performance in real time.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: When building models with Keras, you can use the convenient tf.keras.callbacks.TensorBoard()
+    callback to log model performance, layer activation histograms, and much more.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If you have custom metrics that you want to log to the TensorBoard, you can
+    use the corresponding data type in the tf.summary namespace (e.g., use tf.summary.scalar()
+    if you want to log a scalar value, like model accuracy over time).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Each session where you log information to the TensorBoard is called a run. You
+    should incorporate a readable and robust naming convention for the different runs.
+    A good naming convention should capture major changes you did and the date/time
+    the run was executed.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: TensorBoard Profile provides a diverse collection of profiling (using libcupti
+    library by NVIDIA) results such as time taken by various subtasks during model
+    training (e.g., device compute time, host compute time, input time, etc.), memory
+    used by the model, and a sequential view of when and how various operations are
+    carried out.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: TensorBoard is a great tool for visualizing high-dimensional data like images
+    and word vectors.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Answers to exercises
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '**Exercise 1**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: '**Exercise 2**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: '**Exercise 3**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: '**Exercise 4**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: There are a lot of computations happening on the host. This could be because
+    the device (e.g., GPU) does not have enough memory. Using mixed precision training
+    will help to alleviate the issue. Furthermore, there might be too much non-TensorFlow
+    code that cannot run on the GPU. For that, using more TensorFlow operations and
+    converting such code to TensorFlow will gain speed-ups.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The Kernel launch time has increased. This could be because the workload is
+    heavily CPU-bound. In this case, we can incorporate the TF_GPU_THREAD_MODE environment
+    variable and set it to gpu_private. This will make sure there will be several
+    dedicated threads to launch kernels for the GPU.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Output time is significantly high. This could be because of writing too many
+    outputs too frequently to the disk. To solve that, we can incorporate keeping
+    data in memory for longer and flushing it to the disk only a few times.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '**Exercise 5**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
