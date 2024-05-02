@@ -989,6 +989,7 @@
   id: totrans-133
   prefs: []
   type: TYPE_NORMAL
+  zh: 该模型非常简单，与我们之前定义的完全连接模型相同。它有三个层，分别有512、256和10个节点。前两层使用ReLU激活函数，而最后一层使用softmax激活函数。请注意，我们将第二个Dense层命名为log_layer。我们将使用该层来计算我们感兴趣的指标。最后，该模型使用稀疏分类交叉熵损失、Adam优化器和准确度作为指标进行编译。接下来，我们使用批量归一化定义相同的模型：
 - en: '[PRE20]'
   id: totrans-134
   prefs: []
@@ -1000,6 +1001,7 @@
   id: totrans-135
   prefs: []
   type: TYPE_NORMAL
+  zh: 引入批量归一化意味着在Dense层之间添加tf.keras.layers.BatchNormalization()层。我们将第二个模型中感兴趣的层命名为log_layer_bn，因为我们不能同时使用相同名称的两个层。
 - en: With the models defined, our task is to compute the mean and standard deviation
     of weights at every step. To do that, we will observe the mean and standard deviation
     of the weights in the second layer of both networks (log_layer and log_layer_bn).
@@ -1010,6 +1012,7 @@
   id: totrans-136
   prefs: []
   type: TYPE_NORMAL
+  zh: 有了定义好的模型，我们的任务是在每一步计算权重的均值和标准差。为此，我们将观察两个网络的第二层的权重的均值和标准差（log_layer和log_layer_bn）。正如我们已经讨论过的，我们不能简单地传递一个TensorBoard回调并期望这些指标可用。由于我们感兴趣的指标不常用，我们必须费力确保这些指标在每一步都被记录。
 - en: We will define a train_model() function, to which we can pass the defined model
     and train it on the data. While training, we will compute the mean and the standard
     deviation of the weights in every step and log that to the TensorBoard (see the
@@ -1017,11 +1020,13 @@
   id: totrans-137
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们将定义一个train_model()函数，可以将定义的模型传递给它，并在数据上进行训练。在训练过程中，我们将计算每一步权重的均值和标准差，并将其记录到TensorBoard中（见下一个清单）。
 - en: Listing 14.2 Writing a tf.summary object while training the model in a custom
     loop
   id: totrans-138
   prefs: []
   type: TYPE_NORMAL
+  zh: 清单14.2 在自定义循环中训练模型时编写tf.summary对象
 - en: '[PRE21]'
   id: totrans-139
   prefs: []
@@ -1031,27 +1036,33 @@
   id: totrans-140
   prefs: []
   type: TYPE_NORMAL
+  zh: ❶ 定义写入器。
 - en: ❷ Open the writer.
   id: totrans-141
   prefs: []
   type: TYPE_NORMAL
+  zh: ❷ 打开写入器。
 - en: ❸ Train with one batch.
   id: totrans-142
   prefs: []
   type: TYPE_NORMAL
+  zh: ❸ 用一个批次进行训练。
 - en: ❹ Get the weights of the layer. It’s a list of arrays [weights, bias] in that
     order. Therefore, we’re only taking the weights (index 0).
   id: totrans-143
   prefs: []
   type: TYPE_NORMAL
+  zh: ❹ 获取层的权重。它是一个数组列表[权重，偏差]，顺序是这样的。因此，我们只取权重（索引0）。
 - en: ❺ Log mean and std of absolute weights (which are two scalars for a given epoch).
   id: totrans-144
   prefs: []
   type: TYPE_NORMAL
+  zh: ❺ 记录权重的均值和标准差（对于给定epoch是两个标量）。
 - en: ❻ Flush to the disk from the buffer.
   id: totrans-145
   prefs: []
   type: TYPE_NORMAL
+  zh: ❻ 从缓冲区刷新到磁盘。
 - en: 'Note how we open a tf.summary.writer() and then log the metrics in every step
     using the tf.summary.scalar() call. We are giving the metrics meaningful names
     to make sure we know which is which when visualizing them on the TensorBoard.
@@ -1059,6 +1070,7 @@
   id: totrans-146
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意我们如何打开一个tf.summary.writer()，然后使用tf.summary.scalar()调用在每一步记录指标。我们给指标起了有意义的名称，以确保在TensorBoard上可视化时知道哪个是哪个。有了函数定义，我们为我们编译的两个不同模型调用它：
 - en: '[PRE22]'
   id: totrans-147
   prefs: []
@@ -1074,14 +1086,17 @@
   id: totrans-148
   prefs: []
   type: TYPE_NORMAL
+  zh: 请注意，我们指定不同的日志子目录，以确保出现的两个模型是不同的运行。运行后，您将看到两个新的附加部分，名为mean_weights和std_weights（图14.8）。似乎当使用批量归一化时，权重的均值和方差更加剧烈地变化。这可能是因为批量归一化在层之间引入了显式归一化，使得层的权重更自由地移动。
 - en: '![14-08](../../OEBPS/Images/14-08.png)'
   id: totrans-149
   prefs: []
   type: TYPE_IMG
+  zh: '![14-08](../../OEBPS/Images/14-08.png)'
 - en: Figure 14.8 The mean and standard deviation of weights plotted in the TensorBoard
   id: totrans-150
   prefs: []
   type: TYPE_NORMAL
+  zh: 图14.8 权重的均值和标准差在TensorBoard中绘制
 - en: The next section expands on how the TensorBoard can be used to profile models
     and provides in-depth analysis of how time spent and memory are consumed when
     models are executed.
@@ -1372,37 +1387,44 @@
   id: totrans-194
   prefs: []
   type: TYPE_NORMAL
+  zh: 训练完成后，您可以在TensorBoard上查看结果。TensorBoard提供了大量有价值的信息和对模型性能的洞察。它将计算分解为更小的子任务，并根据这些子任务提供细粒度的计算时间分解。此外，TensorBoard提供了关于改进空间的建议（图14.10）。现在让我们更深入地了解该页面提供的信息。
 - en: '![14-10](../../OEBPS/Images/14-10.png)'
   id: totrans-195
   prefs: []
   type: TYPE_IMG
+  zh: '![14-10](../../OEBPS/Images/14-10.png)'
 - en: Figure 14.10 TensorBoard profiling interface. It gives a valuable collection
     of information on various subtasks involved in running models on the GPU. In addition,
     it provides recommendations on how to improve the performance of the models.
   id: totrans-196
   prefs: []
   type: TYPE_NORMAL
+  zh: 图14.10 TensorBoard性能分析界面。它提供了有关在GPU上运行模型涉及的各种子任务的宝贵信息。此外，它还提供了改进模型性能的建议。
 - en: 'The average step time is a summation of several smaller tasks:'
   id: totrans-197
   prefs: []
   type: TYPE_NORMAL
+  zh: 平均步骤时间是几个较小任务的总和：
 - en: '*Input time*—Time spent on reading data-related operations (e.g., tf.data.Dataset
     operations).'
   id: totrans-198
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '*输入时间*—用于读取与数据相关的操作（例如，tf.data.Dataset操作）的时间。'
 - en: '*Host compute time*—Model-related computations done on the host (e.g., CPU).'
   id: totrans-199
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '*主机计算时间*—在主机上执行的与模型相关的计算（例如，CPU）。'
 - en: '*Device-to-device time*—To run things on the GPU, data first needs to be transferred
     to the GPU. This subtask measures the time taken for such transfers.'
   id: totrans-200
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '*设备到设备时间*—要在GPU上运行东西，首先需要将数据传输到GPU。这个子任务测量了这种传输所花费的时间。'
 - en: '*Kernel launch time*—For the GPU to execute operations on the transferred data,
     the CPU needs to launch the kernels for the GPU. A kernel encapsulates a primitive
     computation performed on data (e.g., matrix multiplication). This measures the
@@ -1411,24 +1433,28 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '*内核启动时间*—为了使GPU执行传输的数据上的操作，CPU需要为GPU启动内核。内核封装了对数据执行的原始计算（例如，矩阵乘法）。这测量了启动内核所需的时间。'
 - en: '*Device compute time*—Model-related computations that happen on the device
     (e.g., GPU).'
   id: totrans-202
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '*设备计算时间*—发生在设备上的与模型相关的计算（例如，GPU）。'
 - en: '*Device collective communication time*—Relates to time spent on communicating
     in multi-device (e.g., multiple GPUs) or multi-node environments.'
   id: totrans-203
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '*设备集体通信时间*—与在多设备（例如，多个GPU）或多节点环境中通信所花费的时间相关。'
 - en: All the other times (e.g., compilation time, output time, all other remaining
     time).
   id: totrans-204
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 所有其他时间（例如，编译时间、输出时间、所有其他剩余时间）。
 - en: Here we can see that the most time is spent on device computations. This is,
     in a way, good, as it means that most computations happen on the GPU. The next-biggest
     time consumer is the input time. This makes sense as we are not using any optimizations
@@ -1437,6 +1463,7 @@
   id: totrans-205
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这里，我们可以看到大部分时间都花在了设备计算上。从某种意义上说，这是好的，因为它意味着大多数计算发生在GPU上。下一个最大的时间消耗者是输入时间。这是有道理的，因为我们没有对我们的tf.data流水线进行任何优化，并且它是一个高度依赖磁盘的流水线，因为图像是从磁盘中读取的。
 - en: Then, right below that, you can see some more information. Close to 80% of the
     TensorFlow ops were placed on this host, whereas only 20% ran on the GPU. Furthermore,
     all the operations were 32-bit operations, and none were 16-bit; 16-bit (half-precision
@@ -1451,24 +1478,29 @@
   id: totrans-206
   prefs: []
   type: TYPE_NORMAL
+  zh: 然后，在下面，您可以看到更多信息。接近80%的TensorFlow操作被放置在此主机上，而仅有20%在GPU上运行。此外，所有操作都是32位操作，没有16位操作；16位（半精度浮点）操作比32位（单精度浮点）数据类型运行得更快，节省了大量内存。GPU和Tensor处理单元（TPU）是经过优化的硬件，可以比32位操作更快地运行16位操作。因此，必须尽可能地将它们纳入其中。话虽如此，我们必须小心如何使用16位操作，因为不正确的使用可能会严重影响模型性能（例如，模型准确性）。将16位操作与32位操作一起用于训练模型称为*混合精度训练*。
 - en: 'If you look at the recommendation section, you can see two main recommendations:'
   id: totrans-207
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果你看推荐部分，你会看到两个主要的建议：
 - en: Optimize the input data pipeline.
   id: totrans-208
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 优化输入数据管道。
 - en: Utilize more 16-bit operations in model training.
   id: totrans-209
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 在模型训练中利用更多的 16 位操作。
 - en: Brain Floating Point data type (bfloat16)
   id: totrans-210
   prefs: []
   type: TYPE_NORMAL
+  zh: Brain Floating Point 数据类型（bfloat16）
 - en: Brain Floating Point values, or bfloat16 values, are a data type proposed by
     Google. It has the same number of bits as float16 (i.e., 16 bits) but is able
     to represent the dynamic range of float32 values with some loss in precision.
@@ -1479,41 +1511,51 @@
   id: totrans-211
   prefs: []
   type: TYPE_NORMAL
+  zh: Brain Floating Point 值，或称 bfloat16 值，是 Google 提出的一种数据类型。它与 float16（即，16 位）具有相同的位数，但能够表示
+    float32 值的动态范围，但在精度上会有一定损失。这种变化是通过增加更多的指数位（小数点左侧）和减少小数位（小数点右侧）来实现的。这种数据类型可以在优化的硬件上获得显著的优势，比如
+    TPU 和 GPU（假设它们有 Tensor 核心；[https://developer.nvidia.com/tensor-cores)](https://developer.nvidia.com/tensor-cores)）。
 - en: Let’s see how we can use these recommendations to reduce model training time.
   id: totrans-212
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们看看如何利用这些建议来减少模型训练时间。
 - en: 14.4.1 Optimizing the input pipeline
   id: totrans-213
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 14.4.1 优化输入管道
 - en: 'To optimize the data pipeline, we will introduce two changes to our get_flower_
     datasets() function:'
   id: totrans-214
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了优化数据管道，我们将对 get_flower_datasets() 函数进行两项更改：
 - en: Use data prefetching to avoid the model having to wait for the data to become
     available.
   id: totrans-215
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用数据预取以避免模型等待数据可用。
 - en: Use the parallelized map function when calling the get_image_and_label() function.
   id: totrans-216
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 在调用 get_image_and_label() 函数时使用并行化的 map 函数。
 - en: In terms of how these changes are reflected in the code, they are minor changes.
     In the following listing, the changes are in bold.
   id: totrans-217
   prefs: []
   type: TYPE_NORMAL
+  zh: 就这些变化在代码中的体现来说，它们是小变化。在下面的列表中，这些变化用粗体表示。
 - en: Listing 14.4 The function generating training/validation data sets from flower
     data set
   id: totrans-218
   prefs: []
   type: TYPE_NORMAL
+  zh: 列表 14.4 从花数据集生成训练/验证数据集的函数
 - en: '[PRE26]'
   id: totrans-219
   prefs: []
@@ -1523,26 +1565,32 @@
   id: totrans-220
   prefs: []
   type: TYPE_NORMAL
+  zh: ❶ 获取训练数据集，对其进行洗牌，并输出（图像，标签）元组。
 - en: ❷ Define a function to get the image and the label given a file name.
   id: totrans-221
   prefs: []
   type: TYPE_NORMAL
+  zh: ❷ 定义一个函数，根据文件名获取图像和标签。
 - en: ❸ Get the tokens in the file path and compute the label from the image ID.
   id: totrans-222
   prefs: []
   type: TYPE_NORMAL
+  zh: ❸ 获取文件路径中的标记并从图像 ID 计算标签。
 - en: ❹ Read the image and convert to a tensor.
   id: totrans-223
   prefs: []
   type: TYPE_NORMAL
+  zh: ❹ 读取图像并转换为张量。
 - en: ❺ Parallelize the map function.
   id: totrans-224
   prefs: []
   type: TYPE_NORMAL
+  zh: ❺ 并行化 map 函数。
 - en: ❻ Incorporate prefetching.
   id: totrans-225
   prefs: []
   type: TYPE_NORMAL
+  zh: ❻ 结合预取。
 - en: To parallelize the dataset.map() function, we add the num_parallel_calls=tf.data
     .AUTOTUNE argument, which will cause TensorFlow to execute the map function in
     parallel, where the number of threads will be determined by the workload carried
@@ -1552,6 +1600,8 @@
   id: totrans-226
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了并行化 dataset.map() 函数，我们在其后添加了 num_parallel_calls=tf.data .AUTOTUNE 参数，这将导致
+    TensorFlow 在并行执行 map 函数，其中线程数将由主机在执行时承载的工作量确定。接下来，在批处理后我们调用 prefetch() 函数，以确保模型训练不会因为等待数据可用而受阻。
 - en: 'Next, we will set a special environment variable called TF_GPU_THREAD_MODE.
     To understand the effects of this variable, you first need to grok how GPUs execute
     instructions at a high level. When you run deep learning models on a machine with
@@ -1574,12 +1624,19 @@
   id: totrans-227
   prefs: []
   type: TYPE_NORMAL
+  zh: 接下来，我们将设置一个特殊的环境变量，称为TF_GPU_THREAD_MODE。要理解这个变量的影响，你首先需要弄清楚 GPU 如何高效执行指令。当你在一台带有
+    GPU 的机器上运行深度学习模型时，大多数数据并行操作（即可以并行执行的数据操作）都会在 GPU 上执行。但数据和指令是如何传输到 GPU 的呢？假设使用
+    GPU 执行两个矩阵之间的逐元素乘法。由于可以并行地对个别元素进行乘法，这是一个数据并行操作。为了在 GPU 上执行此操作（定义为一组指令并称为*内核*），主机（CPU）首先需要启动内核，以便
+    GPU 使用该函数对数据进行操作。特别地，CPU 中的一个线程（现代 Intel CPU 每个核心大约有两个线程）将需要触发此操作。想象一下如果 CPU 中的所有线程都非常忙碌会发生什么。换句话说，如果有很多
+    CPU 绑定的操作正在进行（例如，从磁盘读取大量数据），它可能会导致 CPU 竞争，从而延迟 GPU 内核的启动。这反过来又延迟了在 GPU 上执行的代码。有了TF_GPU_THREAD_MODE
+    *变量，你可以缓解 CPU 竞争引起的 GPU 延迟*。更具体地说，这个变量控制着 CPU 线程如何分配到 GPU 上启动内核。它可以有三个不同的值：
 - en: Global—There is no special preference as to how threads are allocated for the
     different processes (default).
   id: totrans-228
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 全局—对于为不同的进程分配线程没有特殊的偏好（默认）。
 - en: gpu_private—A number of dedicated threads are allocated to launch kernels for
     the GPU. This way, kernel launch will not be delayed, even when a CPU is executing
     a significant load. If there are multiple GPUs, they will have their own private
@@ -1589,120 +1646,145 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: gpu_private—分配了一些专用线程来为 GPU 启动内核。这样，即使 CPU 正在执行大量负载，内核启动也不会延迟。如果有多个 GPU，则它们将拥有自己的私有线程。线程的数量默认为两个，并可以通过设置TF_GPU_THREAD_COUNT变量进行更改。
 - en: shared—Same as gpu_private, except in multi-GPU environments, a pool of threads
     will be shared between the GPUs.
   id: totrans-230
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: shared—与gpu_private相同，但在多 GPU 环境中，一组线程将在 GPU 之间共享。
 - en: We will set this variable to gpu_private. We will keep the number of dedicate
     threads to two, so it will not create the TF_GPU_THREAD_COUNT variable.
   id: totrans-231
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们将此变量设置为gpu_private。我们将保持专用线程的数量为两个，因此不会创建TF_GPU_THREAD_COUNT变量。
 - en: Setting environment variables
   id: totrans-232
   prefs: []
   type: TYPE_NORMAL
+  zh: 设置环境变量
 - en: 'To set the TF_GPU_THREAD_MODE environment variable, you can do the following:'
   id: totrans-233
   prefs: []
   type: TYPE_NORMAL
+  zh: 要设置TF_GPU_THREAD_MODE环境变量，你可以执行以下操作：
 - en: '**Linux operating systems (e.g., Ubuntu)**'
   id: totrans-234
   prefs: []
   type: TYPE_NORMAL
+  zh: '**Linux 操作系统（例如 Ubuntu）**'
 - en: To set the environment variable
   id: totrans-235
   prefs: []
   type: TYPE_NORMAL
+  zh: 设置环境变量
 - en: Open a terminal.
   id: totrans-236
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 打开一个终端。
 - en: Run export TF_GPU_THREAD_MODE=gpu_private.
   id: totrans-237
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 运行 export TF_GPU_THREAD_MODE=gpu_private。
 - en: Verify the environment variable is set by calling echo $TF_GPU_THREAD_MODE.
   id: totrans-238
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 通过调用 echo $TF_GPU_THREAD_MODE 来验证环境变量是否设置。
 - en: Open a new shell and start the Jupyter notebook server.
   id: totrans-239
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 打开一个新的 shell 并启动 Jupyter 笔记本服务器。
 - en: '**Windows operating system**'
   id: totrans-240
   prefs: []
   type: TYPE_NORMAL
+  zh: '**Windows 操作系统**'
 - en: To the environment variable
   id: totrans-241
   prefs: []
   type: TYPE_NORMAL
+  zh: 环境变量
 - en: From the start menu, select Edit the system environment variables.
   id: totrans-242
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 从开始菜单中，选择编辑系统环境变量。
 - en: Click the button called environment variables.
   id: totrans-243
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 单击名为环境变量的按钮。
 - en: Add a new environment variable, TF_GPU_THREAD_MODE=gpu_private, in the opened
     dialog.
   id: totrans-244
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 在打开的对话框中添加一个新的环境变量TF_GPU_THREAD_MODE=gpu_private。
 - en: Open a new command prompt and start the Jupyter notebook server.
   id: totrans-245
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 打开一个新的命令提示符并启动 Jupyter 笔记本服务器。
 - en: '**conda environment (Anaconda)**'
   id: totrans-246
   prefs: []
   type: TYPE_NORMAL
+  zh: '**conda 环境（Anaconda）**'
 - en: To set environment variables in a conda environment
   id: totrans-247
   prefs: []
   type: TYPE_NORMAL
+  zh: 在 conda 环境中设置环境变量
 - en: Activate the conda environment with conda activate manning.tf2.
   id: totrans-248
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用 conda activate manning.tf2 激活 conda 环境。
 - en: Run conda env config vars set TF_GPU_THREAD_MODE=gpu_private.
   id: totrans-249
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 运行 conda env config vars set TF_GPU_THREAD_MODE=gpu_private。
 - en: Deactivate and reactivate the environment for the variable to take effect.
   id: totrans-250
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 停用并重新启用环境以使变量生效。
 - en: Start the Jupyter notebook server.
   id: totrans-251
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 启动 Jupyter 笔记本服务器。
 - en: It is important to restart the notebook server after changing environment variables
     in your operating system or the conda environment. Refer to the following sidebar
     for more details.
   id: totrans-252
   prefs: []
   type: TYPE_NORMAL
+  zh: 在更改操作系统或 conda 环境中的环境变量后，重启笔记本服务器非常重要。有关更多详细信息，请参阅以下边栏。
 - en: 'Important: Restart the notebook server after setting the environment variable'
   id: totrans-253
   prefs: []
   type: TYPE_NORMAL
+  zh: 重要：设置环境变量后重新启动笔记本服务器。
 - en: When you create the notebook server from a shell (e.g., Command prompt on Windows
     or Terminal on Linux), the notebook server is created as a child process of the
     shell. The changes you do to the environment (e.g., adding an environment variable)
@@ -1712,30 +1794,36 @@
   id: totrans-254
   prefs: []
   type: TYPE_NORMAL
+  zh: 当您从 shell（例如，Windows 上的命令提示符或 Linux 上的终端）创建笔记本服务器时，笔记本服务器将作为 shell 的子进程创建。在启动笔记本服务器后对环境进行的更改（例如，添加环境变量）将不会反映在该子进程中。因此，您必须关闭任何现有的笔记本服务器，更改环境变量，然后重新启动笔记本服务器以查看效果。
 - en: 'We introduced three optimizations to our tf.data pipeline:'
   id: totrans-255
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们对我们的 tf.data 流水线进行了三项优化：
 - en: Prefetching batches of data
   id: totrans-256
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 预取数据批次
 - en: Using the parallelized map() function instead of the standard map() function
   id: totrans-257
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用并行化的 map() 函数而不是标准的 map() 函数
 - en: Using dedicated kernel launch threads by setting TF_GPU_THREAD_MODE=gpu_ private
   id: totrans-258
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 通过设置 TF_GPU_THREAD_MODE=gpu_private 使用专用的内核启动线程。
 - en: 14.4.2 Mixed precision training
   id: totrans-259
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 14.4.2 混合精度训练
 - en: As explained earlier, mixed precision training refers to employing a combination
     of 16-bit and 32-bit operations in model training. For example, the trainable
     parameters (i.e., variables) are kept as 32-bit floating point values and operations
@@ -1743,6 +1831,8 @@
   id: totrans-260
   prefs: []
   type: TYPE_NORMAL
+  zh: 正如前面所解释的，混合精度训练是指在模型训练中采用 16 位和 32 位操作的组合。例如，可训练参数（即变量）保持为 32 位浮点值，而操作（例如，矩阵乘法）产生
+    16 位浮点输出。
 - en: 'In Keras, it’s very easy to enable mixed precision training. You simply import
     the mixed_precision namespace from Keras and create a policy that uses mixed precision
     data types by passing mixed_float16. Finally, you set it as a global policy. Then,
@@ -1751,6 +1841,8 @@
   id: totrans-261
   prefs: []
   type: TYPE_NORMAL
+  zh: 在 Keras 中，启用混合精度训练非常简单。您只需从 Keras 中导入 mixed_precision 命名空间，并创建一个使用 mixed precision
+    数据类型的策略，通过传递 mixed_float16。最后，将其设置为全局策略。然后，每当您定义一个新模型时，它都会使用此策略来确定模型的数据类型：
 - en: '[PRE27]'
   id: totrans-262
   prefs: []
@@ -1761,6 +1853,7 @@
   id: totrans-263
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们重新定义我们定义的 CNN 模型并快速检查数据类型，以了解此新策略如何更改模型数据类型：
 - en: '[PRE28]'
   id: totrans-264
   prefs: []
@@ -1771,6 +1864,7 @@
   id: totrans-265
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在我们将选择一个层并检查输入/内部参数（例如，可训练权重）和输出的数据类型：
 - en: '[PRE29]'
   id: totrans-266
   prefs: []
@@ -1780,6 +1874,7 @@
   id: totrans-267
   prefs: []
   type: TYPE_NORMAL
+  zh: 这将打印。
 - en: '[PRE30]'
   id: totrans-268
   prefs: []
@@ -1792,10 +1887,13 @@
   id: totrans-269
   prefs: []
   type: TYPE_NORMAL
+  zh: 正如您所见，输入和输出的数据类型为 float16，而变量的数据类型为 float32。这是混合精度训练所采用的设计原则。为了确保在更新权重时保留精度，变量保持为
+    float32 类型。
 - en: Loss scaling to avoid numerical underflow
   id: totrans-270
   prefs: []
   type: TYPE_NORMAL
+  zh: 损失缩放以避免数值下溢。
 - en: When mixed precision training is used, the loss needs to be treated with care.
     Half precision floating point (float16) values have a smaller dynamic range than
     single precision floating point values (float32). Dynamic range refers to the
@@ -1899,10 +1997,12 @@
   id: totrans-282
   prefs: []
   type: TYPE_NORMAL
+  zh: 图表明了两种类型的内存：*堆*和*栈*。这些是程序用于在执行程序时跟踪变量和函数调用的基本内存空间。从这些中，堆将帮助我们了解内存使用模式或与内存相关的问题，因为在程序执行期间创建的各种对象和变量都保存在其中。例如，如果存在内存泄漏，您将看到堆使用的内存量正在增加。在这里，我们可以看到内存使用情况相当线性，并且可以假设没有重大的内存泄漏。您可以在下一页的侧边栏中阅读有关堆和栈的更多信息。
 - en: Stack vs. heap
   id: totrans-283
   prefs: []
   type: TYPE_NORMAL
+  zh: 堆 vs. 栈
 - en: Memory of a running program is kept either in the stack or in the heap. For
     example, function calls are kept in a stack, where the last call is on top of
     the stack and the oldest is at the bottom. When these function calls create objects,
@@ -1917,6 +2017,8 @@
   id: totrans-284
   prefs: []
   type: TYPE_NORMAL
+  zh: 程序运行时的内存保持在堆栈或堆中。例如，函数调用保持在堆栈中，其中最后一次调用位于堆栈顶部，最早的调用位于底部。当这些函数调用创建对象时，例如，它们被写入堆中（术语“堆”来自与堆数据结构无关的对象集合）。您可以想象堆中包含许多对象和属性，没有特定顺序（因此术语“堆”）。随着函数调用结束，项目将自动从堆栈中弹出。但是，当对象不再使用时，由程序员释放堆的责任，因为它们在函数调用结束后仍然存在。然而，在现代编程语言中，垃圾收集器会自动处理这个问题。
+    （请参阅[http://mng.bz/VMZ5](http://mng.bz/VMZ5)和[http://mng.bz/ZAER](http://mng.bz/ZAER)。）
 - en: 'You probably have heard the term “stack overflow,” which happens when recursive
     function calls in the code do not meet termination conditions in a reasonable
     manner, leading the large number of function calls to spill the stack. On a different
@@ -1926,6 +2028,8 @@
   id: totrans-285
   prefs: []
   type: TYPE_NORMAL
+  zh: 您可能听说过“堆栈溢出”的术语，当代码中的递归函数调用没有合理满足终止条件时，大量的函数调用会溢出堆栈。另外，我们不能忽视一个受开发者欢迎的网站的名称是如何产生的（[stackoverflow.com](http://stackoverflow.com)）。我认为没有比
+    Stack Overflow 本身更好的资源来解释这个问题了：[http://mng.bz/R4ZZ](http://mng.bz/R4ZZ)。
 - en: We also can see fine-grained details about which operations used how much memory.
     For example, we know that the main bottleneck of a CNN is the first Dense layer
     after a series of convolutional/pooling layers. Table 14.1 confirms that. That
@@ -1934,46 +2038,62 @@
   id: totrans-286
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们还可以看到有关哪些操作使用了多少内存的细节。例如，我们知道 CNN 的主要瓶颈是在一系列卷积/池化层之后的第一个 Dense 层。表 14.1 证实了这一点。也就是说，它显示了
+    Dense 层，其形状为 [115200, 512]（即第一个 Dense 层），使用了最多的内存。
 - en: Table 14.1 Memory breakdown table. The table shows the memory usage of various
     TensorFlow operations along with their data shape.
   id: totrans-287
   prefs: []
   type: TYPE_NORMAL
+  zh: 表 14.1 内存分解表。该表显示了各种 TensorFlow 操作的内存使用情况以及它们的数据形状。
 - en: '| **Op name** | **Allocation size (GiBs)** | **Requested size (GiBs)** | **Occurrences**
     | **Region type** | **Data type** | **Shape** |'
   id: totrans-288
   prefs: []
   type: TYPE_TB
+  zh: '| **操作名称** | **分配大小（GiBs）** | **请求大小（GiBs）** | **发生次数** | **区域类型** | **数据类型**
+    | **形状** |'
 - en: '| preallocated/unknown | 0.743 | 0.743 | 1 | persist/dynamic | INVALID | unknown
     |'
   id: totrans-289
   prefs: []
   type: TYPE_TB
+  zh: '| 预分配/未知 | 0.743 | 0.743 | 1 | 持久/动态 | 无效 | 未知 |'
 - en: '| gradient_tape/sequential/dense/MatMul/Cast/Cast | 0.220 | 0.220 | 1 | output
     | float | [115200,512] |'
   id: totrans-290
   prefs: []
   type: TYPE_TB
+  zh: '| gradient_tape/sequential/dense/MatMul/Cast/Cast | 0.220 | 0.220 | 1 | 输出
+    | 浮点 | [115200,512] |'
 - en: '| gradient_tape/sequential/batch_normalisation_3/FusedBatchNormGradV3 | 0.051
     | 0.029 | 1 | temp | half | [32,512,31,31] |'
   id: totrans-291
   prefs: []
   type: TYPE_TB
+  zh: '| gradient_tape/sequential/batch_normalisation_3/FusedBatchNormGradV3 | 0.051
+    | 0.029 | 1 | temp | half | [32,512,31,31] |'
 - en: '| gradient_tape/sequential/average_pooling2d/AvgPool/AvgPoolGrad | 0.036 |
     0.029 | 1 | output | half | [32,31,31,512] |'
   id: totrans-292
   prefs: []
   type: TYPE_TB
+  zh: '| gradient_tape/sequential/average_pooling2d/AvgPool/AvgPoolGrad | 0.036 |
+    0.029 | 1 | output | half | [32,31,31,512] |'
 - en: '| gradient_tape/sequential/batch_normalisation_3/FusedBatchNormGradV3 | 0.029
     | 0.029 | 1 | output | half | [32,31,31,512] |'
   id: totrans-293
   prefs: []
   type: TYPE_TB
+  zh: '| gradient_tape/sequential/batch_normalisation_3/FusedBatchNormGradV3 | 0.029
+    | 0.029 | 1 | output | half | [32,31,31,512] |'
 - en: '| gradient_tape/sequential/batch_normalisation_3/FusedBatchNormGradV3 | 0.029
     | 0.029 | 2 | temp | half | [32,512,31,31] |'
   id: totrans-294
   prefs: []
   type: TYPE_TB
+  zh: '| gradient_tape/sequential/batch_normalisation_3/FusedBatchNormGradV3 | 0.029
+    | 0.029 | 2 | temp | half | [32,512,31,31] |'
 - en: Finally, you have the *trace viewer*. This gives a longitudinal view of how
     various operations were executed on the CPU or GPU and how much time it took.
     This gives a very detailed view of when and how various operations were scheduled
@@ -1981,6 +2101,7 @@
   id: totrans-295
   prefs: []
   type: TYPE_NORMAL
+  zh: 最后，您可以查看*trace viewer*。这个工具提供了各种操作在 CPU 或 GPU 上是如何执行的纵向视图以及所花费的时间。这提供了关于各种操作何时以及如何被安排和执行的非常详细的视图。
 - en: On your left, you can see what was executed on your CPU versus on the GPU. For
     example, you can see that most model-related operations (e.g., convolution) were
     executed on the GPU, whereas tf.data operations (e.g., decoding images) were executed
@@ -1989,15 +2110,19 @@
   id: totrans-296
   prefs: []
   type: TYPE_NORMAL
+  zh: 在左侧，您可以看到在 CPU 上执行了什么操作，而在 GPU 上执行了什么操作。例如，您可以看到大多数与模型相关的操作（例如，卷积）在 GPU 上执行，而
+    tf.data 操作（例如，解码图像）在 GPU 上执行。您还可以注意到，跟踪查看器单独显示了 GPU 私有线程。
 - en: TensorBoard has far more uses than what we have listed here. To know more about
     these, please refer the following sidebar.
   id: totrans-297
   prefs: []
   type: TYPE_NORMAL
+  zh: TensorBoard 的用途远不止我们在这里列出的。要了解更多，请参考以下侧边栏。
 - en: Other views on the TensorBoard
   id: totrans-298
   prefs: []
   type: TYPE_NORMAL
+  zh: TensorBoard 的其他视图
 - en: 'There are many different views available for the TensorBoard. We have discussed
     the most used view, and I will leave it to the readers to explore the views we
     haven’t discussed. However, out of the ones left out, there are views that are
@@ -2005,10 +2130,12 @@
   id: totrans-299
   prefs: []
   type: TYPE_NORMAL
+  zh: TensorBoard 有许多不同的视图可用。我们已经讨论了最常用的视图，我将让读者探索我们没有讨论的视图。然而，剩下的视图中有一些值得注意的视图：
 - en: '**Debugger v2**'
   id: totrans-300
   prefs: []
   type: TYPE_NORMAL
+  zh: '**Debugger v2**'
 - en: Debugger v2 is a tool introduced since TensorFlow 2.3\. The primary purpose
     of it is to debug numerical issues in models. For example, NaN values creeping
     in during model training are a very common issue for deep networks. Debugger v2
@@ -2018,10 +2145,13 @@
   id: totrans-301
   prefs: []
   type: TYPE_NORMAL
+  zh: Debugger v2 是 TensorFlow 2.3 以后引入的工具。它的主要目的是调试模型中的数值问题。例如，在模型训练过程中出现 NaN 值是深度网络的一个非常常见的问题。Debugger
+    v2 将提供模型中各种元素（例如，输入和输出张量）的全面逐步分解，以及哪些元素产生了数值错误。有关更多信息，请访问[https://www.tensorflow.org/tensorboard/debugger_v2](https://www.tensorflow.org/tensorboard/debugger_v2)。
 - en: '**HParams**'
   id: totrans-302
   prefs: []
   type: TYPE_NORMAL
+  zh: '**HParams**'
 - en: Hparams is a view that helps hyperparameter optimization and allows you to dive
     into individual runs to understand which parameters help improve model performance.
     The tensorboard.plugins.hparams.api provides various useful functions and callbacks
@@ -2031,10 +2161,13 @@
   id: totrans-303
   prefs: []
   type: TYPE_NORMAL
+  zh: Hparams 是一个视图，帮助超参数优化，并允许您深入研究个别运行，以了解哪些参数有助于改善模型性能。tensorboard.plugins.hparams.api
+    提供了各种有用的功能和回调，以轻松优化 Keras 模型的超参数。然后，可以在 HParams 视图中查看超参数优化期间发生的试验。有关更多信息，请访问[http://mng.bz/2nKg](http://mng.bz/2nKg)。
 - en: '**What-If Tool**'
   id: totrans-304
   prefs: []
   type: TYPE_NORMAL
+  zh: '**What-If 工具**'
 - en: What-If is a tool that can give valuable insights into black-box models, helping
     with the interpretability of such models. For example, you can run a model inference
     with some data. Then you can modify the data and see how the output changes through
@@ -2043,56 +2176,68 @@
   id: totrans-305
   prefs: []
   type: TYPE_NORMAL
+  zh: What-If 是一个工具，可以为黑盒模型提供有价值的见解，有助于解释这些模型。例如，您可以使用一些数据运行模型推理。然后，您可以修改数据，并通过 What-If
+    工具查看输出如何变化。此外，它提供了各种工具，用于分析模型的性能和公平性。有关更多信息，请访问[http://mng.bz/AyjW](http://mng.bz/AyjW)。
 - en: In the next section, we will discuss how we can visualize and interact with
     word vectors on the TensorBoard.
   id: totrans-306
   prefs: []
   type: TYPE_NORMAL
+  zh: 在下一节中，我们将讨论如何在 TensorBoard 上可视化和与词向量交互。
 - en: Exercise 4
   id: totrans-307
   prefs: []
   type: TYPE_NORMAL
+  zh: 练习 4
 - en: 'You have a model that you have already profiled. You have seen the following
     overview of times:'
   id: totrans-308
   prefs: []
   type: TYPE_NORMAL
+  zh: 你已经进行了模型性能分析。你已经看到了以下时间概述：
 - en: 'Input time: 1.5 ms'
   id: totrans-309
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 输入时间：1.5 毫秒
 - en: 'Device compute time: 6.7 ms'
   id: totrans-310
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 设备计算时间：6.7 毫秒
 - en: 'Kernel launch time: 9.8 ms'
   id: totrans-311
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 内核启动时间：9.8 毫秒
 - en: 'Output time: 10.1 ms'
   id: totrans-312
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 输出时间：10.1 毫秒
 - en: 'Host compute time: 21.2 ms'
   id: totrans-313
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 主机计算时间：21.2 毫秒
 - en: For this scenario, assume a time recorded more than 5 ms is an opportunity for
     improvement. List three code/environment change recommendations to improve the
     model performance.
   id: totrans-314
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于这种情况，假设超过 5 毫秒的时间是有改进空间的机会。列出三个代码/环境更改建议以提高模型性能。
 - en: 14.5 Visualizing word vectors with the TensorBoard
   id: totrans-315
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 14.5 使用 TensorBoard 可视化词向量
 - en: You are working as an NLP engineer for a movie recommendation company and have
     been tasked with developing a movie recommendation model that can be trained on
     small devices. To reduce the training overhead, one of the techniques used is
@@ -2105,6 +2250,9 @@
   id: totrans-316
   prefs: []
   type: TYPE_NORMAL
+  zh: 你正在一家电影推荐公司担任 NLP 工程师，负责开发一种可以在小设备上训练的电影推荐模型。为了减少训练开销，使用了一种技术：使用预训练的词向量并将其冻结（即不进行训练）。你认为
+    GloVe 词向量将是一个很好的起点，并计划使用它们。但在此之前，你必须确保这些向量充分捕捉到电影特定术语/单词中的语义/关系。为此，你需要在 TensorBoard
+    上可视化这些单词的词向量，并分析 GloVe 向量是否表示了单词之间的合理关系。
 - en: 'The first thing we need to do is download the GloVe word vectors. You have
     been provided the code to download GloVe vectors in the notebook, and it is very
     similar to how we have downloaded datasets in the past. Therefore, we will not
@@ -2114,34 +2262,44 @@
   id: totrans-317
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们需要做的第一件事是下载 GloVe 词向量。你已经在笔记本中提供了下载 GloVe 向量的代码，它与我们过去下载数据集的方式非常相似。因此，我们不会详细讨论下载过程。GloVe
+    词向量可从[https://nlp.stanford.edu/projects/glove/](https://nlp.stanford.edu/projects/glove/)获取。GloVe
+    向量有几个不同的版本；它们具有不同的维度和词汇量：
 - en: Trained on Wikipedia 2014 + Gigaword 5 data sets with 6 billion tokens; 400,000
     vocabulary; uncased tokens; and 50D, 100D, 200D, and 300D vectors
   id: totrans-318
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用 Wikipedia 2014 + Gigaword 5 数据集进行训练，共有 60 亿个标记；词汇量为 400,000 个；大小写不敏感的标记；词向量维度为
+    50D、100D、200D 和 300D
 - en: Trained on the Common Crawl data set with 42 billion tokens, 1,900,000 vocabulary,
     uncased tokens, and 300D vectors
   id: totrans-319
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用 Common Crawl 数据集训练，共有 420 亿个标记；词汇量为 1,900,000 个；大小写不敏感的标记；词向量维度为 300D
 - en: Trained on the Common Crawl data set with 840 billion tokens, 2,200,000 vocabulary,
     cased tokens, and 300D vectors
   id: totrans-320
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用 Common Crawl 数据集训练，共有 8400 亿个标记；词汇量为 2,200,000 个；大小写敏感的标记；词向量维度为 300D
 - en: Trained on the Twitter data set with 2 billion tweets; 27 billion tokens; 1,200,000
     vocabulary; uncased tokens; and 25D, 50D, 100D, and 200D vectors
   id: totrans-321
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用 Twitter 数据集进行训练，共有 20 亿个推文；总标记数为 270 亿个；词汇量为 1,200,000 个；大小写不敏感的标记；词向量维度为
+    25D、50D、100D 和 200D
 - en: GloVe word vectors
   id: totrans-322
   prefs: []
   type: TYPE_NORMAL
+  zh: GloVe 词向量
 - en: GloVe (standing for *Glo*bal *Ve*ctors) is a word vector algorithm that generates
     word vectors by looking at both global and local statistics of a corpus. For example,
     word vector algorithms such as Skip-gram or Continuous Bag-of-Words rely only
