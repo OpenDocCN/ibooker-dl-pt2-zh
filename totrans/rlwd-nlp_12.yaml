@@ -3,30 +3,36 @@
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 9 使用预训练语言模型进行迁移学习
 - en: This chapter covers
   id: totrans-1
   prefs: []
   type: TYPE_NORMAL
+  zh: 本章内容包括
 - en: Using transfer learning to leverage knowledge from unlabeled textual data
   id: totrans-2
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 利用无标签文本数据的知识进行迁移学习
 - en: Using self-supervised learning to pretrain large language models such as BERT
   id: totrans-3
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用自监督学习对大型语言模型进行预训练，如 BERT
 - en: Building a sentiment analyzer with BERT and the Hugging Face Transformers library
   id: totrans-4
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用 BERT 和 Hugging Face Transformers 库构建情感分析器
 - en: Building a natural language inference model with BERT and AllenNLP
   id: totrans-5
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用 BERT 和 AllenNLP 构建自然语言推断模型
 - en: The year 2018 is often called “an inflection point” in the history of NLP. A
     prominent NLP researcher, Sebastian Ruder ([https://ruder.io/nlp-imagenet/](https://ruder.io/nlp-imagenet/)),
     dubbed this change “NLP’s ImageNet moment,” where he used the name of a popular
@@ -37,6 +43,9 @@
   id: totrans-6
   prefs: []
   type: TYPE_NORMAL
+  zh: 2018年通常被称为自然语言处理历史上的“拐点”。一位著名的 NLP 研究者，Sebastian Ruder（[https://ruder.io/nlp-imagenet/](https://ruder.io/nlp-imagenet/)）将这一变化称为“NLP
+    的 ImageNet 时刻”，他使用了一个流行的计算机视觉数据集的名称以及在其上进行预训练的强大模型，指出 NLP 社区正在进行类似的变革。强大的预训练语言模型，如
+    ELMo、BERT 和 GPT-2，在许多 NLP 任务上实现了最先进的性能，并在几个月内彻底改变了我们构建 NLP 模型的方式。
 - en: One important concept underlying these powerful pretrained language models is
     *transfer learning*, a technique for improving the performance of one task using
     a model trained on another task. In this chapter, we’ll first introduce the concept,
@@ -48,22 +57,28 @@
   id: totrans-7
   prefs: []
   type: TYPE_NORMAL
+  zh: 这些强大的预训练语言模型背后的一个重要概念是*迁移学习*，一种利用在另一个任务上训练的模型来改善一个任务性能的技术。在本章中，我们首先介绍这个概念，然后介绍
+    BERT，这是为 NLP 提出的最流行的预训练语言模型。我们将介绍 BERT 的设计和预训练，以及如何将该模型用于下游 NLP 任务，包括情感分析和自然语言推断。我们还将涉及其他流行的预训练模型，包括
+    ELMo 和 RoBERTa。
 - en: 9.1 Transfer learning
   id: totrans-8
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 9.1 迁移学习
 - en: We start this chapter by introducing *transfer learning*, a powerful machine
     learning concept fundamental to many pretrained language models (PLMs) in this
     chapter.
   id: totrans-9
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们从介绍*迁移学习*开始这一章，这是本章中许多预训练语言模型（PLM）的基本机器学习概念。
 - en: 9.1.1 Traditional machine learning
   id: totrans-10
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 9.1.1 传统机器学习
 - en: In traditional machine learning, before the advent of pretrained language models,
     NLP models were trained on a per-task basis, and they were useful only for the
     type of the task they were trained for (figure 9.1). For example, if you wanted
@@ -85,20 +100,27 @@
   id: totrans-11
   prefs: []
   type: TYPE_NORMAL
+  zh: 在传统机器学习中，在预训练语言模型出现之前，NLP 模型是根据任务进行训练的，它们仅对它们所训练的任务类型有用（图 9.1）。例如，如果你想要一个情感分析模型，你需要使用带有所需输出的数据集（例如，负面、中性和正面标签），而训练好的模型仅对情感分析有用。如果你需要构建另一个用于词性标注（一种
+    NLP 任务，用于识别单词的词性；请参阅第 5.2 节进行回顾）的模型，你需要通过收集训练数据并从头开始训练一个词性标注模型来完成。无论你的模型有多好，你都不能将情感分析模型“重用”于词性标注，因为这两者是为两个根本不同的任务而训练的。然而，这些任务都在同一语言上操作，这一切似乎都是浪费的。例如，知道
+    “wonderful”，“awesome” 和 “great” 都是具有积极意义的形容词，这将有助于情感分析和词性标注。在传统机器学习范式下，我们不仅需要准备足够大的训练数据来向模型教授这种“常识”，而且个别
+    NLP 模型还需要从给定的数据中学习关于语言的这些事实。
 - en: '![CH09_F01_Hagiwara](../Images/CH09_F01_Hagiwara.png)'
   id: totrans-12
   prefs: []
   type: TYPE_IMG
+  zh: '![CH09_F01_Hagiwara](../Images/CH09_F01_Hagiwara.png)'
 - en: Figure 9.1 In traditional machine learning, each trained model was used for
     just one task.
   id: totrans-13
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 9.1 在传统机器学习中，每个训练好的模型仅用于一个任务。
 - en: 9.1.2 Word embeddings
   id: totrans-14
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 9.1.2 词嵌入
 - en: At this point, you may realize this sounds somewhat familiar. Recall our discussion
     in section 3.1 on word embeddings and why they are important. To recap, word embeddings
     are vector representations of words that are learned so that semantically similar
@@ -110,6 +132,9 @@
   id: totrans-15
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这一点上，你可能会意识到这听起来有些眼熟。回想一下我们在第 3.1 节关于词嵌入以及它们为什么重要的讨论。简而言之，词嵌入是单词的向量表示，这些向量是通过学习得到的，以便语义上相似的单词具有相似的表示。因此，例如，“dog”
+    和 “cat” 的向量最终会位于高维空间中的接近位置。这些表示是在一个独立的大型文本语料库上进行训练的，没有任何训练信号，使用诸如 Skip-gram 和
+    CBOW 等算法，通常统称为 *Word2vec*（第 3.4 节）。
 - en: After these word embeddings are trained, downstream NLP tasks can use them as
     the input to their models (which are often neural networks, but not necessarily).
     Because these embeddings already capture semantic relationship between words (e.g.,
@@ -122,6 +147,9 @@
   id: totrans-16
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这些词嵌入训练之后，下游 NLP 任务可以将它们作为模型的输入（通常是神经网络，但不一定）。因为这些嵌入已经捕捉到单词之间的语义关系（例如，dogs
+    和 cats 都是动物），所以这些任务不再需要从头学习语言是如何工作的，这使它们在试图解决的任务中占据了上风。模型现在可以专注于学习无法被词嵌入捕捉到的更高级别概念（例如，短语、句法和语义）以及从给定的注释数据中学到的任务特定模式。这就是为什么使用词嵌入会给许多
+    NLP 模型带来性能提升的原因。
 - en: In chapter 3, we likened this to teaching a baby (= an NLP model) how to dance.
     By letting babies learn how to walk steadily first (= training word embeddings),
     dance teachers (= task-specific datasets and training objectives) can focus on
@@ -132,6 +160,7 @@
   id: totrans-17
   prefs: []
   type: TYPE_NORMAL
+  zh: 在第 3 章中，我们将这比作是教一个婴儿（= 一个自然语言处理模型）如何跳舞。通过让婴儿先学会稳步行走（= 训练词嵌入），舞蹈老师（= 任务特定数据集和训练目标）可以专注于教授具体的舞步，而不必担心婴儿是否能够站立和行走。这种“分阶段训练”方法使得如果你想教婴儿另一种技能（例如，教授武术），一切都变得更容易，因为他们已经对基本技能（行走）有了很好的掌握。
 - en: The beauty of all this is that word embeddings can be learned independently
     of the downstream tasks. These word embeddings are *pretrained*, meaning their
     training happens before the training of downstream NLP tasks. Using the dancing
@@ -143,19 +172,24 @@
   id: totrans-18
   prefs: []
   type: TYPE_NORMAL
+  zh: 所有这一切的美妙之处在于，词嵌入可以独立于下游任务进行学习。这些词嵌入是*预训练*的，这意味着它们的训练发生在下游自然语言处理任务的训练之前。使用跳舞婴儿的类比，舞蹈老师可以安全地假设所有即将到来的舞蹈学生都已经学会了如何正确站立和行走。由算法开发者创建的预训练词嵌入通常是免费提供的，任何人都可以下载并将其集成到他们的自然语言处理应用程序中。这个过程在图
+    9.2 中有所说明。
 - en: '![CH09_F02_Hagiwara](../Images/CH09_F02_Hagiwara.png)'
   id: totrans-19
   prefs: []
   type: TYPE_IMG
+  zh: '![CH09_F02_Hagiwara](../Images/CH09_F02_Hagiwara.png)'
 - en: Figure 9.2 Leveraging word embeddings helps build a better NLP model.
   id: totrans-20
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 9.2 利用词嵌入有助于构建更好的自然语言处理模型。
 - en: 9.1.3 What is transfer learning?
   id: totrans-21
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 9.1.3 什么是迁移学习？
 - en: If you generalize what you did with word embeddings earlier, you took the outcome
     of one task (i.e., predicting word cooccurrence with embeddings) and transferred
     the knowledge gleaned from it to another one (i.e., sentiment analysis, or any
@@ -171,14 +205,18 @@
   id: totrans-22
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果你总结一下之前对词嵌入所做的事情，你会发现你将一个任务的结果（即，用嵌入预测词共现）并将从中获得的知识转移到另一个任务（即，情感分析，或任何其他自然语言处理任务）。在机器学习中，这个过程被称为*迁移学习*，这是一系列相关的技术，用于通过在不同任务上训练的数据和/或模型来提高机器学习模型在某一任务中的性能。迁移学习总是由两个或多个步骤组成—首先为一个任务训练一个机器学习模型（称为*预训练*），然后调整并在另一个任务中使用它（称为*适应*）。如果同一个模型用于两个任务，第二步称为*微调*，因为你稍微调整了同一个模型，但是用于不同的任务。请参见图
+    9.3，以了解自然语言处理中迁移学习的示意图。
 - en: '![CH09_F03_Hagiwara](../Images/CH09_F03_Hagiwara.png)'
   id: totrans-23
   prefs: []
   type: TYPE_IMG
+  zh: '![CH09_F03_Hagiwara](../Images/CH09_F03_Hagiwara.png)'
 - en: Figure 9.3 Leveraging transfer learning helps build a better NLP model.
   id: totrans-24
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 9.3 利用迁移学习有助于构建更好的自然语言处理模型。
 - en: Transfer learning has become the dominant way for building high-quality NLP
     models in the past few years for two main reasons. Firstly, thanks to powerful
     neural network models such as the Transformer and self-supervised learning (see
@@ -196,6 +234,7 @@
   id: totrans-25
   prefs: []
   type: TYPE_NORMAL
+  zh: 过去几年中，迁移学习已成为构建高质量自然语言处理模型的主要方法，原因有两个。首先，由于强大的神经网络模型如Transformer和自监督学习（见第9.2.2节），几乎可以从几乎无限量的自然语言文本中引导出高质量的嵌入。这些嵌入在很大程度上考虑了自然语言文本的结构、上下文和语义。其次，由于迁移学习，任何人都可以将这些强大的预训练语言模型整合到他们的自然语言处理应用程序中，即使没有访问大量的文本资源，如网络规模语料库，或计算资源，如强大的GPU。这些新技术的出现（Transformer、自监督学习、预训练语言模型和迁移学习）将自然语言处理领域推向了一个全新的阶段，并将许多自然语言处理任务的性能推向了接近人类水平。在接下来的子节中，我们将看到迁移学习在实际构建自然语言处理模型时的应用，同时利用诸如BERT等预训练语言模型。
 - en: Note that the concept called *domain adaptation* is closely related to transfer
     learning. Domain adaptation is a technique where you train a machine learning
     model in one domain (e.g., news) and adapt it to another domain (e.g., social
@@ -208,11 +247,13 @@
   id: totrans-26
   prefs: []
   type: TYPE_NORMAL
+  zh: 请注意，所谓的*领域自适应*概念与迁移学习密切相关。领域自适应是一种技术，你在一个领域（例如，新闻）训练一个机器学习模型，然后将其调整到另一个领域（例如，社交媒体），但这些领域属于*相同任务*（例如，文本分类）。另一方面，在本章中涵盖的迁移学习应用于*不同任务*（例如，语言建模与文本分类）。你可以利用本章介绍的迁移学习范式来实现相同的效果，我们不会专门涵盖领域自适应作为一个单独的主题。有兴趣的读者可以从最近的一篇评论性文章中了解更多关于领域自适应的信息。[¹](#pgfId-1111602)
 - en: 9.2 BERT
   id: totrans-27
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 9.2 BERT
 - en: In this section, we will cover BERT in detail. BERT (Bidirectional Encoder Representations
     from Transformers)[²](#pgfId-1111610) is by far the most popular and most influential
     pretrained language model to date that revolutionized how people train and build
@@ -224,11 +265,13 @@
   id: totrans-28
   prefs: []
   type: TYPE_NORMAL
+  zh: 在本节中，我们将详细介绍BERT。BERT（双向编码器表示转换器）[²](#pgfId-1111610)是迄今为止最流行和最具影响力的预训练语言模型，彻底改变了人们训练和构建自然语言处理模型的方式。我们将首先介绍*上下文化嵌入*及其重要性，然后讨论自监督学习，这是预训练语言模型中的一个重要概念。我们将涵盖BERT用于预训练的两个自监督任务，即，掩码语言模型和下一个句子预测，并介绍如何将BERT调整到你的应用程序中。
 - en: 9.2.1 Limitations of word embeddings
   id: totrans-29
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 9.2.1 词嵌入的局限性
 - en: 'Word embeddings are a powerful concept that can give your application a boost
     in the performance, although they are not without limitation. One obvious issue
     is that they cannot take context into account. Words you see in natural language
@@ -297,6 +340,7 @@
   id: totrans-35
   prefs: []
   type: TYPE_NORMAL
+  zh: 因为BERT基于Transformer架构，它继承了Transformer的所有优点。其自注意力机制使其能够在输入上进行“随机访问”，并捕获输入标记之间的长期依赖关系。与传统的语言模型（例如我们在第5.5节中介绍的基于LSTM的语言模型）不同，后者只能沿着一个方向进行预测，Transformer可以在两个方向上考虑上下文。以“哈姆雷特是莎士比亚的一部戏剧”为例，对于“戏剧”这个词的上下文化嵌入可以包含来自“哈姆雷特”和“莎士比亚”的信息，这样就更容易捕捉到“戏剧舞台作品”的意思。
 - en: 'If this concept is as simple as “BERT is just a Transformer encoder,” why does
     it deserve an entire section here? Because we haven’t answered two important practical
     questions yet: how to train and adapt the model. Neural network models, no matter
@@ -307,11 +351,13 @@
   id: totrans-36
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果这个概念就像“BERT只是一个Transformer编码器”那么简单，为什么它在这里值得有一个完整的章节呢？因为我们还没有回答两个重要的实际问题：如何训练和调整模型。神经网络模型，无论多么强大，如果没有特定的训练策略和获取训练数据的途径，都是无用的。此外，预训练模型没有特定的调整策略也是无用的。我们将在以下小节中讨论这些问题。
 - en: 9.2.2 Self-supervised learning
   id: totrans-37
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 9.2.2 自监督学习
 - en: The Transformer, which was originally proposed for machine translation, is trained
     using parallel text. Its encoder and decoder are optimized to minimize the loss
     function, which is the cross entropy defined by the difference between the decoder
@@ -321,6 +367,7 @@
   id: totrans-38
   prefs: []
   type: TYPE_NORMAL
+  zh: Transformer最初是为了机器翻译而提出的，它是使用平行文本进行训练的。它的编码器和解码器被优化以最小化损失函数，即解码器输出和预期正确翻译之间的差异所定义的交叉熵。然而，预训练BERT的目的是得到高质量的上下文嵌入，而BERT只有一个编码器。我们如何“训练”BERT以使其对下游自然语言处理任务有用呢？
 - en: If you think of BERT just as another way of deriving embeddings, you can draw
     inspiration from how word embeddings are trained. Recall that in section 3.4,
     to train word embeddings, we make up a “fake” task where surrounding words are
@@ -337,6 +384,7 @@
   id: totrans-39
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果你把BERT只看作是另一种得到嵌入的方式，你可以从词嵌入是如何训练的中得到灵感。回想一下，在第3.4节中，为了训练词嵌入，我们构造了一个“假”任务，即用词嵌入预测周围的单词。我们对预测本身不感兴趣，而是对训练的“副产品”感兴趣，即作为模型参数的词嵌入。这种数据本身提供训练信号的训练范式称为*自监督学习*，或者简称为*自监督*，在现代机器学习中。从模型的角度来看，自监督学习仍然是监督学习的一种类型——模型被训练以使得它最小化由训练信号定义的损失函数。不同之处在于训练信号的来源。在监督学习中，训练信号通常来自人类注释。在自监督学习中，训练信号来自数据本身，没有人类干预。
 - en: With increasingly larger datasets and more powerful models, self-supervised
     learning has become a popular way to pretrain NLP models in the past several years.
     But why does it work so well? Two factors contribute to this—one is that the type
@@ -356,11 +404,14 @@
   id: totrans-40
   prefs: []
   type: TYPE_NORMAL
+  zh: 在过去的几年中，随着数据集越来越大和模型越来越强大，自监督学习已经成为预训练 NLP 模型的流行方式。但是为什么它能够如此成功呢？其中两个因素起到了作用——一个是这里的自监督类型在创建时非常简单（只需提取周围单词用于
+    Word2vec），但是解决它需要对语言有深入的理解。例如，重新使用我们在第 5 章中讨论的语言模型的例子，要回答“我的海滩之行被糟糕的___毁了”，系统不仅需要理解句子，还需要具备某种“常识”，了解什么样的事情可能会毁了一次海滩之行（例如，糟糕的天气，交通拥堵）。预测周围单词所需的知识范围从简单的搭配/联想（例如，“纽约的____雕像”），到句法和语法（例如，“我的生日是___五月”），再到语义（前面的例子）。第二个因素是几乎没有限制用于自监督的数据量，因为你所需要的只是干净的纯文本。你可以下载大型数据集（例如，维基百科转储）或爬取和过滤网页，这是训练许多预训练语言模型的流行方式之一。
 - en: 9.2.3 Pretraining BERT
   id: totrans-41
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 9.2.3 BERT 预训练
 - en: Now that we all understand how useful self-supervised learning can be for pretraining
     language models, let’s see how we can use it for pretraining BERT. As mentioned
     earlier, BERT is just a Transformer encoder that transforms the input into a series
@@ -374,6 +425,9 @@
   id: totrans-42
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在我们都明白了自监督学习对于预训练语言模型有多么有用，让我们看看我们如何将其用于预训练 BERT。如前所述，BERT 只是一个将输入转换为考虑上下文的一系列嵌入的
+    Transformer 编码器。对于预训练词嵌入，你可以根据目标词的嵌入预测周围的单词。对于预训练单向语言模型，你可以根据目标之前的标记预测下一个标记。但是对于诸如
+    BERT 这样的双向语言模型，你不能使用这些策略，因为用于预测的输入（上下文化的嵌入）还取决于输入之前和之后的内容。这听起来像是一个先有鸡还是先有蛋的问题。
 - en: The inventors of BERT solved this with a brilliant idea called *masked language
     model* (MLM), where they drop (mask) words randomly in a given sentence and let
     the model predict what the dropped word is. Specifically, after replacing a small
@@ -386,14 +440,19 @@
   id: totrans-43
   prefs: []
   type: TYPE_NORMAL
+  zh: BERT 的发明者们通过一个称为*掩码语言模型*（MLM）的精妙思想来解决这个问题，在给定的句子中随机删除（掩盖）单词，并让模型预测被删除的单词是什么。具体来说，在句子中用一个特殊的占位符替换一小部分单词后，BERT
+    使用 Transformer 对输入进行编码，然后使用前馈层和 softmax 层推导出可能填充该空白的单词的概率分布。因为你已经知道答案（因为你首先删除了这些单词），所以你可以使用常规的交叉熵来训练模型，如图
+    9.5 所示。
 - en: '![CH09_F05_Hagiwara](../Images/CH09_F05_Hagiwara.png)'
   id: totrans-44
   prefs: []
   type: TYPE_IMG
+  zh: '![CH09_F05_Hagiwara](../Images/CH09_F05_Hagiwara.png)'
 - en: Figure 9.5 Pretraining BERT with a masked language model
   id: totrans-45
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 9.5 使用掩码语言模型对 BERT 进行预训练
 - en: Masking and predicting words is not a completely new idea—it’s closely related
     to *cloze tests*, where the test-taker is asked to replace the removed words in
     a sentence. This test form is often used to assess how well students can understand
@@ -472,6 +531,8 @@
   id: totrans-51
   prefs: []
   type: TYPE_NORMAL
+  zh: 在迁移学习的第二（也是最后）阶段，预训练模型被调整以适应目标任务，使后者可以利用前者学到的信号。有两种主要方式可以使BERT适应个别下游任务：*微调*
+    和 *特征提取*。在微调中，神经网络架构稍微修改，以便为所讨论的任务产生类型的预测，并且整个网络在任务的训练数据上持续训练，以使损失函数最小化。这正是你训练NLP任务的神经网络的方式，例如情感分析，其中有一个重要的区别—BERT“继承”了通过预训练学到的模型权重，而不是从头开始随机初始化并进行训练。通过这种方式，下游任务可以利用BERT通过大量数据预训练学到的强大表示。
 - en: The exact way the BERT architecture is modified varies, depending on the final
     task, but here I’m going to describe the simplest case where the task is to predict
     some sort of label for a given sentence. This is also called a *sentence-prediction
@@ -494,15 +555,20 @@
   id: totrans-52
   prefs: []
   type: TYPE_NORMAL
+  zh: BERT架构修改的确切方式因最终任务而异，但在这里我将描述最简单的情况，即任务是对给定句子预测某种标签。这也被称为 *句子预测任务*，其中包括我们在第2章中介绍的情感分析。为了使下游任务能够提取句子的表示，BERT在预训练阶段为每个句子添加一个特殊标记[CLS]（用于
+    *分类*）。您可以使用此标记提取BERT的隐藏状态，并将其用作句子的表示。与其他分类任务一样，线性层可以将此表示压缩为一组“分数”，这些分数对应于每个标签是正确答案的可能性。然后，您可以使用softmax推导出一个概率分布。例如，如果您正在处理一个情感分析数据集，其中有五个标签（非常负面到非常正面），则您将使用线性层将维度降低到5。这种线性层与softmax结合起来，插入到诸如BERT之类的较大的预训练模型中，通常被称为
+    *头部*。换句话说，我们正在将一个 *分类头* 附加到BERT上，以解决句子预测任务。整个网络的权重（头部和BERT）都会被调整，以使损失函数最小化。这意味着通过反向传播微调BERT权重初始化的权重也会被调整。见图9.6以示例说明。
 - en: '![CH09_F06_Hagiwara](../Images/CH09_F06_Hagiwara.png)'
   id: totrans-53
   prefs: []
   type: TYPE_IMG
+  zh: '![CH09_F06_Hagiwara](../Images/CH09_F06_Hagiwara.png)'
 - en: Figure 9.6 Pretraining and fine-tuning BERT with an attached classification
     head
   id: totrans-54
   prefs: []
   type: TYPE_NORMAL
+  zh: 图9.6 使用附加的分类头对BERT进行预训练和微调
 - en: Another variation in fine-tuning BERT uses all the embeddings, averaged over
     the input tokens. In this method, called *mean over time* or *bag of embeddings*,
     all the embeddings produced by BERT are summed up and divided by the length of
@@ -512,15 +578,20 @@
   id: totrans-55
   prefs: []
   type: TYPE_NORMAL
+  zh: 另一种微调 BERT 的变体使用了所有嵌入，这些嵌入是在输入令牌上进行平均的。在这种称为 *mean over time* 或 *bag of embeddings*
+    的方法中，BERT 生成的所有嵌入被求和并除以输入的长度，就像词袋模型一样，以产生一个单一的向量。这种方法不如使用 CLS 特殊令牌那么受欢迎，但根据任务的不同可能效果更好。图
+    9.7 阐明了这一点。
 - en: '![CH09_F07_Hagiwara](../Images/CH09_F07_Hagiwara.png)'
   id: totrans-56
   prefs: []
   type: TYPE_IMG
+  zh: '![CH09_F07_Hagiwara](../Images/CH09_F07_Hagiwara.png)'
 - en: Figure 9.7 Pretraining and fine-tuning BERT using mean over time and a classification
     head
   id: totrans-57
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 9.7 预训练和微调 BERT 使用时间平均和分类头
 - en: Another way to adapt BERT for downstream NLP tasks is *feature extraction*.
     Here BERT is used to extract features, which are simply a sequence of contextualized
     embeddings produced by the final layer of BERT. You can simply feed these vectors
@@ -529,14 +600,18 @@
   id: totrans-58
   prefs: []
   type: TYPE_NORMAL
+  zh: 另一种用于下游 NLP 任务的 BERT 适应方式是 *feature extraction*。在这里，BERT 被用来提取特征，这些特征只是由 BERT
+    的最终层产生的一系列上下文化嵌入。你可以将这些向量简单地作为特征馈送到另一个机器学习模型中，并进行预测，如图 9.8 所示。
 - en: '![CH09_F08_Hagiwara](../Images/CH09_F08_Hagiwara.png)'
   id: totrans-59
   prefs: []
   type: TYPE_IMG
+  zh: '![CH09_F08_Hagiwara](../Images/CH09_F08_Hagiwara.png)'
 - en: Figure 9.8 Pretraining and using BERT for feature extraction
   id: totrans-60
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 9.8 预训练和使用 BERT 进行特征提取
 - en: 'Graphically, this approach looks similar to fine-tuning. After all, you are
     feeding the output from BERT to another ML model. However, there are two subtle
     but important differences: first, because you are no longer optimizing the neural
@@ -554,6 +629,11 @@
   id: totrans-61
   prefs: []
   type: TYPE_NORMAL
+  zh: 从图形上看，这种方法与微调类似。毕竟，你正在将 BERT 的输出馈送到另一个 ML 模型中。然而，存在两个微妙但重要的区别：首先，因为你不再优化神经网络，第二个
+    ML 模型不必是神经网络。一些机器学习任务（例如，无监督聚类）不是神经网络擅长解决的，特征提取在这些情况下提供了完美的解决方案。此外，你可以自由使用更“传统”的
+    ML 算法，如 SVM（支持向量机）、决策树和梯度提升方法（如 GBDT 或梯度提升决策树），这些算法可能在计算成本和性能方面提供更好的折衷方案。其次，因为
+    BERT 仅用作特征提取器，在适应阶段不会进行反向传播，其内部参数也不会更新。在许多情况下，如果微调 BERT 参数，你可以在下游任务中获得更高的准确性，因为这样做也会教导
+    BERT 更好地解决手头的任务。
 - en: Finally, note that these two are not the only ways to adapt BERT. Transfer learning
     is an actively researched topic, not just in NLP but also in many fields of artificial
     intelligence, and we have many other ways to use pretrained language models to
@@ -563,11 +643,14 @@
   id: totrans-62
   prefs: []
   type: TYPE_NORMAL
+  zh: 最后，请注意这两种方式不是适应 BERT 的唯一方式。迁移学习是一个正在积极研究的主题，不仅在自然语言处理领域，而且在人工智能的许多领域都是如此，我们有许多其他方法来使用预训练的语言模型以发挥其最佳作用。如果你对此感兴趣，我建议查看在
+    NAACL 2019（顶级自然语言处理会议之一）上给出的教程，标题为“自然语言处理中的迁移学习”（[http://mng.bz/o8qp](http://mng.bz/o8qp)）。
 - en: '9.3 Case study 1: Sentiment analysis with BERT'
   id: totrans-63
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 9.3 案例研究 1：使用 BERT 进行情感分析
 - en: 'In this section, we will build a sentiment analyzer (again), but this time
     with BERT. Instead of AllenNLP, we will use the Transformers library developed
     by Hugging Face, which we used for making predictions with language models in
@@ -578,6 +661,8 @@
   id: totrans-64
   prefs: []
   type: TYPE_NORMAL
+  zh: 在本节中，我们将再次构建情感分析器，但这次我们将使用 BERT，而不是 AllenNLP，我们将使用由 Hugging Face 开发的 Transformers
+    库，在上一章中使用该库进行语言模型预测。这里的所有代码都可以在 Google Colab 笔记本上访问（[http://www.realworldnlpbook.com/ch9.html#sst](http://www.realworldnlpbook.com/ch9.html#sst)）。你在本节中看到的代码片段都假定你按照以下方式导入了相关的模块、类和方法：
 - en: '[PRE0]'
   id: totrans-65
   prefs: []
@@ -589,6 +674,7 @@
   id: totrans-66
   prefs: []
   type: TYPE_NORMAL
+  zh: 在 Transformers 库中，你可以通过他们的名称指定预训练模型。在本节中，我们将一直使用大写的 BERT-base 模型 ('bert-base-cased')，因此让我们首先定义一个常量，如下所示：
 - en: '[PRE1]'
   id: totrans-67
   prefs: []
@@ -603,11 +689,13 @@
   id: totrans-68
   prefs: []
   type: TYPE_NORMAL
+  zh: Transformers 库还支持其他预训练的 BERT 模型，你可以在他们的文档（[https://huggingface.co/transformers/pretrained_models.html](https://huggingface.co/transformers/pretrained_models.html)）中看到。如果你想使用其他模型，你可以简单地将这个变量替换为你想要使用的模型名称，代码的其余部分在许多情况下都可以原封不动地工作（但并非总是如此）。
 - en: 9.3.1 Tokenizing input
   id: totrans-69
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 9.3.1 将输入划分为单词
 - en: The first step we took for building an NLP model is to build a dataset reader.
     Although AllenNLP (or more precisely speaking, the allennlp-modules package) is
     shipped with a dataset reader for the Stanford Sentiment Treebank, the dataset
@@ -617,12 +705,16 @@
   id: totrans-70
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们构建 NLP 模型的第一步是构建一个数据集读取器。虽然 AllenNLP（或更确切地说，allennlp-modules 包）附带了一个用于 Stanford
+    情感树库的数据集读取器，但是该数据集读取器的输出仅与 AllenNLP 兼容。在本节中，我们将编写一个简单的方法来读取数据集并返回一系列批量输入实例。
 - en: 'Tokenization is one of the most important steps in processing natural language
     input. As we saw in the previous chapter, tokenizers in the Transformers library
     can be initialized with the AutoTokenizer.from_pretrained() class method as follows:'
   id: totrans-71
   prefs: []
   type: TYPE_NORMAL
+  zh: 在处理自然语言输入时，分词是最重要的步骤之一。正如我们在上一章中看到的那样，Transformers 库中的分词器可以通过 AutoTokenizer.from_pretrained()
+    类方法进行初始化，如下所示：
 - en: '[PRE2]'
   id: totrans-72
   prefs: []
@@ -634,11 +726,13 @@
   id: totrans-73
   prefs: []
   type: TYPE_NORMAL
+  zh: 因为不同的预训练模型使用不同的分词器，所以重要的是要通过提供相同的模型名称来初始化与你将要使用的预训练模型匹配的分词器。
 - en: 'You can use the tokenizer to convert between a string and a list of token IDs
     back and forth, as shown next:'
   id: totrans-74
   prefs: []
   type: TYPE_NORMAL
+  zh: 你可以使用分词器在字符串和令牌 ID 的列表之间进行转换，如下所示：
 - en: '[PRE3]'
   id: totrans-75
   prefs: []
@@ -653,6 +747,8 @@
   id: totrans-76
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意 BERT 的分词器在你的句子中添加了两个特殊的标记——[CLS] 和 [SEP]。正如之前讨论的那样，CLS 是一个特殊的标记，用于提取整个输入的嵌入，而
+    SEP 用于分隔两个句子，如果你的任务涉及对一对句子进行预测。因为我们在这里对单个句子进行预测，所以不需要过多关注这个标记。我们将在第 9.5 节讨论句子对分类任务。
 - en: 'Deep neural networks rarely operate on single instances. They usually are trained
     on and make predictions for batches of instances for stability and performance
     reasons. The tokenizer also supports converting the given input in batches by
@@ -660,6 +756,7 @@
   id: totrans-77
   prefs: []
   type: TYPE_NORMAL
+  zh: 深度神经网络很少处理单个实例。它们通常通过训练并为实例的批次进行预测以保持稳定性和性能。分词器还支持通过调用 __call__ 方法（即，只需将对象用作方法）将给定输入转换为批次，如下所示：
 - en: '[PRE4]'
   id: totrans-78
   prefs: []
@@ -679,6 +776,7 @@
   id: totrans-79
   prefs: []
   type: TYPE_NORMAL
+  zh: 运行此代码时，输入列表中的每个字符串都将被标记化，然后生成的张量将用0进行*填充*，以使它们具有相同的长度。这里的填充意味着在每个序列的末尾添加0，以便单个实例具有相同的长度并可以捆绑为单个张量，这对于更有效的计算是必需的（我们将在第10章中更详细地讨论填充）。方法调用包含几个其他参数，用于控制最大长度（max_length=10，表示将所有内容填充到长度为10），是否填充到最大长度，是否截断过长的序列以及返回张量的类型（return_tensors='pt'，表示它返回PyTorch张量）。此tokenizer()调用的结果是一个包含以下三个键和三种不同类型的打包张量的字典：
 - en: '[PRE5]'
   id: totrans-80
   prefs: []
@@ -698,6 +796,7 @@
   id: totrans-81
   prefs: []
   type: TYPE_NORMAL
+  zh: input_ids张量是从文本转换而来的标记ID的打包版本。请注意，每行都是一个矢量化的标记ID，用0进行了填充，以便其长度始终为10。token_type_ids张量指定每个标记来自哪个句子。与之前的SEP特殊标记一样，只有在处理句对时才相关，因此张量只是简单地填满了0。attention_mask张量指定Transformer应该关注哪些标记。由于在输入_ids中存在填充元素（填充为0），因此attention_mask中的相应元素都为0，并且对这些标记的关注将被简单地忽略。掩码是神经网络中经常使用的一种常见技术，通常用于忽略类似于这里所示的批量张量中的不相关元素。第10章将更详细地介绍掩码。
 - en: 'As you see here, the Transformers library’s tokenizers do more than just tokenizing—they
     take a list of strings and create batched tensors for you, including the auxiliary
     tensors (token_type_ids and attention_mask). You just need to create lists of
@@ -709,6 +808,8 @@
   id: totrans-82
   prefs: []
   type: TYPE_NORMAL
+  zh: 正如您在这里看到的，Transformers库的标记器不仅仅是标记化 - 它们为您创建了一个字符串列表，并为您创建了批量张量，包括辅助张量（token_type_ids和attention_mask）。您只需从数据集创建字符串列表，并将它们传递给tokenizer()以创建传递给模型的批次。这种读取数据集的逻辑相当乏味且有点冗长，因此我将其打包在一个名为read_dataset的方法中，这里没有显示。如果您感兴趣，可以检查之前提到的Google
+    Colab笔记本。使用此方法，您可以读取数据集并将其转换为批次列表，如下所示：
 - en: '[PRE6]'
   id: totrans-83
   prefs: []
@@ -719,6 +820,7 @@
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 9.3.2 构建模型
 - en: In the next step, we’ll build the model to classify texts into their sentiment
     labels. The model we build here is nothing but a thin wrapper around BERT. All
     it does is pass the input through BERT, take out its embedding at CLS, pass it
@@ -727,6 +829,7 @@
   id: totrans-85
   prefs: []
   type: TYPE_NORMAL
+  zh: 在下一步中，我们将构建模型，将文本分类到它们的情感标签中。我们在这里构建的模型只是BERT的一个薄包装器。它所做的就是将输入通过BERT传递，取出其在CLS处的嵌入，将其传递到线性层以转换为一组分数（logits），并计算损失。
 - en: Note that we are building a PyTorch Module, not an AllenNLP Model, so make sure
     to inherit from nn.Module, although the structure of these two types of models
     are usually very similar (because AllenNLP’s Models inherit from PyTorch Modules).
@@ -736,10 +839,12 @@
   id: totrans-86
   prefs: []
   type: TYPE_NORMAL
+  zh: 请注意，我们正在构建一个PyTorch模块，而不是AllenNLP模型，因此请确保从nn.Module继承，尽管这两种类型的模型的结构通常非常相似（因为AllenNLP的模型从PyTorch模块继承）。您需要实现__init__()，在其中定义和初始化模型的子模块，以及forward()，其中进行主要计算（“前向传递”）。下面显示了整个代码片段。
 - en: Listing 9.1 Sentiment analysis model with BERT
   id: totrans-87
   prefs: []
   type: TYPE_NORMAL
+  zh: 列表9.1 使用BERT的情感分析模型
 - en: '[PRE7]'
   id: totrans-88
   prefs: []
@@ -749,22 +854,27 @@
   id: totrans-89
   prefs: []
   type: TYPE_NORMAL
+  zh: ❶ 初始化BERT
 - en: ❷ Defines a linear layer
   id: totrans-90
   prefs: []
   type: TYPE_NORMAL
+  zh: ❷ 定义一个线性层
 - en: ❸ Applies BERT
   id: totrans-91
   prefs: []
   type: TYPE_NORMAL
+  zh: ❸ 应用BERT
 - en: ❹ Applies the linear layer
   id: totrans-92
   prefs: []
   type: TYPE_NORMAL
+  zh: ❹ 应用线性层
 - en: ❺ Computes the loss
   id: totrans-93
   prefs: []
   type: TYPE_NORMAL
+  zh: ❺ 计算损失
 - en: The module first defines the BERT model (via the AutoModel.from_pretrained()
     class method), a linear layer (nn.Linear), and the loss function (nn.CrossEntropyLoss)
     in __init__(). Note that the module has no way of knowing the number of labels
@@ -772,6 +882,7 @@
   id: totrans-94
   prefs: []
   type: TYPE_NORMAL
+  zh: 该模块首先在__init__()中定义BERT模型（通过AutoModel.from_pretrained()类方法）、一个线性层（nn.Linear）和损失函数（nn.CrossEntropyLoss）。请注意，模块无法知道它需要分类到的标签数量，因此我们将其作为参数传递（num_labels）。
 - en: In the forward() method, it first calls the BERT model. You can simply pass
     the three types of tensors (input_ids, attention_mask, and token_type_ids) to
     the model. The model returns a data structure that contains last_hidden_state
@@ -785,12 +896,14 @@
   id: totrans-95
   prefs: []
   type: TYPE_NORMAL
+  zh: 在forward()方法中，它首先调用BERT模型。您可以简单地将三种类型的张量（input_ids、attention_mask和token_type_ids）传递给模型。模型返回一个包含last_hidden_state和pooler_output等内容的数据结构，其中last_hidden_state是最后一层的隐藏状态序列，而pooler_output是一个汇总输出，基本上是经过线性层转换的CLS的嵌入。因为我们只关心代表整个输入的池化输出，所以我们将后者传递给线性层。最后，该方法计算损失（如果提供了标签）并返回它，以及logits，用于进行预测和衡量准确性。
 - en: 'Pay attention to the way we designed the method signature—it takes the three
     tensors we inspected earlier with their exact names. This lets us simply destruct
     a batch and pass it to the forward method, as shown here:'
   id: totrans-96
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意我们设计方法签名的方式——它接受我们之前检查的三个张量，使用它们的确切名称。这样我们可以简单地解构一个批次并将其传递给forward方法，如下所示：
 - en: '[PRE8]'
   id: totrans-97
   prefs: []
@@ -801,11 +914,13 @@
   id: totrans-98
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意，forward传递的返回值是损失和logits的元组。现在您已经准备好训练您的模型了！
 - en: 9.3.3 Training the model
   id: totrans-99
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 9.3.3 训练模型
 - en: In the third and the final step of this case study, we will train and validate
     the model. Although AllenNLP took care of the training process in the previous
     chapters, in this section we’ll write our own training loop from scratch so we
@@ -816,16 +931,19 @@
   id: totrans-100
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这个案例研究的第三和最后一步中，我们将训练和验证模型。尽管在前几章中，AllenNLP已经处理了训练过程，但在本节中，我们将从头开始编写自己的训练循环，以便更好地理解自己训练模型所需的工作量。请注意，您也可以选择使用库自己的Trainer类([https://huggingface.co/transformers/main_classes/trainer.html](https://huggingface.co/transformers/main_classes/trainer.html))，该类的工作方式类似于AllenNLP的Trainer，通过指定其参数来运行训练循环。
 - en: We covered the basics of training loops in section 2.5, but to recap, in modern
     machine learning, every training loop looks somewhat similar. If you write it
     in pseudocode, it would look like the one shown as follows.
   id: totrans-101
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们在第2.5节中介绍了训练循环的基础知识，但是为了回顾一下，现代机器学习中，每个训练循环看起来都有些相似。如果您以伪代码的形式编写它，它将类似于下面显示的内容。
 - en: Listing 9.2 Pseudocode for the neural network training loop
   id: totrans-102
   prefs: []
   type: TYPE_NORMAL
+  zh: 列表9.2 神经网络训练循环的伪代码
 - en: '[PRE9]'
   id: totrans-103
   prefs: []
@@ -934,24 +1052,28 @@
   id: totrans-120
   prefs: []
   type: TYPE_NORMAL
+  zh: 当你使用PyTorch训练模型时（因此，也是使用AllenNLP和Transformers两个构建在其上的库），请记得调用model.train()以打开模型的“训练模式”。这很重要，因为一些层（如BatchNorm和dropout）在训练和评估之间的行为不同（我们将在第10章中涵盖dropout）。另一方面，在验证或测试模型时，请务必调用model.eval()。
 - en: 'The code in listing 9.3 does not show the validation phase, but the code for
     validation would look almost the same as that for training. When you validate/test
     your model, pay attention to the following:'
   id: totrans-121
   prefs: []
   type: TYPE_NORMAL
+  zh: 列表9.3中的代码没有显示验证阶段，但验证的代码几乎与训练的代码相同。在验证/测试模型时，请注意以下事项：
 - en: As mentioned previously, make sure to call model.eval() before validating/testing
     your model.
   id: totrans-122
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 如前所述，请确保在验证/测试模型之前调用model.eval()。
 - en: Optimization calls (loss.backward(), optimizer.step(), and scheduler.step())
     are not necessary because you are not updating the model.
   id: totrans-123
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 优化调用（loss.backward()，optimizer.step()和scheduler.step()）是不必要的，因为您没有更新模型。
 - en: Losses are still recorded and reported for monitoring. Be sure to wrap your
     forward pass call with with torch.no_grad()—this will disable gradient computation
     and save memory.
@@ -959,16 +1081,19 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 损失仍然被记录和报告以进行监视。确保将您的前向传递调用包装在torch.no_grad()中——这将禁用梯度计算并节省内存。
 - en: Accuracy is computed in exactly the same way (this is the point of validation!).
   id: totrans-125
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 精度的计算方式完全相同（这是验证的重点！）。
 - en: 'When I ran this, I got the following output to stdout (with intermediate epochs
     omitted):'
   id: totrans-126
   prefs: []
   type: TYPE_NORMAL
+  zh: 当我运行这个时，我得到了以下输出到标准输出（省略了中间时期）：
 - en: '[PRE12]'
   id: totrans-127
   prefs: []
@@ -983,11 +1108,13 @@
   id: totrans-128
   prefs: []
   type: TYPE_NORMAL
+  zh: 开发精度在第8个时期达到了约0.483的峰值，此后没有改善。与我们从LSTM（开发精度约为0.35，在第2章中）和CNN（开发精度约为0.40，在第7章中）得到的结果相比，这是我们在此数据集上取得的最佳结果。我们做了很少的超参数调整，所以现在就得出BERT是我们比较的三个模型中最好的模型的结论还为时过早，但至少我们知道它是一个强大的基准模型！
 - en: 9.4 Other pretrained language models
   id: totrans-129
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 9.4 其他预训练语言模型
 - en: BERT is neither the first nor the last of popular pretrained language models
     (PLMs) commonly used in the NLP community nowadays. In this section, we’ll learn
     several other popular PLMs and how they are different from BERT. Most of these
@@ -997,11 +1124,13 @@
   id: totrans-130
   prefs: []
   type: TYPE_NORMAL
+  zh: BERT既不是目前NLP社区中常用的预训练语言模型（PLMs）中的第一个，也不是最后一个。在本节中，我们将学习其他几个流行的PLMs以及它们与BERT的区别。这些模型中的大多数已经在Transformers库中实现并公开可用，因此您只需更改代码中的几行即可将它们与您的NLP应用集成。
 - en: 9.4.1 ELMo
   id: totrans-131
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 9.4.1 ELMo
 - en: ELMo (Embeddings from Language Models), proposed[⁴](#pgfId-1111949) in early
     2018, is one of the earliest PLMs for deriving contextualized embeddings using
     unlabeled texts. Its core idea is simple—train an LSTM-based language model (similar
@@ -1014,10 +1143,12 @@
   id: totrans-132
   prefs: []
   type: TYPE_NORMAL
+  zh: ELMo（来自语言模型的嵌入），于2018年初提出[⁴](#pgfId-1111949)，是最早用于从未标记文本中获取上下文嵌入的预训练语言模型之一。其核心思想很简单——训练一个基于LSTM的语言模型（类似于我们在第5章中训练的模型），并使用其隐藏状态作为下游自然语言处理任务的额外“特征”。因为语言模型被训练为在给定前文的情况下预测下一个标记，所以隐藏状态可以编码“理解语言”所需的信息。ELMo还使用另一个反向LM执行相同的操作，并结合来自两个方向的嵌入，以便它还可以编码双向信息。请参见图9.10进行说明。
 - en: '![CH09_F10_Hagiwara](../Images/CH09_F10_Hagiwara.png)'
   id: totrans-133
   prefs: []
   type: TYPE_IMG
+  zh: '![CH09_F10_Hagiwara](../Images/CH09_F10_Hagiwara.png)'
 - en: Figure 9.10 ELMo computes contextualized embeddings by combining forward and
     backward LSTMs.
   id: totrans-134
