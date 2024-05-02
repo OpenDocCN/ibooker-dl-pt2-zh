@@ -1,0 +1,1386 @@
+- en: 12 Scaling Gaussian processes to large datasets
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter covers
+  prefs: []
+  type: TYPE_NORMAL
+- en: Training a GP on a large dataset
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using mini-batch gradient descent when training a GP
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using an advanced gradient descent technique to train a GP faster
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'So far, we have seen that GPs offer great modeling flexibility. In chapter
+    3, we learned that we can model high-level trends using the GP’s mean function
+    as well as variability using the covariance function. A GP also provides calibrated
+    uncertainty quantification. That is, the predictions for datapoints near observations
+    in the training dataset have lower uncertainty than those for points far away.
+    This flexibility sets the GP apart from other ML models that produce only point
+    estimates, such as neural networks. However, it comes at a cost: speed.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Training and making predictions with a GP (specifically, computing the inverse
+    of the covariance matrix) scales cubically with respect to the size of the training
+    data. That is, if our dataset doubles in size, a GP will take eight times as long
+    to train and predict. If the dataset increases tenfold, it will take a GP 1,000
+    times longer. This poses a challenge to scaling GPs to large datasets, which are
+    common in many applications:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: If we aim to model housing prices across an entire country, such as the United
+    States, where each data point represents the price of a single house at a given
+    time, the size of our dataset would contain hundreds of millions of points. As
+    an illustration, the online database Statista keeps track of the number of housing
+    units in the United States from 1975 to 2021; this report can be accessed at [https://www.statista.com/statistics/240267/number-of-housing-units-in-the-united-states/](https://www.statista.com/statistics/240267/number-of-housing-units-in-the-united-states/).
+    We see that this number has been steadily rising since 1975, exceeding 100 million
+    in 1990, and is now at more than 140 million.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In the drug discovery applications we discussed in section 1.1.3, a database
+    of possible molecules that could potentially be synthesized into drugs could have
+    billions of entries.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In weather forecasting, low-cost monitoring devices make it easy to collect
+    weather data on a large scale. A dataset could contain by-minute measurements
+    across multiple years.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Given the cubic running time of the normal GP model, it’s infeasible to train
+    it on datasets of this scale. In this chapter, we learn how we can use a class
+    of GP models called *variational Gaussian process* (VGPs) to tackle this problem
+    of learning from big data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Definition A variational Gaussian process picks out a small subset of the data
+    that represents the entire set well. It does this by seeking to minimize the difference
+    between itself and the regular GP that is trained on the full data. The term *variational*
+    refers to the subfield of mathematics that studies the optimization of functionals.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This idea of choosing to train on only a small subset of these representative
+    points is quite natural and intuitive. Figure 12.1 shows a VGP in action, where
+    by learning from a few selective data points, the model produces almost identical
+    predictions to those produced by a regular GP.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/12-01.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 12.1 Predictions made by a regular GP and those by a VGP. The VGP produces
+    almost identical predictions as the GP, while taking significantly less time to
+    train.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We cover how to implement this model and observe its computational benefits
+    in this chapter. Further, when working with a VGP, we can use a more advanced
+    version of gradient descent, which, as we saw in section 3.3.2, is used to optimize
+    the hyperparameters of a GP. We learn to use this version of the algorithm to
+    train faster and more effectively and, ultimately, scale our GPs to large datasets.
+    The code accompanying this chapter can be found in the CH11/01 - Approximate Gaussian
+    process inference.ipynb notebook.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 12.1 Training a GP on a large dataset
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'In this section, to see firsthand how training a GP on a large dataset poses
+    a difficult challenge, we attempt to apply the GP model that we used in chapters
+    2 and 3 to a medium-sized dataset of 1,000 points. This task will make clear that
+    using a regular GP is infeasible and motivate what we learn in the next section:
+    variational GPs.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 12.1.1 Setting up the learning task
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'We first create our dataset in this subsection. We reuse the one-dimensional
+    objective function we saw in chapters 2 and 3, the Forrester function. Again,
+    we implement it as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Similar to what we did in section 3.3, we will also have a helper function
+    that takes in a GP model and visualizes its predictions across the domain. The
+    function has the following header and takes in three parameters—the GP model,
+    the corresponding likelihood function, and a Boolean flag denoting whether the
+    model is a VGP:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/12-01-unnumb-1.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'The logic of this helper function is sketched out in figure 12.2, which consists
+    of four main steps: computing the predictions, plotting the ground truth and the
+    training data, plotting the predictions, and, finally, plotting the inducing points
+    if the model is a VGP.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/12-02.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 12.2 Flowchart of the helper function that visualizes the predictions
+    of a GP. The function also shows the inducing points of a VGP if that is the model
+    passed in.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Definition The inducing points are the small subset chosen by the VGP model
+    to represent the entire dataset to train on. As the name suggests, these points
+    aim to *induce* knowledge about all of the data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We now go through the steps in greater detail. In the first step, we compute
+    the mean and CI predictions with the GP:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In the second step, we make the Matplotlib plot and show the true function
+    stored in `xs` and `ys` (which we generate shortly) and our training data `train_x`
+    and `train_y`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Plots the true objective function
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Makes a scatter plot for the training data
+  prefs: []
+  type: TYPE_NORMAL
+- en: Here, if the model is a VGP (if `variational` is set to `True`), then we plot
+    the training data with lower opacity (by setting `alpha` `=` `0.1`), making them
+    look more transparent. This is so we can plot the representative points learned
+    by the VGP more clearly later.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The predictions made by the GP are then shown with the solid mean line and
+    the shaded 95% CI region in the third step:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Finally, we plot the representative points selected by the VGP by extracting
+    out `model.variational_strategy.inducing_points`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Scatters the inducing points
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, to generate our training and dataset, we randomly select 1,000 points
+    between –5 and 5 and compute the function values at these points:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To make our test set, we compute a dense grid between –7.5 and 7.5 using the
+    `torch.linspace()` function. This test set includes –7.5, 7.4, –7.3, and so on
+    to 7.5:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To visualize what our training set looks like, we can once again make a scatter
+    plot with the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: This code produces figure 12.3, where the black dots denote the individual data
+    points in our training set.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/12-03.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 12.3 The training dataset for our learning task, containing 1,000 data
+    points. It takes considerable time to train a regular GP on this set.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 12.1.2 Training a regular GP
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'We are now ready to implement and train a GP model on this dataset. First,
+    we implement the GP model class, which has a constant function (an instance of
+    `gpytorch.means` `.ConstantMean`) as its mean function and the RBF kernel with
+    an output scale (implemented with `gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel())`)
+    as its covariance function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ A constant mean function
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ An RBF kernel with an output scale
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Creates an MVN distribution as predictions
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, we initialize this GP model with our training data and a `GaussianLikelihood`
+    object:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Finally, we train our GP by running gradient descent to minimize the loss function
+    defined by the likelihood of the data. At the end of training, we obtain the hyperparameters
+    of the model (e.g., the mean constant, length scale, and output scale) that give
+    a low loss value. Gradient descent is implemented with the optimizer Adam (`torch
+    .optim.Adam`), which is one of the most commonly used gradient descent algorithms:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ The gradient descent algorithm Adam
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ The loss function, which computes the likelihood of the data from the hyperparameters
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Enables training mode
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Runs 500 iterations of gradient descent
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Enables prediction mode
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note As a reminder, when training a GP, we need to enable training mode for
+    both the model and the likelihood (using `model.train()` and `likelihood .train()`).
+    After training and before making predictions, we need to enable prediction mode
+    (with `model.eval()` and `likelihood.eval()`).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using GPUs to train GPs
+  prefs: []
+  type: TYPE_NORMAL
+- en: A method of scaling up GPs to large datasets that is not the focus of this chapter
+    is to use graphics processing units (GPUs). GPUs are often used to parallelize
+    matrix multiplications and speed up training neural networks.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The same principle applies here, and GPyTorch keeps training GPs on GPUs simple
+    by following PyTorch’s syntax of transferring objects to the GPU (by calling the
+    `cuda()` method on the objects). In particular, we call `train_x` `=` `train_x.cuda()`
+    and `train_y` `=` `train_y.cuda()` to put our data onto the GPU, and `model` `=`
+    `model .cuda()` and `likelihood` `=` `likelihood.cuda()` to put the GP model and
+    its likelihood onto the GPU.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can find more details on this topic in GPyTorch’s documentation at [http://mng.bz/lW8B](http://mng.bz/lW8B).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We also ran gradient descent for 500 iterations, but as our current dataset
+    is significantly larger, this loop might take a while to complete (so grab a coffee
+    while you wait!). Once training is done, we call the `visualize_gp_belief()` helper
+    function we wrote earlier to show the predictions made by our trained GP, which
+    produces figure 12.4:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: '![](../../OEBPS/Images/12-04.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 12.4 Predictions made by a regular GP. The predictions match the training
+    data well, but training takes a long time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We see that our GP’s predictions match the training data points well—an encouraging
+    sign that our model successfully learned from the data. However, there are several
+    problems with this procedure.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 12.1.3 Problems with training a regular GP
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: In this subsection, we discuss some of the challenges of training a GP on a
+    large dataset. The first challenge, as we’ve mentioned, is that training takes
+    quite a long time. On my MacBook, the 500 iterations of gradient descent could
+    take up to 45 seconds, which is significantly longer than what we observed in
+    chapters 2 and 3\. This is a direct result of the GP’s cubic running time that
+    we mentioned earlier, and this long training time only becomes more prohibitive
+    as our dataset gets larger and larger, as indicated by table 12.1.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Table 12.1 Estimated training time of a GP given the size of the training dataset.
+    Training quickly becomes prohibitive.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| Size of the training set | Training time |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 500 points | 45 seconds |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 2,000 points | 48 minutes |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 3,000 points | 2.7 hours |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 5,000 points | 12.5 hours |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 10,000 points | 4 days |'
+  prefs: []
+  type: TYPE_TB
+- en: 'The second, and perhaps more concerning, problem stems from the fact that computing
+    the loss function (the marginal log likelihood of the training data) used in gradient
+    descent becomes more and more difficult as the size of the training data increases.
+    This is indicated by the warning messages GPyTorch prints out during training:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: These messages tell us that we are encountering numerical instability in the
+    computation of the loss.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note Computing the loss across many data points is a computationally unstable
+    operation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Numerical instability prevents us from correctly calculating the loss and, therefore,
+    effectively minimizing that loss. This is illustrated by how this loss changes
+    across the 500 iterations of gradient descent, shown in figure 12.5.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/12-05.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 12.5 Progressive loss of a regular GP during gradient descent. Due to
+    numerical instability, the loss curve is jagged and not effectively minimized.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Unlike what we saw in chapters 2 and 3, our loss here jumps up and down erratically,
+    indicating that gradient descent is not doing a good job of minimizing that loss.
+    In fact, as we go through more iterations, our loss actually increases, which
+    means we have arrived at a suboptimal model! This phenomenon is understandable:
+    if we are miscalculating the loss of our model, then by using that miscalculated
+    term to guide learning in gradient descent, we likely obtain a suboptimal solution.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: You might be familiar with the analogy of gradient descent as climbing down
+    a mountain. Say you are at the top of a mountain and want to come down. At every
+    step along the way, you find a direction to walk along that will allow you to
+    get to a lower place (that is, descend). Eventually, after taking enough steps,
+    you arrive at the bottom of the mountain. Similarly, in gradient descent, we start
+    out with a relatively high loss, and by adjusting the hyperparameters of our model
+    at each iteration, we iteratively decrease the loss. With enough iterations, we
+    arrive at the optimal model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note An excellent discussion on gradient descent and how it is analogous to
+    descending a mountain is included in Luis Serrano’s *Grokking Machine Learning*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This process works well only if we can compute the loss accurately—that is,
+    if we can see exactly which direction will get us to a lower place on the mountain.
+    If, however, this computation is prone to errors, we naturally won’t be able to
+    effectively minimize the loss of our model. This is similar to trying to descend
+    the mountain with a blindfold on! As we see in figure 12.5, we actually ended
+    up at a higher place on the mountain (our loss is higher than its value before
+    gradient descent).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/12-06.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 12.6 Running gradient descent with a numerically unstable loss computation
+    is similar to descending a mountain with a blindfold on.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Overall, training a regular GP on a large dataset is not a good approach. Not
+    only does training scale cubically with the size of the training data, but the
+    computation of the loss value to be optimized is also unstable. In the remainder
+    of this chapter, we learn about variational GPs, or VGPs, as the solution to this
+    problem.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 12.2 Automatically choosing representative points from a large dataset
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The idea behind VGPs is to select a set of points that are representative of
+    the whole dataset and train a GP on this smaller subset. We have learned to train
+    a GP on a small dataset well. The hope is that this smaller subset captures the
+    general trend of the entire dataset, so minimal information is lost when a GP
+    is trained on the subset.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This approach is quite natural. It’s common for a large dataset to contain redundant
+    information, so if we can learn only from the most informative data points, we
+    can avoid having to process these redundancies. We have noted in section 2.2 that
+    a GP, like any ML model, works under the assumption that similar data points produce
+    similar labels. When a large dataset contains many similar data points, a GP needs
+    only to focus on one of them to learn about their trend. For example, even though
+    by-minute weather data is available, a weather forecasting model can effectively
+    learn from just hourly measurements. In this section, we learn how to do this
+    automatically by making sure that learning from the small subset leads to minimal
+    information loss compared with when we learn from the large set, as well as how
+    to implement this model with GPyTorch.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 12.2.1 Minimizing the difference between two GPs
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: How can we best select this smaller subset so that the final GP model can gain
+    the most information from the original dataset? In this subsection, we discuss
+    the high-level idea of how this is done by a VGP. The process equates to finding
+    the subset of inducing points that, when a GP is trained on this subset, will
+    induce a posterior GP that is as close as possible to the posterior GP trained
+    on the entire dataset.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Diving into some mathematical details, when training a VGP, we aim to minimize
+    the difference between the posterior GP conditioned on the inducing points and
+    the posterior GP conditioned on the entire dataset. This requires a way to measure
+    the difference between two distributions (the two GPs), and the measure chosen
+    for this is the Kullback–Leibler divergence, or the KL divergence.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Definition The *Kullback–Leibler (KL) divergence* is a statistical distance
+    that measures the distance between two distributions. In other words, the KL divergence
+    computes how different a probability distribution is from another distribution.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Supplementary material for the KL divergence
+  prefs: []
+  type: TYPE_NORMAL
+- en: An intuitive explanation of the KL divergence can be found in Will Kurt’s excellent
+    “Kullback-Leibler Divergence Explained” blog post ([https://www.countbayesie.com/blog/2017/5/9/kullback-leibler-divergence-explained](https://www.countbayesie.com/blog/2017/5/9/kullback-leibler-divergence-explained)).
+    The mathematically inclined reader may refer to chapter 2 of David MacKay’s *Information
+    Theory, Inference, and Learning Algorithms* (Cambridge University Press, 2003).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Just as the Euclidean distance between point A and point B (that is, the length
+    of the segment connecting the two points) measures how far apart those two points
+    are in Euclidean space, the KL divergence measures how far apart two given distributions
+    are in the space of probability distributions—that is, how different they are
+    from each other. This is illustrated in figure 12.7.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/12-07.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 12.7 Euclidean distance measures the distance between two points on a
+    plane, while the KL divergence measures the distance between two probability distributions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note As a mathematically valid distance measure, the KL divergence is nonnegative.
+    In other words, the distance between any two distributions is at least zero, and
+    when it is equal to zero, the two distributions exactly match up.
+  prefs: []
+  type: TYPE_NORMAL
+- en: So, if we could easily compute the KL divergence between the posterior GP trained
+    on the inducing points and the posterior GP trained on the entire dataset, we
+    should choose the inducing points that make the KL divergence zero. Unfortunately,
+    in a similar manner to how computing the marginal log likelihood is computationally
+    unstable, computing the KL divergence is not easy either. However, due to its
+    mathematical properties, we can rewrite the KL divergence as the difference between
+    two quantities, as illustrated in figure 12.8.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/12-08.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 12.8 The KL divergence is decomposed into the difference between the
+    marginal log likelihood and the evidence lower bound (ELBO). The ELBO is easy
+    to compute and, therefore, chosen as the metric to be optimized.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The third term in this equation, the evidence lower bound, or ELBO for short,
+    is exactly the difference between the marginal log likelihood and the KL divergence.
+    Even though these two terms, the marginal log likelihood and the KL divergence,
+    are hard to compute, the ELBO has a simple form and can be computed easily. For
+    this reason, instead of minimizing the KL divergence so that the posterior GP
+    trained on the inducing points is as close as possible to the posterior GP trained
+    on the complete dataset, we can maximize the ELBO as a way to indirectly maximize
+    the marginal log likelihood.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/12-08-unnumb-2.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'To summarize, to find the set of inducing points that will give us a posterior
+    GP that is the most similar to the GP we would obtain if we were able to train
+    on the large dataset, we aim to minimize the KL divergence between the two GPs.
+    However, this KL divergence is difficult to compute, so we choose to optimize
+    a proxy of the KL divergence, the ELBO of the model, which is easier to compute.
+    As we see in the next subsection, GPyTorch provides a convenient loss function
+    that computes this ELBO term for us. Before we cover implementation, there’s one
+    more thing for us to discuss: how to account for all data points in a large training
+    set when maximizing the ELBO term.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 12.2.2 Training the model in small batches
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: As we aim to find the set of inducing points that best represents the entire
+    training dataset, we still need to include all points in the training set in the
+    computation of the ELBO. But we said earlier that computing the marginal log likelihood
+    across many data points is numerically unstable, so gradient descent becomes ineffective.
+    Do we face the same problem here? In this subsection, we see that when training
+    a VGP by optimizing the ELBO term, we can avoid this numerical instability problem
+    by using a modified version of gradient descent that is more amenable to large
+    datasets.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The task of computing the loss function of an ML model across many data points
+    is not unique to GPs. For example, neural networks usually train on thousands
+    and millions of data points, and computing the loss function of the network for
+    all data points is not feasible either. The solution to this problem, for both
+    neural networks and VGPs, is to *approximate* the true loss value across all data
+    points using the loss value across a random subset of points. For example, the
+    following code snippet is from the official PyTorch documentation, and it shows
+    how to train a neural network on an image dataset ([http://mng.bz/8rBB](http://mng.bz/8rBB)).
+    Here, the inner loop iterates over small subsets of the training data and runs
+    gradient descent on the loss values computed on these subsets:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Loops over the dataset multiple times
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Gets the inputs; data is a list of [inputs, labels]
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Zeros the parameter gradients
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Forward + backward + optimize
+  prefs: []
+  type: TYPE_NORMAL
+- en: When we calculate the loss of our model on a small number of points, the computation
+    can be done in a stable and efficient manner. Further, by repeating this approximation
+    many times, we can approximate the true loss well. Finally, we run gradient descent
+    on this approximated loss, which hopefully also minimizes the true loss across
+    all data points.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Definition The technique of running gradient descent on the loss computed with
+    a random subset of the data is sometimes called *mini-batch gradient descent*.
+    In practice, instead of randomly choosing a subset in each iteration of gradient
+    descent, we often split the training set into small subsets and iteratively compute
+    the approximate loss using each of these small subsets.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For example, if our training set contains 1,000 points, we can split it into
+    10 small subsets of 100 points. Then, we compute the loss with each subset of
+    100 for gradient descent and iteratively repeat for all 10 subsets. (This is exactly
+    what we do in our code example later.) Again, while this approximate loss, computed
+    from a subset of the data, is not exactly equal to the true loss, in gradient
+    descent, we repeat this approximation many times, which, in aggregation, points
+    us in the correct descent direction.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The difference between gradient descent minimizing the true loss and mini-batch
+    gradient descent minimizing the approximate loss is illustrated by the example
+    in figure 12.9\. Compared to gradient descent (which, again, isn’t possible to
+    run with large data), the mini-batch version might not point to the most effective
+    descent direction, but by repeating the approximation multiple times, we are still
+    able to reach the goal.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/12-09.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 12.9 An illustration of gradient descent and mini-batch gradient descent
+    within a loss “valley,” where the center of the valley gives the lowest loss.
+    Gradient descent, if feasible to compute, leads straight to the target. Mini-batch
+    gradient descent goes in directions that are not optimal but still reaches the
+    target in the end.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If we were thinking in terms of the climbing-down-the-mountain-while-blindfolded
+    analogy, mini-batch gradient descent would be similar to being blindfolded with
+    a thin cloth that can be partially seen through. It’s not always guaranteed that
+    with every step we take, we arrive at a lower location, but given enough time,
+    we will be able to descend successfully.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note Not all loss functions can be approximated by the loss on a subset of the
+    data. In other words, not all loss functions can be minimized using mini-batch
+    gradient descent. The negative marginal log likelihood of a GP is an example;
+    otherwise, we could have run mini-batch gradient descent on this function. Fortunately,
+    mini-batch gradient descent is applicable to the ELBO of a VGP.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To recap, training a VGP follows a roughly similar procedure as training a
+    regular GP, in which we use a version of gradient descent to minimize the appropriate
+    loss of the model. Table 12.2 summarizes the key differences between the two model
+    classes: a regular GP should be trained on small datasets by running gradient
+    descent to minimize the exact negative marginal log likelihood, while a VGP can
+    be trained on large datasets by running mini-batch gradient descent to optimize
+    the ELBO, which is an approximation of the true log likelihood.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Table 12.2 Training a GP vs. training a VGP. The high-level procedure is similar;
+    only the specific components and settings are replaced.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| Training procedure | GP | VGP |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Training data size | Small | Medium to large |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Training type | Exact training | Approximate training |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Loss function | Negative marginal log likelihood | ELBO |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Optimization | Gradient descent | Mini-batch gradient descent |'
+  prefs: []
+  type: TYPE_TB
+- en: 12.2.3 Implementing the approximate model
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'We are now ready to implement a VGP in GPyTorch. Our plan is to write a VGP
+    model class, which is similar to the GP model classes we have worked with, and
+    minimize its ELBO using mini-batch gradient descent. The differences in our workflow
+    described in table 12.2 are reflected in our code in this subsection. Table 12.3
+    shows the components required when implementing a GP versus a VGP in GPyTorch.
+    In addition to a mean and covariance module, a VGP requires two other components:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*A variational distribution*—Defines the distribution over the inducing points
+    for the VGP. As we learned in the previous section, this distribution is to be
+    optimized so that the VGP resembles the GP trained on the full dataset.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*A variational strategy*—Defines how predictions are produced from the inducing
+    points. In section 2.2, we saw that a multivariate normal distribution may be
+    updated in light of an observation. This variational strategy facilitates the
+    same update for the variational distribution.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Table 12.3 Necessary components when implementing a GP vs. a VGP in GPyTorch.
+    A VGP requires a mean and covariance module like a GP but additionally needs a
+    variational distribution and a variational strategy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| Components | GP | VGP |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Mean module | Yes | Yes |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Covariance module | Yes | Yes |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Variational distribution | No | Yes |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Variational strategy | No | Yes |'
+  prefs: []
+  type: TYPE_TB
+- en: 'With these components in mind, we now implement the VGP model class, which
+    we name `ApproximateGPModel`. We don’t take in the training data and a likelihood
+    function in the `__init__()` method anymore. Instead, we take in a set of inducing
+    points that will be used to represent the entire dataset. The rest of the `__init__()`
+    method consists of declaring the learning pipeline that will be used to learn
+    which set of inducing points is best:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*The* `variational_distribution` *variable is an instance of the* `CholeskyVariationalDistribution`
+    *class, which takes in the number of inducing points during initialization.* The
+    variational distribution is the core of a VGP.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*The* `variational_strategy` *variable is an instance of the* `VariationalStrategy`
+    *class.* It takes in the set of inducing points as well as the variational distribution.
+    We set `learn_inducing_locations` `=` `True` so that we can learn the best locations
+    for these inducing points during training. If this variable is set to `False`,
+    the points passed to `__init__()` (stored in `inducing`) will be used as the inducing
+    points:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Instead of an ExactGP object, our VGP is an approximate GP.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Takes in a set of initial inducing points
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Sets up variational parameters necessary for training
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ To be continued
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As the last step in the `__init__()` method, we declare the mean and covariance
+    functions for the VGP. They should be whatever we’d like to use in a regular GP
+    if it were to be trained on the data. In our case, we use the constant mean and
+    the RBF kernel with an output scale:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We also declare the `forward()` method in the same way as in a regular GP,
+    which we do not show here. Let’s now initialize this model with the first 50 data
+    points in the training set as the inducing points:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ The sliced tensor train_x[:50, :] gives the first 50 data points in train_x.
+  prefs: []
+  type: TYPE_NORMAL
+- en: There is nothing special about these first 50 data points, and their values,
+    stored internally in the VGP model, will be modified during training. The most
+    important part of this initialization is that we are specifying that the model
+    should use 50 inducing points. If we’d like to use 100, we could pass `train_x[:100,`
+    `:]` to the initialization.
+  prefs: []
+  type: TYPE_NORMAL
+- en: It’s hard to say exactly what number of inducing points is sufficient for a
+    VGP. The fewer points we use, the faster the model will train but the less effective
+    those inducing points will be at representing the whole set. As the number of
+    points increases, a VGP has more freedom in spreading out the inducing points
+    to cover the whole set, but training will become slower.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note A general rule is not to go over 1,000 inducing points. As we discuss shortly,
+    50 points is enough for us to approximate the trained GP in the previous subsection
+    with high fidelity.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To set up mini-batch gradient descent, we first need an optimizer. We, once
+    again, use the Adam optimizer:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Optimizes the parameters of the likelihood together with those of the GP
+  prefs: []
+  type: TYPE_NORMAL
+- en: Parameters to optimize
+  prefs: []
+  type: TYPE_NORMAL
+- en: Previously, we only needed to pass `model.parameters()` to Adam. Here, the likelihood
+    is not coupled with the VGP model—a regular GP is initialized with a likelihood,
+    while a VGP isn’t. So, it’s necessary to pass `likelihood.parameters()` to Adam
+    in this case.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For the loss function, we use the `gpytorch.mlls.VariationalELBO` class, which
+    implements the ELBO quantity we aim to optimize with a VGP. During initialization,
+    an instance of this class takes in the likelihood function, the VGP model, and
+    the size of the full training set (which we can access with `train_y.size(0)`).
+    With that, we declare this object as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ The size of the training data
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'With the model, the optimizer, and the loss function set up, we now need to
+    run mini-batch gradient descent. To do this, we split our training dataset into
+    batches, each containing 100 points, using PyTorch’s `TensorDataset` and `DataLoader`
+    classes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This `train_loader` object allows us to iterate through mini batches of size
+    100 of our dataset in a clean way when running gradient descent. The loss—that
+    is, the ELBO—is computed with the following syntax:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Here, `x_batch` and `y_batch` are a given batch (small subset) of the full
+    training set. Overall, gradient descent is implemented as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Enables training mode
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Iterates through the entire training dataset 50 times
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ In each iteration, iterates through the mini batches in train_loader
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Mini-batch gradient descent, running gradient descent on the batches
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Enables prediction mode
+  prefs: []
+  type: TYPE_NORMAL
+- en: While running this mini-batch gradient descent loop, you will notice it is significantly
+    faster than the loop with the regular GP. (On the same MacBook, this process took
+    less than one second, a major improvement in speed!)
+  prefs: []
+  type: TYPE_NORMAL
+- en: The speed of a VGP
+  prefs: []
+  type: TYPE_NORMAL
+- en: You might think that our comparison between the 500 iterations of gradient descent
+    with the regular GP and the 50 iterations of mini-batch gradient descent with
+    the VGP is not a fair one. But remember that in each iteration of the outer `for`
+    loop of mini-batch gradient descent, we also iterate over 10 mini batches in `train_loader`,
+    so in the end, we did take 500 gradient steps in total. Further, even if we did
+    run 500 iterations of mini-batch gradient descent, it would take less than 1 second
+    times 10, still a 4x speedup from 45 seconds.
+  prefs: []
+  type: TYPE_NORMAL
+- en: So with mini-batch gradient descent, our VGP model can be trained much more
+    efficiently. But what about the quality of the training? The left panel of figure
+    12.10 visualizes the progressive ELBO loss during our mini-batch gradient descent
+    run. Compared with figure 12.5, although the loss didn’t consistently decrease
+    at every step (there is a zigzag trend), the loss was effectively minimized throughout
+    the entire procedure.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/12-10.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 12.10 Progressive loss and the corresponding length scale and output
+    scale of a VGP during mini-batch gradient descent
+  prefs: []
+  type: TYPE_NORMAL
+- en: This shows that every step during the optimization might not be the best direction
+    to take to minimize the loss, but the mini-batch gradient descent is, indeed,
+    effective at minimizing the loss. This is shown more clearly in figure 12.11.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/12-11.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 12.11 Progressive loss of a VGP during mini-batch gradient descent. Despite
+    some variability, the loss is effectively minimized.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now, let’s visualize the predictions made by this VGP model to see if it produces
+    reasonable results. Using the `visualize_gp_belief()` helper function, we obtain
+    figure 12.12, which shows that we have obtained a high-quality approximation of
+    the GP trained on the true loss at a small fraction of the time cost.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/12-12.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 12.12 Predictions made by a GP and a VGP. The predictions made by the
+    VGP roughly match those by the GP.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To end our discussion on VPGs, let’s visualize the locations of the inducing
+    points our VGP model has learned. We have said that these inducing points should
+    be representative of the whole dataset and capture its trend well. To plot the
+    inducing points, we can access their locations with `model.variational_strategy.inducing_
+    points.detach()` and plot them as scattered points along the mean prediction.
+    Our `visualize_gp_belief()` helper function already has this implemented, and
+    the only thing we need to do is to set `variational` `=` `True` when calling this
+    function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: This produces figure 12.13, in which we see a very interesting behavior in these
+    inducing points. They are not equally spread out across our training data; instead,
+    they cluster around different parts of the data. These parts are where the objective
+    function curves up or down or exhibits some nontrivial behavior. By allocating
+    the inducing points to these locations, the VGP is able to capture the most important
+    trends embedded in the large training dataset.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/12-13.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 12.13 The inducing points of a VGP. These points are positioned so that
+    they represent the entire data and capture the most important trends.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We have learned about how to train a VGP using mini-batch gradient descent and
+    have seen that this helps us approximate a regular GP, which is infeasible to
+    train, with high fidelity at a much lower cost. In the next section, we learn
+    about another gradient descent algorithm that can train a VGP even more effectively.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 12.3 Optimizing better by accounting for the geometry of the loss surface
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In this section, we learn about the algorithm called *natural gradient descent*,
+    which is another version of gradient descent that reasons more carefully about
+    the geometry of the loss function when computing the descent step. As we see shortly,
+    this careful reasoning allows us to quickly descend the loss function, ultimately
+    leading to more effective optimization with fewer iterations (that is, faster
+    convergence).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To understand the motivation for natural gradient descent and why it works
+    better than what we already have, we first distinguish between the two types of
+    parameters of a VGP:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The first type is the regular parameters of a GP, such as the mean constant
+    and the length and output scales of the covariance function. These parameters
+    take on regular numerical values that exist in the Euclidean space.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The second type consists of the *variational* parameters that only a VGP has.
+    These have to do with the inducing points and the various components necessary
+    to facilitate the approximation with the variational distribution. In other words,
+    these parameters are associated with probability distributions and have values
+    that cannot be represented well within the Euclidean space.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Note The difference between these two types of parameters is somewhat similar,
+    although not exactly analogous, to how the Euclidean distance can measure the
+    distance between two points in that space, but it can’t measure the difference
+    between two probability distributions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Although mini-batch gradient descent as we used it in the previous section
+    worked sufficiently well, the algorithm assumes that all parameters exist in Euclidean
+    space. For example, from the perspective of the algorithm, the difference between
+    a length scale of 1 and a length scale of 2 is the same as the difference between
+    an inducing point’s mean value of 1 and a mean value of 2\. However, this is not
+    true: going from a length scale of 1 to a length scale of 2 would affect the VGP
+    model very differently from going from an inducing point’s mean value of 1 to
+    a mean value of 2\. This is illustrated in the example of figure 12.14, where
+    the behavior of the loss with respect to the length scale is quite different than
+    that with respect to the inducing mean.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/12-14.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 12.14 An example of how the loss to be minimized might behave very differently
+    with respect to a regular parameter and a variational parameter. This gives rise
+    to the need to take into account the geometry of the loss.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This difference in behavior exists because the geometry of the loss function
+    with respect to the regular parameters of a VGP is fundamentally different from
+    that with respect to the variational parameters. If mini-batch gradient descent
+    could account for this geometric difference when computing a descent direction
+    of the loss, the algorithm would be more effective at minimizing that loss. This
+    is where natural gradient descent comes in.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Definition *Natural gradient descent* uses information about the geometry of
+    the loss function with respect to the variational parameters to compute better
+    descent directions for these parameters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: By taking better descent directions, natural gradient descent can help us optimize
+    our VGP model more effectively and quickly. The end result is that we converge
+    to our final model in fewer steps. Continuing with our two-dimensional illustration
+    of the different gradient descent algorithms, figure 12.15 shows how this geometric
+    reasoning helps natural gradient descent reach the goal faster than mini-batch
+    gradient descent. That is, natural gradient descent tends to require fewer steps
+    during training to achieve the same loss as mini-batch gradient descent. In our
+    climbing-down-the-mountain analogy, with natural gradient descent, we are still
+    blindfolded by a thin cloth when trying to climb down the mountain, but we are
+    now wearing special hiking shoes that help us traverse the terrain more effectively.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/12-15.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 12.15 An illustration of gradient descent, mini-batch gradient descent,
+    and natural gradient descent within a loss “valley,” where the center of the valley
+    gives the lowest loss. By accounting for the geometry of the loss function, natural
+    gradient descent reaches the loss minimum more quickly than mini-batch.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Supplementary material for natural gradient descent
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For a more math-heavy explanation of natural gradient descent, I recommend
+    the excellent “Natural Gradient Descent” blog post by Agustinus Kristiadi: [http://mng.bz/EQAj](http://mng.bz/EQAj).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note It is important to note that the natural gradient descent algorithm only
+    optimizes the variational parameters of a VGP. The regular parameters, such as
+    the length and output scales, could still be optimized by a regular mini-batch
+    gradient descent algorithm. We see this when we implement our new training procedure
+    next.
+  prefs: []
+  type: TYPE_NORMAL
+- en: And with that, let’s use natural gradient descent to train our VGP model. With
+    the same one-dimensional objective function in previous sections, we implement
+    a VGP model that works with natural gradient descent. The model class in this
+    case is similar to `ApproximateGPModel`, which we implemented for mini-batch gradient
+    descent in the previous section, in that it
+  prefs: []
+  type: TYPE_NORMAL
+- en: Still extends `gpytorch.models.ApproximateGP`
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Needs a variational strategy to manage the learning process
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Has a mean function, covariance function, and `forward()` method like a regular
+    GP model
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The only difference here is that the variational distribution needs to be an
+    instance of `gpytorch.variational.NaturalVariationalDistribution` for us to use
+    natural gradient descent when training the model. The entire model class is implemented
+    as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ The variational distribution needs to be a natural one to work with natural
+    gradient descent.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Declaring the rest of the variational strategy is the same as before.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ The forward() method is the same as before.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We, once again, initialize this VGP model with 50 inducing points:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ 50 inducing points
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now comes the important part, in which we declare the optimizers for our training.
+    Remember that we use the natural gradient descent algorithm to optimize the variational
+    parameters of our model. However, the other parameters, such as the length and
+    output scales, still must be optimized by the Adam optimizer. We, thus, use the
+    following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Natural gradient descent takes in the VGP’s variational parameters, model.variational_parameters().
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Adam takes in the VGP’s other parameters, model.parameters() and likelihood.parameters().
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now, during training, we still compute the loss using
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'While computing the loss, we loop through mini-batches (`x_batch` and `y_batch`)
+    of our training data. However, now that we have two optimizers running at the
+    same time, we need to manage them by calling `zero_grad()` (to clear out the gradients
+    from the previous step) and `step()` (to take a descent step) on each of them
+    at each iteration of training:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Enables training mode
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Clears out the gradients from the previous step
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Takes a descent step with each optimizer
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Enables prediction mode
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note As always, we need to call `model.train()` and `likelihood.train()` prior
+    to gradient descent, and `model.eval()` and `likelihood.eval()` after training
+    has finished.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Notice that we call `zero_grad()` and `step()` on both the natural gradient
+    descent optimizer and Adam to optimize the respective parameters of a VGP model.
+    The training loop, once again, takes a very short time to finish, and the trained
+    VGP produces the predictions shown in figure 12.16\. We see very similar predictions
+    as those of a regular GP in figure 12.4 and those of a VGP trained with mini-batch
+    gradient descent in figure 12.13.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/12-16.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 12.16 Predictions made by a VGP and the inducing points trained via natural
+    gradient descent. The quality of these predictions is excellent.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We can further inspect the progressive ELBO loss during training. Its progress
+    is visualized in the left panel of figure 12.17.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/12-17.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 12.17 Progressive loss of a VGP during natural gradient descent. The
+    loss was effectively minimized after a few number of iterations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Remarkably, our ELBO loss dropped to a low value almost immediately during training,
+    indicating natural gradient descent was able to help us converge to a good model
+    quickly. This illustrates the benefits of this variant of the gradient descent
+    algorithm when training VGPs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We have now reached the end of chapter 12\. In this chapter, we learned to scale
+    GP models to large datasets by using inducing points, which are a set of representative
+    points that aim to capture the trends exhibited by a large training set. The resulting
+    model is called a VGP, which is amenable to mini-batch gradient descent and, therefore,
+    can be trained without the computation of the model loss across all data points.
+    We also examined natural gradient descent as a more effective version of the mini-batch
+    algorithm, allowing us to optimize more effectively. In chapter 13, we cover another
+    advanced usage of GPs, combining them with neural networks to model complex, structured
+    data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 12.4 Exercise
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: This exercise demonstrates the improvement in efficiency when going from a regular
+    GP model to a VGP one on a real-life dataset of housing prices in California.
+    Our goal is to observe the computational benefits of a VGP—this time, in a real-world
+    setting.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Complete the following steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Use the `read_csv()` function from the Pandas library to read in the dataset
+    stored in the spreadsheet named `data/housing.csv`, obtained from Kaggle’s California
+    Housing Prices dataset ([http://mng.bz/N2Q7](http://mng.bz/N2Q7)) under a Creative
+    Common Public Domain license. Once read in, the Pandas dataframe should look similar
+    to the output in figure 12.18.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/12-18.png)'
+  prefs:
+  - PREF_IND
+  type: TYPE_IMG
+- en: Figure 12.18 The housing price dataset shown as a Pandas dataframe. This is
+    the training set for this exercise.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Visualize the `median_house_value` column, which is our prediction target, in
+    a scatter plot whose *x*- and *y*-axes correspond to the `longitude` and `latitude`
+    columns. The location of a dot corresponds to the location of a house, and the
+    color of the dot corresponds to the price. The visualization should look similar
+    to figure 12.19.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/12-19.png)'
+  prefs:
+  - PREF_IND
+  type: TYPE_IMG
+- en: Figure 12.19 The housing price dataset shown as a scatter
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Extract all the columns, except the last (`median_house_value`), and store them
+    as a PyTorch tensor. This will be used as our training features, `train_x`.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Extract the `median_house_value` column, and store its log transformation as
+    another PyTorch tensor. This is our training target, `train_y`.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Normalize the training labels `train_y` by subtracting the mean and dividing
+    by the standard deviation. This will make training more stable.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Implement a regular GP model with a constant mean function and a Matérn 5/2
+    kernel with automatic relevance determination (ARD) with an output scale. For
+    a refresher on Matérn kernels and ARD, refer to sections 3.4.2 and 3.4.3, respectively.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Make a likelihood whose noise is constrained to be at least 0.1 using the following
+    code:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: ❶ The constraint forces the noise to be at least 0.1.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: This constraint helps us smooth out the training labels by raising the noise
+    tolerance.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Initialize the previously implemented GP model and train it with the likelihood
+    using gradient descent for 10 iterations. Observe the total training time.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Implement a variational GP model with the same mean and covariance functions
+    as the GP. This model looks similar to the `ApproximateGPModel` class we implemented
+    in the chapter, except we now need the Matérn 5/2 kernel with ARD.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Train this VGP with the similarly initialized likelihood and 100 inducing points,
+    using natural gradient descent for 10 iterations. For mini-batch gradient descent,
+    you could split the training set into batches of size 100.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Verify that training the VGP takes less time than training the GP. For timing
+    functionalities, you can use `time.time()` to record the start and end time of
+    training each model, or you can use the `tqdm` library to keep track of the duration
+    of training, like in the code we’ve been using.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The solution is included in the `CH11/02` `-` `Exercise.ipynb` notebook.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The computation cost of a GP scales cubically with the size of the training
+    dataset. Therefore, training the model becomes prohibitive as the size of the
+    dataset grows.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Computing the loss of an ML model across a large number of data points is numerically
+    unstable. A loss computed in an unstable way may mislead optimization during gradient
+    descent, leading to poor predictive performance.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A VGP scales to a large dataset by only training on a small set of inducing
+    points. These inducing points need to be representative of the dataset, so the
+    trained model can be as similar as possible to the GP trained on the whole dataset.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: To produce an approximate model that is as close as possible to the model trained
+    on all of the training data, the Kullback–Leibler divergence, which measures the
+    difference between two probability distributions, is used in the formulation of
+    a VGP.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The evidence lower bound (ELBO) acts as a proxy for the true loss when training
+    a VGP. More specifically, the ELBO lower-bounds the marginal log likelihood of
+    the model, which is what we aim to optimize. By optimizing the ELBO, we indirectly
+    optimize the marginal log likelihood.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Training a VGP may be done in small batches, allowing for a more stable computation
+    of the loss. The gradient descent algorithm used in this procedure is mini-batch
+    gradient descent.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Although each step of mini-batch gradient descent is not guaranteed to completely
+    minimize loss, the algorithm, when a large number of iterations are run, can effectively
+    reduce the loss. This is because many steps of mini-batch gradient descent, in
+    aggregation, can point toward the right direction to minimize the loss.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Natural gradient descent accounts for the geometry of the loss function with
+    respect to the variational parameters of a VGP. This geometric reasoning allows
+    the algorithm to update the variational parameters of the trained model and minimize
+    the loss more effectively, leading to faster convergence.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Natural gradient descent optimizes the variational parameters of a VGP. Regular
+    parameters such as the length and output scales are optimized by mini-batch gradient
+    descent.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL

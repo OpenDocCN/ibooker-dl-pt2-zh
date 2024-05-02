@@ -1,0 +1,1555 @@
+- en: 4 Refining the best result with improvement-based policies
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter covers
+  prefs: []
+  type: TYPE_NORMAL
+- en: The BayesOpt loop
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The tradeoff between exploitation and exploration in a BayesOpt policy
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Improvement as a criterion for finding new data points
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: BayesOpt policies that use improvement
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'In this chapter, we first remind ourselves of the iterative nature of BayesOpt:
+    we alternate between training a Gaussian process (GP) on the collected data and
+    finding the next data point to label using a BayesOpt policy. This forms a virtuous
+    cycle in which our past data inform future decisions. We then talk about what
+    we look for in a BayesOpt policy: a decision-making algorithm that decides which
+    data point to label. A good BayesOpt policy needs to balance sufficiently exploring
+    the search space and zeroing in on the high-performing regions.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Finally, we learn about two policies that seek to improve upon the best-seen
+    data point in the BayesOpt loop so far: Probability of Improvement, and one of
+    the most commonly used BayesOpt policies, Expected Improvement. For example, if
+    we have a hyperparameter tuning application where we want to identify the neural
+    network that gives the highest validation accuracy on a dataset, and the highest
+    accuracy we have seen so far is at 90%, we will likely want to improve upon this
+    90% threshold. The policies we learn in this chapter attempt to create this improvement.
+    In the material discovery task we saw in table 1.2, where we’d like to search
+    for metal alloys that mix at a low temperature (corresponding to high stability)
+    and 187.24 is the lowest temperature we have found, the two aforementioned policies
+    will seek to find values lower than this 187.24 benchmark.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Amazingly, thanks to the Gaussianity of our belief about the objective function,
+    how much we can expect to improve from the best-seen point may be computed in
+    closed form. This is to say that while we don’t know what the objective function
+    looks like at unseen locations, computing improvement-based quantities can still
+    be done easily under a GP. By the end of the chapter, we gain a thorough understanding
+    of what a BayesOpt policy needs to do and how this is done with the two improvement-based
+    policies. We also learn how to integrate BoTorch, the BayesOpt library in Python
+    ([https://botorch.org/docs/introduction](https://botorch.org/docs/introduction))
+    that we use from this chapter through the end of the book, to implement BayesOpt
+    policies.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.1 Navigating the search space in BayesOpt
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: How can we make sure we are using our past data to inform future decisions correctly?
+    What are we looking for in a BayesOpt policy as an automated decision-making procedure?
+    This section answers these questions and gives us a clear idea of how BayesOpt
+    works when using a GP.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Specifically, in the following subsection, we reinspect the BayesOpt loop that
+    was briefly introduced in section 1.2.2 to see how decision-making via BayesOpt
+    policies is done in tandem with training a GP. Then, we discuss the main challenge
+    BayesOpt policies need to address: the balance between exploring regions with
+    high uncertainty and exploiting good regions in the search space.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Take, as an example, figure 4.1, which shows a GP trained on two data points
+    at 1 and 2\. Here, a BayesOpt policy needs to decide at which point between –5
+    and 5 we should evaluate the objective function next. The exploration–exploitation
+    tradeoff is clear: we need to decide whether to inspect the objective function
+    at the left and right extremes of our search space (around –5 and 5), where there’s
+    considerable uncertainty in our predictions, or stay within the region around
+    0, where the mean prediction is at the highest. The exploration–exploitation tradeoff
+    will set the stage for the different BayesOpt policies that we discuss in this
+    and following chapters.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/04-01.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.1 The exploration–exploitation tradeoff in BayesOpt. Each policy needs
+    to decide whether to query regions with high uncertainty (exploration) or to query
+    regions with a high predicted mean (exploitation).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.1.1 The BayesOpt loop and policies
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: First, let’s remind ourselves of what the BayesOpt loop looks like and the role
+    BayesOpt policies play in this process. In this chapter, we also implement a scaffold
+    of this loop, which we use to inspect BayesOpt policies in future chapters. Review
+    figure 4.2, which is a repeat of figure 1.6 and shows how BayesOpt works on a
+    high level.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/04-02.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.2 The BayesOpt loop, which combines a GP for modeling and a policy
+    for decision making. This complete workflow may now be used to optimize black
+    box functions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Specifically, BayesOpt is done via a loop that alternates between the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Training a GP on the current training set. We have thoroughly covered how to
+    do this in previous chapters.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using the trained GP to score data points in the search space by how valuable
+    they are at helping us identify the optimum of the objective function (step 2
+    in figure 4.2). The point that maximizes this score is selected to be labeled
+    and added to the training data (step 3 in figure 4.2). How this scoring is done
+    is determined by the BayesOpt policy used. We learn more about different policies
+    in this chapter and chapters 5 and 6.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: We repeat this loop until we reach a termination condition, most often once
+    we have evaluated the objective function for a target number of loop iterations.
+    This procedure is end to end, as we don’t just use a GP to make predictions for
+    the sake of making predictions—these predictions inform the decisions we make
+    about which data points to collect next, which, in turn, drive how future predictions
+    are generated.
+  prefs: []
+  type: TYPE_NORMAL
+- en: DEFINITION The BayesOpt loop is a virtuous cycle of model training (the GP)
+    and data collection (the policy), each of which helps and benefits from the other,
+    with the goal of locating the optimum of the objective function. The virtuous
+    cycle of BayesOpt is a feedback loop that iterates toward an equilibrium with
+    desired properties; its components act in concert to achieve the desired result,
+    rather than aggravating one another in a vicious cycle that results in an undesirable
+    outcome.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The rule that dictates how data points are scored according to their value in
+    helping us achieve this goal is decided by a BayesOpt policy and is, therefore,
+    essential to optimization performance. A good policy that assigns high scores
+    to data points that are truly valuable to optimization will point us toward the
+    optimum of the objective function more quickly and efficiently, while a badly
+    designed policy might misguide our experiments and waste valuable resources.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Definition A *BayesOpt policy* scores each potential query according to its
+    value and thus decides where we should query the objective function next (where
+    the score is maximized). This score computed by the policy is called the *acquisition
+    score* as we are using it as a method of data acquisition.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Connection to reinforcement learning policies
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you have had experience with reinforcement learning (RL), you might notice
+    a connection between a BayesOpt policy and an RL policy. In both techniques, the
+    policy tells us which action to take in a decision-making problem. While in RL,
+    a policy might assign a score to each action and we, in turn, pick the one with
+    the highest score, or the policy might simply output the action we should take.
+    In BayesOpt, it’s always the former, where the policy outputs a score quantifying
+    the value of each possible query, so it’s our job to identify the query maximizing
+    this score.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Unfortunately, there’s no perfect solution to the problem of designing a good
+    BayesOpt policy. That is, there’s no single BayesOpt policy that consistently
+    excels across all objective functions. Different policies, as we see in this and
+    following chapters, use different focuses and heuristics. While some heuristics
+    work well on one type of objective function, others might prove effective on different
+    types of functions. This means we need to expose ourselves to a wide range of
+    BayesOpt policies and understand what they aim to do to be able to apply them
+    to appropriate situations—which is exactly what we will be doing in chapters 4
+    to 6.
+  prefs: []
+  type: TYPE_NORMAL
+- en: What is a policy?
+  prefs: []
+  type: TYPE_NORMAL
+- en: Each BayesOpt policy is a decision rule that scores data points in terms of
+    usefulness in optimization according to a given criterion or heuristic. Different
+    criteria and heuristics give rise to different policies, and there is no predetermined
+    set of BayesOpt policies. In fact, BayesOpt researchers still publish papers proposing
+    new policies. In this book, we only discuss the most popular and commonly used
+    policies in practice.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let us now take a moment to implement a placeholder BayesOpt loop, which we
+    will be using from now on to inspect various BayesOpt policies. This code is implemented
+    in CH04/01 - BayesOpt loop.ipynb. The first component we need is an objective
+    function that we’d like to optimize using BayesOpt. Here, we use the familiar
+    one-dimensional Forrester function, which is defined to be between –5 and 5, as
+    the objective function to be maximized. We also compute the value of the Forrester
+    function inside its domain [–5, 5], with `xs` and `ys` as the ground truth:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Form of the objective function, assumed to be unknown
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Test data computed over a grid between –5 and 5
+  prefs: []
+  type: TYPE_NORMAL
+- en: Another thing we need to do is modify how GP models are implemented so that
+    they can be used with BayesOpt policies in BoTorch. Implementing the GP makes
+    up the first step of our BayesOpt loop.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Since BoTorch is built right on top of GPyTorch, only minimal modifications
+    are required. Specifically, we use the following GP implementation, in which we
+    inherit from the `botorch.models.gpytorch.GPyTorchModel` class in addition to
+    our usual `gpytorch.models.ExactGP` class. Further, we declare the class-specific
+    attribute `num_outputs` and set it to 1\. These are the minimal modifications
+    we need to make to use our GPyTorch model with BoTorch, which implements the BayesOpt
+    policies we use later in this chapter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Modifications for BoTorch integration
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Aside from these, everything else in our GP implementation remains the same.
+    We now write a helper function that trains the GP on our training data:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Trains the GP using gradient descent
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Declares the GP
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Trains the GP using gradient descent
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note We have used all the preceding code in previous chapters. If you are having
+    trouble understanding a piece of code, refer to section 3.3.2 for more details.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This covers step 1 of figure 4.2\. For now, we are skipping step 2, in which
+    we implement BayesOpt policies, and saving it for the next section and future
+    chapters. The next component to be implemented is the visualization of the data
+    that has been collected so far, the current GP belief, and how a BayesOpt policy
+    scores the rest of the data points. The target of this visualization is shown
+    in figure 4.3, which we saw in chapter 1\. Specifically, the top panel of the
+    plot shows the predictions made by a GP model against the true objective function,
+    while the bottom panel shows the acquisition scores as computed by a BayesOpt
+    policy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/04-03.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.3 A typical visualization of progress in BayesOpt. The top panel shows
+    the GP predictions and the ground truth objective function, while the bottom panel
+    shows the acquisition scores made by a BayesOpt policy named Expected Improvement,
+    which we learn about in section 4.3.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We are already familiar with how to generate the top panel, and generating
+    the bottom panel is just as simple. This will be done using a helper function
+    similar to the one we used in section 3.3\. The function takes in a GP model and
+    its likelihood function as well as two optional inputs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`policy` refers to a BayesOpt policy object, which can be called in a way similar
+    to any PyTorch module. Here, we are calling it on the grid `xs` that represents
+    our search space to obtain the acquisition scores across the space. We discuss
+    how to implement these policy objects with BoTorch in the next section, but we
+    don’t need to know more about these objects right now.'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '`next_x` is the location of the data point that maximizes the acquisition score,
+    which is to be added to the running training data:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ GP predictions
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Acquisition score
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Omitted
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here, we are generating the predictions from the GP and the acquisition scores
+    on the test data `xs`. Note that we don’t compute the acquisition scores if `policy`
+    is not passed in, in which case we also visualize the GP predictions in the way
+    we’re already familiar with—scattered points to indicate the training data, a
+    solid line for the mean predictions, and shaded regions for the 95% CIs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Ground truth
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Training data
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Mean predictions and 95% CIs
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note Refer to section 2.4.4 for a refresher on this visualization.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If, on the other hand, a policy object is passed in, we create another subplot
+    to show the acquisition scores across the search space:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ GP predictions (the same as before)
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ The point maximizing the acquisition score, visualized using a dotted vertical
+    line
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Acquisition scores
+  prefs: []
+  type: TYPE_NORMAL
+- en: This function, when `policy` and `next_x` are passed in, will create a lower
+    panel showing the acquisition score according to the BayesOpt policy. Finally,
+    we need to implement step 3 of the BayesOpt loop in figure 4.2, which (1) finds
+    the point with the highest acquisition score and (2) adds it to the training data
+    and updates the GP. For the first task of identifying the point giving the highest
+    acquisition score, while it’s possible in our Forrester example to scan over a
+    one-dimensional search space, an exhaustive search becomes more and more expensive
+    as the number of dimensions of the objective function increases.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note We can use BoTorch’s helper function `botorch.optim.optimize` `.optimize_acqf()`,
+    which finds the point that maximizes the score of any BayesOpt policy. The helper
+    function uses L-BFGS, a quasi-Newton optimization method that generally works
+    better than gradient descent.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We do this as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`policy` is the BayesOpt policy object, which we learn about shortly.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`bounds` stores the boundary of our search space, which is –5 and 5 in this
+    case.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`q` `=` `1` specifies the number of points we’d like the helper function to
+    return, which is one. (In chapter 7, we learn about the setting where we are allowed
+    to make multiple queries to the objective functions at the same time.)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`num_restarts` and `raw_samples` denote the number of repeats and initial data
+    points L-BFGS uses when searching for the optimal candidate that gives the highest
+    acquisition score. Generally, I recommend using 20 times and 50 times the number
+    of dimensions for these parameters, respectively.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The returned values, `next_x` and `acq_val`, are the location of the point
+    giving the highest acquisition score and the corresponding maximized acquisition
+    score, respectively:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: Setting the number of restarts and raw samples
+  prefs: []
+  type: TYPE_NORMAL
+- en: The higher the values of `num_restarts` and `raw_samples` are, the more exhaustive
+    L-BFGS will be when searching for the optimal candidate maximizing the acquisition
+    score. This also means the L-BFGS algorithm will take longer to run. You can increase
+    these two numbers if you see that L-BFGS is failing at maximizing the acquisition
+    score or decrease them if the algorithm is taking too long to run.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As the last step, we put together what we have implemented so far in a BayesOpt
+    loop. We do the following at each iteration of this loop:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We first print out the best value we have seen so far (`train_y.max()`), which
+    shows how optimization is progressing.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Then, we retrain the GP on the current training data and redeclare the BayesOpt
+    policy.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Using the helper function `botorch.optim.optimize_acqf()` from BoTorch, we identify
+    the point in the search space that maximizes the acquisition score.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: We call the helper function `visualize_gp_belief_and_policy()`, which visualizes
+    our current GP belief and optimization progress.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Finally, we query the function value at the identified point (`next_x`) and
+    update our observed data.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: This entire procedure is summarized in figure 4.4, which shows the steps in
+    the BayesOpt loop and the corresponding code that implements them. Each step is
+    implemented by modular code from our helper functions or BoTorch, making the entire
+    procedure easy to follow.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/04-04.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.4 Steps in the BayesOpt loop and the corresponding code. The code for
+    each step is modular, which makes the entire loop easy to follow.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The actual code implementation is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ The number of evaluations of the objective function that can be made
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Updates the model on the current data
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Initializes the BayesOpt policy, to be discussed later
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Finds the point that gives the highest acquisition score
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Visualizes the current GP model and acquisition scores
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❻ Makes an observation at the identified point and updates the training data
+  prefs: []
+  type: TYPE_NORMAL
+- en: With that, we have implemented a skeleton of a BayesOpt loop. All that’s left
+    to do is fill in the initialization of `policy` with an actual BayesOpt policy
+    we would like to use, and the notebook will be able to run BayesOpt on the Forrester
+    function. Note that while calling `visualize_gp_belief_and_policy()` isn’t necessary
+    (that is, the previous BayesOpt loop will still be able to run without that line
+    of code), the function is useful in helping us observe the behavior and characteristics
+    of BayesOpt policies as well as diagnosing any potential problems, as we discuss
+    later in this chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: One of the most important characteristics of a BayesOpt policy is the balance
+    between exploration and exploitation, a classical tradeoff in many AI and ML problems.
+    Here, the possibility of discovering a high-performance region we currently don’t
+    know about (exploration) is traded off against the chance of zeroing in on a known
+    good region (exploitation). We discuss this tradeoff in greater detail in the
+    next subsection.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.1.2 Balancing exploration and exploitation
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'In this subsection, we discuss one of the problems inherent in any decision-making
+    procedure, including BayesOpt: the balance between sufficient exploration of the
+    entire search space and timely exploitation of regions that yield good results.
+    This discussion will help us form an idea of what a good BayesOpt policy should
+    do and make us aware of how each of the policies we learn about addresses this
+    tradeoff.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: To illustrate the exploration–exploitation tradeoff, imagine you are dining
+    at a restaurant you have only been to a few times before (see figure 4.5). You
+    know that this restaurant has great burgers, but you’re not sure if their fish
+    and steaks are any good. Here, you are faced with a exploration–exploitation problem,
+    where you need to choose between ordering something new that might be an excellent
+    dish (exploration) and ordering your usual but reliable meal (exploitation).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/04-05.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.5 Ordering from a menu at a restaurant has an inherent exploration
+    (trying something new) vs. exploitation (ordering the usual) tradeoff.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Excessive exploration might cause you to order something you don’t like, while
+    constant exploitation runs the risk of causing you to miss out on a dish you will
+    really like. Therefore, a reasonable balance between the two is crucial.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This ubiquitous problem is found not only in ordering food but in common problems
+    in AI, such as reinforcement learning, product recommendation, and scientific
+    discovery. In BayesOpt, we face the same tradeoff: we need to sufficiently explore
+    the search space so we don’t miss out on a good region, but we should also focus
+    on regions with high objective values to ensure we are making progress in terms
+    of optimization.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note By “regions with high objective values,” we mean the regions that comprise
+    inputs *x* that yield high values of outputs *f*(*x*), which are the target of
+    our optimization (specifically maximization) task.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s return to our code example and assume that when we first start out, our
+    training dataset contains two observations from the Forrester objective function,
+    at *x* = 1 and at *x* = 2:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: This gives the output
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This indicates that the point at 1 evaluates at roughly 1.6, while the point
+    at 2 evaluates at 1.5\. Visualizing the predictions made by the trained GP, we
+    obtain the familiar-looking plot in figure 4.6\. This figure shows the exploration–exploitation
+    tradeoff we face: Should we evaluate the objective function where uncertainty
+    is high, or should we stay within the region where the mean prediction is high?'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/04-06.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.6 Predictions by a GP trained on two data points from the Forrester
+    function
+  prefs: []
+  type: TYPE_NORMAL
+- en: Each BayesOpt policy has a different way of addressing the tradeoff and, therefore,
+    offers different advice on how to best explore the search space. In figure 4.6,
+    some policies might lead us to further explore unknown regions, while others might
+    suggest zeroing in on what we know to give high values. Again, there’s usually
+    no one-size-fits-all approach (that is, no policy that always works well).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.2 Finding improvement in BayesOpt
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: We have almost everything ready to run BayesOpt on a given objective function.
+    We now need a policy with a scoring rule about how valuable each data point we
+    could potentially label is in our search for the optimum of the objective. Again,
+    each policy we will see gives a different scoring rule, motivated by different
+    heuristics for optimization.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this section, we learn about one such heuristic that makes intuitive sense
+    when the goal is optimization. It comes in the form of seeking to improve from
+    the best point we have seen so far throughout optimization. In the upcoming subsection,
+    we learn that GPs are amenable to facilitating the computation of this measure
+    of improvement. Then, we cover how different ways to define improvement give rise
+    to two of the most common BayesOpt policies: Probability of Improvement and Expected
+    Improvement.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.2.1 Measuring improvement with a GP
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: In this subsection, we examine how improvement in BayesOpt is defined, how it
+    constitutes a good measure of utility, and that working with improvement-related
+    quantities is straightforward with normal distributions. As our final goal in
+    BayesOpt is to identify the global optimum of the objective function—the point
+    that gives the highest objective value—the higher the values are that we observe
+    while making evaluations of the objective function, the higher our utility should
+    be. Suppose that as we make an evaluation of the objective function at some point
+    *x*[1], we observe the value 2\. In another situation in which we evaluate another
+    point *x*[2], we observe the value 10\. Intuitively, we should value the second
+    point more, as it gives us a higher function value.
+  prefs: []
+  type: TYPE_NORMAL
+- en: However, what if before observing *x*[1] and *x*[2], we have already seen a
+    point *x*[0] that yields a value of 20? In this case, it’s natural to think that
+    even though *x*[2] is better than *x*[1], neither point results in any additional
+    utility, as we already have a much better observation in *x*[0]. On the other
+    hand, if we were to have a point *x*[3] that yields a value of 21, then we would
+    be happier, as we would have found a better value than that of *x*[0]. This is
+    illustrated in figure 4.7.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/04-07.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.7 Seeking improvement from the best-seen point. Although point *x*[2]
+    is better than point *x*[1], both are “bad” in the sense that they don’t improve
+    on point *x*[0].
+  prefs: []
+  type: TYPE_NORMAL
+- en: These comparisons point to the idea that in BayesOpt, we care about not only
+    the raw values of our observations but also whether the newly found observations
+    are better than our observations. In this case, since *x*[0] sets a very high
+    bar in terms of function values, neither *x*[1] nor *x*[2] constitute improvement—at
+    least the kind of improvement we care about in optimization. In other words, a
+    reasonable goal in optimization is to seek to *improve* from the best point that
+    we have seen so far because as long as we improve from the best-seen point, we
+    are making progress.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Definition The best-seen point, or the point that yields the highest function
+    value we have found so far, is often called *the incumbent*. This term denotes
+    the fact that this point currently holds the highest value among all points queried
+    during our search.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Given that we have a GP belief about the objective function, inspecting how
+    much we can expect to improve from the best-seen point may be easily accomplished.
+    Let’s start from our running example of the Forrester function, where our current
+    GP is shown in figure 4.6.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Out of the two data points in our training set, (*x* = 1, *y* = 1.6) is the
+    better one, as it has a higher function value. This is our current incumbent.
+    Again, we are focusing on improving from this 1.6 threshold; that is, we’d like
+    to find data points that will yield function values higher than 1.6.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Visually, we can imagine this improvement-based idea as cutting off the GP horizontally
+    at the incumbent, as shown in figure 4.8\. The portion highlighted in the darker
+    color corresponds to “improving from the incumbent” (at 1.6). Anything below this
+    line does not constitute improvement and, therefore, won’t give us any additional
+    optimization utility. Whether a point—for instance, *x* = 0—will yield a higher
+    function value is unknown, but we can still try to reason about the probability
+    that it is true using what we know from the GP model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/04-08.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.8 Improvement from the incumbent from the perspective of a GP. The
+    portion of the GP’s predictions that corresponds to improvement from the incumbent
+    is highlighted in a darker shade.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Reasoning about the probability that *x* = 0 will yield a higher function value
+    is easy to do, as by querying point *x* = 0, the improvement from the incumbent
+    that we may observe exactly corresponds to a *normal distribution* that is partially
+    truncated, as shown in figure 4.9.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The left panel of figure 4.9 contains the same GP in figure 4.8 that is cut
+    off at the incumbent, with an addition showing the CI of the normal distribution
+    prediction at *x* = 0\. Slicing the GP vertically at this point 0, we obtain the
+    right panel of figure 4.9, where the CIs in the two panels are the same. We see
+    that only the highlighted portion of the normal distribution in the right panel
+    represents the improvement we may observe from the incumbent, which is what we
+    care about. This highlighted portion is part of a normal distribution, which,
+    as we cover in the upcoming subsections, leads to many mathematical conveniences.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/04-09.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.9 Improvement from the incumbent at 0, highlighted in a darker shade.
+    The left panel shows the entire GP, while the right panel only shows the normal
+    distribution corresponding to the prediction at 0 (the error bars are the same
+    across the two panels). Here, improvement from the incumbent follows a truncated
+    normal distribution.
+  prefs: []
+  type: TYPE_NORMAL
+- en: These conveniences don’t only apply to *x* = 0\. Since the prediction made by
+    the GP at any given point is a normal distribution, the improvement at any point
+    also follows a normal distribution that is cut off, as shown in figure 4.10.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/04-10.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.10 Improvement from the incumbent at –2 and 3, highlighted in a darker
+    shade. The left panel shows the entire GP, the center panel shows the prediction
+    at –2, and the right panel shows the prediction at 3\. The highlighted portions
+    show possible improvements, which depend on the normal distribution at a given
+    point.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We see that compared with figure 4.9, where a large portion of the normal distribution
+    at 0 is highlighted as possible improvements, the following is true:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The prediction at –2 (center panel) is worse in the sense that only half of
+    it shows possible improvements. This is because the mean prediction at –2 is roughly
+    equal to the incumbent, so there’s a 50–50 chance that the function value at –2
+    will improve from 1.6.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: As another example, the right panel shows the prediction at 3, where it is almost
+    impossible (according to our GP belief about the objective) to improve from the
+    incumbent, as almost the entire normal distribution at 3 lies below the incumbent
+    threshold.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This shows that different points will lead to different possible improvements,
+    depending on the GP’s predictions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.2.2 Computing the Probability of Improvement
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Having isolated what we aim to achieve in BayesOpt—namely, improving from the
+    current incumbent—we are now ready to finally begin discussing the BayesOpt policies
+    that seek to achieve this goal. In this subsection, we learn about *Probability
+    of Improvement* (PoI), which is a policy that measures how likely a candidate
+    point is to be able to improve.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The idea of measuring how likely it is that a candidate point improves from
+    the incumbent corresponds to the probability that a point is a “good” one, according
+    to figure 4.7\. This was also hinted at in section 4.2.1 with the GP, where we
+    said the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The point at 0 (figure 4.9) has a large portion of its normal distribution highlighted
+    as possible improvements. In other words, it has a high probability of improving.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The point at –2 (the center panel of figure 4.10) has a 0.5 probability of improving,
+    as only half of its normal distribution exceeds the incumbent.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The point at 3 (the right panel of figure 4.10) has most of its normal distribution
+    below the threshold, so it has a very low probability of improving.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: We can make this computation more concrete by noticing that the probability
+    that a point improves from the incumbent is equal to the area of the highlighted
+    portion in figures 4.9 and 4.10.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Definition The entire area under any normal curve is 1, so the area of the highlighted
+    portion in figures 4.9 and 4.10 exactly measures how likely it is that the normal
+    random variable in question (the function value at a given point) exceeds the
+    incumbent.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The quantity corresponding to the area of the highlighted region is related
+    to the *cumulative density function* (CDF), which is defined as the probability
+    that a random variable will take a value less than or equal to a target. In other
+    words, the CDF measures the area of the region *not* highlighted, which is 1 minus
+    the area of the highlighted region.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Thanks to how mathematically convenient normal distributions and GPs are, we
+    can easily compute the area of this highlighted region using the CDF, which requires
+    the mean and the standard deviation of the normal distribution in question. Computationally,
+    we can make use of PyTorch’s `torch.distributions.Normal` class, which implements
+    normal distributions and offers the useful `cdf()` method. Specifically, suppose
+    we are interested in calculating how likely the point at 0 is to be able to improve
+    from the incumbent. We will follow the procedure describe in figure 4.11:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, we use the GP to compute the mean and standard deviation predictions
+    at the point at 0.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: We then compute the area under the normal curve defined by the previous mean
+    and standard deviation, with the incumbent being the cutoff. We use the CDF for
+    this computation.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Finally, we subtract the CDF value from 1 to obtain the PoI for the candidate
+    point.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/04-11.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.11 Flowchart of how the PoI score is computed. By following this procedure,
+    we can compute how likely any candidate point is to be able to improve from the
+    incumbent.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note Technically, the CDF computes the area of the portion of a normal distribution
+    to the left of a threshold, so we need to subtract from 1 the output of the CDF
+    to get the area of the portion to the right of the threshold, which corresponds
+    to possible improvements.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We first generate the GP’s prediction at this point:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ The predictive mean at 0
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ The predictive standard deviation at 0
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Then, we initialize a one-dimensional normal distribution with the corresponding
+    mean and standard deviation:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This normal distribution is the one visualized in the right panel of figure
+    4.9\. Finally, to compute the area of the highlighted portion, we call the `cdf()`
+    method with the incumbent as its input (which is `train_y.max()`, the maximum
+    value of our training data) and subtract the result from 1:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here, our code shows that at point 0, we have a greater than 80% chance of improving
+    from the incumbent, which agrees with the fact that a large portion of the normal
+    distribution in figure 4.9 is highlighted. Using the same computation, we can
+    find out that there is a 0.4948 PoI at –2 and 0.0036 at 3\. Looking at figure
+    4.10, we see that these numbers make sense. Beyond these three points (0, –2,
+    and 3), we can also compute how likely a given point is to be able to improve—that
+    is, the PoI of a given point—across our search space, using the same formula.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Definition The procedure in figure 4.11 gives us the scoring rule for the PoI
+    policy, where the score of each point in the search space is equal to how likely
+    it is that the point can improve from the incumbent. Again, this score is also
+    called the *acquisition score*, as we are using it as a method of data acquisition.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We can see that this PoI policy uses the `cdf()` method, but it’s cleaner to
+    use *BoTorch*, the Python library that implements BayesOpt policies, for this
+    task. BoTorch is built on top of and works seamlessly with PyTorch and GPyTorch.
+    As we saw earlier, we only needed to change two lines of code in our GP class
+    to make the model compatible with BoTorch. Further, BoTorch implements its policies
+    as *modules*, allowing us to swap different policies in and out of a BayesOpt
+    loop in a modular manner.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The modularity of BoTorch’s policies
+  prefs: []
+  type: TYPE_NORMAL
+- en: By *modular*, we mean that we can replace the policy currently in use with another
+    policy in a BayesOpt loop by only changing the initialization of the policy. The
+    rest of the BayesOpt loop (training the GP model, visualizing optimization progress,
+    and updating the training data) doesn’t have to change. We have seen a similar
+    modularity with GPyTorch’s mean functions and kernels in sections 3.3 and 3.4.2.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To implement the PoI policy with BoTorch, we do the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Declares the PoI policy
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Computes the score
+  prefs: []
+  type: TYPE_NORMAL
+- en: The BoTorch class `ProbabilityOfImprovement` implements the PoI as a PyTorch
+    module, taking in a GP as the first argument and the incumbent value as the second.
+    The variable `scores` now stores the PoI scores of the points in `xs`, which is
+    a dense grid between –5 and 5.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Again, the acquisition score of each point equals the probability that the point
+    will improve from the incumbent, according to our GP belief. Figure 4.12 shows
+    this score across our search space, together with our GP.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/04-12.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.12 GP predictions (top) and PoI (bottom), where the dotted line indicates
+    the point that maximizes the PoI score. This point is where we query the objective
+    function at the next iteration of optimization.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We observe some interesting behavior in the PoI scores:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The region to the left of the incumbent (from 0 to 1) has relatively high PoI
+    scores. This corresponds to the high mean predictions in this area.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The region on the left of the plot has slightly lower scores. This is because
+    the mean predictions are not as high, but there is enough uncertainty in this
+    region that there’s still a considerable probability of improving.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The region around 2 has a PoI close to 0\. As we saw, the predictive normal
+    distributions of the points here mostly lie below the incumbent threshold.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Now, all that’s left for us to do is identify the point between –5 and 5 that
+    has the highest PoI score—that is, the point that maximizes the probability of
+    improving from the incumbent. As mentioned, we take advantage of BoTorch’s helper
+    function `botorch.optim.optimize.optimize_acqf()`, which finds the point that
+    maximizes the score of any BayesOpt policy. We do this using the following code,
+    which is a part of the code that implements the BayesOpt loop:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The returned values are the location of the point giving the highest acquisition
+    score that L-BFGS finds and the corresponding maximized acquisition score. Upon
+    inspection, we have the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: This output indicates that the candidate point maximizing the PoI score at 0.91
+    PoI is at roughly 0.6, which corresponds to the dotted vertical line in figure
+    4.12\. This point is where we will query the objective function (that is, evaluate
+    the function) to collect the next data point in BayesOpt.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The candidate with the highest predictive mean
+  prefs: []
+  type: TYPE_NORMAL
+- en: Interestingly, the point we select to query (roughly at 0.6) is *not* the point
+    with the highest predictive mean (which is around –0.5). The latter has a slightly
+    lower PoI because our uncertainty at this point is high, so it is, in fact, less
+    likely to be able to improve from the incumbent, despite the high predictive mean.
+  prefs: []
+  type: TYPE_NORMAL
+- en: And that’s all there is to deciding which point to query using the PoI policy
+    at a single iteration of BayesOpt. But remember the BayesOpt loop in figure 4.2,
+    where we alternate between finding the next data point to query using a policy
+    (step 2) and updating our GP with that new data (steps 1 and 3). We will do this
+    in section 4.2.3.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.2.3 Running the PoI policy
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: In this subsection, we finally run the PoI policy and analyze its behavior.
+    Once again, we repeat the entire process—training the model, declaring the PoI
+    policy, and using `optimize_acqf()` to find the best point—multiple times until
+    we reach a termination condition. As we saw, this loop is implemented in the CH04/01
+    - BayesOpt loop.ipynb notebook. Now, we need to initialize the PoI policy within
+    the appropriate `for` loop.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This code produces a series of plots generated by the helper function `visualize_gp_
+    belief_and_policy()`, each showing the current state of our BayesOpt loop throughout
+    the 10 queries we make. These plots look similar to figure 4.12, with the addition
+    of the objective function for our reference:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Our PoI policy
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Omitted
+  prefs: []
+  type: TYPE_NORMAL
+- en: The number of function evaluations in BayesOpt
+  prefs: []
+  type: TYPE_NORMAL
+- en: The number of queries we use in BayesOpt entirely depends on how many function
+    evaluations we can afford to make. Section 1.1 defines the problem of expensive
+    black box optimization, which assumes that the number of queries we can make is
+    relatively low due to the cost of function evaluation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: There are other criteria that could be used to determine when to terminate the
+    BayesOpt loop. For example, we can stop when we have achieved a targeted objective
+    value or when there hasn’t been significant improvement among the last 5 or 10
+    queries. Throughout the book, we stick with the assumption that we have a predetermined
+    number of function evaluations that can be made.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We use 10 queries as the default to run the BayesOpt policies for the one-dimensional
+    Forrester function and inspect the behavior of the policies. Exercise 2 of this
+    chapter deals with a two-dimensional function and uses 20 queries.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 4.13 shows these plots at the first, fifth, and final iterations. We
+    see that the PoI policy stays inside the region between 0 and 2, and at the 10th
+    and final iteration, we have converged at a local optimum. This means we are failing
+    to adequately explore the search space and, therefore, missing out on the global
+    optimum of the objective function in the right area, around 4.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/04-13.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.13 Progress made by the PoI policy. As the policy seeks to pursue improvement
+    of any magnitude, progress gets stuck at the local optimum near 2, and we fail
+    to explore other regions of the search space.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The BoTorch warning when using the helper function optimize_acqf()
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When running the code for the BayesOpt with the PoI on the previous page, you
+    might receive the following warning from BoTorch:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: This warning is displayed when the helper function `optimize_acqf()` (specifically,
+    the line search subroutine) fails to successfully optimize the acquisition score
+    (the PoI score, in this case). This failure often happens when the acquisition
+    score function is highly non-smooth (e.g., in the last panel of figure 4.13, where
+    there’s a sharp peak around *x* = 1.5), making numerical optimization unstable.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Without going into the details of the optimization routine, we can resort to
+    increasing the number of restarts (the `num_restarts` argument) and the number
+    of raw samples (the `raw_samples` argument) when using `optimize_acqf()`, which
+    increases our chance of finding the data point with the highest acquisition score.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For ease of exposition, from this point onward, we turn off this warning when
+    running the helper function `optimize_acqf()` in our code, using a context manager
+    with the `warnings` module as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note Although the performance of the PoI in figure 4.13 might be disappointing
+    (after all, we have spent a lot of time building up to this PoI policy that seems
+    overly exploitative), analyzing what is happening will give us insights into how
+    to refine and *improve* (no pun intended) our performance.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We note that although the PoI gets stuck at the local optimum, it is doing what
+    it’s supposed to do. Specifically, since the PoI seeks to improve from the current
+    incumbent, the policy finds that slowly moving to the right of 1 will achieve
+    that with high probability. Although the PoI constantly finds more and more improvement
+    by slowly moving to the right, we view this behavior as overly exploitative, as
+    the policy is not exploring other regions thoroughly enough.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Important In other words, even though what the PoI is doing is consistent with
+    what we initially wanted to achieve—namely, improving from the incumbent—the resulting
+    behavior isn’t what we want. This means that simply pursuing improvement of any
+    kind from the incumbent shouldn’t be what we care about.
+  prefs: []
+  type: TYPE_NORMAL
+- en: There are two ways to fix this overly exploitative behavior. The first is to
+    restrict what we mean by *improvement*. Our experiment with the PoI shows that
+    at each iteration, the policy only finds marginal improvement from the incumbent
+    by slowly moving in the direction that the GP believes the function moves upward
+    in.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If we were to redefine what we mean by *improvement* by saying that an improvement
+    from the incumbent is only valid if it is at least *ε* greater than the current
+    incumbent value and modifying the PoI accordingly, then the policy will be more
+    likely to explore the search space more effectively. This is because the GP will
+    know that staying at a local optimum won’t lead to significant improvement from
+    the incumbent. Figure 4.14 illustrates this idea.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/04-14.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.14 Defining a stricter definition of *improvement* by requiring an
+    improvement of at least *ε* = 0 (left) and *ε* = 2 (right). The larger the requirement,
+    the more explorative the PoI policy becomes. See exercise 1 for more details.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We won’t go into more detail here, but exercise 1 explores this approach. Interestingly,
+    we will observe that the more improvement we require the PoI to observe, the more
+    explorative the policy becomes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.3 Optimizing the expected value of improvement
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'As we saw in the previous section, naïvely seeking to improve from the incumbent
+    leads to over-exploitation from the PoI. This is because simply moving away from
+    the incumbent by a small amount in the appropriate direction can achieve a high
+    PoI. Therefore, optimizing this PoI is *not* what we want to do. In this section,
+    we learn to further account for the *magnitude* of the possible improvements we
+    may observe. In other words, we also care about how much improvement we can make
+    from the incumbent. This leads us to one of the most popular BayesOpt policies:
+    *Expected Improvement* (EI).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The motivation for seeking to account for the magnitude of the improvement is
+    clear. Consider the example in figure 4.15.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/04-15.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.15 The difference between PoI (left) and EI (right). The former only
+    cares whether we improve from the incumbent, while the latter considers how much
+    improvement is made.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The left panel shows the computation made by the PoI policy, which considers
+    only whether each candidate data point improves from the incumbent. Therefore,
+    a point that improves by a small amount and one that significantly improves from
+    the incumbent are treated equally.
+  prefs: []
+  type: TYPE_NORMAL
+- en: On the other hand, the right panel shows what happens if we also consider the
+    magnitude of the possible improvements. Here, although points *x*[1] and *x*[2]
+    are still treated as undesirable (since they don’t improve from the incumbent
+    *x*[0]), *x*[4] is considered better than *x*[3], as the former offers a larger
+    improvement. Similarly, *x*[5] is considered the best out of the five candidate
+    points.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Of course, this doesn’t mean we can now simply design the policy that picks
+    out the data point that offers the largest improvement from the incumbent. We
+    still need to know how much (if any) improvement we will observe, which we only
+    discover once we actually query the objective function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note Despite not knowing the exact value of the improvement we will observe,
+    we can reason about the magnitude of the improvement of each candidate point in
+    a probabilistic manner.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Recall that in figures 4.9 and 4.10, we have a truncated normal distribution
+    representing the improvement we will observe at a given point. By computing the
+    area of the highlighted region, we obtain the probability that a point will improve
+    from the incumbent, giving us the PoI policy. However, we can perform other computations
+    as well.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Definition In addition to the PoI, we may compute the *expected value* of the
+    random variable corresponding to the highlighted region. The fact that we are
+    dealing with truncated normal distributions enables us to compute this expected
+    value in closed form. The BayesOpt policy that scores data points using this measure
+    is called *Expected Improvement* (EI).
+  prefs: []
+  type: TYPE_NORMAL
+- en: While the closed-form formula for the EI score isn’t as simple as the CDF like
+    for PoI, EI’s scoring formula is still just as easy to calculate. Intuitively,
+    using the expected value of improvement may allow us to better balance exploration
+    and exploitation than PoI. After all, points around the current incumbent may
+    improve with high probability, but their improvements are likely to be minimal
+    (which is what we empirically observed in our experiment).
+  prefs: []
+  type: TYPE_NORMAL
+- en: A point that is far away, which we don’t know much about, might give a lower
+    improvement probability, but because there’s a chance that this point will give
+    a large improvement, EI might assign a higher score to it. In other words, while
+    PoI might be considered a *risk-averse* BayesOpt policy that cares about improving
+    from the incumbent, however small the improvement is, EI balances between the
+    risk and reward to find the point that best balances the tradeoff. This is illustrated
+    in figure 4.16, which compares PoI and EI using the same dataset and trained GP.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/04-16.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.16 The difference between PoI (left) and EI (right). EI balances exploration
+    and exploitation better.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We see that the candidate data point chosen by PoI (around 0.6) is different
+    from one chosen by EI (around –0.7). The former is close to the current incumbent,
+    so it’s likely that querying it will help us improve. However, EI sees that there’s
+    more uncertainty in other regions far away from the incumbent, which may lead
+    to greater improvement. Thanks to this reasoning, EI favors data points that provide
+    a better balance between exploration and exploitation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Another nice property of EI that showcases this balance is the way it assigns
+    the acquisition scores to data points with the same predictive mean or standard
+    deviation. Specifically, it does this in the following ways:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: If two data points have the same predictive mean but different predictive standard
+    deviations, then the one with the higher uncertainty will have a higher score.
+    The policy, therefore, rewards exploration.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If two data points have the same predictive standard deviations but different
+    predictive means, then the one with the higher mean will have a higher score.
+    The policy, therefore, rewards exploitation.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This is a desideratum of a BayesOpt policy, as it expresses our preference for
+    exploration when all else is equal (that is, when the predictive means are equal)
+    but also for exploitation when all else is equal (that is, when uncertainties
+    are equal). We see this property again in chapter 5 with another BayesOpt policy
+    called *upper confidence bound*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Computationally, we can initialize EI as a BayesOpt policy object using code
+    that is almost identical to the code for PoI:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now, let’s rerun our entire BayesOpt loop with the EI policy, making sure we
+    are starting with the same initial dataset. This generates figure 4.17, which
+    is to be compared to figure 4.13 of PoI.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/04-17.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.17 Progress made by the EI policy. The policy balances exploration
+    and exploitation better than PoI and finds the global optimum at the end.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Here, we see that while EI still focuses on the local optimal region around
+    2 initially, the policy quickly explores other regions in the search space to
+    look for larger improvements from the incumbent. At the fifth iteration, we see
+    that we are now inspecting the region on the left. Finally, after spending all
+    10 queries, EI has successfully identified the global optimum of the objective
+    function, outperforming PoI in the previous section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note Due to its simplicity and natural balance between exploration and exploitation,
+    EI is one of the most, if not the most, commonly used policies in BayesOpt. The
+    policy is a good default option if there’s no reason to prefer other policies.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.4 Exercises
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'There are two exercises in this chapter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The first covers using PoI for exploration by changing our definition of improvement.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The second covers hyperparameter tuning using BayesOpt in an objective function
+    that simulates the accuracy surface of an SVM model.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '4.4.1 Exercise 1: Encouraging exploration with PoI'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: One way to address the PoI’s tendency to over-exploit is to set a higher bar
+    for what constitutes *improvement*. Specifically, we saw that naïvely finding
+    points that maximize the probability of improving from the incumbent prevents
+    us from escaping local optima.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As a solution to this, we can modify the policy to specify that we only accept
+    improvements by at least *ε*. This would guide the PoI to look for improvement
+    in other regions in the search space once a local region has been sufficiently
+    covered. This exercise, implemented in CH04/02 - Exercise 1.ipynb, walks us through
+    this modification and showcases the positive effect it has on the PoI. Its steps
+    are as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Recreate the BayesOpt loop in CH04/01 - BayesOpt loop.ipynb, which uses the
+    one-dimensional Forrester function as the optimization objective.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Before the `for` loop that implements BayesOpt, declare a variable named `epsilon`.
+    This variable will act as the minimum improvement threshold to encourage exploration.
+    Set this variable to 0.1 for now.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Inside the `for` loop, initialize the PoI policy as before, but this time, specify
+    that the incumbent threshold, set by the `best_f` argument, is the incumbent value
+    *plus* the value stored in `epsilon`.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Rerun the notebook, and observe whether this modification leads to better optimization
+    performance than the original PoI policy by encouraging more exploration.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: How much more explorative PoI becomes heavily depends on the minimum improvement
+    threshold stored in `epsilon`. Set this variable to 0.001 to observe that an improvement
+    threshold that is not sufficiently large may not necessarily encourage exploration
+    successfully. What happens when this value is set to 0.5?
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: In the previous step, we saw that setting the improvement threshold to an appropriate
+    value is crucial for PoI. However, it’s not obvious how to do this across multiple
+    applications and objective functions. A reasonable heuristic is to dynamically
+    set it to some α percentage of the incumbent value, specifying that we would like
+    to see 1 + α increase in the incumbent value. Implement this in the code with
+    a 110% improvement requirement.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '4.4.2 Exercise 2: BayesOpt for hyperparameter tuning'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'This exercise, implemented in CH04/03 - Exercise 2.ipynb, applies BayesOpt
+    to an objective function that simulates the accuracy surface of an SVM model in
+    a hyperparameter tuning task. The *x*-axis denotes the value of the penalty parameter
+    *C*, while the *y*-axis denotes the value for the RBF kernel parameter *γ*. See
+    the exercise in chapter 3 for more detail. The steps are as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Recreate the BayesOpt (BayesOpt) loop in CH04/01 - BayesOpt loop.ipynb:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: We don’t need the Forrester function anymore; instead, copy the code for the
+    two-dimensional function described in the exercise in chapter 3, and use it as
+    the objective function.
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Note that the domain for this function is [0, 2]².
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Declare the corresponding test data with `xs` for a two-dimensional grid representing
+    the domain and `ys` for the function values of `xs`.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Modify the helper function that visualizes optimization progress. For one-dimensional
+    objective functions, it’s easy to visualize the GP predictions along with the
+    acquisition scores. For this two-dimensional objective, the helper function should
+    generate a plot of two panels: one showing the ground truth and the other showing
+    the acquisition scores. Both panels should also show the labeled data. The plot
+    should look similar to figure 4.18.'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/04-18.png)'
+  prefs:
+  - PREF_IND
+  type: TYPE_IMG
+- en: Figure 4.18 A reference showing what the helper function that visualizes BayesOpt
+    progress should look like. The left panel shows the true objective function, while
+    the right panel shows the acquisition scores.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Copy the GP class from the exercise in chapter 3, which implements a Matérn
+    2.5 kernel with ARD. Further modify this class to make it integratable with BoTorch.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Reuse the helper function `fit_gp_model()` and the `for` loop that implements
+    BayesOpt:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'The initial training dataset should contain the point in the middle of the
+    domain: (1, 1).'
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: As our search space is two-dimensional, make the search for the point maximizing
+    the acquisition score more exhaustive by setting `num_restarts` `=` `40` and `raw_samples`
+    `=` `100` in `botorch.optim.optimize_acqf()`.
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Set the number of queries we can make (the number of times we can evaluate the
+    objective function) to 20.
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Run the PoI policy on this objective function. Observe that the policy, once
+    again, gets stuck at a local optimum.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Run the modified version of PoI, where the minimum improvement threshold is
+    set at 0.1:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: See Exercise 1 for more detail about setting the minimum improvement threshold
+    for PoI.
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Observe that this modification, again, leads to better optimization performance.
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: What is the first iteration where we reach an accuracy of at least 90%? What
+    are the model’s parameters achieving this accuracy?
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Run the EI policy on this objective function:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Observe that the policy outperforms PoI.
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: What is the first iteration where we reach an accuracy of at least 90%? What
+    are the model’s parameters achieving this accuracy?
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Inspecting the performance of a policy based on a single run of BayesOpt can
+    be misleading. It’s better for a BayesOpt experiment to be repeated multiple times
+    with different starting data:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Implement this idea of repeated experiments, and visualize the average incumbent
+    values and error bars across 10 experiments.
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Each experiment should start with a single data point uniformly sampled from
+    the search space.
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Run the policies we have listed, and compare their performance.
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: This marks the end of our chapter on improvement-based BayesOpt policies. It’s
+    important to keep the code that implements the BayesOpt loop for the Forrester
+    function we used here in mind, as we use it again to benchmark other policies
+    in future chapters. Specifically, in chapter 5, we learn about BayesOpt policies
+    inspired by the multi-armed bandit problem.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: A BayesOpt policy uses the trained GP to score how valuable each data point
+    is in our quest to find the optimum of the objective function. The score computed
+    by the policy is called the acquisition score.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In each iteration of a BayesOpt loop, a GP is trained on the observed data,
+    a policy suggests a new data point to query, and the label of this point is added
+    to the training set. This repeats until we cannot make any more function evaluations.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A GPyTorch model only needs minimal modifications to be integrated into BoTorch,
+    which implements BayesOpt policies.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: BoTorch provides a helper function named `optimize_acqf()` from the `optim .optimize`
+    module that takes in a policy object and returns the datapoint that maximizes
+    the acquisition score.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A good BayesOpt policy needs to balance exploration (learning about regions
+    with high uncertainty) and exploitation (narrowing down high-performing regions).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Different BayesOpt policies address the exploration–exploitation tradeoff differently.
+    It is important to inspect optimization progress to analyze and adjust the performance
+    of the policy in use.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: One heuristic that could be used in BayesOpt is to find points that improve
+    upon the best-seen value.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Finding the point that gives the best chance of improving from the best-seen
+    value results in the PoI policy.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Finding the point that gives the highest expected improvement from the best-seen
+    value results in the EI policy.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: PoI may be considered an overly exploitative and risk-averse policy as the policy
+    only aims to improve from the best-seen value, however small the improvement is.
+    Without any further modification, EI tends to balance exploration and exploitation
+    better than PoI.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Thanks to the Gaussian belief about the function values, computing scores by
+    PoI and EI may be done in closed form. We, therefore, can compute and optimize
+    the scores defined by these policies easily.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL

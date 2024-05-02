@@ -1,0 +1,1393 @@
+- en: 3 Customizing a Gaussian process with the mean and covariance functions
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter covers
+  prefs: []
+  type: TYPE_NORMAL
+- en: Controlling the expected behavior of a GP using mean functions
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Controlling the smoothness of a GP using covariance functions
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Learning the optimal hyperparameters of a GP using gradient descent
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In chapter 2, we saw that the mean and covariance functions are the two core
+    components of a Gaussian process (GP). Even though we used the zero mean and the
+    RBF covariance function when implementing our GP, you can choose from many options
+    when it comes to these two components.
+  prefs: []
+  type: TYPE_NORMAL
+- en: By going with a specific choice for either the mean or the covariance function,
+    we are effectively specifying prior knowledge for our GP. Incorporating prior
+    knowledge into prediction is something we need to do with any Bayesian model,
+    including GPs. Although I say we need to do it, being able to incorporate prior
+    knowledge into a model is always a good thing, especially under settings in which
+    data acquisition is expensive, like BayesOpt.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For example, in weather forecasting, if we’d like to estimate the temperature
+    of a typical day in January in Missouri, we won’t have to do any complex calculations
+    to be able to guess that the temperature will be fairly low. At the other end
+    of the spectrum, we can make a good guess that a summer day in California will
+    be relatively hot. These rough estimates may be used as initial first guesses
+    in a Bayesian model, which are, in essence, the model’s prior knowledge. If we
+    didn’t have these first guesses, we would have to do more involved modeling to
+    produce predictions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As we learn in this chapter, incorporating prior knowledge into a GP can drastically
+    change the model’s behavior, which can lead to better predictive performance (and,
+    eventually, more effective decision-making). We should only use no prior knowledge
+    when we have absolutely no good guess about the behavior of the function; otherwise,
+    this equates to wasting information.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this chapter, we discuss the different options when it comes to the mean
+    and covariance functions and how they affect the resulting GP model. Unlike in
+    chapter 2, we take a hands-on approach here and revolve our discussions around
+    code implementation in Python. By the end of this chapter, we develop a pipeline
+    for selecting appropriate mean and covariance functions as well as optimizing
+    their hyperparameters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 3.1 The importance of priors in Bayesian models
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Question: Why can’t you seem to change some people’s mind? Answer: because
+    of their priors. To show how important priors are in a Bayesian model, consider
+    the following scenario.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s say you are hanging out with your friends, Bob and Alice, at a carnival,
+    and you are talking to someone who claims they are a psychic. The way they allow
+    you to test this claim is via the following procedure: you and your friends each
+    think of a number between 0 and 9, and the “psychic” will tell you what number
+    each of you is thinking of. You can repeat this process however many times you’d
+    like.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now, all three of you are curious about this supposed psychic, and you decide
+    to conduct this test 100 times. Amazingly, after these 100 tests, the supposed
+    psychic at the carnival correctly guesses the numbers you each think of. However,
+    after you are done, you each have different reactions, as seen in figure 3.1.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/03-01.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 3.1 Reaction among your group of friends after seeing a person correctly
+    guess a secret number 100 times. Each person reached a different conclusion due
+    to their prior belief.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Further reading on Bayes’ theorem
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you need to refresh your memory, feel free to return to figure 2.2, in which
+    we studied Bayes’ theorem. We only sketch this out on a high level in this book,
+    but I recommend chapters 1 and 2 of Will Kurt’s *Bayesian Statistics the Fun Way*
+    (No Starch Press, 2019) if you’d like to examine this process in greater depth.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'How can all three of you observe the same event (the person at the carnival
+    guessing correctly 100 times) but arrive at different conclusions? To answer this
+    question, consider the process of updating one’s belief using Bayes’ theorem:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Each person starts out with a specific prior probability that the person is
+    a psychic.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Then, you each observe the event that they guess your number correctly once.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'You each then compute the likelihood terms. First, the likelihood their guess
+    is correct, given that they’re indeed a psychic, is exactly 1, since a true psychic
+    can always pass this test. Second, the likelihood their guess is correct, given
+    that they’re *not* a psychic, is 1 out of 10\. This is because each time, you
+    are randomly choosing a number between 0 and 9, so any guess among these 10 options
+    has an equal chance of being correct: 1 out of 10.'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Finally, you update your belief by computing the posterior probability that
+    this person is not a psychic by combining your prior with these likelihood terms.
+    Specifically, this posterior will be proportional to the prior and the first likelihood
+    term *multiplied* together.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: You then repeat this process 100 times, each time using the posterior probability
+    of the previous iteration as your prior for the current iteration.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: What is important on a high level here is that after each test, you and your
+    friends’ posterior belief that this person is a psychic *never decreases*, since
+    that statement doesn’t agree with the data you observe. Specifically, figure 3.2
+    shows the progressive posterior probability of each person in your group as a
+    function of how many tests the “psychic” at the carnival has passed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/03-02.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 3.2 Progressive posterior probability that the woman at the carnival
+    is a psychic as a function of the number of successful guesses. This posterior
+    never decreases but behaves differently depending on the initial prior.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As we can see, each of the three curves either increases or stays flat—none
+    of them actually decreases, since a decreasing probability of being a psychic
+    doesn’t match the 100 successful guesses in a row. But why do the three curves
+    look so different? As you might have already guessed, the starting position of
+    the curve—that is, each person’s prior probability that the woman is a psychic—is
+    the cause.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In Bob’s case, in the left panel, he started out with a relatively high prior
+    that the person is a psychic: 1%. Bob is a believer. As he observes more and more
+    data that agrees with this belief, his posterior probability increases more and
+    more.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In your own case, in the middle, being a skeptic, you started with a much lower
+    prior: 1 in 10 raised to the 14th power. However, since your observations do suggest
+    the woman is a psychic, your posterior probability also increases as more data
+    comes in, reaching 1% at the end.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Alice’s case, on the right, on the other hand, is different. From the start,
+    she didn’t believe psychics are real, so she assigned exactly zero probability
+    to her prior. Now, remember that according to Bayes’ theorem, the posterior probability
+    is proportional to the prior multiplied by the likelihood. Since Alice’s prior
+    is exactly zero, this multiplication in the Bayesian update will always produce
+    another zero.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Since Alice started out with zero probability, even after a successful test,
+    this probability stays the same. After one correct guess, Alice’s posterior is
+    zero. After two guesses, it’s still zero. After all 100 correct guesses, this
+    number is still zero. Everything is consistent with the Bayesian update rule,
+    but because Alice’s prior doesn’t allow for the possibility that psychics exist,
+    no amount of data could convince her otherwise.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This highlights an important aspect of Bayesian learning—our prior determines
+    how learning is done (see figure 3.3):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Bob’s prior is fairly high, so by the end of the 100 tests, he’s completely
+    convinced the person is psychic.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: You, on the other hand, are more skeptical, in that your initial prior is much
+    lower than Bob’s. This means it would take more evidence for you to arrive at
+    a high posterior.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Alice’s complete disregard of the possibility, denoted by her zero prior, prevents
+    her posterior probability from changing from zero.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/03-03.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 3.3 How each person’s prior belief is updated by the same data. Compared
+    to Bob’s, your prior is much lower and increases more slowly. Alice’s prior is
+    0 and stays at 0 throughout.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Although the claim in our example is about the event that someone is a psychic,
+    the same Bayesian update procedure applies to all situations in which we have
+    a probabilistic belief about some event and frequently update it in light of data.
+    In fact, this is actually the reason we can’t seem to be able to change someone’s
+    mind sometimes, even in the face of overwhelming evidence: because they start
+    out with zero prior probability, and nothing will update the posterior to anything
+    other than zero.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: This discussion is philosophically interesting, in that it shows that to be
+    able to convince someone of something, they need to at least entertain the idea
+    by assigning non-zero prior probability to that event. More relevant to our topic,
+    the example shows the importance of having good prior knowledge for a Bayesian
+    model. As we have said, we specify a GP’s prior knowledge with the mean and covariance
+    functions. Each choice leads to a different behavior in the GP’s prediction.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 3.2 Incorporating what you already know into a GP
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In this section, we identify situations in which specifying prior knowledge
+    in a GP is important. This discussion motivates our discussions in the remaining
+    portion of this chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A prior GP may start out having a constant mean and CI everywhere. This GP then
+    gets updated to smoothly interpolate the observed data points, as figure 3.4 denotes.
+    That is, the mean prediction exactly goes through the data points, and the 95%
+    CI vanishes in those regions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/03-04.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 3.4 Comparison between a prior and a posterior GP. The prior GP contains
+    prior information about the objective function, while the posterior GP combines
+    that information with actual observations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The prior GP in figure 3.4 assumes nothing about the objective function we are
+    modeling. That’s why this GP’s mean prediction is zero everywhere. In many cases,
+    however, even though we don’t know the exact form of our objective function, there
+    are aspects of the objective that we *do* know.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Take the following, for example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: When modeling the accuracy of a model in a hyperparameter tuning application,
+    we know that the range of the objective function is between 0 and 1.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In our housing price example from section 2.1, the function values (the prices)
+    are strictly positive and should increase when a desirable property of the house,
+    such as living area, increases.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Again, in the housing example, the function value is more sensitive to some
+    features than others. For instance, the price of a house increases more quickly
+    as a function of the number of stories than as a function of living area—one extra
+    story increases the price of a house more than one extra square foot of living
+    area.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This kind of information is exactly the prior knowledge that we’d like to represent
+    with a GP, and one of the biggest advantages of using a GP is that we have many
+    ways to incorporate prior knowledge. Doing so helps close the gap between the
+    GP surrogate and the actual objective function it models, which will also more
+    effectively guide optimization down the line.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Incorporating prior knowledge with a GP
+  prefs: []
+  type: TYPE_NORMAL
+- en: We incorporate prior knowledge by selecting appropriate mean and covariance
+    functions for our GP and setting their parameters’ values. Specifically
+  prefs: []
+  type: TYPE_NORMAL
+- en: The mean function defines the expected behavior of the objective function.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The covariance function defines the structure of the objective, or, more specifically,
+    the relationship between any pair of data points and how quickly and smoothly
+    the objective function changes across its domain.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Each of the preceding choices leads to drastically different behavior in the
+    resulting GP. For example, a linear mean function will lead to a linear behavior
+    in the GP’s predictions, while a quadratic mean function will lead to a quadratic
+    behavior. By using different parameters in the covariance function, we can also
+    control for the variability of our GP.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 3.3 Defining the functional behavior with the mean function
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: First, we cover the mean function of a GP, which defines the expected behavior
+    of the GP, or what we believe the function looks like on average, across all possible
+    scenarios of the function. This, as we will see, helps us specify any prior knowledge
+    related to the function’s general behavior and shape. The code we use throughout
+    this section is included in CH03/01 - Mean functions.ipynb. To make our discussions
+    concrete, we use a housing price dataset with five data points in table 3.1.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Table 3.1 Example training dataset. The prediction target (price) increases
+    as a function of the feature (living area).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| Living area (in squared feet times 1000) | Price (in dollars times 100,000)
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 0.5 | 0.0625 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 1 | 0.25 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 1.5 | 0.375 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 3 | 2.25 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 4 | 4 |'
+  prefs: []
+  type: TYPE_TB
+- en: In this dataset, the function values we model are the housing prices, which
+    are strictly positive and increase with larger values of living area. These properties
+    make intuitive sense, and even without knowing the prices of unobserved houses,
+    we know for sure that those unseen prices also have these properties.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Our goal here is to incorporate these properties into our mean function, as
+    they describe how we expect the function to behave. Before we jump right to modeling,
+    we first write a helper function that takes in a GP model (along with its likelihood
+    function) and visualizes its predictions in the range from 0 to 10 (that is, a
+    10,000-square-foot living area). This is implemented as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Computes predictions
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Plots the mean line
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Plots the 95% CI region
+  prefs: []
+  type: TYPE_NORMAL
+- en: We saw how this code works in section 2.4.3, and now we are putting it into
+    a convenient function. And with that, we are ready to implement our GP models
+    and see how our choices affect the predictions being produced.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 3.3.1 Using the zero mean function as the base strategy
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The simplest form of the mean is a constant function at zero. In the absence
+    of data, this function will produce zero as its default prediction. The zero mean
+    function is used when there is no extra information about the objective function
+    that we may incorporate into the GP as prior knowledge.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A GP with a zero mean function is implemented as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Constant mean function with a default value of zero
+  prefs: []
+  type: TYPE_NORMAL
+- en: Remember from section 2.4.2 that to build a GP model with GPyTorch, we implement
+    the `__init__()` and `forward()` methods. In the first method, we initialize our
+    mean and covariance functions; in the second, we push the input `x` through these
+    functions and return the corresponding multivariate Gaussian distribution.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note Instead of the `gpytorch.means.ZeroMean` class in our implementation from
+    section 2.4.2, we are using the `gpytorch.means.ConstantMean` class to initialize
+    our mean function. However, this constant mean function has a default value of
+    zero, so effectively, we are still implementing the same GP model. While these
+    two choices lead to identical models for now, in this chapter, we show how `gpytorch.means.ConstantMean`
+    allows us to adjust the constant mean value to obtain a better model shortly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s now initialize an object of this class, train it on our training data,
+    and visualize its predictions. We do this with the following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Declares the GP
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Fixes the hyperparameters
+  prefs: []
+  type: TYPE_NORMAL
+- en: Here, we initialize the GP model and set its hyperparameters—the length scale
+    and noise variance—to 1 and 0.0001, respectively. We will see how to set the values
+    of these hyperparameters appropriately later in this chapter; for now, let’s just
+    stick with these values. Finally, we call the helper function we just wrote, `visualize_gp_belief()`,
+    on our GP model, which produces figure 3.5.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'All the nice properties of the GP that we pointed out in section 2.4.4 are
+    still here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The posterior mean function smoothly interpolates the xs that are our training
+    data points.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The 95% CI vanishes around these data points, denoting a well-calibrated quantification
+    of uncertainty.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/03-05.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 3.5 Predictions by a GP with a zero mean function. The posterior mean
+    function interpolates the observed data points and reverts back to zero in regions
+    that are far away from these observations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We also notice from this plot that once we have gone sufficiently far away
+    from our training data points (the right side of the plot), our posterior mean
+    function *reverts* back to the prior mean, which is zero. This is, in fact, an
+    important feature of a GP: in the absence of data (in regions without observations),
+    the prior mean function is the main driving force of the inference procedure.
+    This makes intuitive sense, as without actual observations, the best thing that
+    a predictive model can do is simply appeal to the prior knowledge encoded in its
+    mean function.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Note At this point, we see why having well-defined prior knowledge encoded
+    into the prior GP is so important: in the absence of data, the only thing that
+    drives predictions is the prior GP.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A natural question then arises: Is it possible to use a nonzero mean function
+    to induce a different behavior for our GP in these unexplored regions, and if
+    so, what are our options? The remaining portion of this section aims to answer
+    this question. We start by using a constant mean function that is not zero.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 3.3.2 Using the constant function with gradient descent
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: A constant mean function that is not zero is appropriate when we expect the
+    objective function we are modeling to take on some range of values that we know
+    *a priori*. As we are modeling housing prices, using a constant mean function
+    with a constant greater than zero makes sense, as we indeed expect the prices
+    to be positive.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Of course, it’s not possible to know what value the objective function takes,
+    on average, in many cases. How, then, should we find an appropriate value for
+    our mean function? The strategy we use is to appeal to a specific quantity: how
+    likely the training dataset is, given the value for our mean function. Roughly
+    speaking, this quantity measures how well our model explains its training data.
+    We show how to use this quantity to select the best mean function for our GP in
+    this subsection.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/03-05-unnumb-1.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'If the likelihood of the training data given some value *c*[1] is higher than
+    that given another value *c*[2], then we prefer using *c*[1] to using *c*[2].
+    This quantifies our previous intuition about using nonzero mean functions to model
+    positive functions: a constant mean function whose value is positive explains
+    observations from an exclusively positive function better than a function whose
+    value is zero (or negative) does.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: How can we compute this likelihood? GPyTorch offers a convenient class, `gpytorch.mlls.ExactMarginalLogLikelihood`,
+    that takes in a GP model and computes the marginal log likelihood of its training
+    data, given the hyperparameters of the model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To see that this likelihood quantity is effective at quantifying data fit,
+    consider figure 3.6\. This figure visualizes the predictions made by two separate
+    GP models: a zero mean GP we saw in the previous subsection, on the left, and
+    the GP with a mean function whose value is 2, on the right. Notice how in the
+    second panel, the mean function reverts to 2 instead of 0 on the right side of
+    the plot. Here, the second GP has a higher (log) likelihood than the first, which
+    means the value 2 explains our training data better than the value 0.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/03-06.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 3.6 GP predictions, given two different constant mean functions. The
+    value 2 gives a higher likelihood value than the value 0, indicating the former
+    mean function is a better fit than the latter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/03-06-unnumb-2.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: With this log likelihood computation in hand, our last step is to simply find
+    the value for our mean function such that the log likelihood is maximized. In
+    other words, we aim to seek the mean value that explains our training data the
+    best. Since we have access to the log likelihood computation, we can use gradient-based
+    optimization algorithms, such as gradient descent, to iteratively refine the mean
+    value we have. Upon convergence, we will have arrived at a good mean value that
+    gives high data likelihood. If you need a refresher on how gradient descent works,
+    I recommend appendix B of Luis Serrano’s *Grokking Machine Learning* (Manning,
+    2021), which does a good job of explaining the concept.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, let’s see how we can implement this process with code. Since we implemented
+    our GP model with the `gpytorch.means.ConstantMean` class for our mean function,
+    we don’t need to change anything here. So, for now, let’s initialize our GP model
+    again:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The central step of this procedure is to define the log likelihood function
+    as well as a gradient descent algorithm. As mentioned previously, the former is
+    an instance of the `gpytorch.mlls.ExactMarginalLogLikelihood` class, implemented
+    like so:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'For the gradient descent algorithm, we use Adam, which is a state-of-the-art
+    algorithm that has enjoyed a lot of success in many ML tasks, especially DL. We
+    declare it using PyTorch as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note that we are passing to the `torch.optim.Adam` class `model.mean_module.constant`,
+    which is the mean value we seek to optimize. When we run the gradient descent
+    procedure, the Adam algorithm iteratively updates the value of `model.mean_module.constant`
+    to improve the likelihood function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The last thing we need to do now is to run gradient descent, which is implemented
+    as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Enables the training mode
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Loss as the negative marginal log likelihood
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Gradient descent on the loss
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Enables the prediction mode
+  prefs: []
+  type: TYPE_NORMAL
+- en: The calls to `train()` at the beginning and `eval()` at the end are the bookkeeping
+    steps we always need to take, enabling the training mode and prediction mode of
+    our GP model, respectively. Resetting the gradients at each step with `optimizer.zero_grad()`
+    is another bookkeeping task to make sure we don’t incorrectly compute the gradients.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the middle, we have a 500-step gradient descent procedure in which we iteratively
+    compute the loss (which is the negative of our log likelihood) and descend on
+    this loss based on its gradients. During this `for` loop, we keep track of the
+    negative log likelihood values that we obtain as well as the mean value, adjusted
+    in each step. This is so that after training, we can visually inspect these values
+    to determine whether they have converged.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 3.7 includes this visualization, showing the running values for the negative
+    log likelihood (which we aim to minimize) and the value for the mean function
+    of the GP. Our loss consistently decreases (which is a good thing!) with increasing
+    values of the mean constant, showing that a positive constant does give a higher
+    likelihood than zero. Both curves plateau after 500 iterations, indicating we
+    have converged at an optimal value for the mean constant.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/03-07.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 3.7 Running negative log likelihood (lower is better) and mean value
+    during gradient descent. In both panels, the values have converged, indicating
+    we have arrived at an optimum.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note I recommend that you *always* plot out the progressive loss, like we just
+    did here, when using gradient descent to see whether you have converged at an
+    optimal value. Stopping before convergence might lead to poor performance for
+    your model. While we won’t be showing these progressive loss plots again throughout
+    this chapter, the accompanying code does include them.
+  prefs: []
+  type: TYPE_NORMAL
+- en: So far, we have learned how to use a zero mean function as the default for our
+    GP model as well as optimize the mean constant value with respect to the data
+    likelihood. However, in many use cases, you might have prior knowledge about how
+    the objective function is expected to behave and, thus, prefer to incorporate
+    more structure into your mean function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For example, how can we implement the idea that the price of a house increases
+    with a larger living area? Moving forward, we learn to do this with a GP by using
+    a linear or quadratic mean function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 3.3.3 Using the linear function with gradient descent
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: We proceed with the linear mean function, which is in the form of *μ* = *w^T**x*
+    + *b*. Here, *μ* is the predictive mean value at the test point *x*, while *w*
+    is the weight vector that concatenates the coefficients for each of the features
+    in *x*, and *b* is a constant bias term.
+  prefs: []
+  type: TYPE_NORMAL
+- en: By using the linear mean function, we are encoding the assumption that the expected
+    behavior of our objective function is equal to a linear combination of the features
+    of the data point *x*. For our housing price example, we only have one feature,
+    the living area, and we expect it to have a positive weight, so by increasing
+    the living area, our model will predict a higher price.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Another way to think about this linear mean model is that we have a linear regression
+    model (which also assumes the target label to be a linear combination of the features)
+    and we put a probabilistic belief, a GP model, on top of our predictions. This
+    gives us the power offered by a linear regression model, while maintaining all
+    the benefits of modeling with a GP—namely, uncertainty quantification.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note Under a constant mean function, the weight vector *w* is fixed at the zero
+    vector, and the bias *b* is the mean value that we learned to optimize in the
+    previous subsection. In other words, the linear function is a more general model
+    than the constant mean function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Regarding implementation, building a GP model with a linear mean function is
+    quite straightforward. We simply swap out our constant mean and replace it with
+    a `gpytorch.means.LinearMean` instance, as follows (our `forward()` method remains
+    unchanged):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Linear mean
+  prefs: []
+  type: TYPE_NORMAL
+- en: Here, we use `1` to initialize our mean module, indicating we are working with
+    a one-dimensional objective function. When working with a higher-dimensional function,
+    you can simply pass in the dimensionality of that function here. Aside from this,
+    everything else about our model is similar to what we had before. Fitting and
+    training this new model on our three-point dataset, we obtain the predictions
+    in figure 3.8.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/03-08.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 3.8 Predictions by a GP with a linear mean function. The GP has an upward
+    trend, which is a direct result of the positive slope of the linear mean function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Unlike what we have seen so far with the constant mean, the linear mean function
+    we’re using here drives the entire GP model to have an upward trend. This is because
+    the best-fit line of the five data points in our training data is one with a positive
+    slope, which is exactly what we wanted to model as a relationship between living
+    area and price.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 3.3.4 Using the quadratic function by implementing a custom mean function
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Our linear mean function here successfully captures the increasing trend of
+    the price, but it assumes the rate of price increase is constant. That is, adding
+    an extra square foot to the living area leads, in expectation, to a constant increase
+    in price.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In many cases, however, we might have prior knowledge that our objective function
+    increases at a non-constant rate, which a linear mean cannot model. In fact, the
+    data points we’ve been using were generated so that the price is a quadratic function
+    of the living area. This is why we see the larger houses become more expensive
+    faster than the smaller houses. In this subsection, we implement our GP mean as
+    a quadratic function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'At the time of this writing, GPyTorch only provides implementations for the
+    constant and linear mean functions. But the beauty of this package, as we will
+    see again and again in the book, is its modularity: all components of a GP model,
+    such as the mean function, the covariance function, the prediction strategy, and
+    even the marginal log likelihood function, are implemented as modules, and therefore,
+    they can be modified, reimplemented, and extended in an object-oriented manner.
+    We see this first-hand when implementing our own quadratic mean function.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The first thing for us to do is define a mean function class:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This class extends the `gpytorch.means.Mean` class, which is the base for all
+    GPyTorch mean function implementations. To implement our custom logic, we need
+    to rewrite two methods: `__init__()` and `forward()`, which are exactly the same
+    as when we implement a GP model!'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In `__init__()`, we need to declare what parameters our mean function contains.
+    This process is called *parameter registration*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'While a linear function has two parameters, a slope and an intercept, a quadratic
+    function has three: a coefficient for the second-order term *x*[2]; a coefficient
+    for the first-order term *x*; and a coefficient for the zeroth-order term, which
+    is typically called the bias. This is illustrated in figure 3.9.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/03-09.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 3.9 The functional forms of a linear function and a quadratic function.
+    The linear function has two parameters, while the quadratic function has three.
+    When these functions are used as a GP’s mean function, the corresponding parameters
+    are the GP’s hyperparameters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'With that in mind, we implement the `__init__()` method like so:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Second-order coefficient
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ First-order coefficient
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Bias
+  prefs: []
+  type: TYPE_NORMAL
+- en: We sequentially call `register_parameter()` to register the second-order coefficient,
+    the first-order coefficient, and the bias. As we don’t have a good idea of what
+    values these coefficients should take, we simply initialize them randomly using
+    `torch.randn()`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note We need to register these parameters as instances of the `torch.nn` `.Parameter`
+    class, which allows their values to be adjusted (trained) during gradient descent.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For the `forward()` method, we need to define how our mean function should
+    process an input. As we have said, a quadratic function is in the form of *ax²
+    + bx + c*, where *a*, *b*, and *c* are the second-order coefficient, first-order
+    coefficient, and the bias, respectively. So we only need to implement that logic,
+    as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Omitted
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ The formula of a quadratic function
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'With this quadratic mean function in hand, we can now write a GP model that
+    initializes its mean module using the custom `QuadraticMean` class we just implemented:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Omitted
+  prefs: []
+  type: TYPE_NORMAL
+- en: Rerunning our entire training procedure with gradient descent gives us the predictions
+    in figure 3.10.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/03-10.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 3.10 Predictions by a GP with a quadratic mean function. This GP predicts
+    that with a larger living area, the price increases at a faster rate.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Here, we successfully model the non-constant rate of increase in housing prices
+    with respect to living area. Our predictions increase much more quickly on the
+    right side of the plot than on the left.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We can do this for any functional form we want to assume about the objective,
+    such as a higher-degree polynomial or a sublinear function. All we need to do
+    is implement a mean function class with appropriate parameters and use gradient
+    descent to assign values to these parameters that will give us a good fit for
+    our training data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Our discussion so far demonstrates the mathematical flexibility of GP models,
+    in that they can make use of a mean function of any structure and still produce
+    probabilistic predictions. This flexibility motivates and drives the design of
+    GPyTorch, whose emphasis on modularity helps us extend and implement our own custom
+    mean function effortlessly. We see the same flexibility and modularity in GPyTorch’s
+    covariance functions, which we discuss next.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 3.4 Defining variability and smoothness with the covariance function
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'While the mean function defines our expectation of the overall behavior of
+    the objective function, the covariance function, or the kernel, of a GP plays
+    a more complex role: defining the relationship between data points within the
+    domain and controlling for the structure and smoothness of the GP. In this section,
+    we compare how the predictions by a GP change as we change different components
+    of our model. From there, we gain practical insights into how to select an appropriate
+    covariance function for a GP model. The code that we use is in CH03/02 - Covariance
+    functions.ipynb.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Throughout these examples, we use the Forrester function, which we saw in section
+    2.4.1, as our objective. We, once again, randomly sample three data points between
+    -3 and 3 and use them as our training dataset. All predictions visualized in this
+    section are from a GP trained on these three points.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 3.4.1 Setting the scales of the covariance function
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The first way of controlling the behavior of a GP via its covariance function
+    is to set the length scale and the output scale. These scales, just like the constant
+    or the coefficients in the mean function, are the hyperparameters of the covariance
+    function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A length scale controls the scale of the GP’s input and, thus, how fast the
+    GP can change along an axis—that is, how much we believe the objective function
+    varies with respect to an input dimension.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The output scale defines the range of the GP’s output or, in other words, the
+    range of its predictions.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'By setting these scales to different values, we can either increase or decrease
+    the uncertainty in our GP’s predictions as well as scale the range of our predictions.
+    We use the following implementation:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ gpytorch.kernels.ScaleKernel implements the output scale.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Omitted
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Notice that our code for the `covar_module` attribute here is different from
+    before: we are placing a `gpytorch.kernels.ScaleKernel` object outside of our
+    usual RBF kernel. This effectively implements the output scale that scales the
+    output of the RBF kernel by some constant factor. The length scale, on the other
+    hand, is already included within `gpytorch.kernels.RBFKernel`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/03-10-unnumb-3.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: In the code we have been using thus far, there is one line where we set the
+    length scale of our kernel with `model.covar_module.base_kernel.lengthscale` `=`
+    `lengthscale`. This is where the value of the length scale is stored. Using a
+    similar API, we can set the output scale of our kernel with `model.covar_module.outputscale`
+    `=` `outputscale`. Now, to see that the length scale effectively controls how
+    fast the function varies, we compare the predictions made by two GPs—one with
+    a length scale of 1 and the other with a length scale of 0.3, shown in figure
+    3.11.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/03-11.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 3.11 The GP’s predictions with the length scale set to 1 (left) and to
+    0.3 (right). With a small length scale, the GP predictions have more variability,
+    leading to more uncertainty.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The stark difference between the two panels makes clear the effect of our length
+    scale:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A shorter length scale corresponds with more variability in the objective function,
+    given a constant change in the input.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A longer length scale, on the other hand, forces the function to be smoother,
+    in the sense that it varies less, given the same input change.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: For instance, going one unit along the *x*-axis, the samples in the left panel
+    in figure 3.11 vary less than those in the right panel.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/03-11-unnumb-4.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: What about the output scale, then? We said earlier that this parameter scales
+    the output of the covariance function to a different range. This is done by simply
+    multiplying the covariance output with this parameter. Hence, a large output scale
+    leads to the range of the GP’s predictions being wider, while a small output scale
+    shrinks this prediction range. To see that this is true, let’s once again run
+    our code and regenerate the predictions, this time setting the output scale to
+    3\. The produced output is shown in figure 3.12.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/03-12.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 3.12 The GP’s predictions with the output scale set to 3\. With a large
+    output scale, the GP models the function to have a wider range, also allowing
+    more uncertainty in the predictions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: While the left panel of figures 3.11 and 3.12 may look the same in that the
+    GP and its samples have the same shape across the two plots, we notice that figure
+    3.12 has a larger *y*-axis, as both its predictions and its samples take on larger
+    values (both negative and positive). This is the direct result of scaling the
+    covariance values from the RBF kernel with a large output scale.
+  prefs: []
+  type: TYPE_NORMAL
+- en: With just two hyperparameters for our covariance function, we have seen that
+    we can account for a wide range of functional behaviors that are modeled by our
+    GP, which we summarize in table 3.2\. I invite you to rerun this code with different
+    values for the length and output scales to see their effects and verify the table
+    for yourself!
+  prefs: []
+  type: TYPE_NORMAL
+- en: Table 3.2  Summary of the roles that the length and output scales of a GP play
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| Parameter | With a large value | With a small value |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Length scale | Smoother predictions, less uncertainty | More variability,
+    more uncertainty |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Output scale | Larger output values, more uncertainty | Narrower output range,
+    less uncertainty |'
+  prefs: []
+  type: TYPE_TB
+- en: 'Note This flexibility in modeling gives rise to a natural question: How should
+    you appropriately set the values for these hyperparameters? Luckily, we already
+    know a good way of setting the hyperparameters of a GP model. We can do this by
+    choosing the values that explain our data the best or, in other words, maximizing
+    the marginal log likelihood, specifically via gradient descent.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Just like when we wanted to optimize the hyperparameters of the mean function,
+    we now do this by simply passing the variables we’d like to optimize—the parameters
+    of the covariance function—to Adam:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: By running gradient descent, we can arrive at good values for these parameters.
+    Specifically, I obtained a length scale of roughly 1.3 and an output scale of
+    roughly 2.1\. That is, to fit the three-point training dataset well, we want the
+    GP to be slightly smoother (with a length scale greater than 1), and we also want
+    the range of our predictions to be larger (with a larger output scale). This is
+    certainly a reassuring result, as our objective function does have a wide range
+    of values—at input 3, it takes on a value of –2, which is well outside of the
+    CI with an output scale of 1.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 3.4.2 Controlling smoothness with different covariance functions
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Thus far, we have exclusively used the RBF kernel as our covariance function.
+    It is, however, entirely possible to use a different kernel for our GP if RBF
+    is not appropriate. In this subsection, we learn to use another family of kernels,
+    the Matérn kernel, and see what effect this kernel would have on our GP.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note By using a Matérn kernel, we are specifying the smoothness of the function
+    of our GP models. *Smoothness* is a technical term here that refers to the differentiability
+    of the function; the more times a function is differentiable, the smoother it
+    is. We can roughly think of this as how much the function values “jump” up and
+    down in a jagged manner.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The RBF kernel models functions that are *infinitely* differentiable, which
+    is a property that not many functions in the real world have. Meanwhile, a Matérn
+    kernel produces functions that are finitely differentiable, and exactly how many
+    times these functions may be differentiated (that is, how smooth these functions
+    are) is controlled by a settable parameter, as we discuss shortly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To see the Matérn kernel in action, we first reimplement our GP model class:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Omitted
+  prefs: []
+  type: TYPE_NORMAL
+- en: Here, our `covar_module` attribute is initialized as an instance of the `gpytorch
+    .kernels.MaternKernel` class. This initialization takes in a parameter `nu` that
+    defines the level of smoothness our GP will have, which is also a parameter of
+    our `__init__()` method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Important At the time of this writing, three values for `nu` are supported by
+    GPyTorch, 1/2, 3/2, and 5/2, corresponding to functions being non-, once-, and
+    twice-differentiable. In other words, the larger this `nu` parameter, the smoother
+    our GP.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s try `nu` `=` `0.5` first by setting that value when we initialize the
+    GP:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Fixes hyperparameters and enables the prediction mode
+  prefs: []
+  type: TYPE_NORMAL
+- en: This code produces figure 3.13.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/03-13.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 3.13 The GP’s predictions with the Matérn 1/2 kernel, which induces the
+    belief that the objective function is not differentiable, corresponding to very
+    rough samples
+  prefs: []
+  type: TYPE_NORMAL
+- en: Unlike what we have seen before with RBF, the samples from this Matérn kernel
+    are all very jagged. In fact, none of them are differentiable. `nu` `=` `0.5`
+    is a good value for the Matérn kernel when modeling time-series data, such as
+    stock prices.
+  prefs: []
+  type: TYPE_NORMAL
+- en: However, this value is typically not used in BayesOpt, as jagged functions like
+    those in figure 3.13 are highly volatile (they can jump up and down in an unpredictable
+    way) and are usually not the target for automated optimization techniques. We
+    need a certain level of smoothness from our objective function that is to be optimized;
+    otherwise, effective optimization is an unrealistic goal.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The Matérn 5/2 kernel is commonly preferred. Its predictions, along with those
+    generated by Matérn 3/2, are visualized in figure 3.14.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/03-14.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 3.14 The GP’s predictions with the Matérn 5/2 (left) and Matérn 3/2 (right)
+    kernel. The samples here are smooth enough for the GP to effectively learn from
+    data but are also jagged enough to realistically model real-life processes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We see that the samples from this 5/2 kernel are much smoother, which leads
+    to more effective learning by the GP. However, these samples are also rough enough
+    that they resemble functions we might see in the real world. For this reason,
+    most efforts, both research and applied, in BayesOpt utilize this Matérn 5/2 kernel.
+    In future chapters, when we discuss decision-making for BayesOpt, we default to
+    this kernel, accordingly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note While we do not include the corresponding details here, a Matérn kernel
+    has its own length scale and output scale, which may be specified to further customize
+    the behavior of the resulting GP in the same manner as in the previous subsection.
+  prefs: []
+  type: TYPE_NORMAL
+- en: By pairing a mean function with a kernel, we can induce complex behavior in
+    the predictions of the GP. Just like our prior affects the conclusion each person
+    in our group of friends reaches after seeing someone correctly guess a secret
+    number 100 times, our choice of the mean function and the kernel determines the
+    predictions made by a GP. Figure 3.15 shows three examples in which each combination
+    of a mean function and a kernel leads to a drastically different behavior.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/03-15.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 3.15 Three different choices for the mean function and kernel and the
+    predictions made by their respective posterior GPs when trained on the same dataset.
+    Each choice leads to a different behavior in prediction.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 3.4.3 Modeling different levels of variability with multiple length scales
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'As we have only been considering one-dimensional objective functions (functions
+    whose inputs have one feature), there is only one length scale that we need to
+    consider. However, we can imagine scenarios in which a high-dimensional objective
+    function (whose inputs have more than one feature) has more variability in some
+    dimensions and is smoother in others. That is, some dimensions have small-length
+    scales, while others have large-length scales. Remember our motivating example
+    at the beginning of this chapter: the price prediction of a house increases by
+    a larger amount with an extra story than with an extra square foot of living area.
+    We explore how to maintain multiple length scales in a GP to model these functions
+    in this subsection.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: If we were to only use a single length scale for all dimensions, we wouldn’t
+    be able to faithfully model the objective function. This situation calls for the
+    GP model to maintain a separate length scale for each dimension to fully capture
+    the variability in each of them. In this final section of the chapter, we learn
+    how to do this with GPyTorch.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To aid our discussion, we use a concrete two-dimensional objective function
+    called Ackley, which can be modified to have various levels of variability in
+    different dimensions. We implement the function as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: We specifically restrict the domain of this function to the square region between
+    –3 and 3 in both dimensions, which is typically denoted as [–3, 3]². To visualize
+    this objective function, we use the heat map in figure 3.16.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/03-16.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 3.16 The two-dimensional Ackley function to be used as our objective.
+    Here, the *x*-axis has less variability (it changes less) than the *y*-axis, requiring
+    different length scales.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Each dark blob in the heat map can be thought of as a valley that has a low
+    value across the surface of the objective function. Here, there are many more
+    valleys across the *y*-axis than across the *x*-axis, indicating that the second
+    dimension has more variability than the first—that is, the objective function
+    goes up and down many times across the *y*-axis, more often than across the *x*-axis.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Once again, this means that using only one length scale for both dimensions
+    is not a good choice. Instead, we should have a length scale for *each* dimension
+    (two, in this case). Each length scale can then be independently optimized using
+    gradient descent.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Important Using a kernel with a length scale for each dimension is called *automatic
+    relevance determination* (ARD). This term denotes the fact that after using gradient
+    descent to optimize these length scales, we can infer how relevant each dimension
+    of the objective function is with respect to the function values. A dimension
+    with a large length scale has low variability and is, therefore, less relevant
+    in modeling the objective function values than a dimension with a small length
+    scale.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Implementing ARD is very easy with GPyTorch: we simply specify the `ard_num_dims`
+    parameter to be equal to the number of dimensions our objective function has when
+    initializing our covariance function. This is done with the RBF kernel like so:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Omitted
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s see whether, when trained on our Ackley function, this model gives us
+    different length scales for the two dimensions. To do this, we first construct
+    a randomly sampled training dataset consisting of 100 points:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: After training the model using gradient descent, like we have been doing, we
+    could inspect the optimized values for the length scales by printing out
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This is, indeed, the result we expected: a larger length scale for the first
+    dimension, where there is less variability in the function values, and a smaller
+    length scale for the second dimension, where there is more variability.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/03-16-0-unnumb-5.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: More reading on kernels
+  prefs: []
+  type: TYPE_NORMAL
+- en: Kernels, in and of themselves, have enjoyed a lot of interest from the ML community.
+    One thing to note, in addition to what we have covered so far, is that kernels
+    can also encode complex structures, such as periodicity, linearity, and noise.
+    For a more thorough and technical discussion on kernels and their roles in ML,
+    the interested reader may refer to David Duvenaud’s *The Kernel Cookbook* ([https://www.cs.toronto.edu/~duvenaud/cookbook/](https://www.cs.toronto.edu/~duvenaud/cookbook/)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: This discussion marks the end of chapter 3\. Throughout this chapter, we have
+    extensively investigated how our GP model is influenced by the mean and covariance
+    functions, specifically by their various parameters. We use this as a way to incorporate
+    what we know about the objective function—that is, prior information—into our
+    GP models. We have also learned to use gradient descent to estimate the values
+    for these parameters to obtain the GP model that explains our data the best.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This also marks the end of the first part of the book, where we focus on GPs.
+    Starting from the next chapter, we begin learning about the second component of
+    the BayesOpt framework: decision-making. We begin with two of the most commonly
+    used BayesOpt policies that seek to improve from the best point seen: Probability
+    of Improvement and Expected Improvement.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 3.5 Exercise
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: This exercise provides practice for implementing a GP model with ARD. To do
+    this, we create an objective function that varies along one axis more than it
+    does along another axis. We then train a GP model, with and without ARD, on data
+    points from this function and compare the learned length scale values. The solution
+    is included in CH03/03 - Exercise.ipynb.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There are multiple steps to this process:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Implement the following two-dimensional function in Python using PyTorch:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/03-16-Equations_ch-3.png)'
+  prefs:
+  - PREF_IND
+  type: TYPE_IMG
+- en: This function simulates the accuracy surface of a support-vector machine (SVM)
+    model in a hyperparameter tuning task. The *x*-axis denotes the value of the penalty
+    parameter *c*, while the *y*-axis denotes the value for the RBF kernel parameter
+    *γ*. (We use this function as our objective in future chapters as well.)
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Visualize the function over the domain [`0,` `2`]². The heat map should look
+    like figure 3.17.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/03-17.png)'
+  prefs:
+  - PREF_IND
+  type: TYPE_IMG
+- en: Figure 3.17 The accuracy of an SVM model on a test dataset as a function of
+    the penalty parameter *c* and the RBF kernel parameter *γ*. The function changes
+    more quickly with respect to *γ* than to *c*.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Randomly draw 100 data points from the domain [`0,` `2`]². This will be used
+    as our training data.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Implement a GP model with a constant mean function and a Matérn 5/2 kernel with
+    an output scale implemented as a `gpytorch.kernels.ScaleKernel` object.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Don’t specify the `ard_num_dims` parameter when initializing the kernel object
+    or set the parameter to `None`. This will create a GP model without ARD.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Train the hyperparameters of the GP model using gradient descent, and inspect
+    the length scale after training.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Redefine the GP model class, this time setting `ard_num_dims` `=` `2`. Retrain
+    the GP model with gradient descent, and verify that the two length scales have
+    significantly different values.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Prior knowledge plays an important role in a Bayesian model and can heavily
+    influence the posterior predictions of the model.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: With a GP, prior knowledge can be specified using the mean and the covariance
+    functions.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The mean function describes the expected behavior of the GP model. In the absence
+    of data, a GP’s posterior mean prediction reverts to the prior mean.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A GP’s mean function can take on any functional form, including a constant,
+    a linear function, and a quadratic function, which can be implemented with GPyTorch.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A GP’s covariance function controls the smoothness of the GP model.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The length scale specifies the level of variability of the output with respect
+    to the function input. A large length scale leads to more smoothness and, thus,
+    less uncertainty in predictions.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Each dimension in a GP can have its own length scale. This is called automatic
+    relevance determination (ARD) and is used to model objective functions that have
+    different levels of variability in different dimensions.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The output scale specifies the range of the function output. A large output
+    scale leads to a larger output range and, thus, more uncertainty in the predictions.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The Matérn kernel class is a generalization of the RBF kernel class. By specifying
+    its parameter `nu`, we can model various levels of smoothness in the GP’s predictions.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The hyperparameters of a GP can be optimized by maximizing the marginal likelihood
+    of the data using gradient descent.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL

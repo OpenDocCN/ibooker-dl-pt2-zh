@@ -1,0 +1,1427 @@
+- en: 7 Maximizing throughput with batch optimization
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter covers
+  prefs: []
+  type: TYPE_NORMAL
+- en: Making function evaluations in batches
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Extending BayesOpt to the batch setting
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Optimizing hard-to-compute acquisition scores
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The BayesOpt loop we have been working with thus far takes in one query at a
+    time and returns the function evaluation for the query before the next query is
+    made. We use this loop in settings where function evaluations can only be made
+    sequentially. However, many real-world scenarios of black box optimization allow
+    the user to evaluate the objective functions in batches. For example, when tuning
+    the hyperparameters of an ML model, we can try out different hyperparameter combinations
+    in parallel if we have access to multiple processing units or computers, instead
+    of running individual combinations one by one. By taking advantage of all the
+    resources available to us, we can increase the number of experiments we conduct
+    and maximize throughput during the function evaluation step of the BayesOpt loop.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We call this variant of BayesOpt in which multiple queries can be made in parallel
+    *batch Bayesian optimization*. Examples of batch BayesOpt other than hyperparameter
+    tuning include drug discovery, where a scientist uses each of multiple machines
+    in their laboratory to synthesize an individual drug prototype, and product recommendation,
+    where the recommendation engine presents multiple products to a customer at the
+    same time. Overall, any black box optimization setting in which more than one
+    experiment can be run simultaneously calls for batch BayesOpt.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Given that computational and physical resources are often parallelizable, batch
+    BayesOpt is one of the most common settings of BayesOpt in the real world. In
+    this chapter, we are introduced to batch BayesOpt and see how the policies we
+    have learned about in previous chapters can be extended to this setting. We discuss
+    why extending a BayesOpt policy to the batch setting is not a trivial endeavor
+    and why it requires careful consideration. We then learn about various strategies
+    that facilitate extending to the batch setting and how to implement BayesOpt policies
+    in Python using BoTorch.
+  prefs: []
+  type: TYPE_NORMAL
+- en: By the end of the chapter, you will understand what batch BayesOpt is, when
+    the batch setting is applicable, and how to implement BayesOpt policies in this
+    setting. With the knowledge of how to parallelize BayesOpt in the batch setting,
+    we can make BayesOpt more practical and applicable in the real world.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.1 Making multiple function evaluations simultaneously
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The ability to make multiple function evaluations at the same time in a black
+    box problem is common in many real-world scenarios, and batch BayesOpt is the
+    setting of BayesOpt in which this parallelism of function evaluations is taken
+    into account. In this section, we cover the exact setting of batch BayesOpt and
+    what challenges we might face when using BayesOpt policies to make multiple queries
+    to the objective function. This section will motivate the various strategies to
+    extend BayesOpt policies to the batch setting. We cover these strategies later
+    in the chapter, starting in section 7.2.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.1.1 Making use of all available resources in parallel
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: One of the defining characteristics of an expensive black box optimization problem
+    is that making function evaluations can be cost prohibitive. In section 1.1, we
+    examined the high cost of making function evaluations in many applications; hyperparameter
+    tuning a neural network takes a lot of time and computational resources, and the
+    cost of creating new drugs has been exponentially increasing in recent years,
+    to name two examples. This cost of querying the objective function in black box
+    optimization gives rise to the need to make the process of querying the objective
+    function more efficient. One way we can achieve this is via *parallelism*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Definition *Parallelism* refers to the act of running independent processes
+    at the same time so that the total time taken to complete these processes is cut
+    short.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The benefits of parallelism are summarized in figure 7.1, where three processes
+    (which can be programs to run, computations to complete, and so on) run either
+    sequentially or in parallel. When run in parallel, the three processes only take
+    one third of the total time required if run sequentially.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/07-01.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.1 Illustration of the benefits of parallelism. Three generic processes
+    either run sequentially (left) or in parallel (right). When running in parallel,
+    the three processes only take one third of the total time required if run sequentially.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Parallelism is particularly common in computer science, where a computer may
+    use multiple processing units in parallel to process multiple programs at the
+    same time. If these programs are independent from each other (they don’t use each
+    other’s data or write to the same files), they can run in parallel without any
+    issue.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The same idea applies to optimization settings that employ BayesOpt. For example,
+    an ML engineer tuning a neural network may take advantage of the multiple GPUs
+    to which they have access to train multiple models at the same time. A scientist
+    attempting to discover new drugs can experiment with more than one recipe using
+    the equipment in the lab to synthesize the multiple recipes simultaneously. Making
+    multiple queries at the same time allows us to obtain more information given the
+    same amount of time spent learning about the objective function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: What are GPUs?
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*GPUs*, or graphics processing units, are the hardware that is optimized to
+    perform parallel matrix multiplications. Therefore, they are commonly used for
+    training neural networks.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Take the example of baking a batch of cookies. You *could* bake one cookie at
+    a time if you wanted to, but doing so would waste resources such as power for
+    the oven and time. Instead, you’re much more likely to bake multiple cookies simultaneously
+    in a batch.
+  prefs: []
+  type: TYPE_NORMAL
+- en: BayesOpt for baking cookies
+  prefs: []
+  type: TYPE_NORMAL
+- en: On the topic of baking, there is, in fact, a research paper on batch BayesOpt
+    ([https://static.googleusercontent.com/media/research.google.com/en//pubs/archive/46507.pdf](https://static.googleusercontent.com/media/research.google.com/en//pubs/archive/46507.pdf))
+    that tackles optimizing cookie recipes by finding the optimal amount of eggs,
+    sugar, and cinnamon to use when making the cookie dough.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In BayesOpt, the batch setting allows multiple inputs of the objective function
+    to be evaluated at the same time. That is, we can send multiple queries, *x*[1],
+    *x*[2], ..., *x[k]*, to the black box that evaluates the objective all at once
+    and receive the corresponding objective values *f*(*x*[1]), *f*(*x*[2]), ...,
+    *f*(*x[k]*) in a batch. In contrast, in the classic sequential BayesOpt setting,
+    only after observing *f*(*x*[1]) can we proceed to query at another location *x*[2].
+  prefs: []
+  type: TYPE_NORMAL
+- en: At each iteration of the batch BayesOpt loop, we pick out multiple input locations
+    to evaluate the objective function at, as opposed to a single location like we’ve
+    been doing thus far. This batch BayesOpt loop is illustrated in figure 7.2\. The
+    requirement for multiple queries at a time means we need new BayesOpt policies
+    to score the usefulness of these input locations. We talk more about why the BayesOpt
+    policies we have learned cannot be easily extended to the batch setting in the
+    next section. The other component of the BayesOpt loop, the GP, remains unchanged,
+    as we still need an ML model that produces probabilistic predictions. In other
+    words, it’s the decision-making component of BayesOpt that needs to be modified
+    for us to adopt the batch setting.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/07-02.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.2 The batch BayesOpt loop. Compared to sequential BayesOpt, batch BayesOpt
+    requires multiple query points to be identified at step 2 and evaluates the objective
+    function at these points simultaneously at step 3.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Acquisition scores of a policy
+  prefs: []
+  type: TYPE_NORMAL
+- en: A BayesOpt policy assigns a score, called the *acquisition score*, to each input
+    location in the search space that quantifies how useful the input is in our search
+    for the global optimum of the objective function. Each policy uses a different
+    heuristic to compute this score, as detailed in chapters 4 to 6.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The number of queries that could be made simultaneously—that is, the size of
+    the batch—is application dependent. For example, how many cookies you could bake
+    at the same time depends on the size of your oven and baking trays. The computing
+    resources you have available (the number of CPUs and GPUs) dictate how many neural
+    networks you can train in parallel when tuning the model’s hyperparameters. Figure
+    7.1 shows three processes running at the same time as an example, so the batch
+    size is 3.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.1.2 Why can’t we use regular BayesOpt policies in the batch setting?
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: We said in the previous section that the BayesOpt policies we have learned under
+    the sequential setting (where queries to the objective function are made sequentially,
+    one after another) cannot be repurposed and used in the batch setting without
+    modifications. In this section, we discuss in more detail why this is the case
+    and why we need specialized policies for the batch setting.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Remember from section 4.1 that a BayesOpt policy assigns a score to each point
+    in the search space that quantifies how useful the point is in our search for
+    the global optimum of the objective function. We then look for the point that
+    gives the highest score and choose it as the next query of the objective function.
+    Figure 7.3 shows the score computed by the Expected Improvement (EI) policy (introduced
+    in section 4.3) as the curve in the bottom panel, where 1.75, as indicated by
+    the vertical mark on the lower curve, maximizes the score and is our next query.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/07-03.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.3 An example of BayesOpt. The top panel shows the GP predictions and
+    the ground truth objective function, while the bottom panel shows the acquisition
+    scores made by EI, discussed in section 4.3\. The vertical tick on the lower curve
+    at 1.75 indicates the next query.
+  prefs: []
+  type: TYPE_NORMAL
+- en: What would happen if we were to use the same EI score, the lower curve in figure
+    7.3, to pick out not one but multiple points to query the objective function with?
+    We would need to identify the many points that give the highest EI scores. However,
+    these points that give high EI scores would simply cluster around the point picked
+    under the sequential setting. This is because along the lower curve, if we were
+    to move an infinitesimal distance from 1.75, we would still receive a high EI
+    score. That is, the points close to the one giving the highest acquisition score
+    also give high acquisition scores.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If we were to simply pick out the points with the highest acquisition scores,
+    our queries would cluster around a single region in the search space, essentially
+    putting all our eggs in one basket. This is illustrated in figure 7.4, where the
+    queries giving the highest EI scores cluster around 1.75\. This clustering effect
+    is undesirable because we are wasting our valuable resources evaluating the objective
+    function at essentially a single input location. These clustered points are less
+    useful than points that are more spread out.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/07-04.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.4 Queries made in the batch setting if we were to simply pick out the
+    points with the highest acquisition scores, denoted by the vertical ticks on the
+    lower curve. These queries are close to each other and are less useful than if
+    they were more spread out.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Choosing all of our queries to be points clustered around one location prevents
+    us from benefiting from the parallelism inherent in the batch setting. Our discussion
+    so far shows that designing a batch of queries is not as simple as choosing the
+    top points giving the highest acquisition scores of a BayesOpt policy. In the
+    remainder of this chapter, we discuss BayesOpt policies that are specifically
+    designed for the batch setting. Conveniently for us, these policies are extensions
+    of the BayesOpt policies we have learned in chapters 4 through 6, so we only need
+    to learn about extending the optimization heuristics we have learned to the batch
+    setting.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.2 Computing the improvement and upper confidence bound of a batch of points
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The first policies we will extend to the batch setting are the improvement-based
+    policies, which are the topic of chapter 4, and the UCB policy, discussed in section
+    5.2\. The heuristics used by these policies allow for the policies to be modified
+    to work in the batch setting, as we see shortly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next section, we introduce the mathematical modification of those heuristics
+    and discuss how resulting batch policies work. Afterwards, we learn how to declare
+    and run these batch policies with BoTorch.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.2.1 Extending optimization heuristics to the batch setting
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The discussion in section 7.1.2 shows that choosing a batch of points to evaluate
+    the objective function with is not as simple as finding the top points that maximize
+    the acquisition score of a sequential policy. Instead, we need to redefine the
+    mathematical formulations of these sequential policies to repurpose them to the
+    batch setting.
+  prefs: []
+  type: TYPE_NORMAL
+- en: One strategy applies for three BayesOpt policies that we have learned, PoI,
+    EI, and UCB, which formulate their acquisition scores as averages over normal
+    distributions. That is, the score each of the three policies assigns to a given
+    point can be written as the average of a quantity of interest over a normal distribution
+    in the sequential setting. For PoI, this quantity is whether we will observe an
+    improvement; for EI, the quantity of interest is the magnitude of the improvement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/07-05.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.5 Extending the mathematical formulation of a BayesOpt policy to the
+    batch setting. In both cases, we use the average of a quantity of interest. In
+    the batch setting, we take the maximum value across the points in a batch before
+    taking the average to represent the utility of the whole batch.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As shown in the top portion of figure 7.5, a sequential BayesOpt policy scores
+    a candidate query *x* using the average of some quantity *G*(*f*(*x*)) over the
+    normal distribution that is our belief about the value of the objective function
+    *f*(*x*). This quantity *G* depends on the heuristic that the BayesOpt policy
+    uses to balance between exploration and exploitation. With a batch of queries
+    *x*[1], *x*[2], ..., *x[k]*, we instead compute the average of the maximum value
+    of the quantity *G* across the points in the batch, as shown in the bottom portion
+    of figure 7.5\. This average is computed across the multivariate Gaussian distribution
+    corresponding to the objective values *f*(*x*[1]), *f*(*x*[2]), ..., *f*(*x[k]*).
+  prefs: []
+  type: TYPE_NORMAL
+- en: The balance between exploration and exploitation
+  prefs: []
+  type: TYPE_NORMAL
+- en: All BayesOpt policies need to address the tradeoff between zeroing in on a high-performing
+    region in the search space (exploitation) and inspecting unexplored regions (exploration).
+    Refer to section 4.1.2 for a more thorough discussion of this tradeoff.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This strategy of using the maximum of the quantity of interest *G* to represent
+    the utility of the whole batch makes intuitive sense in the context of optimization,
+    which is our goal. The higher the maximum *G*, the more valuable the whole batch
+    of queries. With a way to quantify the value of any given batch of queries, we
+    can now proceed to find the batch maximizing that quantity. The heuristic we use
+    is similar to what we do in sports competitions like the Olympics: each country
+    might train many athletes throughout the year, but when the time comes, only the
+    best individuals are chosen to take part in the competition. Figure 7.6 visualizes
+    this process.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/07-06.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.6 The batch BayesOpt heuristic picks out the best element with the
+    highest *G* value to represent the whole batch (bottom). This strategy is similar
+    to team selection in the Olympics, where only the best athletes are selected to
+    represent a country.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'How is this strategy realized with the three aforementioned policies? Let’s
+    first discuss the first two: improvement-based policies. Remember from chapter
+    4 that PoI uses the probability that the next query will improve from the best-seen
+    point (the incumbent) as the acquisition score. The more likely that a point will
+    yield a better result than the incumbent, the higher the score that PoI assigns
+    to that point. The EI policy, on the other hand, takes into account the magnitude
+    of the improvement, assigning a high acquisition score to points that are likely
+    to both improve from the incumbent and improve by a large amount.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The difference between these two policies is visualized in figure 7.7, where
+    different outcomes lie on the *x*-axis, and the *y*-axis shows the objective value
+    that is to be optimized. PoI treats all points on the *x*-axis that yield higher
+    values than the incumbent equally, while EI considers how much each point improves.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/07-07.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.7 The difference between PoI (left) and EI (right). The former only
+    considers whether we improve from the incumbent or not, while the latter considers
+    how much improvement is made.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the batch setting, we can reason about the improvement we observe after the
+    current iteration of the BayesOpt loop in a similar manner. Instead of reasoning
+    about the multiple points within a batch of queries, we can single out the maximum
+    value among the function evaluations at these points. That is, if our batch of
+    queries to the objective function were at *x*[1], *x*[2], ..., *x[k]*, we wouldn’t
+    need to use all function evaluations *f*(*x*[1]), *f*(*x*[2]), ..., *f*(*x[k]*)
+    to reason about the improvement we observe. We’d need just the maximum value max
+    {*f*(*x*[1]), *f*(*x*[2]), ..., *f*(*x[k]*)} since this maximum value defines
+    the improvement we observe.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Following the example in figure 7.7, assume our incumbent has an objective
+    value of 20, and consider the following scenarios visualized in the right panel
+    of figure 7.8:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: If our batch of queries, with the batch size of 3, returned values that are
+    all lower than 20 (corresponding to *X*[1] in the right panel), then we would
+    observe no improvement. The highest function evaluation in *X*[1] is 3, meaning
+    no function evaluation from this batch improved from the incumbent.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If all returned values exceeded the incumbent (corresponding to *X*[2]), then
+    we would observe an improvement from the incumbent. In particular, the maximum
+    of this batch *X*[2] is 30, leading to an improvement of 10.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: More importantly, if only some but not all returned function evaluations were
+    better than the incumbent (*X*[3], as an example), then we would still observe
+    an improvement. The maximum of *X*[3] is 22, which is, indeed, an improvement
+    from the incumbent 20.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: By focusing on the maximum evaluated value returned from a batch of queries,
+    we can determine right away whether this batch has resulted in an improvement
+    from the incumbent. Figure 7.8 shows this improvement-based reasoning of PoI,
+    where batches *X*[2] and *X*[3] are treated equally, as they (or, more specifically,
+    their maximum values) both lead to an improvement. We now have a way to extend
+    the idea of computing the probability of improvement from the sequential to the
+    batch setting.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/07-08.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.8 Whether a query (left) or a batch of queries (right) leads to an
+    improvement from the incumbent. In the batch setting on the right, we only consider
+    the maximum value within each batch to determine whether there is an improvement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Definition The *acquisition score* PoI assigns to a given batch of candidate
+    queries is equal to the probability that the maximum among the returned function
+    evaluations will exceed the incumbent.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Mathematically, we go from computing the probability that the function evaluation
+    *f*(*x*) will exceed the incumbent *f**, denoted as *Pr*(*f*(*x*) > *f**), in
+    the sequential setting, to computing the probability that the maximum function
+    evaluation will exceed the incumbent, *Pr*(max {*f*(*x*[1]), *f*(*x*[2]), ...,
+    *f*(*x[k]*)} > *f**). This probability *Pr*(max {*f*(*x*[1]), *f*(*x*[2]), ...,
+    *f*(*x[k]*)} > *f**) is then used as the PoI acquisition score for the batch of
+    queries *x*[1], *x*[2], ..., *x[k]*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As mentioned earlier in this section, these probabilities, *Pr*(*f*(*x*) > *f**)
+    and *Pr*(max {*f*(*x*[1]), *f*(*x*[2]), ..., *f*(*x[k]*)} > *f**), can be viewed
+    as averages of quantities that are important to our optimization progress over
+    Gaussian distributions. Specifically, the probabilities are averages of the binary
+    random variable indicating whether *f*(*x*) > *f** and max {*f*(*x*[1]), *f*(*x*[2]),
+    ..., *f*(*x[k]*)} > *f** are true, respectively. This comparison is visualized
+    in figure 7.9.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/07-09.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.9 Extending the POI policy to the batch setting. In the sequential
+    case (top), we consider whether the next query improves from the incumbent. In
+    the batch setting (bottom), we reason about whether the maximum value across the
+    points in a batch improves from the incumbent.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To complete the batch BayesOpt loop with this PoI policy, we then find the batch
+    *x*[1], *x*[2], ..., *x[k]* that maximizes the acquisition score *Pr*(max {*f*(*x*[1]),
+    *f*(*x*[2]), ..., *f*(*x[k]*)} > *f**). As we learned in section 4.1.1, we can
+    use the helper function `optimize_acqf()` from BoTorch’s `optim.optimize` module
+    to facilitate this search for the batch *x*[1], *x*[2], ..., *x[k]* that optimizes
+    the acquisition score, as we will see in section 7.2.2.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We now move on to the EI policy, which computes the expected value of the improvement
+    from the incumbent we will observe from querying a particular point. Since we
+    already have a way to reason about improvement from the incumbent upon observing
+    a batch of function evaluations, the batch extension of EI presents itself. That
+    is, we only compute the expected value of the improvement from the incumbent that
+    results from the maximum function evaluation within the returned batch, max {*f*(*x*[1]),
+    *f*(*x*[2]), ..., *f*(*x[k]*)}. Just as PoI computes the probability that this
+    maximum value exceeds the incumbent, EI considers how much the maximum exceeds
+    the improvement. The difference between EI and its batch variant is visualized
+    in figure 7.10.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/07-10.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.10 Extending the EI policy to the batch setting. In the sequential
+    case (top), we use the average of how much the next query improves from the incumbent.
+    In the batch setting (bottom), we take the average of how much the maximum value
+    across the points in a batch improves from the incumbent.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To illustrate this reasoning, figure 7.11 shows the distinction in how EI scores
+    different outcomes in the sequential (left panel) and the batch setting (right
+    panel). The following is true in the right panel:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A batch that doesn’t possess any point that improves from the incumbent at 20
+    (*X*[1], as an example) will constitute zero improvement.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The maximum value from batch *X*[2] is 22, so we observe an improvement of 2,
+    even though there are values in this batch that fall below the incumbent.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Although the values in batch *X*[3] are all higher than the incumbent, the improvement
+    we observe is once again completely determined by the maximum value 30.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Finally, even if most of batch *X*[4] is lower than the incumbent 20, the maximum
+    value of *X*[4] is 50, making this batch a very good outcome.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/07-11.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.11 Whether a query (left) or a batch of queries (right) leads to an
+    improvement from the incumbent. In the batch setting on the right, we only consider
+    the maximum value within each batch to determine whether there is an improvement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To proceed with batch EI, we compute the expected value of how much higher the
+    maximum value within a batch is than the incumbent. This expected value of the
+    improvement or expected improvement is the acquisition score batch that EI uses
+    to rank how valuable a given batch *x*[1], *x*[2], ..., *x[k]* is. The helper
+    function `optimize_acqf()` can once again be used to find the batch that gives
+    the highest expected improvement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The discussions so far help us extend the two improvement-based policies, PoI
+    and EI, to the batch setting. We are now left with the UCB policy. Fortunately,
+    the strategy of picking out the maximum value from a batch of queries to compute
+    the improvement also applies to UCB. To apply the same strategy of picking out
+    the maximum value (with respect to a function *G* of interest) from a batch of
+    queries to UCB, we need to reframe the UCB acquisition score as an average across
+    a normal distribution.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The mathematical details of the UCB policy
+  prefs: []
+  type: TYPE_NORMAL
+- en: In section 5.2.2, we discussed that the UCB acquisition score is *μ* + *βσ*.
+    Here, the terms *μ* and *σ* are the predictive mean and standard deviations of
+    *f*(*x*), and β is an adjustable parameter that trades off exploration and exploitation.
+    We now need to rewrite *μ* + *βσ* as an average of some quantity over the normal
+    distribution *N*(*μ*, σ²) to extend UCB to the batch setting. While this reformulation
+    can be done, we don’t go into the math here. The interested reader can refer to
+    appendix A of this paper ([https://arxiv.org/pdf/1712.00424.pdf](https://arxiv.org/pdf/1712.00424.pdf)),
+    which lays out the mathematical details.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The rest of extending UCB to the batch setting follows the same procedure:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We take the average of the maximum of the quantity that is the rewritten *μ*
+    + *βσ* across the whole batch and use it as the batch UCB acquisition score.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: We then use the helper function `optimize_acqf()` to find the batch that give
+    us the highest score.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: That’s all we need to know about extending these three BayesOpt policies to
+    the batch setting. We learn how to implement these policies in BoTorch in the
+    next section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.2.2 Implementing batch improvement and UCB policies
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Similar to what we saw in chapters 4 through 6, BoTorch makes it straightforward
+    to implement and use BayesOpt policies in Python, and the batch variants of the
+    three policies discussed in the previous section, PoI, EI, and UCB, are no exceptions.
+    While it’s important for us to learn about the mathematical formulations of these
+    three policies, we will see that with BoTorch, we can simply replace a single
+    line of code in our Python program to run these policies. The code we use in this
+    section can be found in the Jupyter notebook named CH07/01 - Batch BayesOpt loop.ipynb.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You might think that as we are now working under a new setting where queries
+    to the objective function are done in batches, we need to modify the code that
+    implements the BayesOpt loop (obtaining multiple function evaluations at the same
+    time, appending multiple points to the training set, training the GP model). Amazingly,
+    however, the necessary modifications are minimal, thanks to BoTorch’s ability
+    to seamlessly support batch mode. In particular, when using the helper function
+    `optimize_acqf()` to find the next queries maximizing the acquisition score, we
+    only need to specify the parameter `q` `=` `k` to be the batch size (that is,
+    the number of function evaluations that can be run in parallel).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/07-12.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.12 Steps in the batch BayesOpt loop and the corresponding code. Compared
+    to the sequential setting, we need minimum modifications to our code when moving
+    to the batch setting.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The entire batch BayesOpt loop is summarized in figure 7.12, which closely
+    resembles figure 4.4\. The few changes are annotated:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We specify `q` `=` `k` to be the batch size *k* when using the helper function
+    `optimize _acqf()`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This helper function returns `next_x`, which contains *k* points. The variable
+    `next_x` is a *k*-by-*d* PyTorch tensor, where *d* is the number of dimensions
+    in our search space (that is, the number of features in our data set).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: We then query the objective function at the locations specified in `next_x`
+    and obtain `next_y`, which contains the function evaluations. Unlike the sequential
+    setting, where `next_y` is a scalar or a one-element tensor, `next_y` here is
+    a tensor that contains *k* elements, corresponding to the function evaluations
+    of `next_x`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Note For step 1 in figure 7.12, we still need a class implementation of a GP
+    model and the helper function `fit_gp_model()` that trains the GP on the training
+    data. Fortunately, the same code we use in the sequential setting can be reused
+    without any modification. Refer to section 4.1.1 for the complete discussion of
+    this code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To facilitate our code demonstration, we use the two-dimensional synthetic
+    objective function that simulates the model accuracy of a hyperparameter tuning
+    application. This function is first introduced in chapter 3’s exercise and is
+    implemented as follows, where we specify that the function domain, our search
+    space, is between 0 and 2 in each of the two dimensions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Function definition
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Function domain, which is between 0 and 2 in each dimension
+  prefs: []
+  type: TYPE_NORMAL
+- en: This objective function is visualized in figure 7.13, where we see the global
+    optimum is achieved near the top right corner of the space, giving an accuracy
+    of 90%.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/07-13.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.13 Accuracy of an SVM model on a test data set, as a function of the
+    penalty parameter *C* and the RBF kernel parameter *γ*. This is the objective
+    function we aim to optimize in this chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To set up our batch optimization problem, we assume we can train the model
+    in four different processes at the same time. In other words, our batch size is
+    4\. Further, we can only retrain the model five times, so the number of iterations
+    of our batch BayesOpt loop is 5, and the total number of queries we can make is
+    4 × 5 = 20:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ This variable equals 5.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, all that’s left to do is run a batch BayesOpt policy. We do this with
+    the following code that first randomly picks out a point in the search space as
+    the training set:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Randomly picks a point in the search space
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Evaluates the objective function at the randomly picked point
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We then do the following for each of the five iterations:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Keep track of the best accuracy seen so far
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Retrain the GP model with the current training set
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Initialize a batch BayesOpt policy
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Use the helper function `optimize_acqf()` to find the best batch of queries
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Evaluate the objective function at the locations specified by the batch of queries
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Append the new observations to the training set and repeat:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Keeps track of optimization progress
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Trains a GP on the current training set
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Initializes a batch BayesOpt policy, to be discussed shortly
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Finds the next batch to query
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Sets argument q to the batch size
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❻ Evaluates the objective function at the selected batch
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❼ Updates the training data
+  prefs: []
+  type: TYPE_NORMAL
+- en: Again, this code is almost identical to the code we use in section 4.1.1 of
+    chapter 4 that implements the sequential setting of BayesOpt. All we need to be
+    careful of is setting argument `q` of the helper function `optimize_acqf()` to
+    the correct batch size.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To run a batch BayesOpt policy, we then initialize it using BoTorch’s class
+    implementation of the policy. For the PoI policy, we use
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: Similarly, for the EI policy, we use
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note the `q` in front of the class names, which indicates these classes implement
+    batch BayesOpt policies. Similar to argument `best_f` that sequential PoI and
+    EI take in, this argument `best_f` here specifies the current incumbent value,
+    which we set at `train_y.max()`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For UCB, we use an equivalent API, where the argument `beta` sets the tradeoff
+    parameter *β* in the acquisition score *μ* + *βσ*, where *μ* and σ are the mean
+    and standard deviation of our prediction at a given point:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: Arguments BayesOpt policies take
+  prefs: []
+  type: TYPE_NORMAL
+- en: We learn about the implementation of sequential POI, EI, and UCB in sections
+    4.2.2, 4.3, and 5.2.3, respectively. The arguments each of these policies take
+    in are identical to their batch counterparts, which makes transitioning to the
+    batch setting in BoTorch straightforward.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Since we can now run the batch version of PoI, EI, and UCB, let’s take a moment
+    to inspect the behavior of these policies. In particular, assume our current BayesOpt
+    progress is the same as in figure 7.3 with the one-dimensional objective function.
+    This figure also shows the acquisition scores computed by EI for a single point
+    in the bottom panel. We’re interested in seeing what EI’s acquisition scores look
+    like for a batch of two points—that is, the expected improvement from the incumbent
+    of a given pair of queries.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We show these acquisition scores with a heatmap in figure 7.14, where the brightness
+    of each location on the square denotes the expected improvement of a given pair
+    of queries, and the locations that give the highest acquisition scores are denoted
+    as stars. (The top and right panels show the observed data and the current GP
+    belief about the objective function along the axes of the heatmap.) We observe
+    a few interesting trends:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: There are two straight bands on the heatmap denoting high acquisition scores.
+    These bands are close to the data point *x* = 2, meaning any batch of queries
+    (of size 2) that has a member close to *x* = 2 will give a high score. This makes
+    sense because around *x* = 2 is where the posterior mean of the GP is maximized.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The diagonal of the heatmap is dark, meaning that querying a batch *x*[1] and
+    *x*[2], where *x*[1] is roughly equal to *x*[2], is likely to yield a low improvement.
+    This observation verifies what we said in section 7.1.2: choosing the queries
+    in a batch to cluster around each other is a bad strategy that essentially puts
+    all our eggs in one basket.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Finally, the two optimal batches of queries, denoted by the stars, are the same
+    batch, since the locations are symmetric to each other. This batch contains 1.68
+    and 2.12, which are still in the neighborhood of *x* = 2, where the GP tells us
+    the objective function yields high values. Further, the two selected queries 1.68
+    and 2.12 are far away from each other and, thus, help us escape the trap of clustering
+    our queries around each other.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/07-14.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.14 A heatmap showing the acquisition scores of the batch EI policy
+    for batches of size 2 with a one-dimensional objective function. The top and right
+    panels show the observed data and the current GP belief about the objective function
+    along the axes of the heatmap. The two optimal pairs of queries, denoted as the
+    two stars, contain 1.68 and 2.12, which are relatively far away from each other.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 7.14 shows that the batch version of EI evaluates a given batch of queries
+    in a reasonable manner, prioritizing batches that are both likely to yield high
+    objective values and sufficiently spread out.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Batch versus sequential EI
+  prefs: []
+  type: TYPE_NORMAL
+- en: Interestingly, the two points selected by batch EI, 1.68 and 2.12, are different
+    from the point maximizing the sequential EI’s acquisition score, 1.75\. This difference
+    between sequential EI and batch EI demonstrates that the optimal decision in the
+    sequential setting isn’t necessarily the optimal decision in the batch setting.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Returning to our hyperparameter tuning example, we are ready to use these initializations
+    to run the batch policies. After saving the running incumbent values each policy
+    achieves and plotting them against each other, we can generate figure 7.15, which
+    shows the optimization progress each policy makes in our example. We first observe
+    that this progress is being plotted in batches of four, which makes sense, since
+    4 is the batch size we use. In terms of performance, we see that EI and UCB are
+    able to progress faster than PoI in the beginning, but all three converge to roughly
+    the same accuracy at the end.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/07-15.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.15 Progress made by various batch BayesOpt policies in the hyperparameter
+    tuning example. Progress is made in batches of four, which is the batch size used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Repeated experiments in BayesOpt
+  prefs: []
+  type: TYPE_NORMAL
+- en: To accurately compare the performance of these policies in this hyperparameter
+    tuning application, we need to repeat this experiment using different initial
+    training sets that are randomly generated. Refer to step 9 of exercise 2 from
+    chapter 4 to see how we can run repeated experiments in BayesOpt.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We have now learned how to implement the batch versions of PoI, EI, and UCB
+    in BoTorch and have seen that the transition from the sequential to the batch
+    setting requires minimum modifications to our code. Let’s now move on to the remaining
+    BayesOpt policies, TS and MES, which require different strategies to be extended
+    to the batch setting.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '7.3 Exercise 1: Extending TS to the batch setting via resampling'
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Unlike the other BayesOpt policies, Thompson sampling (TS) can be easily extended
+    to the batch setting, thanks to its sampling strategy. We explore how this extension
+    is done in this exercise. Remember that TS in the sequential setting, which, as
+    we learned in section 5.3, draws one sample from the current GP belief about the
+    objective function and queries the data point that maximizes that sample.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the batch setting, we simply repeat this process of sampling from the GP
+    and maximizing the sample multiple times to assemble a batch of queries of the
+    desired size. For example, if the batch size of our batch BayesOpt problem is
+    3, then we draw three samples from the GP, and the batch of queries we end up
+    with contains the maximizers of the three samples (one maximizer for each sample).
+    This logic is illustrated in figure 7.16, where we keep sampling from the GP and
+    adding the point that maximizes the latest sample to the running batch until the
+    batch is full—that is, until we have reached the appropriate batch size.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/07-16.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.16 A flowchart of the implementation of the batch version of TS. We
+    keep sampling from the GP and adding the point that maximizes the latest sample
+    to the running batch until the batch is full.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Every time we draw a sample from the GP, we obtain a different realization
+    of what the objective function could be. By optimizing the multiple samples drawn
+    from the GP, we have an easy way of selecting multiple points that could guide
+    us to the global optimum of the objective function. To implement and run this
+    policy on the hyperparameter tuning example, we take the following steps, as implemented
+    in the CH07/02 - Exercise 1.ipynb notebook:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Recreate the batch BayesOpt loop in CH07/01 - Batch BayesOpt loop.ipynb.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Implement TS with a Sobol sampler, as described in section 5.3:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Use 2,000 candidates for the Sobol sampler.
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'When calling the TS object, specify that the number of samples is equal to
+    the batch size:'
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: Run this TS policy on the hyperparameter tuning objective function, and observe
+    its performance.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Sobol sequences
+  prefs: []
+  type: TYPE_NORMAL
+- en: A Sobol sampler generates a Sobol sequence, which can cover a space better than
+    a uniformly sampled sequence. More discussion on Sobol sequences can be found
+    in section 5.3.2.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.4 Computing the value of a batch of points using information theory
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: We now learn how to extend the final BayesOpt policy in our toolkit, Max-value
+    Entropy Search (MES), to the batch setting. Unlike the improvement-based and bandit
+    policies, MES requires more careful consideration to run efficiently in the batch
+    setting. We discuss the batch version of MES and the problems we run into when
+    extending it to the batch setting in the next section and, finally, how to implement
+    the policy in BoTorch afterwards.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note MES is the topic of chapter 6, where we learn about the basics of information
+    theory and how to implement the MES policy with BoTorch.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.4.1 Finding the most informative batch of points with cyclic refinement
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: In the sequential setting, MES scores each candidate query according to how
+    much information about the objective function’s maximum value *f** we will gain
+    after querying that candidate point. The more information about the maximum value
+    a candidate point offers, the more likely it is that the point will guide us toward
+    the objective function’s global optimum *x**.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We’d like to use the same strategy for the batch setting. That is, we want to
+    compute how much information about the maximum objective value *f** we will gain
+    after querying a batch of candidate points. This information-theoretic value of
+    a batch of points is a well-defined mathematical quantity, and we can theoretically
+    compute and use it as the acquisition score in the batch setting. However, computing
+    this information-theoretic quantity is quite expensive to do in practice.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The main bottleneck comes from the fact that we have to consider all possible
+    function evaluations in the batch to know how much information about *f** we will
+    gain. Although these function evaluations follow a multivariate Gaussian distribution,
+    which offers many mathematical conveniences, computing the information gain about
+    *f** is one of the tasks that aren’t simplified by Gaussianity. This computational
+    cost means that although we can compute the acquisition score for a batch of points,
+    this computation is expensive to do and not amenable to optimization. That is,
+    finding the batch of points that maximizes information about *f** is very hard
+    to do.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note The search for the query maximizing the acquisition score is done by L-BFGS,
+    a quasi-Newton optimization method that generally works better than gradient descent,
+    in the helper function `optimize_acqf()`. However, due to the way the batch version
+    of the information-theoretic acquisition score is computed, neither L-BFGS nor
+    gradient descent can effectively optimize the score.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Acquisition scores in BayesOpt
+  prefs: []
+  type: TYPE_NORMAL
+- en: Remember that the acquisition score quantifies the value of a query or a batch
+    of queries in helping us locate the global optimum of the objective function,
+    so at every iteration of the BayesOpt loop, we need to identify the query or the
+    batch of queries that maximizes the acquisition score. See section 4.1 for a discussion
+    on maximizing the acquisition score.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/07-16-unnumb.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'If the method we usually use to find the next optimal query in terms of information
+    theory, L-BFGS, only works in the sequential setting for one candidate point,
+    how can we still use it in the batch setting? Our strategy here is to use the
+    method to find individual members of the batch, one member at a time, in a cyclic
+    manner, until convergence. Specifically, we do the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We start out with a starting batch *x*[1], *x*[2], ..., *x[k]*. This batch can
+    be randomly selected from the search space.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Since L-BFGS cannot run on all members of *x*[1], *x*[2], ..., *x[k]* simultaneously,
+    we only run it on *x*[1] while keeping the other members of the batch *x*[2],
+    *x*[3], ..., *x[k]* fixed. L-BFGS can, indeed, optimize *x*[1] individually, since
+    this task is similar to maximizing the acquisition score in the sequential setting.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Once L-BFGS returns a value for *x*[1], we run L-BFGS on *x*[2] while keeping
+    *x*[1] and the other members, *x*[3], *x*[4], ..., *x[k]*, fixed.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: We repeat these individual routines until we have finished processing the last
+    member of the batch *x[k]*, at which point we return to *x*[1] and repeat the
+    entire procedure.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: We run these cycles of optimization until convergence—that is, until the acquisition
+    score we obtain doesn’t increase anymore. These steps are summarized in figure
+    7.17.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/07-17.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.17 Flowchart of cyclic optimization used in finding the batch that
+    maximizes information about the maximum objective value in batch MES. The procedure
+    is cyclic in that we sequentially refine each member of the batch in a cycle until
+    we converge on a good acquisition score.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Definition The entire procedure is called *cyclic optimization* as we sequentially
+    refine each member of the batch in a cycle until we converge on a good acquisition
+    score.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The cyclic optimization strategy allows us to bypass the challenge of running
+    L-BFGS on a batch of multiple points, as we, instead, only run L-BFGS on individual
+    points, making individual refinements to the acquisition score. With this optimization
+    strategy, we can realize the MES policy in the batch setting.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note We can draw an analogy between cyclic optimization and how an artist might
+    draw a painting. The artist might work on individual portions of the painting
+    separately and switch around as they make progress. They might work on the foreground,
+    move to the background for a bit, and then back to the foreground, each time making
+    small refinements to each section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.4.2 Implementing batch entropy search with BoTorch
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: We now learn to declare the batch MES policy in BoTorch and hook it into our
+    batch BayesOpt loop. Luckily, the details of cyclic optimization discussed in
+    the previous section are abstracted away by BoTorch, and we can initialize batch
+    MES in a straightforward manner. The following code is included in the CH07/03
+    - Max-value Entropy Search.ipynb notebook.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We still use the hyperparameter tuning example. First, we need to make a minor
+    modification to our GP model. Specifically, to reason about the entropy of the
+    posterior GP (that is, to “fantasize” about future observations), the class implementation
+    of our GP model needs to inherit from the `FantasizeMixin` class from the `botorch.models.model`
+    module:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Inheriting from FantasizeMixin allows us to reason about the posterior GP
+    more effectively.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ The remaining code remains unchanged.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The rest of the code for this class implementation remains unchanged. Now,
+    inside the `for` loop that implements the iteration of BayesOpt, we declare MES
+    in the same way as we do in the sequential setting:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We draw samples from a Sobol sequence and use them as candidates for the MES
+    policy. These samples are initially drawn within the unit cube and then resized
+    to span our search space.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'The MES policy is initialized with the GP model and the previously generated
+    candidate set:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Our search space is two-dimensional.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Resizes the candidates to span the search space
+  prefs: []
+  type: TYPE_NORMAL
+- en: Sobol sequences
+  prefs: []
+  type: TYPE_NORMAL
+- en: The Sobol sequence is first discussed in section 5.3.2 for the TS policy. The
+    implementation of the MES policy also requires the Sobol sequence, which we learned
+    about in section 6.2.2.
+  prefs: []
+  type: TYPE_NORMAL
+- en: While the initialization of the batch MES policy is exactly the same as what
+    we do in the sequential setting, we need a helper function other than `optimize_acqf()`
+    for the cyclic optimization procedure described in the previous section to identify
+    the batch that maximizes posterior information about *f**.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Specifically, we use the helper function `optimize_acqf_cyclic()`, which can
+    be accessed from the same BoTorch module `botorch.optim`. Here, we only switch
+    out `optimize_acqf()` for `optimize_acqf_cyclic()`; the rest of the arguments,
+    such as the bounds and the batch size, remain the same:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: BoTorch dimension warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'While running the code for batch MES, you might encounter a warning:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: This warning indicates that we are not formatting the tensor containing the
+    observed values `train_y` according to BoTorch’s convention. However, this is
+    not a code-breaking error, so to be able to keep using the same GP implementation
+    as with other policies, we simply ignore this warning using the `warnings` module.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note Due to its algorithmic complexity, the batch MES policy can take quite
+    some time to run. Feel free to skip the portion of the code that runs the optimization
+    loop and proceed with the chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: And with that, we are now ready to run batch MES on our hyperparameter tuning
+    example. Using the same initial training data, batch MES’s progress is visualized
+    in figure 7.18, which shows that the policy is comparable with the other policies
+    in this run.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/07-18.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.18 Progress made by various batch BayesOpt policies in the hyperparameter
+    tuning example, including MES
+  prefs: []
+  type: TYPE_NORMAL
+- en: We have now learned how to convert BayesOpt policies to the batch setting, where
+    multiple queries are made in parallel. Depending on the policy, this conversion
+    requires various levels of consideration. With the improvement-based policies
+    and UCB, we use the heuristic that the best-performing member should represent
+    the entire batch. In exercise 1, we see that TS can be extended to the batch setting
+    by simply repeating the sampling process to assemble a batch of the desired size.
+    MES, on the other hand, needs a modified routine that uses cyclic optimization
+    to search for the batch that maximizes its acquisition score. In the next chapter,
+    we learn about another specialized BayesOpt setting, in which constraints need
+    to be taken into account when the objective function is being optimized.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '7.5 Exercise 2: Optimizing airplane designs'
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In this exercise, we run the batch BayesOpt policies explored in this chapter
+    on a simulated optimization problem in physics. This problem is the highest-dimensional
+    problem we have encountered and will offer us an opportunity to see how BayesOpt
+    tackles a generic black box optimization problem in high dimensions. More specific
+    to this chapter, we will see how various batch BayesOpt policies perform on a
+    real-world optimization problem.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We are interested in an aerostructural optimization problem that airplane engineers
+    commonly deal with. In such an optimization problem, we have various tunable parameters
+    (each making up a dimension in our search space) that control how an airplane
+    works. These parameters could be the length and width of the plane, the shape
+    and the angle of the wings with respect to the body of the plane, or the angle
+    of the turbine blades and how fast they rotate. It’s the job of an optimization
+    engineer to tune the values of these parameters to get the plane to work or to
+    optimize some performance metric, such as speed or energy efficiency.
+  prefs: []
+  type: TYPE_NORMAL
+- en: While engineers might have a good idea about how some of these variables affect
+    the performance of an airplane, a good way to test out an experimental plane design
+    is to run various computer simulations and observe the simulated behavior of the
+    airplane. From these simulations, we score the proposed plane design on how well
+    it does on various performance metrics. With the simulation program in hand, we
+    can treat this tuning process as a black box optimization problem. That is, we
+    don’t know how each tunable parameter affects the final performance of the simulated
+    airplane, but we’d like to optimize these parameters to achieve the best result.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This exercise provides an objective function that simulates this process of
+    benchmarking the performance of an airplane design. The code is provided in the
+    CH07/04 - Exercise 2.ipynb notebook. There are multiple steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Implement the objective function that simulates performance benchmarking. This
+    is a four-parameter function with the following code, which computes a score quantifying
+    the utility of the airplane specified by the four input parameters. Since we treat
+    this function as a black box, we assume that we don’t know what goes on inside
+    the function and how the output is produced:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The four parameters are the various settings of the plane, scaled to be between
+    0 and 1\. That is, our search space is the four-dimensional unit hypercube. Though
+    not essential to our black box optimization approach, the names of these parameters
+    are as follows:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: While it’s not easy to visualize an entire four-dimensional function, we can
+    show how the function behaves in two-dimensional spaces. Figure 7.19 visualizes
+    our objective function for various pairs of parameters we can tune, showing a
+    complex nonlinear trend across these two-dimensional spaces.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/07-19.png)'
+  prefs:
+  - PREF_IND
+  type: TYPE_IMG
+- en: Figure 7.19 The objective function of the simulated airplane design optimization
+    problem in various two-dimensional subspaces, corresponding to pairs of tunable
+    parameters, shown as axis labels. Bright spots indicate high objective values,
+    which are our optimization goals; dark spots indicate low objective values.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Again, our goal is to find the maximum value of this function using BayesOpt.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'Implement a GP model with a constant mean function and a Matérn 2.5 kernel
+    with an output scale implemented as a `gpytorch.kernels.ScaleKernel` object:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: We need to specify the `ard_num_dims` `=` `4` argument when initializing the
+    kernel to account for the fact that our objective function is four-dimensional.
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Note We learn how to work with Matérn kernels in section 3.4.2 as well as in
+    the exercise in chapter 3.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Implement a helper function that trains the GP on a given training dataset.
+    This function should take in a training set, train a GP using gradient descent
+    to minimize the negative log likelihood, and return that GP and its likelihood
+    function. See section 4.1.1 for a refresher on how to implement this helper function.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Define the settings of our optimization problem:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'The search space is the four-dimensional unit hypercube, so we should have
+    a variable named `bounds` that stores the following tensor:'
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_PRE
+- en: We pass these bounds to the BayesOpt policies we run later in the exercise.
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: In each run, a BayesOpt policy can make in total 100 queries to the objective
+    function (that is, 100 function evaluations) in batches of 5\. We also repeat
+    our experiments for each policy five times.
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Run each batch BayesOpt policy we learn in this chapter on the objective function
+    just implemented:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Each experiment should start with a randomly selected function evaluation as
+    the training set.
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Record the best values found throughout the search.
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Use a 5,000-point Sobol sequence for TS and MES.
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Running MES in a high-dimensional problem is computationally expensive. A common
+    strategy to relieve this burden is to limit the number of cycles for cyclic optimization.
+    For example, to terminate the optimization of the MES acquisition score after
+    five cycles, we can pass `cyclic_options={"maxiter":` `5}` to the helper function
+    `optimize_acqf_cyclic()`. Run this more lightweight version of MES in the experiments.
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Plot the optimization progress of the BayesOpt policies we have run, and observe
+    their performance. Each policy should have a curve showing the average best-seen
+    point as a function of the number of queries used and the standard errors. See
+    the last step of chapter 4’s exercise 2 for more details on how to make this visualization.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Many black box optimization settings in the real world allow multiple experiments
+    (function evaluations) to be carried out at the same time in parallel. By taking
+    advantage of this parallelism, we can conduct more experiments in BayesOpt and
+    potentially achieve better performance.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: At each iteration of the batch BayesOpt setting, a batch of queries is selected,
+    and the objective function is evaluated at these queries. This setting requires
+    the BayesOpt policy used to be able to score a batch of queries in accordance
+    with the utility of the queries in helping us locate the global optimum.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Extending BayesOpt policies to the batch setting isn’t as simple as choosing
+    the top data points that score the highest acquisition value in the sequential
+    setting. Doing so leads to the selected queries being extremely close to one another,
+    defeating the purpose of parallelism.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Three BayesOpt policies—PoI, EI, and UCB—can be extended to the batch setting
+    using the same strategy. This strategy uses the maximum value within a batch of
+    queries to quantify the value of the whole batch. Mathematically, the strategy
+    of using the maximum value to represent an entire batch requires rewriting the
+    acquisition score as an average of some quantity of interest.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Due to its random nature, the TS policy can be easily extended to the batch
+    setting. Instead of sampling from the GP and maximizing the sample only once,
+    batch TS repeats this sampling and maximizing process until we reach the targeted
+    batch size.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Computing the information-theoretic value of multiple points is computationally
+    challenging. This difficulty prevents the algorithm L-BFGS, used by the helper
+    function `optimize_acqf()` to find the point or the batch of points that maximizes
+    the acquisition score of a given policy, from being used with the MES policy in
+    the batch setting.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: To circumvent the computational challenge of using L-BFGS with batch MES, we
+    use cyclic optimization. This strategy involves refining individual members of
+    our current batch of queries in a cyclic manner until the acquisition score converges.
+    Cyclic optimization can be used in BoTorch with the helper function `optimize_acqf_cyclic()`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: To maximize our optimization throughput, it’s important to specify the correct
+    batch size when using the helper functions `optimize_acqf()` and `optimize_ acqf_cyclic()`
+    when searching for the batch that maximizes the acquisition score of a given policy.
+    We do this by setting the argument `q` to the desired batch size.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The BoTorch implementation of most BayesOpt policies follows the same interface
+    as the implementation in the sequential setting. This consistency allows the programmer
+    to transition to the batch setting without having to significantly modify their
+    code.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL

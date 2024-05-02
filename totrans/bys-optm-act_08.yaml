@@ -1,0 +1,1131 @@
+- en: 6 Using information theory with entropy-based policies
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter covers
+  prefs: []
+  type: TYPE_NORMAL
+- en: Entropy as an information-theoretic measure of uncertainty
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Information gain as a method of reducing entropy
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: BayesOpt policies that use information theory for their search
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: We saw in chapter 4 that by aiming to improve from the best value achieved so
+    far, we can design improvement-based BayesOpt policies, such as Probability of
+    Improvement (POI) and Expected Improvement (EI). In chapter 5, we used multi-armed
+    bandit (MAB) policies to obtain Upper Confidence Bound (UCB) and Thompson sampling
+    (TS), each of which uses a unique heuristic to balance exploration and exploitation
+    in the search for the global optimum of the objective function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this chapter, we learn about another heuristic to decision-making, this time
+    using information theory to design BayesOpt policies we can use in our optimization
+    pipeline. Unlike the heuristics we have seen (seeking improvement, optimism in
+    the face of uncertainty, and random sampling), which might seem unique to optimization-related
+    tasks, information theory is a major subfield of mathematics that has applications
+    in a wide range of topics. As we discuss in this chapter, by appealing to information
+    theory or, more specifically, *entropy*, a quantity that measures uncertainty
+    in terms of information, we can design BayesOpt policies that seek to reduce our
+    uncertainty about the objective function to be optimized in a principled and mathematically
+    elegant manner.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The idea behind entropy-based search is quite simple: we look at places where
+    our information about a quantity of interest will most increase. As we cover later
+    in the chapter, this is similar to looking for a lost remote control in the living
+    room, where the TV is, as opposed to in the bathroom.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The first part of this chapter is a high-level exposition on information theory,
+    entropy, and ways to maximize the amount of information we receive upon performing
+    an action. This is done by reinterpreting the familiar example of binary search.
+    Armed with the fundamentals of information theory, we then move on to discussing
+    BayesOpt policies that maximize information about the global optimum of an objective
+    function. These policies are the result of applying information theory to the
+    task of BayesOpt. As always, we also learn how to implement these policies in
+    Python.
+  prefs: []
+  type: TYPE_NORMAL
+- en: By the end of the chapter, you will gain a working understanding of what information
+    theory is, how entropy as a measure of uncertainty is quantified, and how entropy
+    is translated to BayesOpt. This chapter adds another policy to our BayesOpt toolkit
+    and concludes the second part of the book on BayesOpt policies.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 6.1 Measuring knowledge with information theory
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '*Information theory* is a subfield of mathematics that studies how to best
+    represent, quantify, and reason about information in a principled, mathematical
+    manner. In this section, we introduce information theory on a high level and discuss
+    how it is related to decision-making under uncertainty. We do this by reexamining
+    the idea behind binary search, a popular algorithm in computer science, from the
+    perspective of information theory. This discussion subsequently allows us to connect
+    information theory to BayesOpt and motivates an information-theoretic policy for
+    optimization.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 6.1.1 Measuring uncertainty with entropy
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Information theory is especially prevalent in computer science, where digital
+    information is represented as bits (0s and 1s). You might remember calculating
+    how many bits are required to represent a given number of integers—for example,
+    a single bit is enough to represent two numbers, 0 and 1, while five bits are
+    necessary to represent 32 (2 raised to the fifth power) different numbers. These
+    calculations are examples of information theory in practice.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/06-00-unnumb-1.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: The information-theoretic concept of interest within the context of decision-making
+    under uncertainty is *entropy*. Entropy measures the level of uncertainty we have
+    in an unknown quantity. If this unknown quantity is modeled as a random variable,
+    entropy measures the variability in the possible values of the random variable.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note This uncertainty measure, entropy, is similar to but not quite the same
+    as what we’ve been calling *uncertainty* in the predictions made by a GP thus
+    far, which is simply the standard deviation of the predictive distribution.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this subsection, we learn more about entropy as a concept and how it is computed
+    for a simple Bernoulli distribution for binary events. We show how entropy successfully
+    quantifies uncertainty in an unknown quantity.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s go back to the first example of any Introduction to Probability course:
+    coin flipping. Say you are about to flip a biased coin that will land on heads
+    with some probability *p* between 0 and 1, and you’d like to reason about the
+    event that the coin will, indeed, land on heads. Denote *X* as the binary random
+    variable that indicates whether the event happens (that is, *X* = 1 if the coin
+    lands on heads and *X* = 0 otherwise). Then, we say that *X* follows a Bernoulli
+    distribution with parameter *p*, and the probability that *X* = 1 is equal to
+    *p*.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/06-00-unnumb-2.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Here, the entropy of *X* is defined as –*p* log *p* – (1 – *p*) log(1 – *p*),
+    where *log* is the logarithmic function in base 2\. We see that this is a function
+    of the probability of heads *p*. Figure 6.1 shows the function of entropy for
+    *p* in (0, 1), from which we can gain some insights:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The entropy is always nonnegative.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The entropy increases when *p* increases before 0.5, reaches its highest at
+    *p* = 0.5, and then decreases afterwards.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/06-01.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 6.1 Entropy of a Bernoulli random variable as a function of the success
+    probability. The entropy is maximized (uncertainty is at its highest) when the
+    success probability is at 0.5.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Both insights are valuable when we study our uncertainty about whether or not
+    the coin will land on heads. First, we shouldn’t have negative uncertainty about
+    something, so it makes sense that the entropy is never negative. More importantly,
+    entropy is maximized right at the middle, when *p* = 0.5\. This is quite reasonable:
+    as *p* gets farther and farther away from 0.5, we become more certain about the
+    outcome of the event—whether the coin will land on heads.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: For instance, if *p* = 0.7, then we are more certain it will land on heads—our
+    entropy is around 0.9 here. If *p* = 0.1, then we are even more certain about
+    the outcome (this time that it will land on tails)—the entropy here is roughly
+    0.5\. While entropy is not defined at the endpoints (due to the logarithmic function),
+    entropy approaches zero as we get closer to either endpoint, indicating zero uncertainty.
+    When *p* = 0.5, on the other hand, our uncertainty is at its maximum, as we are
+    maximally unsure whether the coin will land on heads or tails. These calculations
+    demonstrate that entropy is an appropriate measure of uncertainty.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Entropy vs. standard deviation
+  prefs: []
+  type: TYPE_NORMAL
+- en: When we used the term *uncertainty* in previous chapters, we were referring
+    to the standard deviations of the predictive normal distributions produced by
+    a GP. The *standard deviation* of a distribution, as the name suggests, measures
+    how much the values within the distribution deviate from the mean and is, therefore,
+    a valid measure of uncertainty.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Entropy, on the other hand, is motivated by concepts of information theory,
+    and it is also a valid measure of uncertainty. In fact, it is a more elegant and
+    general approach to quantify uncertainty and could more accurately model uncertainty
+    in edge cases of many situations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Definition For a given probability distribution, the entropy is defined to be
+    –Σ*[i]* *p[i]* log *p[i]*, where we sum over the different possible events indexed
+    by *i*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We see that what we used for the preceding Bernoulli distribution is a special
+    case of this formula. We also use this formula later in the chapter when we work
+    with uniform distributions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 6.1.2 Looking for a remote control using entropy
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: As entropy measures how much uncertainty there is in our knowledge about a quantity
+    or event of interest, it can inform our decisions, helping us most efficiently
+    reduce our uncertainty about the quantity or event. We look at an example of this
+    in this subsection, in which we decide where to best look for a lost remote control.
+    Although simple, the example presents the information-theoretic reasoning we use
+    in subsequent discussions, where entropy is used for more complex decision-making
+    problems.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Imagine that while trying to turn on the TV in your living room one day, you
+    realize you can’t find the remote control on the table, which is where it usually
+    is. You, therefore, decide to conduct a search for this remote. First, you reason
+    that it should be in the living room somewhere, but you don’t have any idea about
+    where the remote is within the living room, so all locations are equally likely.
+    In the language of probabilistic inference that we've been using, you can say
+    that the *distribution of the location of the remote* is uniform over the living
+    room.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/06-02.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 6.2 A sample floor plan for the example of finding the remote control.
+    The living room is uniformly shaded to indicate that the distribution of the location
+    of the remote is uniform over the living room.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Figure 6.2 visualizes this belief about the location of the remote control
+    that you have, indicated by the shaded living room, which is where the remote
+    is (according to your belief). Now, you might ask yourself this question: Where
+    in this house should you look for the remote? It’s reasonable to think that you
+    should look in the living room, as opposed to, say, the bathroom, because that’s
+    where the TV is. But how does one quantifiably justify that choice?'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Information theory, specifically entropy, offers a way of doing that by allowing
+    us to reason about how much entropy remains after a search for a remote in the
+    living room versus in the bathroom. That is, it allows us to determine how much
+    uncertainty about the location of the remote we have left after looking in the
+    living room as opposed to after looking in the bathroom.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/06-03.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 6.3 Entropy of the location of the remote after a portion of the living
+    room is searched. If the remote is found (upper right), then no uncertainty remains.
+    Otherwise, entropy is still reduced (lower right), as the distribution of the
+    location of the remote is now narrower.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Figure 6.3 shows how entropy of the location of the remote decreases once the
+    upper portion of the living room is searched. We can reason the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: If the remote is found within the searched region, then you will no longer have
+    any uncertainty about its location. In other words, the entropy will be zero.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If the remote is not found, then our posterior belief about the location of
+    the remote is updated to the shaded region in the lower-right section. This distribution
+    spans a smaller region than the one in figure 6.2, so there is less uncertainty
+    (entropy).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Either way, the entropy is reduced by looking in the specified portion of the
+    living room. What would happen, then, if you decided to search for the remote
+    in the bathroom? Figure 6.4 shows the corresponding reasoning:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: If the remote is found in the bathroom, then entropy will still drop to zero.
+    However, this is unlikely to happen, according to your belief about the location
+    of the remote.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If the remote is not found in the bathroom, then your posterior belief about
+    the location of the remote doesn’t change from figure 6.2, and the resulting entropy
+    remains the same.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/06-04.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 6.4 Entropy of the location of the remote after the bathroom is searched.
+    As the remote cannot be found in the bathroom, the entropy in the posterior distribution
+    of the location of the remote is unchanged.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Searching for and not finding the remote in the bathroom doesn’t reduce the
+    entropy of the location of the remote. In other words, looking in the bathroom
+    doesn’t provide any extra information about the location of the remote, so it
+    is the suboptimal decision according to information theory.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This comparison would not be as cut and dried if the prior distribution of
+    the location of the remote (your initial guess about where it is) was over the
+    entire house, not just the living room. After all, there is always a small probability
+    that the remote got misplaced outside the living room. However, the procedure
+    of determining where to look—that is, the portion of the house that will give
+    you maximal information about the location of the remote—is still the same:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Consider the posterior distribution of the location of the remote if it is found,
+    and compute the entropy of that distribution.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Compute the same entropy if the remote is not found.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Compute the average entropy over the two cases.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Repeat this computation for all locations you are considering looking in, and
+    pick the one that gives the lowest entropy.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Entropy gives us a way to quantify our uncertainty about a quantity of interest,
+    using its probabilistic distribution in an information-theoretic manner. This
+    procedure uses entropy to identify the action that maximally reduces entropy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note This is a mathematically elegant procedure applicable to many decision-making
+    situations under uncertainty. We can think of this entropy-based search procedure
+    as a kind of search for the truth in which we aim to take the action that takes
+    us as close to the truth as possible by maximally reducing uncertainty.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 6.1.3 Binary search using entropy
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'To further understand entropy-based search, we now see how this procedure manifests
+    itself in one of the classic algorithms in computer science: binary search. You
+    are most likely already familiar with this algorithm, so we don’t go into much
+    detail here. For an excellent and beginner-friendly explanation of binary search,
+    I recommend chapter 1 of Aditya Bhargava’s *Grokking Algorithms* (Manning, 2016).
+    On a high level, we employ binary search when we want to look for the position
+    of a specific targeted number within a sorted list such that the elements in the
+    list are increasing from the first to the last element.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip The idea behind binary search is to look at the middle element of the list
+    and compare it to the target. If the target is smaller than the middle element,
+    then we know to only look at the first half of the list; otherwise, we look at
+    the second half. We repeat this process of halving the list until we find the
+    target.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Consider a concrete example in which we have a sorted list of 100 elements [*x*[1],
+    *x*[2], ..., *x*[100]], and we’d like to find the location of a given target *z*,
+    assuming *z* is, indeed, in the sorted list.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/06-05.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 6.5 An illustration of binary search on a 100-element list. At each iteration
+    of the search, the target is compared against the middle element of the current
+    list. Depending on the result of this comparison, we remove either the first or
+    second half of the list from the search space.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As illustrated by figure 6.5, binary search works by dividing the list into
+    two halves: the first 50 elements and the last 50 elements. Since we know the
+    list is sorted, we know the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: If our target *z* is less than the 50th element *x*[50], then we only need to
+    consider the first 50 elements, since the last 50 elements are all greater than
+    target *z*.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If our target is greater than *x*[50], then we only need to look at the second
+    half of the list.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Terminating the search
+  prefs: []
+  type: TYPE_NORMAL
+- en: For each comparison in figure 6.5, we omit the situation where *z* is equal
+    to the number it’s being compared to, in which case we can simply terminate the
+    search.
+  prefs: []
+  type: TYPE_NORMAL
+- en: On average, this procedure helps us find the location of *z* within the list
+    much more quickly than sequentially searching through the list from one end to
+    the other. Binary search is a realization of the goal of making the optimal decision
+    based on information theory in this game of searching for the location of a number
+    within a sorted list, if we were to tackle the problem from a probabilistic angle.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note Binary search strategy is the optimal solution for finding *z*, allowing
+    us to locate it more quickly than any other strategy, on average.
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, let’s use the random variable *L* to denote the location of our target
+    *z* within the sorted list. Here, we would like to use a distribution to describe
+    our belief about the variable. Since from our perspective, any location within
+    the list is equally likely to contain the value of *z*, we use a uniform distribution
+    for modeling.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 6.6 visualizes this distribution, which, again, represents our belief
+    about the location of *z*. Since each location is equally as likely as any other,
+    the probability that a given location contains *z* is uniformly 1 ÷ 100, or 1%.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/06-06.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 6.6 Prior distribution of the location of the target *z* within the 100-element
+    list. Since each location is as equally likely as any other, the probability that
+    a given location contains *z* is 1%.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note Let’s try computing the entropy of this uniform distribution. Remember,
+    the formula for the entropy is *–Σ[i]* *p[i]* log *p[i]*, where we sum over the
+    different possible events indexed by *i*. This is equal to
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/06-06-Equations_ch-6-1.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: So, the amount of uncertainty we have in our prior distribution of *L* is roughly
+    6.64.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, we tackle the same question: How should we search over this 100-element
+    list to locate *z* as quickly as possible? We do this by following the entropy
+    search procedure described in section 6.1.2, where we aim to minimize the entropy
+    in the posterior distribution of the quantity that we care about—in this case,
+    the location *L*.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'How do we compute the entropy of the posterior distribution of *L* after inspecting
+    a given location? This calculation requires us to reason about what we can conclude
+    about *L* upon inspecting a given location, which is quite easy to do. Say we
+    decide to inspect the first location *x*[1]. According to our belief about *L*,
+    there is a 1% chance that *L* is at this location and a 99% chance that *L* is
+    in one of the remaining slots:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: If *L* is, indeed, at this location, then our posterior entropy about *L* drops
+    to 0, as there’s no more uncertainty about this quantity.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Otherwise, the distribution of *L* is updated to reflect this observation that
+    *z* is not the first number of the list.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Figure 6.7 shows this process as a diagram in which we need to update the distribution
+    for *L* so that each of the 99 locations has a 1 ÷ 99, or roughly 1.01%, probability
+    of containing *z*. Each of the 99 locations is still equally likely, but the probability
+    of each location has gone up a bit since we have ruled out the first location
+    in this hypothetical scenario.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/06-07.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 6.7 Posterior distributions of the location of target *z* within the
+    100-element list upon inspecting the first element. In each scenario, the probability
+    that *z* is at a given location is updated accordingly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note Again, we’re only considering the case where *z* exists in the list, so
+    either the smallest element in the list *x*[1] is equal to *z*, or the former
+    is less than the latter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Following the same calculation, we can obtain the entropy for this new distribution
+    as
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/06-07-Equations_ch-6-2.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Again, this is the posterior entropy of *L* in the second case, where *z* is
+    not present in the first location. The last step we need to take to compute the
+    overall posterior entropy after inspecting the first location is to take the average
+    of the two cases:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: If *z* is in the first slot, which is 1% likely, then the posterior entropy
+    is 0.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If *z* is not in the first slot, which is 99% likely, then the posterior entropy
+    is 6.63.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Taking the average, we have 0.01 (0) + 0.99 (6.63) = 6.56\. So, on average,
+    we expect to see a posterior entropy of 6.56 when we choose to look into the first
+    element of the array. Now, to determine whether looking at the first element is
+    the optimal decision or there’s a better location for obtaining more information
+    about *L*, we need to repeat this procedure for the other locations in the list.
+    Specifically, for a given location, we need to
+  prefs: []
+  type: TYPE_NORMAL
+- en: Iterate over each of the potential scenarios while inspecting the location
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Compute the posterior entropy of the distribution of *L* for each scenario
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Compute the average posterior entropy across the scenarios based on how likely
+    each of them is
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Let’s do this one more time for, say, the 10th location *x*[10]; the corresponding
+    diagram is shown in figure 6.8\. While this scenario is slightly different from
+    what we just went over, the underlying idea is still the same. First, there are
+    various scenarios that can take place when we look at *x*[10]:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The 10th element *x*[10] can be greater than *z*, in which case we can rule
+    out the last 91 elements in the list and focus our search on the first 9 elements.
+    Here, each of the 9 locations has an 11% chance of containing *z*, and the posterior
+    entropy, by using the same formula, can be computed to be roughly 3.17.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The tenth element *x*[10] can be exactly equal to *z*, in which case our posterior
+    entropy is once again zero.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The tenth element *x*[10] can be less than *z*, in which case we narrow our
+    search to the last 90 elements. The posterior entropy in this case is around 6.49.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/06-08.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 6.8 Posterior distributions of the location of target *z* within the
+    100-element list upon inspecting the 10th element. In each scenario, the probability
+    that *z* is at a given location is updated accordingly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note Make sure you attempt the entropy computations yourself to understand how
+    we are getting these numbers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Finally, we take the weighted average of these entropies using the corresponding
+    probabilities: 0.09 (3.17) + 0.01 (0) + 0.9 (6.49) = 6.13\. This number presents
+    the expected posterior entropy—that is, the expected posterior uncertainty we
+    have about *L*, the location of *z*, after inspecting the 10th element *x*[10].'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Compared to the same number for the first element *x*[1], 6.56, we conclude
+    that looking at *x*[10] on average gives us more information about *L* than looking
+    at *x*[1]. In other words, inspecting *x*[10] is the better decision in terms
+    of information theory.
+  prefs: []
+  type: TYPE_NORMAL
+- en: But what is the *optimal* decision in terms of information theory—the one that
+    gives us the most information about *L*? To determine this, we simply repeat the
+    computation we just performed on *x*[1] and *x*[10] for the other locations in
+    the list and pick out the one with the lowest expected posterior entropy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Figure 6.9 shows this quantity, the expected posterior entropy in the location
+    of our target, as a function of the location we choose to inspect. The first thing
+    we notice is the symmetry of the curve: looking at the last location gives us
+    the same expected posterior entropy (uncertainty) as looking at the first; similarly,
+    the 10th and the 90th locations give the same amount of information, and so on.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/06-09.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 6.9 Expected posterior entropy in the location of the target as a function
+    of the location within the list to inspect. The middle location is optimal, minimizing
+    the expected entropy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: More importantly, we see that inspecting the locations in the middle, either
+    the 50th or 51st number in the list, gives us the maximal amount of information.
+    This is because once we do, we are guaranteed to rule out *half* of the list,
+    regardless of whether our target number is greater or less than the number in
+    the middle. This is not the case for other locations. As we saw earlier, we may
+    be able to rule out 90 numbers in the list when looking at the 10th number, but
+    this only happens with 0.1 probability. When looking at the first number, there’s
+    a 99% probability that we will only be able to rule out one number.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note All in all, inspecting the numbers in the middle maximizes the amount of
+    information we gain, on average.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The rest of the search for the target follows the same procedure: computing
+    the expected posterior entropy that will result from each decision and then choosing
+    the decision that minimizes that entropy. As the probability distribution we work
+    with is always a uniform distribution after each update, the optimal number to
+    inspect is always the one in the middle of the array that hasn’t been ruled out.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is exactly the strategy of binary search! From the perspective of information
+    theory, binary search is the optimal solution to the problem of search for a number
+    in a sorted list.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Justifying binary search with information theory
+  prefs: []
+  type: TYPE_NORMAL
+- en: When I first learned about this algorithm, I remember thinking that the strategy
+    of searching in the middle of an array seemed, although reasonable, quite unique
+    and “out of nowhere.” However, we have just learned to derive the same solution
+    from an information-theoretic perspective, which concretely quantifies the idea
+    of ruling out half of our search space in the service of gaining as much information
+    as possible or reducing as much entropy as possible.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The application of information theory and entropy doesn’t stop at binary search.
+    As we saw, the procedure we went through is generalizable to other decision-making
+    problems: if we can model the problem of interest in terms of probability distributions
+    for unknown quantities, actions we can take, and how the distributions can be
+    updated when an action is taken, then we can once again choose the optimal action
+    in terms of information theory, which is the action that reduces our uncertainty
+    about the quantity of interest the most. For the remainder of this chapter, we
+    learn to apply this idea to BayesOpt and implement the resulting entropy search
+    policy with BoTorch.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 6.2 Entropy search in BayesOpt
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Taking the same approach presented in the previous section, we obtain entropy
+    search policies in BayesOpt. The main idea is to choose our actions, our experiments,
+    so that we can reduce the most amount of entropy in the posterior distribution
+    of what we care about. In this section, we first discuss how to do this on a high
+    level and then move on to implementation in BoTorch.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 6.2.1 Searching for the optimum using information theory
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'In our remote control example, we aim to search for the remote within an apartment
+    and, thus, want to reduce the entropy of the distribution of the location of the
+    remote. In binary search, the process is similar: our target is the location of
+    a specific number we’d like to search for within a list, and we want to reduce
+    the entropy of the distribution of that number. Now, to design an entropy search
+    policy, we must determine what to use as our target in BayesOpt and how to use
+    information theory to aid the search process, which we learn how to do here.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Recall our ultimate goal in using BayesOpt: to search within the domain *D*
+    of a black box function at the location where the function is maximized. This
+    means a natural search target for us is the location *x** that maximizes the objective
+    value of the function *f*. That is, *f * = f(x*)* ≥ *f(x)*, for all *x* in *D*.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Definition The optimal location *x** is often called the *optimizer* of the
+    objective function *f*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Given a GP belief about the objective function *f*, there is a corresponding
+    probabilistic belief about the optimizer *x**, which is treated as a random variable.
+    Figure 6.10 shows an example of a trained GP and the distribution of the objective
+    optimizer *x** induced from the GP. It’s important to keep a few interesting characteristics
+    of this distribution in mind:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The distribution is complicated and multimodal (having several local optima).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The most likely location for the optimizer *x** is a bit to the left of zero.
+    This is where the predictive mean of the GP is maximized.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: There is non-negligible probability that the optimizer *x** is at an end point
+    –5 or 5.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The probability that *x** is around 2 is almost zero, corresponding to the fact
+    that we already observed a higher objective value than *f*(2).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/06-10.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 6.10 GP belief (top) and the distribution of the function optimizer *x**
+    (bottom). The distribution of the optimizer is non-Gaussian and fairly complicated,
+    posing a challenge for modeling and decision-making.
+  prefs: []
+  type: TYPE_NORMAL
+- en: These characteristics make modeling this distribution of *x** very challenging.
+    The most simple method of gauging how this quantity *x** is distributed is to
+    simply draw many samples from the GP and record the location at which each sample
+    is maximized. This is, in fact, how figure 6.10 is generated.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Making matters worse is the fact that we need exponentially more samples to
+    estimate the distribution of *x** when the dimensionality of the objective function
+    (the length of the input vector *x* or the number of features each *x* has) increases.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Definition This is an instance of the *curse of dimensionality*, which, in ML,
+    is often used to refer to the exponential cost of many procedures with respect
+    to the dimensionality of an object of interest.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To use entropy search in BayesOpt, we need to model our belief about the location
+    of the optimum *x** using a probability distribution. However, we can’t exactly
+    model the distribution of the optimizer *x**; instead, we must approximate it
+    using samples drawn from a GP. Unfortunately, this process quickly becomes computationally
+    expensive as the number of dimensions in the objective function (the length of
+    *x*) increases.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note There are, in fact, research papers in BayesOpt that seek to search for
+    the location of the optimizer *x** using entropy. The resulting policies, however,
+    often prove too computationally expensive to run and are not implemented in BoTorch.
+  prefs: []
+  type: TYPE_NORMAL
+- en: But that doesn’t mean we need to abandon the effort of using information theory
+    in BayesOpt altogether. It just means we need to modify our search procedure to
+    make it more amenable to computational methodologies. One easy way to achieve
+    this is to target a quantity other than the optimizer *x** that is, on the one
+    hand, connected to the search for *x** and, on the other, easier to reason about.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A quantity of interest in optimization, other than the optimizer *x**, is the
+    optimal value *f** = *f*(*x**), achieved at the optimizer, which is also a random
+    variable, according to our GP belief about the objective function *f*. As one
+    can imagine, learning about the optimal value *f** might tell us a lot about the
+    optimizer *x**; that is, the two quantities are connected in terms of information
+    theory. However, the optimal value *f** is much easier to work with than the optimizer
+    *x**, as the former is just a real-valued number, while the latter is a vector
+    of length equal to the number of dimensions of the objective function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: An example of the distribution of the optimal value *f** induced by a GP is
+    shown in figure 6.11, on the right panel. We see that that this distribution is
+    roughly truncated around 1.6, which is exactly the value of the incumbent in our
+    training dataset; this makes sense, as the optimal value *f** must be at least
+    the incumbent value 1.6.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/06-11.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 6.11 The GP belief (top left), the distribution of the function optimizer
+    *x** (bottom), and the distribution of the optimal value *f** (right). The distribution
+    of the optimal value is always one-dimensional and, therefore, easier to work
+    with than that of the optimizer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note The main advantage of focusing our effort on this distribution of *f**
+    is the fact that the distribution is always one-dimensional, regardless of the
+    dimensionality of the objective function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Specifically, we can draw samples from this one-dimensional distribution to
+    approximate the expected posterior entropy upon making a query. From this point,
+    we follow the same idea behind entropy search: choosing the query that (approximately)
+    minimizes the expected posterior entropy or, in other words, maximizes the expected
+    *reduction* in entropy.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Definition By using this expected-reduction-in-entropy quantity as the acquisition
+    score, we obtain the *Max-value Entropy Search* (MES) policy. The term *max-value*
+    denotes the fact that we are using information theory to search for the max value,
+    or the optimal value *f**, of the objective function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 6.12 shows the MES acquisition score in our running example in the bottom
+    panel, where the point around –2 is where we should query next, according to this
+    information-theory–based criterion. The MES policy prefers this location because
+    it has both a relatively high mean and a high CI, thus balancing exploration and
+    exploitation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/06-12.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 6.12 The GP belief (top left), the distribution of the optimal value
+    *f** (right), and the approximate expected reduction in entropy, which is used
+    as the acquisition function score (bottom). The distribution of the optimal value
+    is always one-dimensional and, therefore, easier to work with than that of the
+    optimizer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Interestingly, the acquisition landscape here looks somewhat similar to the
+    distribution of the optimizer *x** itself, which is shown in figure 6.11, where
+    we see that the curve
+  prefs: []
+  type: TYPE_NORMAL
+- en: Reaches its zenith somewhere in the middle
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Achieves a non-negligible value at the end points
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Bottoms out at 0 around 2, where we know for certain the location is not optimal
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: This is an indication that the optimal value *f** is intimately linked to the
+    optimizer *x**, and while we lose some information by altering our objective,
+    searching for *f** is a good proxy for searching for *x** and is much more computationally
+    tractable.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 6.2.2 Implementing entropy search with BoTorch
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Having discussed the high-level idea behind MES, we are now ready to implement
+    it using BoTorch and plug it into our optimization pipeline. The MES policy is
+    implemented by the `qMaxValueEntropy` class in `botorch.acquisition.max_value_entropy_
+    search` as a PyTorch module, similar to most BayesOpt policies we have seen. When
+    initialized, this class takes in two arguments: a GPyTorch GP model and a set
+    of points that will be used as samples in the approximation procedure described
+    in the previous section.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'While there are many ways that these sample points can be generated, one particular
+    way we have learned from section 5.3.2 is using a Sobol sequence, which does a
+    better job of covering the targeted space. Overall, the MES policy is implemented
+    as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Generates the samples between 0 and 1 using a Sobol sequence
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Rescales the samples to be inside the domain
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Declares the MES policy object
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Computes the acquisition scores
+  prefs: []
+  type: TYPE_NORMAL
+- en: Here, `num_candidates` is a tunable parameter that sets the number of samples
+    you’d like to use in the MES computation. A larger value would mean an approximation
+    with higher fidelity, but it would come at a higher computational cost.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s now apply this code to our running problem of optimizing the one-dimensional
+    Forrester function, as implemented in the CH06/01 - BayesOpt loop.ipynb notebook.
+    We are already familiar with most of this code, so we don’t go into the details
+    here.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 6.13 shows the progress made by MES for 10 queries, in which the policy
+    quickly finds the global optimum of the Forrester after five queries. Interestingly,
+    as optimization progresses, we become more and more certain that looking at other
+    regions in the search space will not result in any substantial reduction in entropy,
+    which helps us stay close to the optimal location.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/06-13.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 6.13 Progress made by the MES policy. The policy quickly finds the global
+    optimum after five queries.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We have seen that information theory gives us a principled, mathematically elegant
+    framework for decision-making that revolves around trying to learn as much as
+    possible about a quantity of interest. This comes down to reducing the expected
+    posterior entropy in the distribution that models the quantity we care about.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Within BayesOpt, we saw that a direct translation of this procedure poses computational
+    challenges in modeling the location of the optimal value of the objective function,
+    our primary search target. Instead, we shift our focus to the optimal value of
+    the objective function itself, making the computation more tractable. Fortunately,
+    all of this math is nicely abstracted away by BoTorch, leaving us with a convenient,
+    modular interface we can plug into any optimization problem.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is also where the second part of the book on BayesOpt policies comes to
+    an end. The last three chapters covered some of the most commonly used heuristics
+    to decision-making in BayesOpt and the corresponding policies, ranging from seeking
+    improvement from the incumbent to borrowing multi-armed bandit methods and, in
+    this chapter, using information theory.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The remainder of the book takes our discussion to the next level by introducing
+    special optimization settings that differ from what we have seen so far, where
+    we sequentially observe a single data point at each step of the optimization.
+    These chapters show that the methods we have learned can be translated to practical
+    settings in the real world to accelerate optimization.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 6.3 Exercises
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'There are two exercises in this chapter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The first exercise covers a variant of binary search in which prior information
+    can be taken into account when making decisions.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The second walks us through the process of implementing MES in the hyperparameter
+    tuning problem seen in previous chapters.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '6.3.1 Exercise 1: Incorporating prior knowledge into entropy search'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: We saw in section 6.1.3 that by placing a uniform prior distribution on the
+    location of the target within the array, the optimal information-theoretical search
+    decision is to cut the array in half. What happens if a uniform distribution doesn’t
+    represent your prior belief faithfully and you’d like to use a different distribution?
+    This exercise, implemented in the CH06/02 - Exercise 1.ipynb notebook, shows us
+    an instance of this as well as how to derive the resulting optimal decision. Solving
+    this exercise should help us further appreciate the elegance and flexibility of
+    entropy search as a generic decision-making procedure under uncertainty.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Imagine the following scenario: you work at a phone manufacturing company in
+    the quality control department, and your current project is to stress test the
+    robustness of the casing of the company’s newest product. Specifically, your team
+    wants to find out from which floor of a 10-story building one can drop the phone
+    to the ground and not break it. A few rules apply:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The engineers who made the phone are sure it won’t break if dropped from the
+    first floor.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If the phone breaks when dropped from a given floor, then it will also break
+    when dropped from a higher floor.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'You are tasked with finding the highest floor from which one can drop the phone
+    without it breaking—we denote this unknown floor as *X*—by conducting trials.
+    That is, you must drop actual phones from specific floors to determine *X*. The
+    question is the following: How should you choose which floors to drop the phones
+    from to find *X*? Since the phones are expensive, you need to conduct as few trials
+    as possible and would like to use information theory to aid the search:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Assume that by taking into account physics and the materials and construction
+    of the phone, the engineers have an initial guess regarding which floors might
+    be possible.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Specifically, the prior distribution of *X* is exponential in that the probability
+    that *X* is equal to a number is inversely exponential with respect to that number:
+    *Pr*(*X* = *n*) = 1 / 2^(*n*), for *n* = 1, 2, ..., 9; the probability corresponding
+    to the highest (tenth) floor is *Pr*(*X* = 10) = 1 / 2⁹. So the probability that
+    *X* = 1 is 50%, and this probability is cut in half as the number increases. This
+    probability distribution is visualized in figure 6.14.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/06-14.png)'
+  prefs:
+  - PREF_IND
+  type: TYPE_IMG
+- en: Figure 6.14 The probability that *X* is equal to a number between 1 and 10 (that
+    is, the probability that a floor is the highest floor that doesn’t cause the phone
+    to break when dropped)
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Verify that this is a valid probability distribution by proving that the probabilities
+    sum to one. That is, prove that *Pr*(*X* = 1) + *Pr*(*X* = 2) + ... + *Pr*(*X*
+    = 10) = 1.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Calculate the entropy of this prior distribution using the formula given at
+    the end of section 6.1.1.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Given the prior distribution defined between 1 and 10, what is the probability
+    that the phone will break when dropped from the second floor? What is this probability
+    for the fifth floor? How about the first floor?
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Assume that after observing the result of any trial, the posterior distribution
+    for *X* is once again exponential and is defined between the lowest and highest
+    possible floors.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: For example, if you observe that the phone doesn’t break when dropped from the
+    fifth floor, then we know that *X* is at least 5 and the posterior distribution
+    of *X* is such that *Pr*(*X* = 5) = 1 / 2, *Pr*(*X* = 6) = 1 / 4, ..., *Pr*(*X*
+    = 9) = 1 / 32, *Pr*(*X* = 10) = 1 / 32\. If, on the other hand, the phone breaks
+    when dropped from the fifth floor, then we know that *X* is at most 4 and the
+    posterior distribution is such that *Pr*(*X* = 1) = 1 / 2, *Pr*(*X* = 2) = 1 /
+    4, *Pr*(*X* = 3) = 1 / 8, *Pr*(*X* = 4) = 1 / 8\. Figure 6.15 shows these two
+    scenarios.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/06-15.png)'
+  prefs:
+  - PREF_IND
+  type: TYPE_IMG
+- en: Figure 6.15 The posterior probability distributions of *X* in two scenarios
+    when the phone is dropped from the fifth floor. Each posterior distribution is
+    still exponential.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Compute the entropy of this fictitious posterior distribution in the two cases.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Given the prior distribution, compute the expected posterior entropy after you
+    conduct a trial on the fifth floor (that is, after you drop the phone from the
+    fifth floor and observe whether it breaks).
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Compute this expected posterior entropy for other floors. Which floor gives
+    the highest reduction in entropy? Is this still the same result as binary search?
+    If not, what has changed?
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '6.3.2 Exercise 2: Bayesian optimization for hyperparameter tuning'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'This exercise, implemented in the CH06/03 - Exercise 2.ipynb notebook, applies
+    BayesOpt to an objective function that simulates the accuracy surface of a support-vector
+    machine model in a hyperparameter tuning task. The *x*-axis denotes the value
+    of the penalty parameter *C*, while the *y*-axis denotes the value of the RBF
+    kernel parameter *γ*. See the exercises in chapters 3 and 4 for more detail. Complete
+    the exercise using the following steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Recreate the BayesOpt loop in the CH05/03 - Exercise 2.ipynb notebook, including
+    the outer loop that implements repeated experiments.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Run the MES policy. Since our objective function is two-dimensional, we should
+    increase the size of the Sobol sequence used by MES. For example, you can set
+    it at 2,000\. Observe its aggregated performance.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Repeated experiments in BayesOpt
+  prefs: []
+  type: TYPE_NORMAL
+- en: Refer to step 9 of exercise 2 from chapter 4 to see how we can run repeated
+    experiments in BayesOpt.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Information theory studies the representation, quantification, and transfer
+    of information. One of the core concepts in this field is entropy, which quantifies
+    our uncertainty about a random variable from the variable’s probability distribution.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: An entropy search procedure considers the expected reduction in entropy (and
+    therefore in uncertainty) of a quantity of interest by taking an action, choosing
+    the action that maximizes this reduction. We can apply this generic procedure
+    to many decision-making problems under uncertainty.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Binary search may be obtained as the result of entropy search applied to the
+    problem of finding the location of a specific number in a sorted array.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The curse of dimensionality refers to the exponential cost of many procedures
+    in ML with respect to the dimensionality of an object of interest. As the number
+    of dimensions increases, exponentially more time is needed to finish the procedure.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In BayesOpt, while entropy search may be applied to the problem of finding the
+    location of the function optimizer, it is computationally expensive due to the
+    curse of dimensionality.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: To overcome the curse of dimensionality, we modify our goal of finding the function’s
+    optimized value, making it a one-dimensional search problem. The resulting BayesOpt
+    policy is called Max-value Entropy Search (MES).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Due to the complex behavior of the global optimum of a function modeled by a
+    GP, it is infeasible to compute the acquisition scores of MES in closed form.
+    However, we can draw samples from probability distributions to approximate the
+    acquisition scores.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Implementing MES in BoTorch follows the same procedure as implementing other
+    BayesOpt policies. To facilitate the sampling procedure in the acquisition score
+    approximation, we use a Sobol sequence when initializing the policy object.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL

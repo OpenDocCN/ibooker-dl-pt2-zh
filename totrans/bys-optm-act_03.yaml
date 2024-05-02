@@ -1,0 +1,1436 @@
+- en: 2 Gaussian processes as distributions over functions
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter covers
+  prefs: []
+  type: TYPE_NORMAL
+- en: A crash course on multivariate Gaussian distributions and their properties
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Understanding GPs as multivariate Gaussian distributions in infinite dimensions
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Implementing GPs in Python
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Having seen what BayesOpt can help us do, we are now ready to embark on our
+    journey toward mastering BayesOpt. As we saw in chapter 1, a BayesOpt workflow
+    consists of two main parts: a Gaussian process (GP) as a predictive, or surrogate,
+    model and a policy for decision-making. With a GP, we don’t obtain only point
+    estimates as predictions for a test data point, but instead, we have an entire
+    *probability distribution* representing our belief about the prediction.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: With a GP, we produce similar predictions from similar data points. For example,
+    in weather forecasting, when estimating today’s temperature, a GP will look at
+    the climatic data of days that are similar to today, either the last few days
+    or this exact day a year ago. Days in another season wouldn’t inform the GP when
+    making this prediction. Similarly, when predicting the price of a house, a GP
+    will say that similar houses in the same neighborhood as the prediction target
+    are more informative than houses in another state.
+  prefs: []
+  type: TYPE_NORMAL
+- en: How similar a data point is to another is encoded using the covariance function
+    of a GP, which, in addition, models the uncertainty in the GP’s predictions. Remember
+    from chapter 1 our comparison of a ridge regression model and a GP, shown again
+    in figure 2.1\. Here, while the ridge regressor only produces single-valued predictions,
+    the GP outputs a normal distribution at each test point. Uncertainty quantification
+    is what sets the GP apart from other ML models, specifically in the context of
+    decision-making under uncertainty.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/02-01.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 2.1 Predictions by ridge regression vs. those by a GP. While the mean
+    prediction of the GP is the same as the prediction of ridge, the GP also offers
+    CIs indicating the predictive level of uncertainty.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We will see how correlation modeling and uncertainty quantification are mathematically
+    realized with Gaussian distributions and learn to actually implement a GP in GPyTorch,
+    the premiere GP modeling tool in Python. Being able to model a function with a
+    GP is the first step toward BayesOpt—a step we will take in this chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Why GPyTorch?
+  prefs: []
+  type: TYPE_NORMAL
+- en: There are other GP modeling libraries in Python, such as GPy or GPflow, but
+    we have chosen GPyTorch for this book. Built on top of PyTorch and actively maintained,
+    GPyTorch offers a streamlined workflow from array manipulation to GP modeling
+    and, eventually, to BayesOpt with BoTorch, which we start using in chapter 4.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The library is also actively maintained and has many state-of-the-art methods
+    implemented. For example, chapter 12 covers using GPyTorch to scale a GP to large
+    datasets, and in chapter 13, we learn to integrate a neural network into a GP
+    model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.1 How to sell your house the Bayesian way
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Before we jump right into GPs, let’s consider an example scenario in the domain
+    of housing price modeling and how the price of a house is determined in relation
+    to other houses. This discussion serves as an example of how correlation works
+    in a multivariate Gaussian distribution, which is a central part of a GP.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Say you are a homeowner in Missouri who is looking to sell your house. You
+    are trying to set an appropriate asking price and are talking to a friend about
+    how to do this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**You:**     I’m not sure what to do. I just don’t know exactly how much my
+    house is worth.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Friend:** Do you have a rough estimate?'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**You:**     Somewhere between 150k and 300k would be my guess.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Friend:** That’s a pretty big range.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**You:**     Yeah, I wish I knew people who have sold their houses. I need
+    some references.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Friend:** I heard Alice sold her house for 250k.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**You:**     Alix who’s in California? That’s really surprising! Also, I don’t
+    think a house in California will help me make a better estimate for my own house.
+    It could still be anything between 150k and 300k.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Friend:** No, it’s Alice who lives right next to you.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**You:**     Oh, I see. That’s very useful actually, since her house is really
+    similar to mine! Now, I would guess that my house will be valued at somewhere
+    between 230k and 270k. Time to talk to my realtor!'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Friend:** Glad I could help.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this conversation, you said that using your neighbor Alice’s house as a
+    reference is a good strategy for estimating your own price. This is because the
+    two houses are similar in attributes and physically close to each other, so you
+    expect them to sell for similar amounts. Alix’s house, on the other hand, is in
+    California and is entirely irrelevant to our house, so even if you know how much
+    she sold her house for, you won’t be able to gain any new information about what
+    you’re interested in: how much your own house is worth.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The calculation we just went through is a Bayesian update to our belief about
+    the price of our house. You might be familiar with Bayes’ theorem, which is shown
+    in figure 2.2\. For an excellent introduction to Bayes’ theorem and Bayesian learning,
+    check out chapter 8 of Luis Serrano’s *Grokking Machine Learning* (Manning, 2021).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Bayes’ theorem gives us a way of updating our belief about a quantity we’re
+    interested in, which, in this case, is the appropriate price for our house. When
+    applying Bayes’ theorem, we go from our prior belief, which is our first guess,
+    to a posterior belief about the quantity in question. This posterior belief combines
+    the prior belief and the likelihood of any data we observe.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/02-02.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 2.2 Bayes' theorem, which gives a method of updating a belief about a
+    quantity of interest, represented as a probability distribution of a random variable.
+    Before observing any data, we have the prior belief about X. After being updated
+    with data, we obtain the posterior belief about X.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In our example, we start out with a prior belief that the price is between 150k
+    and 300k. The range from 150k to 300k, like your friend remarked, is quite big,
+    so there’s not much information contained in this initial prior belief—anything
+    between 150k and 300k is possible for this price. Now, an interesting thing happens
+    when we *update* this range to a posterior belief, considering new information
+    about either of the two houses’ price.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, assuming that Alix’s house in California is valued at 250k, our posterior
+    belief about our own house remains unchanged: from 150k to 300k. Again, this is
+    because Alix’s house is not relevant to ours, and the price of her house doesn’t
+    inform us about the quantity we’re interested in.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Second, if the new information is that Alice’s house, which is right next to
+    our own, is valued at 250k, then our posterior belief significantly changes from
+    the prior: to the 230k–270k range. Having Alice’s house as a reference, we have
+    updated our belief to be around the observed value, 250k, while narrowing down
+    the range of our belief (going from a 150k difference to a 40k difference). This
+    is a very reasonable thing to do, as the price of Alice’s house is very informative
+    with respect to the price of our house. Figure 2.3 visualizes this entire process.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/02-03.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 2.3 Updating the belief about the price of our house in a Bayesian way.
+    Depending on how similar the house whose price was observed is to our house, the
+    posterior belief either stays the same or is drastically updated.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that the numbers in the example are not exact and are only used so that
+    the example makes intuitive sense. However, we will see that by using a multivariate
+    Gaussian distribution to model our belief, we can realize this intuitive update
+    procedure in a quantifiable way. Further, with such a Gaussian distribution, we
+    can determine whether a variable (someone’s house) is similar enough to the variable
+    we’re interested in (our own house) to influence our posterior belief and to what
+    extent.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.2 Modeling correlations with multivariate Gaussian distributions and Bayesian
+    updates
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In this section, we learn about multivariate Gaussian distributions (or multivariate
+    Gaussians—or simply Gaussians) and see how they facilitate the update rule we
+    saw previously. This serves as the basis for our subsequent discussion on GPs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.2.1 Using multivariate Gaussian distributions to jointly model multiple variables
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Here, we first cover what multivariate Gaussians are and what they can model.
+    We will see that with a covariance matrix, a multivariate Gaussian (MVN) describes
+    not only the behavior of the individual random variables but also the correlation
+    of these variables.
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, let’s consider normal distributions—aka the bell curve. Normal distributions
+    are highly common in the real world and are used to model a wide range of quantities;
+    examples include height, IQ, income, and weight at birth.
+  prefs: []
+  type: TYPE_NORMAL
+- en: An MVN distribution is what we would use when we want to model more than one
+    quantity. To do this, we aggregate these quantities into a vector of random variables,
+    and this vector is then said to follow an MVN distribution. This aggregation is
+    depicted in figure 2.4.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/02-04.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 2.4 An MVN distribution groups multiple normally distributed random variables
+    together. While the mean vector of the MVN concatenates the mean values, the covariance
+    matrix models the correlations between the individual variables.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Definition Consider a random vector *X* = [*X*[1]*X*[2] ... *X[n]*] that follows
+    a Gaussian distribution denoted by *N*(*μ*, Σ), where *μ* is a vector of length
+    *n* and Σ is an *n*-by-*n* matrix. Here, *μ* is called the mean vector, whose
+    individual elements denote the expected values of corresponding random variables
+    in *X*, and Σ is the covariance matrix, which describes the variance of individual
+    variables as well as correlations between variables.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s take a moment to parse the definition of an MVN distribution:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, due to the convenient properties of an MVN, each random variable in the
+    vector *X* follows a normal distribution. Specifically, the *i*-th variable *X[i]*
+    has the mean value of *μ[i]*, which is the *i*-th element of the mean vector *μ*
+    of the MVN.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Further, the variance of *X[i]* is the *i*-th *diagonal* entry of the covariance
+    matrix Σ.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If we have a vector of random variables following an MVN, then each individual
+    variable corresponds to a known normal distribution.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'If the diagonal entries in the covariance matrix Σ are the variances of the
+    individual variables, what about the off-diagonal entries? The entry in the *i*-th
+    row and *j*-th column of this matrix denotes the covariance between *X[i]* and
+    *X[j]*, which is related to the correlation between the two random variables.
+    Assuming the correlation is positive, the following is true:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: If this correlation is high, then the two random variables *X[i]* and *X[j]*
+    are said to be correlated. This means that if the value of one increases, the
+    value of the other also tends to increase, and if the value of one decreases,
+    the value of the other will decrease. Your neighbor Alice’s house and your own
+    are examples of correlated variables.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: On the other hand, if this correlation is low and close to zero, then no matter
+    what the value of *X[i]* is, what we know about the value of *X[j]* most likely
+    does not change much. This is because there is no correlation between the two
+    variables. Alix’s house in California and our house fall into this category.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Negative correlations
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The previous description is for positive correlations. A correlation can also
+    be negative, indicating that the variables move in opposite directions: if one
+    variable increases, the other will decrease, and vice versa. Positive correlations
+    illustrate the important concepts we aim to learn here, so we won’t worry about
+    the negative correlation case.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To make our discussion more concrete, let’s define an MVN distribution that
+    jointly models three random variables: the price of our house, A; the price of
+    our neighbor Alice’s house, B; and the price of Alix’s house in California, C.
+    This three-dimensional Gaussian also has a covariance matrix described in figure
+    2.4.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note It’s usually convenient to assume that the mean vector of this Gaussian
+    is normalized to be the zero vector. This normalization is usually done, in practice,
+    to simplify a lot of mathematical details.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Once again, the diagonal cells tell us the variances of individual random variables.
+    B has a slightly larger variance (3) than A (1), meaning we are more uncertain
+    about the value of B because we don’t know everything about our neighbor’s house,
+    so a more accurate estimate cannot be done. The third variable, C, on the other
+    hand, has the largest variance to denote the fact that houses in California have
+    an overall wider price range.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note The values being used here (1, 3, 10) are example values to make the point
+    that the larger a variance of a random variable, the more uncertain we are about
+    the value of the variable (before learning what its value is).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Further, the covariance between our house, A, and our neighbor’s, B, is 0.9,
+    which indicates the prices of the two houses are correlated in a non-negligible
+    way. This makes sense because if we know the price of our neighbor’s house, we
+    will be able to obtain a better estimate for our own house that is on the same
+    street. Also notice that neither A nor B has any correlation with the price of
+    the house in California, since location-wise, C has nothing in common with A or
+    B. Another way to say this is that even if we know how much the house in California
+    costs, we won’t learn anything about the price of our own house. Let’s now visualize
+    this three-dimensional Gaussian using a parallel coordinates plot in figure 2.5.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/02-05.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 2.5 Parallel coordinates plot visualizing a mean-normalized MVN from
+    the housing price example. The error bars indicate 95% CIs of corresponding normal
+    distributions, while the faded lines show samples drawn from the multivariate
+    Gaussian.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Note the bold diamonds and corresponding error bars in the figure:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The bold diamonds represent the mean vector of our Gaussian, which is simply
+    the zero vector.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The error bars denote the 95% credible intervals (CIs) of the three individual
+    variables. Going from A to B to C, we observe larger and larger CIs, corresponding
+    to the increasing values of the respective variances.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Credible intervals
+  prefs: []
+  type: TYPE_NORMAL
+- en: A (1 – α) CI of a normal distribution of a random variable *x* is a range in
+    which the probability that *x* falls inside this range is exactly (1 – α). Statisticians
+    typically use 95% CIs for normal distributions. There is nothing really special
+    about the number 95% here, except for the fact that 95% is the threshold many
+    statistical procedures use to determine whether something is meaningful or not.
+    For example, a *t* test typically uses a confidence level of 1 – α = 0.95, corresponding
+    to the fact that a *p*-value less than α = 0.05 indicates significant results.
+    A convenient fact about normal distributions is that *μ* ± 1.96σ is a 95% CI (some
+    even use *μ* ± 2σ), where *μ* and σ are the mean and standard deviation of the
+    variable *x*, which is an easy-to-compute quantity.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 2.5 represents our *prior belief* about the normalized prices of the
+    three houses. Starting from this prior, we guess that all three have a normalized
+    price of zero, and we have varying levels of uncertainty regarding our guesses.
+    Further, as we are working with a random distribution, we could draw samples from
+    this MVN. These samples are shown as connected faded diamonds.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.2.2 Updating MVN distributions
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: With an MVN distribution in hand, we will see how we can update this distribution
+    given some data we observe in this subsection. Specifically, following our example
+    at the beginning of the chapter, we’d like to derive the *posterior belief* about
+    these prices upon observing the value of either B or C. This is an important task
+    as it is how an MVN, as well as a GP, learns from data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Definition This update process is sometimes called *conditioning*: deriving
+    the *conditional distribution* of a variable, given that we know the value of
+    some other variable. More specifically, we are conditioning our belief—which is
+    a joint trivariate Gaussian—on the value of either B or C, obtaining the joint
+    posterior distribution for these three variables.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Here, using the Bayes’ theorem in figure 2.2, we can derive this posterior distribution
+    in closed form. However, the derivation is rather math-heavy, so we won’t go into
+    it here. We just need to know that we have a formula in which we can plug the
+    value of B or C that we’d like to condition on, and the formula will tell us what
+    the posterior distributions of A, B, and C are. Surprisingly, the posterior distribution
+    of a Gaussian is conditioned on data that is also Gaussian, and we can obtain
+    the exact posterior means and variances that specify the posterior Gaussians.
+    (Later in the chapter, we see that when we implement a GP in Python, GPyTorch
+    takes care of this math-heavy update for us.)
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note For the interested reader, this formula and its derivation can be found
+    in chapter 2, section 2 of the book *Gaussian Processes for Machine Learning*
+    by Carl Edward Rasmussen and Christopher K. I. Williams (MIT Press, 2006), which
+    is often considered the bible of GPs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/02-05-unnumb-1.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Let’s now regenerate the parallel coordinates plot, conditioning the MVN on
+    B = 4 as an example value for B. The result is shown in figure 2.6.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/02-06.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 2.6 Parallel coordinates plot visualizing the MVN from figure 2.5, conditioned
+    on B = 4\. Here, the distribution of A is updated, and all drawn samples interpolate
+    B = 4.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Upon updating our belief with an observation about B, a few things have changed
+    in our posterior belief:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The distribution of A changes, taking on a slightly larger mean value due to
+    the positive correlation between A and B. Further, its error bars now have a smaller
+    range.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The posterior distribution of B simply becomes a special normal distribution
+    with zero variance since we know for sure what its value is in the posterior.
+    In other words, there is no uncertainty about the value of B anymore.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Meanwhile, the distribution of C stays the same after the update as it has no
+    correlation with B.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: All of this makes sense and corresponds with our intuition from the housing
+    price example. Specifically, when we find out about our neighbor’s house, the
+    belief about our own house is updated to be similar to the observed price, and
+    our uncertainty also decreases.
+  prefs: []
+  type: TYPE_NORMAL
+- en: What happens when we condition on C? As you might have guessed, for the same
+    reason that C stays the same after conditioning on a value of B, both the posterior
+    distribution of A and that of B remain unchanged when we condition on C. Figure
+    2.7 shows this for C = 4.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/02-07.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 2.7 Parallel coordinates plot visualizing the MVN from figure 2.5, conditioned
+    on C = 4\. Here, no other marginal distribution changes. All drawn samples interpolate
+    C = 4.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is when we find out that a house in California was sold. As this house
+    has nothing to do with our own house in Missouri, the belief about the price of
+    our house stays the same.
+  prefs: []
+  type: TYPE_NORMAL
+- en: There is another interesting thing about figures 2.6 and 2.7\. Notice that when
+    we condition on B = 2 in figure 2.6, all the samples we draw of the posterior
+    MVN pass through the point (B, 2). This is because in our posterior belief, we
+    don’t have any uncertainty about what value B takes anymore, and any sample drawn
+    from the posterior distribution needs to satisfy the constraints from this condition.
+    The same thing goes for the point (C, 2) in figure 2.7.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Visually, you could think of this as meaning that when we condition on a variable,
+    we “tie” the samples drawn from the prior distribution (in figure 2.5) into a
+    knot at the same point corresponding to the variable we condition on, as shown
+    in figure 2.8.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/02-08.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 2.8 Conditioning a Gaussian on an observation is similar to tying a knot
+    around that observation. All samples from the posterior distribution need to pass
+    through the knot, and there’s no uncertainty at the observed point.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Finally, we can picture the Bayesian conditioning procedure we have just gone
+    through with a diagram analogous to figure 2.3\. This is shown in figure 2.9.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/02-09.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 2.9 Updating the belief about the price of our house in a Bayesian way.
+    Depending on how similar the house whose price was observed in relation to our
+    house is, the posterior belief either stays the same or is drastically updated.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Again, if we condition our Gaussian on C, the posterior distributions of the
+    uncorrelated variables remain unchanged. If we condition on B, however, the variable
+    that is correlated to it, A, gets updated.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.2.3 Modeling many variables with high-dimensional Gaussian distributions
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: An MVN distribution need not only contain three random variables; it can, in
+    fact, simultaneously model any finite number of variables. In this subsection,
+    we learn that a higher-dimensional Gaussian works in the same way as what we have
+    seen so far. So, let’s say that instead of a 3-dimensional Gaussian representing
+    three houses, we have a 20-dimensional Gaussian encoding information about an
+    array of houses on a street. An even higher-dimensional Gaussian would model houses
+    in a city or country.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Further, with these parallel coordinates plots, we can visualize all individual
+    variables of a high-dimensional Gaussian at the same time. This is because each
+    variable corresponds to a single error bar, occupying only one slot on the *x*-axis.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We once again normalize its mean vector to be the zero vector, and while it’s
+    not convenient to show its 20-by-20 covariance matrix, we could plot a heat map
+    visualizing this matrix, as in figure 2.10.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/02-10.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 2.10 Heat map showing the covariance matrix of a 20-dimensional Gaussian
+    distribution. Neighboring variables are more correlated than those that are far
+    away, as indicated by a darker shade.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The diagonal entries, or the variance of individual variables, are all 1s, in
+    this case. Further, variables are ordered so that those that are close to each
+    other are correlated; that is, their covariance takes a larger value. Variables
+    that are far away from each other are, on the other hand, less correlated, and
+    their covariances are close to zero. For example, any pair of consecutive variables
+    in this Gaussian (the first and the second, the second and the third, etc.) have
+    a covariance of roughly 0.87\. That is, any two houses that are next to each other
+    have a covariance of 0.87\. If we consider the 1st and the 20th variable—that
+    is, the house at one end of the street and the house at the other end—their covariance
+    is effectively zero.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is very intuitive as we expect houses that are close by to have similar
+    prices, so once we know the price of a house, we gain more information about the
+    prices of those that are around that area than about the prices of those that
+    are far away.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/02-11.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 2.11 Error bars and samples drawn from a prior (left) and a posterior
+    (right) Gaussian distribution, conditioned on the 10th variable having a value
+    of 2\. Uncertainty in variables close to the 10th reduces in the posterior, and
+    their mean values are updated to be close to 2.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'How does this play out in a parallel coordinates plot? Figure 2.11 shows our
+    prior Gaussian on the left and the posterior Gaussian conditioned on the 10th
+    variable having a value of 2 on the right. Basically, we are simulating the event
+    in which we find out that the price of the 10th house is 2 (whose exact unit is
+    omitted):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, we once again see this phenomenon in which the error bars and samples
+    are tied into a knot around the observation we condition on in the posterior distribution.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Second, due to the correlation structure imposed by the covariance matrix, variables
+    close to the 10th have their mean values “dragged up” so that the mean vector
+    now smoothly interpolates the point (10, 2). This means we have updated our belief,
+    as the surrounding houses now have their prices increased to reflect the information
+    we have learned.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Finally, the uncertainty (denoted by the error bars) around this point (10,
+    2) decreases after the conditioning. This is a very good property to have, as
+    intuitively, if we know the value of a variable, we should become more certain
+    about the values of other variables correlated with the variable we know. That
+    is, if we know the price of a house, we become more certain about the prices of
+    nearby houses. This property is the basis of the calibrated quantification of
+    uncertainty that GPs offer, which we see in the next section of this chapter.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 2.3 Going from a finite to an infinite Gaussian
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: We are now ready to discuss what a GP is. In the same manner as when we have
+    three variables, A, B, and C, or 20, as in the previous section, let’s say we
+    now have an infinite number of variables, all belonging to an MVN. This *infinite-dimensional*
+    Gaussian is called a *Gaussian process*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Imagine predicting housing prices across a very large, densely populated area.
+    The scale of the entire area is so large that if we move away from a house by
+    a very small amount, we will arrive at a different house. Given the high density
+    of the variables (houses) in this Gaussian, we can treat this whole area as having
+    infinitely many houses; that is, the Gaussian distribution has infinitely many
+    variables.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/02-12.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 2.12 Modeling housing prices in California using different numbers of
+    variables. The more variables we have, the smoother our model becomes and the
+    closer we approach an infinite-dimensional model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is illustrated in figure 2.12 using a dataset containing 5,000 house prices
+    in California. In the top-left panel, we show the individual data points in a
+    scatter plot. In the remaining panels, we model the data using various numbers
+    of variables, where each variable corresponds to a region inside the map of California.
+    As the number of variables increases, our model becomes more fine-grained. When
+    this number is infinite—that is, when we can make a prediction in any region on
+    this map, however small—our model exists in an infinite-dimensional space.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This is exactly what a Gaussian process is: a Gaussian distribution in an infinite-dimensional
+    space. The ability to make a prediction in any region helps us move away from
+    a finite-dimensional MVN and obtain an ML model. Strictly speaking, the concept
+    of a Gaussian distribution doesn’t apply when there are infinitely many variables,
+    so the technical definition is the following.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Definition A Gaussian process is a collection of random variables such that
+    the joint distribution of every finite subset of those variables is an MVN.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This definition means that if we have a GP model to describe a function *ƒ*,
+    then the function values at *any* set of points are modeled by an MVN distribution.
+    For example, the vector of variables [*ƒ*(1) *ƒ*(2) *ƒ*(3)] follows a three-dimensional
+    Gaussian; [*ƒ*(1) *ƒ*(0) *ƒ*(10) *ƒ*(5) *ƒ*(3)] follows a different, five-dimensional
+    Gaussian; and [*ƒ*(0.1) *ƒ*(0.2) ... *ƒ*(9.9) *ƒ*(10)] follows yet another Gaussian.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/02-13.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 2.13 Parallel coordinates plots of different Gaussian distributions.
+    Any finite subset of a GP is an MVN. As the number of variables approaches infinity,
+    we obtain a GP and can make predictions everywhere in the domain.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is illustrated in figure 2.13\. The first three panels show, in parallel
+    coordinates plots, a trivariate Gaussian for [*ƒ*(–2) *ƒ*(1) *ƒ*(4)], an 11-variate
+    Gaussian for [*ƒ*(–4.5) *ƒ*(–4) ... *ƒ*(4) *ƒ*(4.5)], and a 101-variate Gaussian
+    across a denser grid. Finally, in the last panel, we have infinitely many variables,
+    which gives us a GP.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Since we are now in infinite dimensions, it doesn’t make sense to talk about
+    the mean vector and covariance matrix anymore. Instead, what we have with a GP
+    is a mean *function* and a covariance *function*, but the respective roles of
+    these two objects are still the same as with an MVN:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, the mean function, which takes in one input, *x*, computes the expectation
+    of the function value *ƒ*(*x*).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Second, the covariance function takes in two inputs, *x*[1] and *x*[2], and
+    computes the covariance between the two variables, *ƒ*(*x*[1]) and *ƒ*(*x*[2]).
+    If *x*[1] is the same as *x*[2], then this covariance value is simply the variance
+    of the normal distribution of *ƒ*(*x*). If *x*[1] is different from *x*[2], the
+    covariance denotes the correlation between the two variables.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: As the mean and covariance are functions, we are no longer tied to a fixed number
+    of variables—instead, we effectively have infinitely many variables and can make
+    our predictions *anywhere*, as illustrated in figure 2.13\. This is why although
+    a GP has all the properties of an MVN, the GP exists in infinite dimensions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For the same reason, a GP can be considered as a distribution over functions,
+    as the title of this chapter suggests. The progression we have gone through in
+    this chapter, from a one-dimensional normal to a GP, is summarized in table 2.1.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Table 2.1 Gaussian distribution objects and what they model. With a GP, we operate
+    under infinite dimensions, modeling functions instead of numbers or vectors.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| Distribution type | Number of modeled variables | Description |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| A one-dimensional normal distribution | One | A distribution over numbers
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| An MVN distribution | Finitely many | A distribution over vectors of finite
+    length |'
+  prefs: []
+  type: TYPE_TB
+- en: '| A GP | Infinitely many | A distribution over functions |'
+  prefs: []
+  type: TYPE_TB
+- en: To see a GP in action, let’s reexamine the curve-fitting procedure in figure
+    2.1 at the beginning of this chapter, where we limit our domain to between –5
+    and 5\. This is shown in figure 2.14.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/02-14.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 2.14 Predictions made by a GP conditioned on zero, one, two, and four
+    observations
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In each of the panels, the following is true:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The solid line in the middle is the mean function, which is analogous to the
+    solid line connecting the diamonds in figure 2.11.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The shaded region, on the other hand, is the 95% CI across the domain, corresponding
+    to the error bars in figure 2.11.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The various wiggly lines are samples drawn from the corresponding GP.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Before observing any data, we start out with the *prior GP* in the top-left
+    panel. Just like a prior MVN, our prior GP produces constant mean prediction and
+    uncertainty in the absence of training data. This is a reasonable behavior to
+    have.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The interesting part comes when we condition our GP on various data points.
+    This is visualized in the remaining panels of figure 2.14\. Exactly like the discrete
+    case of an MVN, with a GP working in a continuous domain, the mean prediction
+    as well as samples drawn from the posterior distribution smoothly interpolate
+    data points in the training set, while our uncertainty about the function value,
+    quantified by the CI, smoothly decreases in the areas around these observations.
+    This is what we call a *calibrated quantification of uncertainty*, which is one
+    of the biggest selling points of a GP.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Smoothness of a GP
+  prefs: []
+  type: TYPE_NORMAL
+- en: The *smoothness* property refers to the constraint that requires similar points
+    to be correlated with each other. In other words, points that are similar should
+    result in similar function values. This is, again, why when we condition on the
+    data point at 3 in the top-right panel, the mean predictions at 2.9 and 3.1 are
+    updated to take on larger values than their prior means. These points, 2.9 and
+    3.1, are similar to 3 because they are close to each other. This smoothness is
+    set using the covariance function of the GP, which is the topic of chapter 3\.
+    While the examples we have seen so far are in one dimension, this smoothness is
+    preserved when our search space is higher-dimensional, as we see later.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Overall, we have seen that a GP is an MVN, distribution when extended to infinite
+    dimensions, and thanks to many convenient mathematical properties of Gaussian
+    distributions, a GP not only produces a mean prediction but also quantifies our
+    uncertainty about the function values in a principled way via its predictive covariances.
+    The mean prediction goes exactly through the training data points, and the uncertainty
+    collapses at these data points.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Modeling non-Gaussian data
+  prefs: []
+  type: TYPE_NORMAL
+- en: In real life, not all data follows Gaussian distributions. For example, for
+    values that are limited within a numerical range or variables that don’t follow
+    bell-shaped distributions, Gaussian distributions are inappropriate and might
+    lead to low-quality predictions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In these cases, we can apply various data processing techniques to “convert”
+    our data points to follow Gaussian distribution. For example, the Box–Muller transform
+    is an algorithm that generates pairs of normally distributed random numbers from
+    uniformly distributed random numbers. The interested reader can find more details
+    about this algorithm on Wolfram’s MathWorld ([https://mathworld.wolfram.com/Box-MullerTransformation.xhtml](https://mathworld.wolfram.com/Box-MullerTransformation.xhtml)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.4 Implementing GPs in Python
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In this final section of the chapter, we take our first step toward implementing
+    GPs in Python. Our goal is to become familiar with the syntax and API of the libraries
+    we will be using for this task and learn how to recreate the visualizations we
+    have seen thus far. This hands-on section will also help us understand GPs more
+    deeply.
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, make sure you have downloaded the accompanying code for the book and
+    installed the necessary libraries. Detailed instructions on how to do this are
+    included in the front matter. We use the code included in the Jupyter notebook
+    CH02/01 - Gaussian processes.ipynb.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.4.1 Setting up the training data
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Before we start implementing the code for our GP model, let’s first spend some
+    time creating an objective function we’d like to model and a training dataset.
+    To do this, we need to import PyTorch for calculating and manipulating tensors
+    and Matplotlib for data visualization:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Our objective function in this example is the one-dimensional Forrester function.
+    The Forrester function is multimodal with one global maximum and one local maximum
+    ([https://www.sfu.ca/~ssurjano/forretal08.xhtml](https://www.sfu.ca/~ssurjano/forretal08.xhtml)),
+    making fitting and finding the maximum of the function a nontrivial task. The
+    function has the following formula:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/02-14-Equations_ch-2.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'This is implemented as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Let us quickly plot this function in a graph. Here, we restrict ourselves to
+    the domain between –3 and 3 and compute this Forrester function on a dense grid
+    of 100 points in this range. We also need some sample points for training, which
+    we generate by randomly sampling with `torch.rand()` and store in `train_x`; `train_y`
+    contains the labels of these training points, which can be obtained by evaluating
+    `forrester_1d(train_x)`. This plot is generated by the following code, which produces
+    figure 2.15:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: '![](../../OEBPS/Images/02-15.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 2.15 The objective function that is used in the current example, as shown
+    by the solid line. The markers indicate points in the training dataset.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The three markers we see are points that we randomly select to include in our
+    training dataset. The locations of these training data points are stored in `train_x`,
+    and their labels (the values of the Forrester function at these locations) are
+    stored in `train_y`. This sets up our regression task: implementing and training
+    a GP on these three data points and visualizing its predictions on the range between
+    –3 and 3\. Here, we have also created `xs`, which is a dense grid over this range.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.4.2 Implementing a GP class
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: In this subsection, we learn how to implement a GP model in Python. We use the
+    GPyTorch library, a state-of-the-art tool for modern GP modeling.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Important The design philosophy of GPyTorch is to follow the DL library PyTorch
+    and have all of its model classes extend a base model class. If you are familiar
+    with implementing neural networks in PyTorch, you might know that this base is
+    `torch.nn.Module`. With GPyTorch, we typically extend the `gpytorch.models.ExactGP`
+    class.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To implement our model class, we use the following structure:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Here, we implement a class called `BaseGPModel`, which has two specific methods:
+    `__init__()` and `forward()`. The behavior of our GP model heavily depends on
+    how we write these two methods, and no matter what kind of GP model we’d like
+    to implement, our model class needs to have these methods.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s discuss the `__init__()` method first. Its job is to take in the training
+    dataset defined by the first and second arguments, `train_x` and `train_y`, as
+    well as a likelihood function, stored in the variable `likelihood`, and initialize
+    the GP model, which is a `BaseGPModel` object. We implement the method as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here, we simply pass the three input arguments to the `__init__()` method of
+    our super class, and the built-in implementation of `gpytorch.models.ExactGP`
+    takes care of the heavy lifting for us. What remains is the definition of the
+    mean and the covariance functions, which, as we have said, are the two main components
+    of a GP.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In GPyTorch, there is a wide range of choices for both the mean and the covariance
+    function, which we explore in chapter 3\. For now, we use the most common options
+    for a GP:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`gpytorch.means.ZeroMean()` for the mean function, which outputs zero mean
+    predictions in prior mode'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`gpytorch.kernels.RBFKernel()` for the covariance functions, which implements
+    the *radial basis function* (RBF) kernel—one of the most commonly used covariance
+    function for GPs, which implements the idea that data points close to each other
+    are correlated to each other'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: We store these objects in the `mean_module` and `covar_module` class attributes,
+    respectively. That’s all we need to do for the `__init__()` method. Now, let’s
+    turn our attention to the `forward()` method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `forward()` method is very important as it defines how the model should
+    process its input. If you have worked with neural networks in PyTorch, you know
+    that the `forward()` method of a network class sequentially passes its input through
+    the layers of the network, and the output of the final layer is what the neural
+    network produces. In PyTorch, each layer is implemented as a *module*, which is
+    a term to denote the basic building block of any object in PyTorch that processes
+    data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `forward()` method of a GP in GPyTorch works in a similar way: the GP’s
+    mean and covariance functions are implemented as modules, and the input of the
+    method is passed to these modules. Instead of sequentially passing the result
+    through different modules, we pass the input to the mean and the covariance functions
+    simultaneously. The output of these modules is then combined to create an MVN
+    distribution. This difference between PyTorch and GPyTorch is illustrated in figure
+    2.16.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/02-16.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 2.16 How PyTorch and GPyTorch process data in their respective `forward()`
+    methods. The input is processed by different modules to produce the final output,
+    either a number for a feed-forward neural network or an MVN distribution for a
+    GP.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `forward()` method is implemented in the following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The logic here is pretty straightforward: As we have a mean function and a
+    covariance function, we simply call them on the input `x` to compute the mean
+    and covariance predictions. Finally, what we need to return is an MVN distribution,
+    implemented by the `gpytorch.distributions.MultivariateNormal` class, with corresponding
+    mean and covariance. In other words, we are doing nothing more than creating an
+    MVN distribution with a mean vector and a covariance matrix computed from the
+    `mean_ module` and `covar_module` attributes of our model class.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: And that is all there is to it! It’s quite surprising how easy it is to implement
+    a GP model with GPyTorch. The biggest takeaway for us is that we need to implement
+    a mean and covariance function in the `__init__()` method. In the `forward()`
+    method, when we need to make a prediction, we simply call these two functions
+    on the input passed in.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.4.3 Making predictions with a GP
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'With the `BaseGPModel` class in hand, we are ready to make predictions with
+    a GP! Recall that in the `__init__()` method, we need to pass in a likelihood
+    function, `likelihood`, in addition to our training data. In many regression tasks,
+    a `gpytorch.likelihoods.GaussianLikelihood` object suffices. We create this object
+    like so:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now, we can initialize our `BaseGPModel` object. But before we initialize it
+    with our three-entry training data, we would like to first make predictions with
+    the prior GP.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/02-16-unnumb-2.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'To initialize a GP object without any training data, we pass `None` as both
+    the training features (`train_x`) and labels (`train_y`). So our prior GP is created
+    as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Finally, some bookkeeping is necessary before we can make any predictions.
+    First, we set the hyperparameters of the GP:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We discuss what each of these hyperparameters controls in chapter 3\. For now,
+    we just use the values that I personally like to use as the default: 1 for the
+    length scale and 0.0001 for the noise variance. The very last detail is to enable
+    prediction mode in both the GP model and its likelihood by calling the `eval()`
+    method from the corresponding objects.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'With these bookkeeping tasks out of the way, we can now finally call this GP
+    model on our test data to make predictions. We do this like so:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: Remember, in the `forward()` method of the model class, we return the MVN distribution,
+    so that is the output when we pass some test data through our model using `model(xs)`.
+    (In the syntax of PyTorch, calling `model(xs)` is a shorthand for calling the
+    `forward()` method on the test data `xs`.) We also pass that same output through
+    the likelihood function `likelihood`, which incorporates the noise variance into
+    our predictions. In short, what we store in `predictive_distribution` is an MVN
+    distribution that represents our prediction for the test points `xs`. Moreover,
+    we compute this object within a `torch.no_grad()` context, which is good practice
+    when we don’t want PyTorch to keep track of the gradients of these computations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note We only want to compute the gradients of operations when we’d like to optimize
+    some parameters of our model using gradient descent. But when we want to make
+    predictions, we should keep our model completely fixed, so disabling gradient
+    checking is appropriate.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.4.4 Visualizing predictions of a GP
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: With this predictive Gaussian distribution in hand, we can now recreate the
+    GP plots we have seen so far. Each of these plots consists of a mean function,
+    *μ*, which we could obtain from the MVN with
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: Additionally, we want to show the 95% CI. Mathematically, this can be done by
+    extracting the diagonal elements of the predictive covariance matrix, Σ (remember
+    that these elements denote the individual variances σ²), taking the square roots
+    of these values to compute the standard deviations, σ, and computing the CI range
+    of *μ* ± 1.96σ.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Fortunately for us, computing the 95% CI is a common operation when working
+    with a GP, so GPyTorch offers a convenient helper method called `confidence_`
+    `region()` that we may call directly from an MVN distribution object:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: This method returns a tuple of two Torch tensors, which store the lower and
+    upper endpoints of the CI, respectively.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Finally, we may want samples drawn for our plot from our current GP model.
+    We can do this directly by calling the method `sample()` from the Gaussian object
+    `predictive_distribution`. If we don’t pass in any input argument, the method
+    will return a single sample. Here, we want to sample from our GP five times, which
+    is done as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: We pass in a `torch.Size()` object to denote that we want five samples to be
+    returned. Setting the random seed before sampling is a good practice to ensure
+    reproducibility of our code. And with that, we are ready to make some plots!
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The first thing to do is simply plot the mean function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As for the 95% CI, we typically use a shaded region like what we have seen
+    so far, which can be done using Matplotlib’s `fill_between()` function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Finally, we plot the individual samples:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: This code will produce the plot in figure 2.17.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/02-17.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 2.17 Predictions made by a prior GP with a zero mean and RBF kernel.
+    While the mean and CI are constant, individual samples exhibit complex, nonlinear
+    behaviors.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We see that across the domain, our prior GP produces a mean function that is
+    constant at zero, and our 95% CI is constant. This is to be expected as we used
+    a `gpytorch .means.ZeroMean()` object to implement the mean function, and without
+    any training data, our prior predictions default to this 0 value.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'With that said, the mean and CI are only measurements of expectation: they
+    denote the average behavior of our predictions across many, many different realizations
+    of what could be. When we draw individual samples, however, we see that each of
+    these samples has a very complex shape that is not at all constant. All of this
+    is to say that while the expected value of our prediction at any point is zero,
+    there is a wide range of values it could take. This demonstrates that a GP can
+    model complex, nonlinear behaviors in a flexible manner.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'So far, we have learned to make and visualize predictions from a prior GP without
+    any training data. Now, let’s actually train a GP model on the training set we
+    randomly generated and see how the predictions change. The nice thing about what
+    we have coded so far is that everything may be repeated exactly, except we now
+    initialize our GP with our training data (remember that we used `None` for the
+    first and second arguments before):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: Rerunning the code will give us figure 2.18.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/02-18.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 2.18 Predictions made by a posterior GP. The mean function and randomly
+    drawn samples smoothly interpolate the training data points, while uncertainty
+    vanishes in the regions surrounding these data points.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This is exactly the type of prediction we’d like to see: the mean line and
+    samples nicely interpolate our observed data points, and our uncertainty (measured
+    by the CI) also reduces around those data points.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We can already see how this uncertainty quantification is useful in terms of
+    modeling the objective function. After only observing three data points, our GP
+    has obtained a rather good approximation of the true objective function. In fact,
+    almost all of the objective lies inside the 95% CI, indicating our GP is successfully
+    accounting for how the objective function might behave, even in regions where
+    we don’t have any data from the function yet. This calibrated quantification is
+    especially beneficial when we actually need to make decisions based on our GP
+    model—that is, when we decide at which points we should observe the function value
+    to find the optimum—but let’s save that for the next part of the book.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.4.5 Going beyond one-dimensional objective functions
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: So far, we have only seen examples of GPs trained on one-dimensional objective
+    functions. However, there is nothing inherent about a GP that confines us to just
+    one dimension. In fact, as long as our mean and covariance function can handle
+    high-dimensional inputs, a GP can operate in high dimensions without difficulty.
+    In this subsection, we learn how to train a GP on a two-dimensional dataset.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We follow the procedure in the previous section. First, we need a training dataset.
+    Here, I’m artificially creating a dummy set with points at (0, 0), (1, 2), and
+    (–1, 1) with respective labels of 0, –1, and 0.5\. In other words, the objective
+    function we’re learning from has a value of 0 at (0, 0), –1 at (1, 2), and 0.5
+    at (–1, 1). We’d like to make predictions within the [–3, 3]-by-[–3, 3] square.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This is set up in Python as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ One-dimensional grid
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Two-dimensional grid
+  prefs: []
+  type: TYPE_NORMAL
+- en: The variable `xs` is a 10,201-by-2 matrix that contains the lattices of a grid
+    over the square we’d like to predict on.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Important There are 10,201 points because we are taking a 101-endpoint grid
+    in each of the two dimensions. Now, we simply rerun the GP code we previously
+    ran to train a GP and make predictions on this two-dimensional dataset. Note that
+    no modification to our `BaseGPModel` class or any of the prediction code is needed,
+    which is quite amazing!
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'One thing we do need to change, though, is how we visualize our predictions.
+    As we are operating in two dimensions, plotting the predictive mean and CI in
+    a single plot becomes more difficult. Here, a typical solution is to draw a heat
+    map for the predictive mean and another heat map for the predictive standard deviation.
+    While the standard deviation is not exactly the 95% CI, these two objects, in
+    essence, do quantify the same thing: our uncertainty about the function values.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'So, instead of calling `predictive_distribution.confidence_region()`, as we
+    did before, we now extract the predictive standard deviation like so:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, to draw the heat maps, we use the `imshow()` function from Matplotlib.
+    We need to be careful with the shape of our predictions in `predictive_mean` and
+    `predictive_` `stddev` here. Each of them is a tensor of length 10,000, so it
+    will need to be reshaped into a square matrix before being passed to the `imshow()`
+    function. This can be done as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ The first heat map for the predictive mean
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ The second heat map for the predictive standard deviation
+  prefs: []
+  type: TYPE_NORMAL
+- en: This code produces the two heat maps in figure 2.19.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/02-19.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 2.19 Predictions made by a two-dimensional GP. The mean function still
+    agrees with the training data, and uncertainty once again vanishes in the regions
+    surrounding these data points.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We see that what we have in the one-dimensional case extends to this example
+    too:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The left panel shows that our mean prediction agrees with our training data:
+    the bright blob on the left corresponds to (–1, 1), which has a value of 0.5,
+    while the dark blob on the right corresponds to (1, 2), which has a value of –1
+    (our observation at (0, 0) has a value of 0, which is also the prior mean, so
+    it is not as obvious to point out in the left panel as the other two).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Our uncertainty (measured by the predictive standard deviation) is close to
+    zero around the three points in our training data, as demonstrated by the right
+    panel. Going away from these data points, the standard deviation smoothly increases
+    to the normalized maximum uncertainty of 1.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This means all of the nice properties of a GP, such as smooth interpolation
+    and uncertainty quantification, are preserved when we go to higher dimensions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This marks the end of chapter 2\. We have gained a conceptual understanding
+    of what a GP is and learned how to implement a base GP model in Python using GPyTorch.
+    As mentioned, we dive deeper into the mean and covariance functions of a GP in
+    chapter 3, including their hyperparameters, and see how each of these components
+    controls the behavior of our GP model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 2.5 Exercise
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In this exercise, we train a GP on a real-world dataset we saw in chapter 1,
+    which is shown again in table 2.2\. Each data point (row) corresponds to an alloy
+    (a kind of metal) created by mixing lead (Pb), tin (Sn), germanium (Ge), and manganese
+    (Mn)—these are called the *parent compounds*—at different ratios. The features
+    are contained in the first four columns, which are the percentages of the parent
+    compounds. The prediction target, mixing temperature, is in the last column, denoting
+    the lowest temperature at which an alloy can form. The task is to predict mixing
+    temperature given the compositional percentages of an alloy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Table 2.2 Data from a materials discovery task. The features are the structure
+    of a material expressed in percentages of parent compounds, and the prediction
+    target is the mixing temperature.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| % of Pb | % of Sn | % of Ge | % of Mn | Mixing temp. (°F) |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- | --- | --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 0.50 | 0.50 | 0.00 | 0.00 | 192.08 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 0.33 | 0.33 | 0.33 | 0.00 | 258.30 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 0.00 | 0.50 | 0.50 | 0.00 | 187.24 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 0.00 | 0.33 | 0.33 | 0.33 | 188.54 |'
+  prefs: []
+  type: TYPE_TB
+- en: 'There are multiple steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Create the four-dimensional dataset included in table 2.2.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Normalize the fifth column by subtracting the mean from all values and dividing
+    the results by their standard deviation.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Treat the first four columns as features and the fifth as labels. Train a GP
+    on this data. You can reuse the GP model class we implemented in the chapter.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Create a test dataset containing compositions with zero percent germanium and
+    manganese. In other words, the test set is a grid over the unit square whose axes
+    are percentages of lead and tin.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'The test set should look like the following PyTorch tensor:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: Notice that the third and fourth columns are all zeros.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Predict the mixing temperature on this test set. That is, compute the posterior
+    mean and standard deviation of the normalized mixing temperature for every point
+    in the test set.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Visualize the predictions. This involves showing the mean and standard deviation
+    as heat maps in the same way as in figure 2.19\. The solution is included in CH02/02
+    - Exercise.ipynb.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: A multivariate Gaussian (MVN) distribution models the joint distribution of
+    many random variables. The mean vector denotes the expected values of the variables,
+    while the covariance matrix models both the variances and the covariances among
+    these variables.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: By applying Bayes’ theorem, we can compute the posterior distribution of an
+    MVN. Through this Bayesian update, variables that are similar to the observed
+    variable are updated to reflect this similarity. Overall, similar variables produce
+    similar predictions.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A GP extends an MVN distribution to infinite dimensions, making it a distribution
+    over functions. However, the behavior of a GP is still similar to that of an MVN
+    distribution.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Even without any training data, a GP may still produce predictions specified
+    by the prior GP.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Once trained on a dataset, the mean prediction of a GP smoothly interpolates
+    the training data points.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'One of the biggest advantages of using a GP is the calibrated quantification
+    of uncertainty the model offers: predictions around observed data points are more
+    confident; predictions far away from training data, on the other hand, are more
+    uncertain.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Conditioning with an MVN distribution or a GP is visually similar to tying a
+    knot at an observation. This forces the model to exactly go through the observation
+    and reduces the uncertainty to zero.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'When using GPyTorch to implement GPs, we can write a model class that extends
+    the base class in a modular way. Specifically, we implement two specific methods:
+    `__init__()`, which declares the mean and covariance functions of the GP, and
+    `forward()`, which constructs an MVN distribution for a given input.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL

@@ -1,0 +1,1219 @@
+- en: 5 Exploring the search space with bandit-style policies
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter covers
+  prefs: []
+  type: TYPE_NORMAL
+- en: The multi-armed bandit problem and how it’s related to BayesOpt
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The Upper Confidence Bound policy in BayesOpt
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The Thompson sampling policy in BayesOpt
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Which slot machine should you play at a casino to maximize your winnings? How
+    can you develop a strategy to intelligently try out multiple slot machines and
+    narrow down the most profitable machine? What does this problem have to do with
+    BayesOpt? These are the questions this chapter will help us answer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Chapter 4 was our introduction to BayesOpt policies, which decide how the search
+    space should be explored and inspected. The exploration strategy of a BayesOpt
+    policy should guide us toward the optimum of the objective function we’d like
+    to optimize. The two particular policies we learned about were Probability of
+    Improvement (PoI) and Expected Improvement (EI), which use the idea that we’d
+    like to improve from the best objective value we have seen so far. This improvement-based
+    mindset is only a heuristic and, therefore, doesn’t constitute the only approach
+    to BayesOpt.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this chapter, we learn about two more BayesOpt policies that are directly
+    taken from the heavily related decision-making problem called the *multi-armed
+    bandit* (MAB). Posed as a question of which is the most profitable slot machine
+    to play at a casino, the MAB problem sets the stage for many decision-making-under-uncertainty
+    problems. MAB has enjoyed a long history and extensive research, and many good
+    solutions have been developed for this problem. As we learn in this chapter, MAB
+    and BayesOpt are very similar problems—both deal with decision-making under uncertainty
+    for optimization—so the expectation is that solutions to the MAB problem will
+    work well on BayesOpt too.
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, we briefly talk about the MAB problem and how it is related to BayesOpt.
+    This discussion provides some background on the problem and puts into perspective
+    how BayesOpt is related to other problems in AI. Then, we learn about the two
+    most popular policies in MAB and apply them to BayesOpt. The first is the *Upper
+    Confidence Bound* policy, which uses the *optimism in the face of uncertainty*
+    principle to reason about its decisions. The second policy is called *Thompson
+    sampling*, which is a randomized solution that actively uses the probabilistic
+    nature of our predictive models. We then implement and run these policies on our
+    running examples and analyze their performance.
+  prefs: []
+  type: TYPE_NORMAL
+- en: By the end of this chapter, we gain an understanding of the MAB problem and
+    its relationship with BayesOpt. More importantly, we add two more items to our
+    portfolio of BayesOpt policies, exposing ourselves to more ways of exploring the
+    search space in a black box optimization problem.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.1 Introduction to the MAB problem
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In this section, we learn about the MAB problem on a high level. We start by
+    discussing its problem statement and setting in the first subsection.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Important In a MAB problem, we need to choose an action to take at each step
+    over a long horizon. Each action yields a reward according to an unknown reward
+    rate, and our goal is to maximize the total reward we receive at the end of the
+    long horizon.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We also explore its connections to BayesOpt, as well as other problems in AI
+    and ML. This provides us with context, relating MAB to the rest of the text.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.1.1 Finding the best slot machine at a casino
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: While *multi-armed bandit* may evoke a mysterious image in your mind, the term
+    actually refers to a gambler’s problem of choosing which slot machines to play
+    at a casino to obtain the largest amount of reward. Imagine you’re at a casino
+    and there’s a slot machine with an “arm” you can pull.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Upon pulling the arm of the slot machine, you may receive coins as a reward;
+    however, there’s randomness in this process. Specifically, programmed within the
+    inner-workings of this slot machine is a reward probability *p*. Each time the
+    arm of the machine is pulled, the machine returns coins according to that probability.
+    This slot machine is visualized in figure 5.1\. If *p* = 0.5, then the machine
+    rewards its players half of the time. If *p* = 0.01, then roughly only 1 in 100
+    pulls will result in coins being returned. Since this probability is programmed
+    inside the machine—and therefore hidden away from us—there’s no way for us to
+    know for sure what that probability is.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/05-01.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.1 A slot machine with an arm that can be pulled. The machine may return
+    coins according to its reward probability when its arm is pulled.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this hypothetical setting, the casino programs its slot machines so that
+    the rate at which these machines reward players with coins is lower than that
+    of the machines being played and receiving coins. In other words, even if there
+    are occasional winners who receive rewards from these slot machines, on average,
+    it’s the casino that makes a profit.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Definition A particularly unsuccessful player who is losing coins faster than
+    winning them might begrudgingly call the slot machine they have been playing “a
+    bandit,” thinking the machine is stealing their money. Since the machine has an
+    arm that may be pulled, it can be called a *one-armed bandit*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now, imagine there’s not just one slot machine but a *row* of machines we may
+    choose to play, each with its own reward probability *p*, as visualized in figure
+    5.2.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/05-02.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.2 A slot machine with an arm that can be pulled. The machine may return
+    coins according to its reward probability when its arm is pulled.
+  prefs: []
+  type: TYPE_NORMAL
+- en: With this row of slot machines, a strategic player may turn this setting into
+    a decision-making challenge and aim to try out the slot machines in some intelligent
+    manner so they can most quickly identify the machine that has the highest reward
+    probability. Their intent here is to maximize the amount of reward they receive
+    given that they can only pull the arms of these machines a specific number of
+    times.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Definition This decision-making problem is called the *multi-armed bandit* (or
+    MAB), as there are multiple arms we may pull. The goal is to design a policy of
+    deciding which machine’s arm we should pull next to maximize the total reward
+    we obtain at the end.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We see that MAB possesses many characteristics of an optimization-under-uncertainty
+    problem, like BayesOpt:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*We can take specific actions.* Each action corresponds to pulling the arm
+    of a specific slot machine.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*We have a limited budget.* We can only pull these arms for a specific number
+    of times until we have to stop.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*There’s uncertainty in the outcomes of the actions that may be taken.* We
+    don’t know what the reward probability of each slot machine is, and we can’t even
+    estimate it until we have pulled its arm multiple times. Further, upon pulling
+    an arm, we can’t know for sure whether we will receive coins, as there’s randomness
+    in the reward.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*We’d like to optimize for an objective.* We aim to maximize the *cumulative
+    reward*, which is the total number of coins we receive while pulling the arms
+    of these machines until we stop.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Perhaps most importantly, in MAB, we face the same exploration–exploitation
+    tradeoff we discussed in section 4.1.2\. In particular, each time we decide to
+    pull the arm of a machine, we need to choose between the machine that has been
+    giving us a good success rate so far (exploitation) and others with a reward probability
+    we don’t know much about (exploration).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The problem we face is a tradeoff because by exploring, we run the risk of
+    wasting our pulls on machines that have low reward probability, but excessive
+    exploitation means we might completely miss out on a machine that has a higher
+    reward rate than what we currently observe. Figure 5.3 shows an example of this
+    where the following is true:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We have collected 70 coins over 100 pulls of the first machine. That is, the
+    first machine offers the highest empirical success rate so far, at 70%.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: We have more data from the second machine, so we have the least uncertainty
+    about its reward rate, which is around 50%.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Although the empirical success rate of the third machine is the lowest (0%),
+    we may need to try pulling its arm more times to be more certain of its reward
+    rate.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/05-03.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.3 An example of an MAB dataset showing the exploration–exploitation
+    dilemma. An MAB policy must choose between a machine with a consistently high
+    success rate and one with a reward rate that is uncertain.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'It is the job of a MAB policy, similar to that of a BayesOpt policy, to look
+    at the data on past rewards and decide which arm we should pull next, while balancing
+    this tradeoff between exploration and exploitation. The MAB problem models a wide
+    range of applications you might see in the real world:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In product recommendation, an engine needs to pick from a number of products
+    in a store to suggest one to a user. Each product can be seen as the arm of a
+    slot machine, and pulling the arm means the engine picks that product to present
+    to the user. If the user clicks on the advertisement for the product, we may see
+    it as receiving a reward, as the user’s click is something we want to achieve.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Many resource management problems may be framed as MAB, where we need to consider
+    how to best allocate different resources to different organizations to best optimize
+    some high-level objective (e.g., profit or productivity) without knowing in advance
+    how well each organization will operate. Portfolio management can also be framed
+    as an MAB problem in the same way.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: MAB also has seen application in the design of clinical trials, where each patient
+    needs to be assigned to a specific treatment. We wish to optimize the treatment
+    outcome across all patients but need to contend with limited resources and determining
+    how likely each patient is to benefit from a given treatment.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In each of these applications, we can take a set of actions—that is, a set of
+    arms we can pull—to optimize an objective under uncertainty.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.1.2 From MAB to BayesOpt
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: We have seen that MAB and BayesOpt have many shared characteristics. In both
+    problems, we need to reason about what decision we should take so that we can
+    maximize a quantity we care about. Further, the outcome of each action is not
+    deterministic. This means we don’t know whether an action will yield a good result
+    until we actually take it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: However, these two problems are not equivalent. In MAB, we aim to maximize the
+    *cumulative reward* over time—that is, the total number of coins one receives.
+    With BayesOpt, we seek to simply find an input of a function that leads to a high
+    value; so as long as among the dataset we collect there is a good objective value,
+    we will succeed at optimization. This single-valued objective is sometimes called
+    the *simple reward*. This difference means we need to make sure we are frequently
+    receiving rewards in MAB to maintain a good cumulative reward, while in BayesOpt,
+    we could afford to be more explorative to potentially find a good objective value.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Definition The term *simple reward* doesn’t mean the objective is easier or
+    simpler to optimize, but rather that the objective is a single number as opposed
+    to a sum that is the cumulative reward.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Further, there are only a finite number of actions to take in MAB (a finite
+    number of arms we could pull). In BayesOpt, as we are attempting to optimize an
+    objective function in a continuous domain, there are infinitely many actions.
+    Since we assume with a GP that function values at nearby points are similar to
+    one another, we can think of this as actions close to each other yielding similar
+    reward rates. This is illustrated in figure 5.4, where each infinitesimal point
+    is a slot machine whose arm we could pull (that is, query the objective function
+    value at), and machines that are close to each other have similar colors.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/05-04.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.4 BayesOpt is similar to an MBA problem with infinitely many actions.
+    Each infinitesimal point is a slot machine whose arm we could pull. Further, machines
+    that are close to each other are correlated in the sense that they have similar
+    reward rates.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Most formalizations of the MAB problem consider the binary setting where a slot
+    machine, when pulled, either returns a coin or doesn’t return anything. The function
+    value we may observe in BayesOpt, on the other hand, could take on any real value.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The main differences between MAB and BayesOpt are summarized in table 5.1\.
+    Although these are fundamental differences, the tradeoff between exploration and
+    exploitation in decision-making is present in both problems, so it’s reasonable
+    to aim to repurpose MAB policies to BayesOpt.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Table 5.1 The differences between the MAB and BayesOpt
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| Criterion | MAB | BayesOpt |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Objective to be maximized | Cumulative reward | Simple reward |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Type of observation/reward | Binary | Real-valued |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Number of actions | Finite | Infinite |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Correlation between actions | No | Yes for similar actions |'
+  prefs: []
+  type: TYPE_TB
+- en: In the rest of this chapter, we learn about two such policies, the motivations
+    behind them, and how to implement them with BoTorch. We start with the Upper Confidence
+    Bound policy in the next section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.2 Being optimistic under uncertainty with the Upper Confidence Bound policy
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: How should we account for the infinitely many possibilities for the value we
+    may observe when we evaluate the objective function at a particular location?
+    Further, how should we reason about these possibilities in a simple, efficient
+    way that is conducive to decision-making? In this section, we explore the *Upper
+    Confidence Bound* (UCB) policy from MAB, which results in a BayesOpt policy of
+    the same name.
+  prefs: []
+  type: TYPE_NORMAL
+- en: UCB operates under the *optimism in the face of uncertainty* principle. In MAB,
+    the idea is to use an upper bound of our estimate for each slot machine’s reward
+    rate as a substitute for the true, unknown reward rate. That is, we optimistically
+    estimate the reward rate of each machine using an upper bound of what we believe
+    it to be and, finally, choose the one with the highest upper bound.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We first discuss this principle and how it aids our decision-making reasoning.
+    Afterwards, we learn how to implement the UCB policy using BoTorch and analyze
+    its behavior.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.2.1 Optimism under uncertainty
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Let’s consider a simple example to make this idea concrete. Say you wake up
+    one day and observe that even though it’s sunny outside, there are dark clouds
+    on the horizon. You check the weather app on your phone to see if it will stay
+    sunny throughout the day and whether you should bring an umbrella to work in case
+    it rains later. Unfortunately, the app can’t tell you with absolute certainty
+    whether it will stay sunny. Instead, you only see an estimate that the probability
+    of sunny weather is between 30% and 60%.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You think to yourself that if the probability that it will stay sunny is less
+    than 50%, then you will bring an umbrella. However, you don’t have a single-valued
+    estimate here, but instead, a range between 30% and 60%. How, then, should you
+    decide whether an umbrella is necessary?
+  prefs: []
+  type: TYPE_NORMAL
+- en: A pessimist might say that since the probability of sunny weather could be as
+    low as 30%, you should be on the safe side and prepare for the worst. Someone
+    who considers the average case might look further into the app to see what the
+    mean estimate is for the probability it will stay sunny and make their decision
+    accordingly. From the perspective of an optimist, on the other hand, a 60% chance
+    is reason enough to think that it will stay sunny, so this person wouldn’t bother
+    bringing an umbrella with them to work. These ways of thinking are shown in figure
+    5.5.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In figure 5.5, the third person’s reasoning corresponds to the idea behind
+    the UCB policy: being optimistic about the outcome of an unknown event and making
+    decisions based on this belief. In the MAB problem, the UCB would construct an
+    upper bound of the reward rate of each slot machine and proceed to pick the machine
+    with the highest bound.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/05-05.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.5 Different ways of thinking about the future and making decisions.
+    The last person corresponds to the UCB policy, which reasons about an unknown
+    quantity in an optimistic manner.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note The way this policy is realized in BayesOpt is particularly simple since
+    with a GP as our predictive model of the objective function, we already have an
+    upper bound of the reward rate of each action. That is, we have an upper bound
+    of the objective value at any given input location.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Specifically, we know that the objective value at a given location follows a
+    normal distribution, and a commonly used measure to quantify uncertainty of a
+    normal distribution is the 95% CI, which contains 95% of the probability mass
+    of the distribution. With a GP, we visualize this 95% CI across the input space
+    as the thick line in figure 5.6\. The upper bound of this 95% CI, which is the
+    upper boundary of the shaded region highlighted in figure 5.6, is exactly what
+    the UCB policy uses as the acquisition scores for the data points in the search
+    space, and the point that gives the highest score is the one at which we will
+    evaluate the objective function next, which, in this case, is the location indicated
+    by the dotted line around –1.3.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/05-06.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.6 The UCB of a GP that corresponds to the 95% CI. This bound can be
+    used as the acquisition score of the UCB policy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Definition *Acquisition scores* quantify how valuable a data point is in guiding
+    us towards the optimum of the objective function. We first learned about acquisition
+    scores in section 4.1.1.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You might think that this form of decision-making might not be appropriate,
+    especially in high-stakes situations where the cost of a bad decision is high.
+    In our umbrella example, by optimistically underestimating the probability of
+    rain, you might run the risk of getting caught in the rain without an umbrella.
+  prefs: []
+  type: TYPE_NORMAL
+- en: However, it is a particularly computationally efficient way of reasoning, as
+    we simply need to extract an upper bound of our estimate of a quantity of interest
+    and use that bound for decision-making. Moreover, as we see in the next subsection,
+    by choosing which CI we’d like to use (as opposed to sticking with the 95% CI),
+    we have complete control over how optimistic the UCB is. This control also allows
+    the policy to balance exploration and exploitation, which is the core question
+    that needs to be addressed by any BayesOpt policy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.2.2 Balancing exploration and exploitation
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: In this subsection, we talk further about how the UCB policy may be adjusted
+    by us, the BayesOpt users. This offers a level of control that balances between
+    regions with high uncertainty (exploration) and regions with high predictive mean
+    (exploitation). This discussion aims to provide a deeper understanding of UCB
+    before moving ahead with BoTorch implementation in the next subsection.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Remember that with a normal distribution, going two standard deviations away
+    from the mean (that is, mean *μ* plus/minus 2 times standard deviation σ) gives
+    us the 95% CI. The upper bound of this interval (*μ* + 2σ) is the acquisition
+    score of UCB we saw in the previous subsection.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'However, the 95% CI is not the only CI of a normal distribution. By setting
+    the multiplier, denoted as β, for the standard deviation σ in the formula *μ*
+    + βσ, we obtain other CIs. For example, the following is true in a one-dimensional
+    normal distribution, as shown in figure 5.7:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Going one standard deviation above the mean (*μ* + σ)—that is, setting β =
+    1—gives the 68% CI: 68% of the probability mass of the normal distribution lies
+    between *μ* – σ and *μ* + σ.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Similarly, three standard deviations away from the mean (β = 3) gives us the
+    99.7% CI.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/05-07.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.7 Different CIs of standard normal distributions. Going away from the
+    mean to one, two, and three standard deviations, we obtain the 68%, 95%, and 99.7%
+    CIs. The upper bounds of these intervals are used by the UCB policy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In fact, any value of β would give us a unique CI for the normal distribution.
+    Since the UCB only dictates that we should use an upper bound from our predictive
+    model to make decisions, any value of the form *μ* + βσ can serve as the upper
+    bound used in UCB. By setting this parameter β, we can control for the behavior
+    of the UCB policy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 5.8 shows three different upper bounds corresponding to β = 1, 2, 3,
+    while the mean function, in fact, corresponds to setting β = 0\. We see that although
+    the upper bounds are of roughly the same shape, these bounds go up and down at
+    different rates. Further, since the data point maximizing this bound is the point
+    the UCB selects to query for optimization, different bounds, that is, different
+    values of β will induce different optimization behaviors.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/05-08.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.8 Different upper bounds of a GP, corresponding to different CIs and
+    β values. The larger β is, the more explorative the UCB policy becomes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Important The smaller β is, the more exploitative UCB becomes. Conversely, the
+    larger β is, the more explorative UCB becomes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We can see that the value of β controls the behavior of UCB by inspecting the
+    formula for the acquisition score: *μ* + βσ. When β is small, the mean *μ* contributes
+    the most to the acquisition score. So, the data point with the highest predictive
+    mean will maximize this score. This selection corresponds to pure exploitation,
+    as we are simply picking out the point with the largest predicted value. When
+    β is large, on the other hand, the standard deviation σ, which quantifies our
+    uncertainty, becomes more important in the UCB score, emphasizing the need for
+    exploration.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We see this distinction in figure 5.8 where around 0 is where we achieve the
+    highest predictive mean, indicating it is the region of exploitation. As β increases,
+    the point at which the different upper bounds peak gradually moves to the left
+    where there is more uncertainty in our prediction.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note Interestingly, in the limit where β → ∞, the point that maximizes UCB’s
+    acquisition score is where the standard deviation σ is maximized—that is, where
+    our uncertainty is at its highest. This behavior corresponds to pure exploration,
+    as we are selecting data points with high uncertainty.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Finally, UCB correctly assigns higher scores to data points that offer better
+    balance between exploration and exploitation:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: If two data points have the same predictive mean but different predictive standard
+    deviations, then the one with the higher uncertainty will have a higher score.
+    The policy, therefore, rewards exploration.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If two data points have the same predictive standard deviations but different
+    predictive means, then the one with the higher mean will have a higher score.
+    The policy, therefore, rewards exploitation.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Remember that one of the policies discussed in chapter 4, EI, also has this
+    property, which is a desideratum of any BayesOpt policy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: All in all, this parameter, β, controls UCB and how the policy explores and
+    exploits the search space. This means that by setting the value of this parameter,
+    we have direct control over its behavior. Unfortunately, beyond the fact that
+    the value for β corresponds to the level of exploration, there’s no straightforward,
+    principled way of setting this parameter, and some values might work on some problems
+    but not on others. Exercise 1 of this chapter further discusses a more-involved
+    method of setting β that might generally work sufficiently well.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note The documentation of BoTorch usually shows UCB with β = 0.1, while many
+    research papers that use UCB for BayesOpt opt for β = 3\. So, 0.1 could be your
+    go-to value when using this policy if you prefer exploitation, and 3 should be
+    the default if you lean toward exploration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.2.3 Implementation with BoTorch
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Having thoroughly discussed the motivation and math behind UCB, we now learn
+    how to implement the policy using BoTorch. The code we look at here is included
+    in CH05/01 - BayesOpt loop.ipynb. Remember from section 4.2.2 that although we
+    could manually implement the PoI policy ourselves, declaring the BoTorch policy
+    object, using it with the GP model, and optimizing the acquisition score using
+    BoTorch’s helper function `optimize_acqf()` make it easier to implement our BayesOpt
+    loop.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For this reason, we do the same thing here and use the built-in UCB policy class,
+    even though we could simply compute the quantity μ + βσ ourselves. This can be
+    done with
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here, the UCB class implementation in BoTorch takes in the GP model as its first
+    input and a positive value for its second input `beta`. As you might expect, this
+    second input denotes the value for the UCB parameter β in the score formula μ
+    + βσ, which trades off between exploration and exploitation. Here, we set it to
+    1 for now.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note Believe it or not, this is all we need to change from our BayesOpt code
+    from the previous chapter to run the UCB policy on the objective functions we
+    have. This demonstrates the benefit of BoTorch’s modularity, which allows us to
+    plug and play any policy we’d like to use into our BayesOpt pipeline.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Running our UCB policy with β = 1 on our familiar Forrester objective function
+    generates figure 5.9, which shows optimization progress throughout 10 function
+    evaluations. We see that like what happened to the PoI policy, UCB with β = 1
+    fails to sufficiently explore the search space and is stuck at a local optimum
+    in the case of the Forrester function. This means the value for β is too small.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/05-09.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.9 Progress made by the UCB policy with the tradeoff parameter β = 1\.
+    The value of the parameter is not sufficiently large to encourage exploration,
+    causing progress to be stuck at a local optimum.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note We learn about the Probability of Improvement policy in section 4.2.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let us try again, this time setting this tradeoff parameter to a larger value:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: The progress of this version of the UCB policy is shown in figure 5.10\. This
+    time, UCB is able to find the global optimum thanks to the higher level of exploration
+    induced by the larger value of β. However, if β is so large that UCB only spends
+    its budget exploring the search space, then our optimization performance might
+    also suffer. (We see an example of this in this chapter’s exercises later on.)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/05-10.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.10 Progress made by the UCB policy with the tradeoff parameter β =
+    2\. The policy successfully finds the global optimum.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Overall, the importance of using a good value for this tradeoff parameter while
+    using the UCB policy is clear. However, again, it’s difficult to say what value
+    will work well for a given objective function. Exercise 1 of this chapter explores
+    a certain strategy to adjust the value of this parameter as we progress through
+    the search.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This marks the end of our discussion on UCB. We have seen that by adopting the
+    *optimism in the face of uncertainty* mindset from the MAB problem, we obtain
+    a BayesOpt policy whose explorative behavior can be directly controlled and tuned
+    with a tradeoff parameter. In the next section, we move on to the second policy
+    taken from MAB, which has an entirely different motivation and strategy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.3 Smart sampling with the Thompson sampling policy
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In this section, we learn about another heuristic in MAB that directly translates
+    to a widely used BayesOpt policy called *Thompson sampling* (TS). As we will see,
+    this policy uses an entirely different motivation from that of UCB and, therefore,
+    induces different optimization behavior. Similar to section 5.2 with UCB, we learn
+    the general idea behind this BayesOpt policy first and then move on to its code
+    implementation later.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.3.1 One sample to represent the unknown
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: With UCB, we make decisions based on an optimistic estimate of the unknown quantity
+    we care about. This offers a simple way to reason about the consequences of the
+    actions we take and the rewards we receive that trades off exploration and exploitation.
+    What about TS?
+  prefs: []
+  type: TYPE_NORMAL
+- en: Definition The idea of Thompson sampling is to first maintain a probabilistic
+    belief about the quantity we care about and then *sample* from that belief and
+    treat that sample as a replacement of the true unknown quantity in question. This
+    sampled replacement is then used to pick out the best decision we should make.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s come back to our weather forecast example to see how this works. Again,
+    we are interested in the problem of deciding whether we should bring an umbrella
+    to work in which we are given an estimate of the probability that the weather
+    will stay sunny throughout the day. Remember that the UCB relies on an upper bound
+    of this estimate to inform its decisions, but what will the TS policy do?
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The TS first draws a sample from the probability distribution we use to model
+    the unknown quantity—whether it will stay sunny, in this case—and make decisions
+    based on this sample. Let’s say that instead of a range like we saw in the previous
+    section, the weather app on our phone now announces there’s a 66% (roughly two
+    out of three) chance the weather will say sunny. This means that when following
+    the TS policy, we first flip a coin with a two-thirds bias for heads:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: If the coin lands on heads (with a 66% chance), then we treat it as if the weather
+    will stay clear throughout the day and conclude we won’t need an umbrella.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If the coin lands on tails (with 34% chance), then we treat it as if it will
+    rain and conclude we should bring an umbrella to work.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This process of TS is visualized in figure 5.11 as a decision tree, where at
+    the beginning, we flip a biased coin to obtain a sample from the probability distribution
+    of sunny weather. Based on whether the coin lands on heads (representing a sample
+    of sunny weather) or tails (a sample of rain), we decide whether or not we should
+    bring an umbrella to work.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/05-11.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.11 The TS policy as a decision tree. We flip a biased coin to obtain
+    a sample from the probability distribution of sunny weather and decide whether
+    to bring an umbrella based on this sample.
+  prefs: []
+  type: TYPE_NORMAL
+- en: While this might seem like an arbitrary method of decision-making at first,
+    TS is particularly effective in both MAB and BayesOpt. First of all, given a probability
+    distribution representing a quantity of interest, a sample of that distribution
+    is a possible realization of that quantity, so that sample may be used as a representation
+    of the distribution. In optimization under uncertainty problems, TS offers the
+    same benefit as UCB in that sampling from a probability distribution is often
+    easy to do. Just as UCB’s optimistic estimates of the reward rates may be generated
+    in an efficient manner, sampling may be done just as efficiently.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s consider how TS works in BayesOpt. From a GP trained on the current observed
+    data, we draw one sample. Remember from chapter 3 that a sample from a GP is a
+    function representing a particular realization of the objective function according
+    to our GP belief. However, unlike the true objective function, which is unknown
+    in regions without observed data, a sample drawn from a GP is entirely known.
+    This means we can find the location at which this sample is maximized.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 5.12 shows the GP we trained on the Forrester function and three samples
+    drawn from it as dashed lines. Further, along each of the samples, we use a diamond
+    to indicate the location at which the sample is maximized. As we can see, one
+    sample is maximized around –3.2, another around –1.2, and the third at 5.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/05-12.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.12 Samples drawn from a GP and data points that maximize the corresponding
+    samples. Whichever sample is drawn, TS selects the data point that maximizes that
+    sample as the next point at which to evaluate the objective function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When using the TS policy, it’s entirely up to chance to determine which of these
+    three samples (or a completely different sample) we draw from the GP. However,
+    whichever sample we draw, the data point that maximizes the sample is the one
+    we will query next. That is, if we draw the sample maximized at –3.2, then –3.2
+    is where we will evaluate the objective function next. If we draw the sample maximized
+    at 5, then we will query the point *x* = 5 next.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Definition The acquisition scores that TS computes are the values of a random
+    sample drawn from the GP. The data point that maximizes this sample is the one
+    we will query next.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Unlike other policies we have seen so far, TS is a *randomized* policy, which
+    means that when faced with the same training data and GP, it’s not guaranteed
+    that the policy will make the same decision (unless we computationally set the
+    random seed). However, this randomness is in no way a disadvantage. We have said
+    that drawing a sample from a GP is easy, so computing the TS acquisition score
+    may be done efficiently. Further, maximization of a random sample inherently balances
+    between exploration and exploitation, which, as we know, is the main concern in
+    BayesOpt:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: If a data point has a high predictive mean, then the value of a random sample
+    at that data point is likely to be high, making it more likely to be the one maximizing
+    the sample.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If a data point has a high predictive standard deviation (that is, uncertainty),
+    then a random sample at that data point will also have a higher variability and,
+    thus, a higher chance of having a high value. This higher variability, therefore,
+    also makes the data point more likely to be chosen as the next point to query.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: TS is likely to exploit with a random sample that is maximized in a region with
+    a high predictive mean, but the policy is just as likely to explore with another
+    sample given the same situation. We see this in figure 5.12, where one sample
+    is maximized around –1.2, which has a relatively high predictive mean. If this
+    is the sample we draw, then by evaluating the objective at –1.2, we will be exploiting
+    the function. However, if we draw either of the other two samples, then we will
+    be exploring, as the regions where the samples are maximized have high uncertainty.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is quite an elegant tradeoff scheme. By using the randomness of the samples,
+    TS directly uses the probabilistic nature of our predictive model, the GP, to
+    explore and exploit the search space. The randomized nature of TS means that at
+    any given iteration of the BayesOpt loop, the policy might not make the best decision
+    to trade off exploration and exploitation, but over time, in the aggregation of
+    its decisions, the policy will be able to explore the space sufficiently and narrow
+    down high-performing regions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.3.2 Implementation with BoTorch
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Let’s now move on to implementing this TS policy in Python. Once again, the
+    code is included in the CH05/01 - BayesOpt loop.ipynb notebook. Remember that
+    for the BayesOpt policies we have seen, implementation comes down to declaring
+    a BoTorch policy object and specifying the relevant information. Then, to find
+    the data point we should query next, we optimize the acquisition score, as computed
+    by the policy. This, however, is *not* the case with TS.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The main challenge of implementing TS as a generic PyTorch module that takes
+    in a data point and scores it according to some criterion is that sampling from
+    a GP can only be done with a finite number of points. In the past, we have represented
+    a sample from a GP using a sample of a high-dimensional MVN distribution of a
+    dense grid over the search space. When samples of this dense Gaussian are plotted,
+    they appear to be actual functions with smooth curves, but in reality, they are
+    defined over a grid.
+  prefs: []
+  type: TYPE_NORMAL
+- en: All of this is to say that it is computationally impossible to draw a sample
+    as a function from a GP since that would require an infinite number of bits. A
+    typical solution is to draw the corresponding MVN over a large number of points
+    that span the input space so that all regions in the search space are represented.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Important This is exactly what we do to implement TS: generate a large number
+    of points throughout the search space and draw a sample from the MVN distribution
+    corresponding to predictions from a GP over these points.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The procedure for TS is summarized in figure 5.13, where we use a *Sobol sequence*
+    as the points that span the search space. (We discuss why a Sobol sequence is
+    preferred over other sampling strategies shortly.) We then draw a sample from
+    the GP on these points and pick out the point that yields the highest value from
+    the sample. This sample is then used to represent a sample from the GP itself,
+    and we evaluate the objective function at the location where the sampled value
+    is maximized next.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/05-13.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.13 Flowchart of the implementation of TS in BoTorch. We use a Sobol
+    sequence to populate the search space, draw a sample from the GP on the sequence,
+    and choose the point in the sequence that maximizes the sample to evaluate the
+    objective function at.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Definition A *Sobol sequence* is an infinite list of points in a region in Euclidean
+    space that aims to cover the region evenly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s first discuss why we need to use a Sobol sequence to generate points that
+    span our search space. A simpler solution is to use a dense grid. However, generating
+    a dense grid quickly becomes intractable as the number of dimensions of our search
+    space grows, so this strategy is out of the question. Another potential solution
+    is to uniformly sample from that space, but statistical theory shows that uniform
+    sampling is, in fact, not the best way to generate points that cover a space evenly,
+    and a Sobol sequence does a better job.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 5.14 shows the comparison between a Sobol sequence of 100 points and
+    the same number of points uniformly sampled within the two-dimensional unit square.
+    We see that the Sobol sequence covers the square more evenly, which is what we’d
+    like to achieve with TS. This contrast is even more glaring in higher dimensions,
+    giving us more reason to prefer Sobol sequences than uniformly sampled data points.
+    We don’t discuss Sobol sequences in detail here; what is important for us to know
+    is that a Sobol sequence is the go-to method of sample generation if our goal
+    is to cover a space evenly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/05-14.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.14 Points from a Sobol sequence vs. uniformly sampled points in the
+    two-dimensional unit square. The Sobol sequence covers the square more evenly
+    and, therefore, should be used by TS.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'PyTorch provides an implementation of Sobol sequences, which can be used as
+    follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ The number of dimensions of the space
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ The number of points to be generated
+  prefs: []
+  type: TYPE_NORMAL
+- en: Here, `sobol` is an instance of the `SobolEngine` class, which implements the
+    sampling logic of Sobol sequences in the unit cube, and `candidate_x` is a PyTorch
+    tensor of the shape `(num_candidates,` `dim)` that contains the generated points
+    with the correct dimensionality.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note It’s important to remember that `SobolEngine` generates points that cover
+    the unit cube. To get `candidate_x` to cover the space we want, we need to resize
+    this tensor accordingly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: How many points the Sobol sequence should contain (that is, the value of `num_
+    candidates`) is up to us (the users) to decide; the preceding example shows that
+    we are using 1,000\. In a typical case, you would want a value large enough so
+    that the search space could be sufficiently covered. However, a value that is
+    too large will make sampling from the posterior GP numerically unstable.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Numerical instability when drawing GP samples
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The numerical instability when drawing GP samples could, at times, lead to
+    the following warning when we run TS:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: This warning indicates that the code has encountered a numerical problem due
+    to the fact that the covariance matrix of the GP is not positive definite (`p.d.`)
+    when it should be. However, this code also applies an automatic fix where we add
+    a “jitter” of 1e–6 to this covariance matrix, making the matrix positive definite,
+    so we, the users, don’t have to do anything further.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Just as we did in section 4.2.3, we use the `warnings` module to disable this
+    warning to make the output of our code cleaner as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Code for TS
+  prefs: []
+  type: TYPE_NORMAL
+- en: You could play around with multiple thousands of points to find the number that
+    works best for your use case, objective function, and trained GP. However, you
+    should always use at least 1,000 points.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Next, we move on to the second component of TS, which is the process of sampling
+    an MVN from our posterior GP and maximizing it. First, the sampler object that
+    implements the sampling may be declared as
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `MaxPosteriorSampling` class in BoTorch implements the logic of TS: sampling
+    from the posterior of a GP and maximizing that sample. Here, `model` refers to
+    the GP trained on observed data. It is important to set `replacement` to `False`,
+    making sure we are sampling without replacement (sampling with replacement isn’t
+    appropriate for TS). Finally, to obtain the data point that gives the highest
+    sampled value among `candidate_x`, we pass it to the sampler object:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The returned value is, indeed, the point that maximizes the sample, which is
+    the point we query next. And with that, our implementation of the TS policy is
+    complete. We may plug this into the code we have been using so far for the BayesOpt
+    loop on the Forrester function with the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Generates points from a Sobol engine
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Resizes the generated points to be between −5 and 5, which is our search space
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Generates the TS candidate to be queried next
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Visualizes our current progress without the acquisition function
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that the overall structure of our BayesOpt loop remains the same. What’s
+    different is that instead of a BoTorch policy object, we now have a Sobol sequence
+    to generate the set of points that cover our search space, which are then fed
+    into a `MaxPosteriorSampling` object that implements the TS policy. The variable
+    `next_x`, like before, contains the data point we will query next.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note Since we don’t have a BoTorch policy object when visualizing our progress
+    using the `visualize_gp_belief_and_policy()` helper function, we don’t specify
+    the `policy` argument anymore. This function, therefore, will only show the trained
+    GP at each iteration, without the acquisition scores.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/05-15.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.15 Progress made by the TS policy. The policy explores the search space
+    for some iterations and then gradually zeros in on the global optimum.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Optimization progress of TS is shown in figure 5.15, where we can observe that
+    the policy successfully zeros in on the global optimum throughout the procedure—but
+    not without spending a couple of queries exploring the space. This showcases the
+    ability to trade off exploration and exploitation of TS in BayesOpt.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Our discussion on BayesOpt policies inspired by policies under the MAB setting
+    is thus concluded. We have seen that each of the two policies we learned, UCB
+    and TS, uses natural heuristics to reason about unknown quantities in an efficient
+    manner and make decisions accordingly. One challenge in BayesOpt, the balance
+    between exploration and exploitation, is also addressed by both policies, allowing
+    the policies to have good optimization performance. In the next and final chapter
+    of the second part of the book, we learn about yet another commonly used heuristic
+    to decision-making in BayesOpt, this time by using information theory.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 5.4 Exercises
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'There are two exercises in this chapter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The first exercise explores a potential method to set the tradeoff parameter
+    for the UCB policy that considers how far along we are in optimization.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The second exercise applies the two policies we have learned in this chapter
+    to the hyperparameter tuning problem seen in previous chapters.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '5.4.1 Exercise 1: Setting an exploration schedule for the UCB'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This exercise, implemented in CH05/02 - Exercise 1.ipynb, discusses a strategy
+    of adaptively setting the value of the tradeoff parameter β of the UCB policy.
+    As mentioned in the section on UCB, the performance of the policy heavily depends
+    on this parameter, but it’s not obvious how we should set its value. A value might
+    work well on some objective functions but poorly on others.
+  prefs: []
+  type: TYPE_NORMAL
+- en: BayesOpt practitioners have noticed that as we collect more and more data, UCB
+    can become too exploitative. This is because as the size of our training dataset
+    increases, we gain more knowledge about the objective function, and our uncertainty
+    about the predictions made by the GP decreases. This means the CI produced by
+    the GP will become tighter, moving the upper bound that makes up the acquisition
+    score used by UCB closer to the mean prediction.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'However, if the UCB acquisition score is similar to the mean prediction, then
+    the policy is exploitative, as it will only query data points with high predictive
+    means. This phenomenon shows that the more data we have observed, the more explorative
+    we should be with UCB. Here, a natural way of gradually encouraging more exploration
+    from UCB is to slowly increase the value of the tradeoff parameter β, which is
+    what we learn to do in this exercise, following these steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Recreate the BayesOpt loop in CH04/02 - Exercise 1.ipynb, which uses the one-dimensional
+    Forrester function as the optimization objective.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: We aim to slowly increase the value of the tradeoff parameter β by multiplying
+    it with a constant at each iteration of the loop. That is, at the end of each
+    iteration, we need to update the parameter with `beta` `*=` `multiplier`.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Say we want β to start out with a value of 1 and to have a value of 10 at the
+    end of the search (the tenth iteration). What is the value that the multiplier
+    for β needs to have?
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'Implement this scheduling logic, and observe the resulting optimization performance:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Specifically, even though this version of UCB starts out with β = 1, does it
+    get stuck at a local optimum like the version for which the parameter is fixed
+    at 1?
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '5.4.2 Exercise 2: BayesOpt for hyperparameter tuning'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'This exercise, implemented in CH05/03 - Exercise 2.ipynb, applies BayesOpt
+    to an objective function that simulates the accuracy surface of a support-vector
+    machine model in a hyperparameter tuning task. The *x*-axis denotes the value
+    of the penalty parameter *C*, while the *y*-axis denotes the value for the RBF
+    kernel parameter *γ*. See the exercises in chapters 3 and 4 for more detail. Follow
+    these steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Recreate the BayesOpt loop in CH04/03 - Exercise 2.ipynb, including the outer
+    loop that implements repeated experiments.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Run the UCB policy, setting the value of the tradeoff parameter to β ∈ { 1,
+    3, 10, 30 }, and observe the values'' aggregated performance:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Which value leads to over-exploitation, and which leads to over-exploration?
+    Which value works best?
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Run the adaptive version of UCB (see exercise 1):'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The tradeoff parameter should start at 3 and end at 10.
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Observe that changing the end value from 10 to 30 doesn’t affect optimization
+    performance too much. We, therefore, say that this strategy is robust against
+    the value of this end value, which is a desideratum.
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Compare the performance of this adaptive version and that of other versions
+    with fixed β.
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Run the TS policy, and observe its aggregated performance.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The MAB problem consists of a set of actions that may be performed (arms of
+    slot machines that may be pulled), each of which returns a reward according to
+    its specific reward rate. The goal is to maximize the sum of the reward (cumulative
+    reward) we receive given a number of iterations.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: An MAB policy selects which action to take next based on past data. A good policy
+    needs to balance under-explored actions and high-performing actions.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Unlike the MAB problem, where there are a finite set of sections, there are
+    infinitely many actions that we can take in BayesOpt.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The goal of BayesOpt is to maximize the largest observed reward, which is often
+    called the *simple reward*.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The rewards in BayesOpt are correlated: similar actions yield similar rewards.
+    This is not necessarily true with the MAB.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The UCB policy uses an optimistic estimate of the quantity of interest to make
+    decisions. This *optimism in the face of uncertainty* heuristic can balance exploration
+    and exploitation, with a tradeoff parameter that we, the users, can set.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The smaller the tradeoff parameter of the UCB policy is, the more exploitative
+    the policy becomes, tending to stay within regions known to give high rewards.
+    The larger the tradeoff parameter is, the more explorative the policy becomes,
+    tending to query regions far away from observed data.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The TS policy draws a sample from a probabilistic model of the quantity of interest
+    and uses this sample to make decisions.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The random nature of TS allows the policy to explore and exploit the search
+    space appropriately: both regions of high uncertainty and those of high predictive
+    mean are likely to be chosen by TS.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'For computational reasons, more care is needed when implementing TS: we first
+    generate a set of points to cover the search space evenly, and then a sample from
+    the GP posterior is drawn for these points.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: To cover a space evenly, we can use a Sobol sequence to generate the points
+    within the unit cube and scale them to the targeted space.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL

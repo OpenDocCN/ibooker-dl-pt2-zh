@@ -1,0 +1,889 @@
+- en: 11 Optimizing multiple objectives at the same time
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter covers
+  prefs: []
+  type: TYPE_NORMAL
+- en: The problem of optimizing multiple objectives at the same time
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Training multiple GPs to learn about multiple objectives at the same time
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Jointly optimizing multiple objectives
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Every day, we are faced with optimization tradeoffs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: “This coffee tastes good, but there’s too much sugar.”
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: “That shirt looks great, but it’s out of my price range.”
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: “The neural network I just trained has a high accuracy, but it is too big and
+    takes too long to train.”
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'In an attempt to achieve a good performance on some objective, we sacrifice
+    another criterion that’s just as important: a coffee drinker with a sweet tooth
+    might optimize the taste of their coffee while using an unhealthy amount of sugar;
+    a shopper scores a clothing article high on looks and low on affordability; an
+    ML engineer develops a neural network that has good predictive performance but
+    is too large to be used in a real-time application. By focusing on one optimization
+    objective, we might perform badly on another objective that needs to be accounted
+    for. We should instead model *all* objective functions that are to be optimized
+    into our optimization procedure and attempt to jointly optimize them all. For
+    example, we should look for coffee recipes that are both tasty and low in sugar,
+    clothing items that are both fashionable and affordable, or ML models that perform
+    well and are practical to implement. This type of optimization problem is called
+    *multiobjective optimization*.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Definition A multiobjective optimization problem, as the name suggests, involves
+    multiple objective functions that are to be optimized *at the same time*. The
+    goal is to find data points that achieve high values on all of the objectives.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Of course, in any nontrivial multiobjective optimization problem, we might have
+    *competing* objectives, for which the only way to achieve good performance on
+    one objective function is to sacrifice performance on another objective. This
+    inherent conflict between optimization objectives gives rise to the need to balance
+    these objectives (very much like the need to balance exploitation and exploration,
+    discussed in section 4.1.2, which are the two “objectives” we need to optimize
+    for inside the BayesOpt loop).
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this chapter, we learn about multiobjective optimization, how to successfully
+    address it by finding data points whose performance on one objective cannot be
+    improved without sacrificing another objective, and how to apply BayesOpt to this
+    problem when the objective functions are expensive-to-query black boxes. Multiobjective
+    optimization is a common problem across many fields, and by the end of this chapter,
+    we add the ability to tackle this problem to our toolkit using Bayesian methods.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 11.1 Balancing multiple optimization objectives with BayesOpt
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Applications of multiobjective optimization are ubiquitous:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In engineering and manufacturing, engineers often face a tradeoff between multiple
+    objectives, such as the quality of a product versus the manufacturing cost. For
+    example, car manufacturers are constantly optimizing their production line to
+    maximize quality and minimize cost.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In resource allocation problems, such as the distribution of monetary and medical
+    aid across poor communities or to those affected by natural disasters, decision-makers
+    need to balance having the largest effect on these communities and the various
+    logistical difficulties in distribution.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Similar to the examples of the cost-constrained optimization problem we discussed
+    in section 8.1.1, scientists developing drugs to treat a certain disease need
+    to balance maximizing effectiveness against the disease and minimizing side effects
+    on patients.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: More relevant to ML engineers, a practical ML model that can be deployed in
+    the real world needs to achieve good performance while maintaining a low training
+    cost.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Unlike optimization settings discussed in previous chapters, we no longer have
+    a single optimization objective to focus on. In many of these problems, the objectives
+    we need to optimize are in conflict with each other: only by sacrificing our performance
+    on one metric can we improve on another. One way to think about this inherent
+    conflict between the optimization objectives is that we have to “juggle” the various
+    objectives at the same time: we can’t simply focus on certain objectives while
+    ignoring the others. This need to juggle multiple objectives at the same time
+    is visualized in figure 11.1\. Fortunately, the fact that there is now more than
+    one objective function doesn’t affect most of the BayesOpt workflow we have developed
+    throughout this book.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/11-01.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 11.1 A cartoon illustrating the balance we must achieve in multiobjective
+    optimization, where we need to juggle different objective functions
+  prefs: []
+  type: TYPE_NORMAL
+- en: Modeling multiple objective functions using multiple GPs
+  prefs: []
+  type: TYPE_NORMAL
+- en: In previous chapters, we trained a GP model on observed data to model our belief
+    about the single objective function to be optimized. In this chapter, we have
+    multiple objective functions to model, but each of these objectives can still
+    be modeled as a GP. By maintaining these multiple GPs, we have a way to reason
+    about all objective functions in a probabilistic manner.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 11.2 shows the BayesOpt loop in which there are two objective functions
+    to be optimized. Compared to figure 1.6, step 1 now has a GP for each of the objectives,
+    and each data point identified by the BayesOpt policy is evaluated on all objective
+    functions at step 3.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/11-02.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 11.2 The multiobjective BayesOpt loop with two objective functions. A
+    GP trains on data from each objective function, and the BayesOpt policy decides
+    which data point to evaluate the objective functions with next.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Training a GP on data from each objective is straightforward to implement; in
+    fact, we’ve already done this for constrained optimization in chapter 8, where
+    we train one GP on the objective function and another on the constraint function.
+    In other words, we only need to focus on the design of the BayesOpt policy in
+    step 2 of figure 11.2 to help us make effective decisions during optimization.
+    We focus on learning how the BayesOpt policy should address the balance between
+    the multiple objectives so that we can find high-performing data points as quickly
+    as possible in the rest of this chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 11.2 Finding the boundary of the most optimal data points
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In this section, we learn about mathematical concepts that are commonly used
+    in multiobjective optimization to quantify how much progress we have made during
+    optimization. These concepts help us establish the target of the optimization
+    strategy we develop later in this chapter. To make our discussion concrete, we
+    use the code in the CH11/01 - Computing hypervolume.ipynb notebook.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We start out with the two objective functions that we need to optimize at the
+    same time:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The first objective is the familiar Forrester function used in previous chapters.
+    The global optimum of this objective function is located on the right side of
+    the search space. This function is implemented as `objective1()` in the following
+    code.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: We also have another objective function, implemented as `objective2()`, which
+    has a different functional form and behavior from Forrester. Crucially, the global
+    optimum of this objective is located on the left side of the search space—the
+    mismatch in the locations of the global optima of the two objective functions
+    simulates the tradeoff that is common in multiobjective optimization problems.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: We write a helper function `joint_objective()` that returns the values of the
+    two objective functions in a PyTorch tensor for a given input data point `x`.
+    This function helps keep our code concise.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Finally, we define the search space of our optimization problem to be between
+    –5 and 5:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ The first objective function
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ The second objective function
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ The helper function that calls both objective functions
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ The bounds of the search space
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Figure 11.3 shows these two objective functions in our search space. We see
+    that the data points that maximize the two objectives are different from each
+    other: the solid curve is maximized around *x* = 4.5, while the dashed curve is
+    maximized around *x* = –4.5\. This difference means that we have two conflicting
+    objectives, and the joint optimization of these two functions requires trading
+    off their objective values.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/11-03.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 11.3 The two objective functions that make up our current multiobjective
+    optimization problem. The data points that maximize the two objectives are different
+    from each other, so there’s a tradeoff in the optimization of the two objectives.
+  prefs: []
+  type: TYPE_NORMAL
+- en: By “trading off,” we mean there exist points *x* in our search space whose values
+    for the first objective (denoted as *f*[1](*x*)) cannot be improved unless their
+    values for the second objective (denoted as *f*[2](*x*)) are lowered. In other
+    words, there are data points that optimize one objective function in the sense
+    that their values cannot be exceeded unless we sacrifice another objective function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As an example, consider *x* = –5 as indicated in figure 11.3\. This is the data
+    point on the very far left of the search space. This point has an objective value
+    *f*[1](–5) of roughly 4 and an objective value *f*[2](–5) of roughly 1.5\. Now,
+    *x* = –5 is one of the data points where, if we want to do better than 4 on the
+    first objective *f*[1](*x*), we will have to do worse than 1.5 on *f*[2](*x*).
+    Indeed, the only way for us to achieve a higher *f*[1](*x*) value than 4 is to
+    query on the rightmost portion of the search space where *x* > 4\. Here, the values
+    of *f*[2](*x*) fall below 0.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Conversely, the region on the right (*x* > 4) is also where the tension between
+    *f*[1](*x*) and *f*[2](*x*) exists: to increase the value of *f*[2](*x*), we would
+    have to move away to the left of the space, in which case the value of *f*[1](*x*)
+    would suffer.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Definition A data point whose value for an objective cannot be exceeded unless
+    its value for another objective decreases is called *nondominated*. The opposite,
+    a *dominated* point *x*[1], is one such that there exists another point *x*[2],
+    whose objective values all exceed those of *x*[1]. A nondominated point can also
+    be called a *Pareto optimal*, *Pareto efficient*, or *noninferior*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The point *x* = –5, therefore, is a nondominated point, and so are some of
+    the points where *x* > 4\. An example of a dominated point is *x* = –1.9 in figure
+    11.3, which gives *f*[1](–1.9) ≈ *f*[2](–1.9) ≈ 1\. This point is dominated by
+    *x* = –5 since the former’s objective values are lower than those of the latter:
+    *f*[1](–1.9) < *f*[1](–5) and *f*[2](–1.9) < *f*[2](–5).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In many cases, we have infinitely many nondominated points. Figure 11.4 shows
+    the nondominated points in our current problem as dash-shaded regions (we talk
+    about how to find these nondominated points later in this section; for now, let’s
+    focus on the behavior of these nondominated points):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We see that *x* = –5 is, indeed, a nondominated point, along with many points
+    around that region that give high values for the second objective *f*[2](*x*).
+    The points outside this region don’t yield higher *f*[2](*x*) values, so the points
+    inside the region are nondominated. We call this set of points *group 1*.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A smaller region on the right that gives high values for the first objective
+    *f*[1](*x*) is also nondominated. This set of points is called *group 2*.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: There’s a third, smallest region around *x* = 4 that’s also nondominated, whose
+    values for *f*[1](*x*) are not exceeded by the nondominated points on the far
+    left of the search space. Though this region doesn’t contain the global optimum
+    of either objective function, the region trades off between the values of the
+    two objectives and is, therefore, nondominated. We call these points *group 3*.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/11-04.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 11.4 The two objective functions and the nondominated points. There are
+    infinitely many nondominated points in this multiobjective optimization problem.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The nondominated points are valuable in multi objective optimization because
+    they, themselves, are solutions to the optimization problem, as we cannot improve
+    upon them without sacrificing at least one objective. Further, by studying the
+    nondominated points, their relationship with one another, and how they are spread
+    out within the search space, we can understand more about the tradeoff between
+    the multiple objectives in our optimization problem. Hence, a reasonable goal
+    of multiobjective optimization is to find many nondominated points.
+  prefs: []
+  type: TYPE_NORMAL
+- en: However, it’s not immediately clear how we should concretely quantify this goal
+    of finding nondominated points. We shouldn’t simply seek to uncover as many nondominated
+    points as possible, since there can be, and often are, infinitely many of them.
+    Instead, we use a quantity that is easier to think about if we were to visualize
+    the data points in a different space.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In figures 11.3 and 11.4, the *x*-axis corresponds to the data points themselves,
+    and the *y*-axis corresponds to the objective values of these data points. To
+    study the tradeoff between two conflicting objectives, we can also use a scatter
+    plot, where the *x*-coordinate of a given data point *x* is the value for the
+    first objective *f*[1](*x*), and the *y*-coordinate is the value for the second
+    objective *f*[2](*x*).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Figure 11.5 shows this scatter plot for each point in a dense grid of 201 equally
+    spaced points between –5 and 5, where dominated points are denoted as dots and
+    nondominated points as stars. We see that whether a point is dominated or not
+    is more easily determined in this space: for each data point *x*[1], if there’s
+    another data point *x*[2] that’s placed above and to the right of *x*[1], then
+    *x*[1] is a dominated point; conversely, if there isn’t any point *x*[2] that’s
+    simultaneously above and to the right of *x*[1], then *x*[1] is nondominated.
+    We also see in figure 11.5 the three groups of nondominated points corresponding
+    to those in the discussion regarding figure 11.4.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/11-05.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 11.5 Scatter plot of data points based on their values for the two objective
+    functions. Dominated points are denoted as dots; nondominated points are stars.
+    The three groups of nondominated points correspond to those in the discussion
+    regarding figure 11.4.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'From the set of nondominated points, visualized in the space of the objective
+    values, we now introduce another concept: the *Pareto frontier*. Figure 11.6 visualizes
+    the Pareto frontier of our current optimization problem.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/11-06.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 11.6 The Pareto frontier that traces through the nondominated points.
+    No data point lies beyond (above and to the right of) this Pareto frontier.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Definition The curve that traces through the nondominated points is called the
+    *Pareto frontier*. It’s called a *frontier* because when we view all data points
+    as a set, this curve of the nondominated points makes up a boundary, or a frontier,
+    of the set beyond which no data point lies.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The concept of the Pareto frontier is crucial in multiobjective optimization
+    because the frontier directly leads to a metric that can quantify progress in
+    a multiobjective optimization problem. In particular, we focus on how much of
+    the space—the one defined by the collected objective values from multiple objectives—the
+    Pareto frontier covers; that is, the area inside (below and to the left) of the
+    Pareto frontier. This area is shown as the shaded region in the left panel of
+    figure 11.7.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Definition We use the term *dominated hypervolume* (or, sometimes, simply *hypervolume*)
+    to denote how much of the space is covered by the Pareto frontier. When there
+    are two objective functions, like in our example, the space is two-dimensional
+    and the dominated hypervolume is the area of the dominated region. When there
+    are more than two objectives, the dominated hypervolume measures the same quantity
+    but in higher dimensions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The scattered points shown in the left panel of figure 11.7 are generated using
+    a dense grid of 201 points across the search space so that we can study the behavior
+    of the Pareto frontier and its hypervolume in full detail. In other words, this
+    dense grid represents the result of an exhaustive search of the space to fully
+    map out the Pareto frontier.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As a point of comparison, the right panel of figure 11.7 shows the result of
+    20 points selected uniformly at random between –5 and 5\. From the selected points,
+    we, again, find those that aren’t dominated by any other points within the set
+    of 20 points and draw the Pareto frontier of this second dataset.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/11-07.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 11.7 The dominated hypervolume of a dense grid (left), which is equivalent
+    to an exhaustive search, and that of 20 data points randomly selected at random
+    (right). The first dataset has a larger dominated volume and, therefore, does
+    a better job at multiobjective optimization than the second dataset.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Unlike the case on the left, where we fully cover the search space, the small
+    dataset on the right only has four nondominated points. In the context of multiobjective
+    optimization, we make more progress with the first dataset (from the exhaustive
+    search) than we do with the second (from the random search).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Compared to the dataset from the exhaustive search, these four nondominated
+    points make up a more jagged Pareto frontier, which, in turn, has a much smaller
+    dominated hypervolume. In other words, this measure of dominated hypervolume can
+    be used to quantify optimization progress in a multiobjective optimization problem.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note In a multiobjective optimization problem, we measure optimization progress
+    by the hypervolume of the dominated region resulting from the current collected
+    data. The bigger the dominated hypervolume of our collected data, the more progress
+    we have made in simultaneously optimizing our objective functions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: According to the hypervolume metric, figure 11.7 shows that an exhaustive search
+    does a better job than a random search (with fewer queries) at optimization, which
+    is an expected result. But to quantify *how much* better the former search strategy
+    is, we need a way to compute this hypervolume metric. For this computation, a
+    *reference point* is needed; this reference point acts as an endpoint for the
+    dominated region, setting a lower-left bound for the region. We can think of this
+    reference point as the worst possible outcome we can observe under a multiobjective
+    optimization setting, so the hypervolume of the region between this reference
+    point and the Pareto frontier quantifies how much we have improved from this worst
+    possible outcome. (The worst possible outcome for each objective function, if
+    not known to us, the BayesOpt users, can be set at a particular value that we
+    think is the bare minimum each query can achieve.)
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note In multiobjective optimization, a common reference point is an *array*,
+    each of whose elements corresponds to the lowest value of an objective function
+    to be maximized.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For example, the reference point for our current optimization problem is [–2.0292,
+    –0.4444] since the first element, –2.0292, is the minimum value of the first objective
+    function (the solid curve in figure 11.3), and –0.4444 is the minimum value of
+    the second objective (the dashed curve in figure 11.3). This reference point is
+    visualized in figure 11.8 as the star, which, again, sets a lower bound for the
+    dominated space.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/11-08.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 11.8 The reference point in a multiobjective optimization problem, which
+    sets a lower bound for the dominated space. The hypervolume is computed to be
+    the volume of the region between the reference point and the Pareto frontier.
+  prefs: []
+  type: TYPE_NORMAL
+- en: With this reference point, we can compute the hypervolume of the dominated region
+    of a dataset collected by a multiobjective optimization policy. The algorithm
+    to complete this computation involves dividing the dominated region into multiple
+    nonintersecting hyperrectangles that collectively make up the dominated region.
+    From there, we can easily compute the hypervolume of each hyperrectangle and sum
+    them up to obtain the hypervolume of the entire region. The interested reader
+    can refer to the research paper by Renaud Lacour, Kathrin Klamroth, and Carlos
+    M. Fonseca that proposes this algorithm ([http://mng.bz/jPdp](http://mng.bz/jPdp)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: With BoTorch, we can import and run this algorithm without the need to implement
+    the low-level details. More specifically, assume we have stored the collected
+    labels found during optimization in variable `train_y`. As we have two objective
+    functions in our example, `train_y` should have a shape of *n*-by-2, where *n*
+    is the number of data points in the collected set. We can then use the following
+    code to compute the hypervolume measure, where
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `DominatedPartitioning` class implements the partitioning of a dominated
+    region. To initialize this object, we pass in the reference point and the collected
+    labels `train_y`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'We then call the `compute_hypervolume()` method on the dominated region object
+    to compute its hypervolume:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Imports the class implementation of the dominated region
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Computes the hypervolume of the dominated region with respect to the reference
+    point
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using this method, we can compute the hypervolumes of the exhaustive and random
+    search, as shown in the left and middle panels of figure 11.9\. We see that the
+    exhaustive search does achieve a higher hypervolume (31.49) than that of the random
+    search (25.72).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/11-09.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 11.9 The multiobjective optimization results of various search strategies
+    and the corresponding hypervolumes. BayesOpt achieves almost the same hypervolume
+    as an exhaustive search, with significantly fewer queries.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the right panel of figure 11.9, we also see the corresponding result achieved
+    by the BayesOpt strategy we learn about in the next section with just 20 data
+    points. With only one-tenth of the budget (20 versus 201), BayesOpt achieves almost
+    the same hypervolume as the exhaustive search. Compared to the random search with
+    the same budget, BayesOpt is able to map out the true Pareto frontier more fully
+    and achieve a much higher hypervolume.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 11.3 Seeking to improve the optimal data boundary
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'How should a BayesOpt policy aim to maximize the hypervolume of the dominated
+    region within its collected data? A simple strategy is to alternate between optimizing
+    each of the objectives in an iteratively manner: at this iteration of the BayesOpt
+    loop, we seek to maximize the first objective *f*[1](*x*); at the next iteration,
+    we aim to maximize the second objective *f*[2](*x*); and so on. During an iteration,
+    we have a specific objective we want to optimize, which we can achieve by using
+    the various BayesOpt policies we learned in chapters 4 through 6\. For the remainder
+    of this chapter, we use Expected Improvement (EI), which we learned in section
+    4.3\. EI is a policy commonly used in practice, thanks to its algorithmic simplicity
+    and consistent performance.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Assume that in our multiobjective optimization problem, we have observed the
+    data points indicated by the Xs in the top panels of figure 11.10\. By training
+    a GP on the dataset belonging to each objective function, we obtain the GP predictions
+    for the first objective (top-left panel) and the second objective (top-right panel).
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the bottom panels of figure 11.10, we show the acquisition scores of the
+    individual EI policies on the corresponding objective functions. The bottom-left
+    EI seeks to maximize the first objective *f*[1](x), while the bottom-right EI
+    searches for the optimum of the second objective *f*[2](*x*). We see that the
+    conflict between the two objectives is clear here when the first EI focuses on
+    the right region of the search space, where *f*[1](*x*) is maximized, while the
+    second EI looks at the left region, where *f*[2](*x*) is maximized.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/11-10.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 11.10 The current GP belief about each of the two objective functions
+    (top) and the corresponding EI acquisition scores (bottom). Each EI policy seeks
+    to optimize its own objective function and focuses on separate regions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note The acquisition score of a datapoint, as computed by a BayesOpt policy,
+    quantifies how valuable the data point is to our search for an objective function’s
+    optimum. The higher the acquisition score, the more valuable the data point, and
+    the point giving the highest acquisition score is the point the policy recommends
+    to be queried.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the alternating strategy we came up with previously, we either follow the
+    first EI policy and query the point around *x* = 4.5 or follow the second EI and
+    query the point around *x* = –4.5, depending on whether it’s *f*[1](*x*)’s or
+    *f*[2](*x*)’s turn to be optimized. We use this alternating strategy as a baseline
+    to compare our final solution against.
+  prefs: []
+  type: TYPE_NORMAL
+- en: What should this solution be to allow us to do better than the simple strategy
+    of alternating between different objective functions? We note that by having a
+    GP to model each of the objectives to be maximized, we have a way to probabilistically
+    reason about the value each potential new query gives on each objective *simultaneously*.
+    Specifically, we know that the value each potential new query gives on each objective
+    follows a known normal distribution; this normal distribution is our prediction
+    about the value of the query.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This prediction allows us to reason about whether each potential new query is
+    a nondominated point and if so, how much it will increase the hypervolume of the
+    dominated region. Each newly observed nondominated point extends the boundary
+    of the dominated region (that is, the Pareto frontier) and, therefore, increases
+    the dominated hypervolume. We, therefore, can use the increase in the hypervolume
+    that each new query leads to, on average, as the acquisition score to quantify
+    how valuable the query is. The bigger the increase in hypervolume that we can
+    expect from a query, the more it will help us make optimization progress.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Of course, we can’t know for sure how much of an increase in hypervolume we
+    will obtain from a query until we actually make the query on the objective functions.
+    However, again, we can reason about this hypervolume increase in a probabilistic
+    manner. That is, we can compute the *expected value* of the increase in hypervolume
+    that will result from a potential query.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Like the algorithm that determines the hypervolume of a dominated region, this
+    computation of the expected increase in hypervolume involves dividing the dominated
+    region into hyperrectangles and is quite complicated. We, once again, won’t go
+    into the mathematical details here, but you can refer to the research paper by
+    Kaifeng Yang, Michael Emmerich, André Deutz, and Thomas Bäck that proposes the
+    corresponding BayesOpt policy, which is called *Expected Hypervolume Improvement*
+    (EHVI), for more details ([http://mng.bz/WzYw](http://mng.bz/WzYw)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Definition The Expected Hypervolume Improvement policy uses the expected value
+    of the increase in hypervolume of the dominated region that a new data point will
+    result in as the acquisition score of that data point. This policy is the generalization
+    of EI to the multiobjective setting, where we aim to maximize the dominated hypervolume.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Figure 11.11 shows the acquisition scores of EHVI in the bottom-right panel
+    on the same dataset as in figure 11.10\. We see that compared to the individual
+    EI policies, EHVI nicely balances the two objectives by assigning high acquisition
+    scores to multiple regions that likely extend the Pareto frontier: the leftmost
+    region of the search space has the highest score, but the rightmost region, along
+    with other regions in between, also has nonnegligible acquisition scores.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/11-11.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 11.11 The current GP belief about each of the two objective functions
+    (top), the corresponding EI acquisition scores (bottom left), and the EHVI acquisition
+    scores (bottom right). EHVI balances the two objectives, assigning high acquisition
+    scores to multiple regions that likely extend the Pareto frontier.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To verify that this EHVI strategy does, indeed, give us an advantage in multiobjective
+    optimization, we implement the policy and run it on our current problem. The code
+    we use is included in the CH11/02 - Multi-objective BayesOpt loop.ipynb notebook.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, we need the class implementation of the GP model and a helper function
+    `fit_gp_model()` that facilitates the training of each GP on observed data. As
+    we have implemented these components in previous chapters, we won’t show the code
+    for them here again; you can refer to section 4.1.1 for a refresher on this code.
+    At each step of the BayesOpt loop, we call the helper function to initialize and
+    train a GP on each objective function’s data. In our case, we have two objective
+    functions, so we call the helper function twice, each time with either `train_y[:,`
+    `0]`, which are the labels observed from the first objective *f*[1](*x*), or `train_y[:,`
+    `1]`, the labels from the second objective *f*[2](*x*):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We then implement the EHVI policy using the `ExpectedHypervolumeImprovement`
+    class from the `botorch.acquisition.multi_objective.analytic` module. To initialize
+    the policy object, we set the following arguments:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The argument `model` takes in a list of GPs, each of which models an objective
+    function. This list of GPs is implemented as an instance of the `ModelListGP`
+    class, taking in the individual GP objects (`model1`, `model2`).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The argument `ref_point` takes in the reference point, which is necessary for
+    the computation of hypervolume and potential hypervolume increases.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Finally, the argument `partitioning` takes in an instance of the `FastNondominatedPartitioning`
+    class, which facilitates the computation of hypervolume increases. The initialization
+    of this object, similar to a `DominatedPartitioning` object we saw previously,
+    takes in a reference point and the observed labels `train_y`:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Imports the necessary classes
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ The list of GP models, each for one objective function
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ The reference point
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ The nondominated partitioning object to compute the hypervolume increase
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Using the `policy` object for the EHVI policy, we can then compute the acquisition
+    score, denoting the expected hypervolume increase, which results from a potential
+    new observation. We can then find the data point that gives the highest score,
+    using the helper function `optimize_acqf()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The variable `next_x` stores the location of the query we will make our objective
+    functions with next: `next_y` `=` `joint_objective(next_x)`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'That’s all we need to run EHVI on our current optimization problem. As a point
+    of reference, we also test the previously discussed alternating optimization strategy,
+    in which we use regular EI to optimize a selected objective function. As we have
+    two objectives, we simply switch back and forth between the two (`num_queries`,
+    here, is the total number of evaluations we can make in a BayesOpt run):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ If the current iteration number is even, optimizes the first objective
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ If the current iteration number is odd, optimizes the second objective
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Creates the EI policy accordingly
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Finally, to quantify our optimization progress, we record the hypervolume of
+    the dominated region resulting from the current dataset collected throughout the
+    search. This recording is done with a tensor named `hypervolumes`, which stores
+    the current dominated hypervolume at each step during an experiment, across many
+    experiments. Overall, our BayesOpt loop is the following, where for each policy,
+    we run the experiment multiple times, each with an initial dataset chosen uniformly
+    at random:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ The history of hypervolumes found throughout optimization
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Initializes a random initial training set
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Records the current hypervolume
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Retrains the models, initializes a policy, and finds the next query
+  prefs: []
+  type: TYPE_NORMAL
+- en: The CH11/02 - Multi-objective BayesOpt loop.ipynb notebook runs the two BayesOpt
+    policies we have for 10 experiments, each with a budget of 20 queries to the objective
+    functions. Figure 11.12 shows the average hypervolume and error bars as a function
+    of the number of queries made by the two policies. We see that EHVI consistently
+    outperforms the alternating EI policy, which illustrates the benefits of the hypervolume-based
+    approach.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/11-12.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 11.12 Average hypervolume and error bars as a function of the number
+    of queries made by two BayesOpt policies. EHVI consistently outperforms the alternating
+    EI policy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this chapter, we have learned about the multiobjective optimization problem
+    and how to approach it using BayesOpt. We discussed the concept of hypervolume
+    as a measure of optimization performance, quantifying how much progress we have
+    made in optimizing the objective functions. By using a variant of the EI policy
+    to optimize the increase in hypervolume, we obtained an EHVI policy that achieves
+    strong performance.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Unfortunately, there are other aspects of multiobjective BayesOpt that can’t
+    be covered in this chapter. Specifically, in addition to EHVI, we can consider
+    other optimization policies. One common technique is *scalarization*, which combines
+    multiple competing objectives into one by taking a weighted sum. This strategy
+    is a generalization of the alternating EI policy, which we can think of as assigning
+    a weight of 1 to one objective and a weight of 0 to the other at each iteration.
+    The interested reader can refer to the BoTorch documentation (see [https://botorch.org/docs/multi_objective](https://botorch.org/docs/multi_objective)
+    and [https://botorch.org/tutorials/multi_objective_bo](https://botorch.org/tutorials/multi_objective_bo)),
+    which provides a brief summary of different multiobjective optimization policies
+    that BoTorch offers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '11.4 Exercise: Multiobjective optimization of airplane design'
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In this exercise, we apply the multiobjective optimization techniques we have
+    learned to the problem of optimizing the aerostructural design of an airplane.
+    This problem was first introduced in exercise 2 of chapter 7 and was modified
+    as a cost-constrained problem in exercise 2 of chapter 8\. We reuse the code from
+    chapter 8 here. This exercise allows us to observe the performance of the Expected
+    Hypervolume Improvement (EHVI) policy in a multidimensional problem. The solution
+    is included in the CH11/03 - Exercise 1.ipynb notebook.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Take the following steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Copy the code for the objective functions `flight_utility()` and `flight_cost()`
+    from exercise 2 of chapter 8\. Negate the sign of the returned value of the second
+    function, `flight_cost()`. We use these two functions as objectives for our multiobjective
+    optimization problem.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Write a helper function that takes in an input `X` (which could contain multiple
+    data points) and returns the values of `X` evaluated on the two objective functions.
+    The returned value should be a tensor of size *n*-by-2, where *n* is the number
+    of data points in `X`.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Declare the search space to be the four-dimensional unit square. That is, the
+    four lower bounds are 0, and the four upper bounds are 1.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: To compute the hypervolume of a dataset collected by an optimization algorithm,
+    we need a reference point. Declare this reference point to be [–1.5, –2], which
+    are the corresponding lowest values of the two objective functions.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Implement the class for the GP model, which should have a constant mean and
+    a four-dimensional Matérn 2.5 kernel with automatic relevance determination (ARD;
+    see section 3.4.2) and a helper function `fit_gp_model()` that initializes and
+    trains a GP on a training set. Refer to section 4.1.1 for details on implementing
+    these components.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Set the number of experiments to be run to 10 and the budget (the number of
+    queries to be made) in each experiment to 50.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Run the EHVI policy to optimize the two objective functions we have as well
+    as the alternating EI strategy discussed in section 11.3\. Plot the average hypervolume
+    and error bars achieved by these two policies (similar to figure 11.2), and compare
+    their performance.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The multiobjective optimization problem arises when there are multiple potentially
+    conflicting objectives that need to be optimized at the same time. This problem
+    is common in the real world as we often contend with multiple competing goals
+    in many real-life tasks.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: When using BayesOpt for multiobjective optimization, we use multiple GPs to
+    model our belief about the objective functions (one model for each objective).
+    We can use these GPs to reason about the objective functions simultaneously in
+    a probabilistic manner.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A nondominated point achieves objective values that cannot be improved upon
+    unless we sacrifice performance on at least one objective. Discovering nondominated
+    data points is a goal of multiobjective optimization as they allow us to study
+    the tradeoff between the objective functions.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Nondominated data points make up the Pareto frontier, which sets the boundary
+    that represents optimality in multiobjective optimization. No data point lies
+    beyond the Pareto frontier of all nondominated points.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The hypervolume of the dominated space—that is, the region covered by the Pareto
+    frontier—measures optimization performance of a dataset collected by an algorithm.
+    The larger the hypervolume, the better the algorithm’s performance will be. The
+    hypervolume of a dataset can be computed by calling the `compute_hypervolume()`
+    method on an instance of BoTorch’s `DominatedPartitioning` class.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: To compute the hypervolume of a dataset, we need a reference point that serves
+    as the endpoint of the dominated space. We usually set the reference point to
+    be the lowest values of the objective functions to be optimized.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: As the GPs allow us to make predictions about the objective functions, we can
+    seek to improve upon the hypervolume of our current dataset. This strategy corresponds
+    to the EHVI policy, which is a variant of EI in multiobjective optimization. This
+    policy successfully balances the competing objectives.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL

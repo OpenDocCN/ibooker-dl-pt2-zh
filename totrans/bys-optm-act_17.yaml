@@ -1,0 +1,1015 @@
+- en: 13 Combining Gaussian processes with neural networks
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter covers
+  prefs: []
+  type: TYPE_NORMAL
+- en: The difficulty of processing complex, structured data with common covariance
+    functions
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using neural networks to handle complex, structured data
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Combining neural networks with GPs
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In chapter 2, we learned that the mean and covariance functions of a Gaussian
+    process (GP) act as prior information that we’d like to incorporate into the model
+    when making predictions. For this reason, the choice for these functions greatly
+    affects how the trained GP behaves. Consequently, if the mean and covariance functions
+    are misspecified or inappropriate for the task at hand, the resulting predictions
+    won’t be useful.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As an example, remember that a *covariance function*, or *kernel*, expresses
+    the correlation—that is, similarity—between two points. The more similar the two
+    points are, the more likely they are to have similar values for the labels we’re
+    trying to predict. In our housing price prediction example, similar houses are
+    likely to go for similar prices.
+  prefs: []
+  type: TYPE_NORMAL
+- en: How does a kernel exactly compute the similarity between any two given houses?
+    Let’s consider two cases. In the first, a kernel only considers the color of the
+    front door and outputs 1 for any two houses of the same door color and 0 otherwise.
+    In other words, this kernel thinks two houses are similar if and only if they
+    have the same color for their front doors.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This kernel, as illustrated by figure 13.1, is a bad choice for a housing price
+    prediction model. The kernel thinks that the house on the left and the one in
+    the middle should have similar prices, while the house on the right and the one
+    in the middle should have different prices. This is not appropriate, as the left
+    house is much bigger than the other two, which are of similar size. The misprediction
+    happens because the kernel is wrong about which characteristic of a house is a
+    good predictive feature for how much the house costs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/13-01.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 13.1 The covariance between houses computed by an inappropriate kernel.
+    Because it looks only at the color of the front door, this kernel doesn’t produce
+    appropriate covariances.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The other kernel is more sophisticated and accounts for relevant factors, such
+    as location and living area. This kernel is more appropriate as it can describe
+    the similarity between the prices of two houses more reasonably. Having the appropriate
+    kernel—that is, the correct measure of similarity—is paramount for GPs. If the
+    kernel can correctly describe how similar or different a given pair of data points
+    are, the GP using the covariance will be able to produce well-calibrated predictions.
+    Otherwise, the predictions will be of low quality.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You might think a kernel for houses that only considers door color is inappropriate,
+    and no reasonable kernels in ML would behave this way. However, as we show in
+    this chapter, some common kernels we have used thus far (e.g., RBF and Matérn)
+    fall apart in the same way when processing structured input data, such as images.
+    Specifically, they fail to adequately describe the similarity between two images,
+    which poses a challenge for training GPs on these structured data types. The approach
+    we take is to use neural networks. Neural networks are flexible models that can
+    approximate any function well, given enough data. We learn to use a neural network
+    to transform input data that a GP’s kernel isn’t able to process well. In doing
+    this, we get the best of both worlds: flexible modeling with a neural network
+    *and* uncertainty-calibrated predictions from a GP.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this chapter, we show that our usual RBF kernel doesn’t capture the structure
+    of a common dataset well, resulting in bad predictions from the GP. We then combine
+    a neural network model with this GP and see that the new kernel can successfully
+    reason about similarity. By the end of the chapter, we obtain a framework to help
+    a GP handle structured data types and improve predictive performance.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 13.1 Data that contains structures
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'In this section, we explain what exactly we mean by *structured data*. Unlike
+    the type of data we have been using to train our GPs in previous chapters, where
+    each feature (column) in the dataset could take on values within a continuous
+    range, in many applications, data has more complexity. Take the following, for
+    instance:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The number of stories in a house can only be a positive integer.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In computer vision tasks, the pixel value in an image is an integer between
+    0 and 255.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In molecular ML, a molecule is often represented as a graph.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'That is, there are *structures* embedded in the data points in these applications,
+    or requirements that the data points need to follow: no house can have a negative
+    number of stories; a pixel cannot take a fraction as its value; a graph denoting
+    a molecule will have nodes and edges representing chemicals and bindings. We call
+    these kinds of data *structured data*. Throughout this chapter, we use the popular
+    MNIST handwritten digit dataset (see [https://huggingface.co/datasets/mnist](https://huggingface.co/datasets/mnist))
+    as a case study for our discussions.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Definition The Modified National Institute of Standards and Technology (MNIST))
+    dataset contains images of handwritten digits. Each image is a 28-by-28 matrix
+    of integers between 0 and 255.
+  prefs: []
+  type: TYPE_NORMAL
+- en: An example data point from this set is shown in figure 13.2, where a pixel is
+    shown with a shade corresponding to its value; 0 corresponds to a white pixel,
+    and 255 corresponds to a dark pixel. We see that this data point is an image of
+    the number five.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/13-02.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 13.2 A data point from the MNIST dataset, which is an image with 28 rows
+    and 28 columns of pixels, represented as a PyTorch tensor
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note While this handwritten digit recognition task is technically a classification
+    problem, we use it to simulate a regression problem (which is the type of problem
+    we aim to solve in BayesOpt). Since each label is a number (a digit), we pretend
+    these labels exist in a continuous range and directly use them as our prediction
+    target.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Our task is to train a GP on a dataset of image labels (each label here is the
+    value of the digit written in the corresponding image) and then use it to predict
+    on a test set. This distinction is illustrated in figure 13.3, which shows that
+    unlike classification, where we choose one of the classes as a prediction for
+    each data point, each prediction here is a number inside a continuous range in
+    a regression task.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/13-03.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 13.3 Classification vs. regression in the context of the MNIST data.
+    Each prediction is a classification task that corresponds to one of the classes;
+    each prediction in regression is a number inside a continuous range.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There are many real-world applications that follow this form of regression
+    problem on structured data:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In product recommendation, we want to predict the probability that someone will
+    click on a customized ad. The ads, which are images one can customize, are the
+    structured data, and the click probability is the prediction target. This probability
+    can be any number between 0 and 1.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In materials science, a scientist may want to predict the energy level of a
+    molecular composition when that composition is synthesized in a laboratory. Each
+    molecular composition can be represented as a graph of a specific structure with
+    nodes and edges, and the energy level can be any number between the theoretical
+    minimum and maximum energy levels that a composition can exhibit.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In drug discovery, we want to predict the effectiveness of a drug that could
+    be produced. As illustrated in figure 13.4, each drug corresponds to a chemical
+    compound, which can also be represented as a graph. Its effectiveness can be a
+    real number on a scale (say from 0 to 10).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/13-04.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 13.4 Drug discovery as an example of a structured regression problem.
+    Each compound is represented as a structured graph, and we aim to predict the
+    effectiveness of the compound in treating some disease on a scale from 0 to 10.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In all of these applications, the input data we’d like to perform a prediction
+    on is structured, and our prediction target is a real-valued number. In short,
+    they are regression problems on structured data. Using the MNIST dataset, we simulate
+    one such problem.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 13.2 Capturing similarity within structured data
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'In this section, we explore how common kernels, such as the radial basis function
+    (RBF) kernel (see section 2.4), fail to describe similarity within structured
+    data. The output of the kernel for any two inputs *x*[1] and *x*[2], which quantifies
+    the covariance of the two inputs, is defined as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/13-04-Equations_ch-13.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: This output, which is the covariance between the two variables, is the exponential
+    of the negated difference in values between the two inputs divided by a scale.
+    The output is always between 0 and 1, and the bigger the difference in values,
+    the smaller the output.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This makes sense in many cases since if the two inputs have similar values,
+    and hence a small difference, their covariance will be high, and if they have
+    different values, the covariance will be low. Two houses with roughly equal living
+    area are likely to have similar prices—that is, their prices have a high covariance;
+    the prices of a very large house and very small one, on the other hand, are likely
+    to have a low covariance.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 13.2.1 Using a kernel with GPyTorch
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Let’s verify this with code. We usually initialize an `RBFKernel` object when
+    creating a GP model. Here, we work directly with this kernel object. To do this,
+    we first create an RBF kernel object with GPyTorch:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note As always, GPyTorch is our library of choice for implementing GP-related
+    objects in Python. Refer to section 2.4 for a refresher on how a kernel object
+    is used by a GP in GPyTorch.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To compute the covariance between two inputs, we simply pass them to this kernel
+    object. For example, let’s compute the covariance between 0 and 0.1:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'These two numbers are close to each other on the real number line (that is,
+    they are similar), so their covariance is very high—almost 1\. Let’s now compute
+    the covariance between 0 and 10, two numbers that are different:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: This time, as the difference between the two numbers is much larger, their covariance
+    drops to 0\. This contrast, which is a reasonable behavior to have, is illustrated
+    by figure 13.5.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/13-05.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 13.5 The covariance between various numbers. When the difference between
+    two numbers is small, the covariance increases. When the difference is large,
+    the covariance decreases.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The problem arises when the difference in value between two inputs doesn’t capture
+    the structural difference in the meaning of the data. This is often the case for
+    structured data such as images, as we will see now.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 13.2.2 Working with images in PyTorch
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'In this subsection, we see how images are imported and stored as PyTorch tensors
+    as well as how value-based similarity metrics, such as the RBF kernel, break down
+    when processing this kind of data. First, we redefine our RBF kernel with a large-length
+    scale so that higher covariances are more likely:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ The large-length scale leads to higher covariances.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, we need to import images from the MNIST dataset into our Python code.
+    We can do this using PyTorch and its popular add-on library, torchvision:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Defines the transformation to normalize the pixel values
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Downloads and imports the dataset
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Extracts the pixel values as a flattened tensor
+  prefs: []
+  type: TYPE_NORMAL
+- en: We won’t go deeply into this code, as it’s not the focus of our discussion.
+    All we need to know is that `train_x` contains the images in the MNIST dataset,
+    each of which is stored as a PyTorch tensor containing the pixel values that represent
+    an image of a handwritten digit.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As the data points are images, we can visualize them as heat maps, using the
+    familiar `imshow()` function from Matplotlib. For example, the following code
+    visualizes the first data point in `train_x`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Each image has 28 rows and 28 columns of pixels, so we need to reshape it
+    into a 28-by-28 square tensor.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This code produces figure 13.2, which we see is an image of the digit 5\. When
+    we print out the actual values of this first data point, we see that it’s a 28
+    × 28 = 784-element PyTorch tensor:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: Each element in this tensor, ranging between 0 and 255, represents a pixel we
+    see in figure 13.2\. A value of 0 corresponds to the lowest signal, the background
+    in the figure, while higher values correspond to the bright spots.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 13.2.3 Computing the covariance of two images
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'That’s all the background information we need to explore the problem that common
+    GP kernels face when processing structured data. To highlight the problem, we
+    single out three specific data points, which we call point A, point B, and point
+    C, respectively, indexed by the following numbers:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Point A
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Point B
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Point C
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Before checking the actual digits these images show, let’s compute their covariance
+    matrix using our RBF kernel:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This is a 3-by-3 covariance matrix with a familiar structure: the diagonal
+    elements take on the value of 1, representing the variances of the individual
+    variables, while the off-diagonal elements represent the different covariances.
+    We see that the points A and C are completely uncorrelated, having a covariance
+    of zero, while points A and B are slightly correlated. According to the RBF kernel,
+    points A and B are similar to each other and are completely different from point
+    C.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We should, then, expect points A and B to share the same label. However, this
+    is not the case! Once again, we visualize these data points as heat maps, and
+    we obtain figure 13.6.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/13-06.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 13.6 Three specific data points from the MNIST dataset. The first and
+    second points have a nonzero covariance, despite having different labels. The
+    first and third points have a zero covariance, despite having the same label.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here, it’s points A and C that share the same label (digit 9). So why does
+    the RBF kernel think points A and B are correlated? Looking at figure 13.6, we
+    can make a good guess that while points A and B have different labels, the images
+    themselves are similar in the sense that many of the pixels match. In fact, the
+    stroke that makes up the tail of the digits almost matches exactly in the two
+    images. So, in a sense, the RBF kernel is doing its job, computing the difference
+    between the images and outputting a number representing their covariance based
+    on that difference. However, the difference is computed by comparing the pixels
+    in and of themselves, which is not a metric that is indicative of what we’re trying
+    to learn: the values of the digits.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'By only looking at the pixel values, the RBF kernel is overestimating the covariance
+    between points A and B, which have different labels, and underestimating the covariance
+    between points A and C, which share the same label, as illustrated by figure 13.7\.
+    An analogy can be used here to demonstrate the inappropriate house kernel we mentioned
+    at the introduction of the chapter: this kernel looks only at the color of the
+    front door to decide whether two houses are correlated, leading to inaccurate
+    predictions of their prices. In a similar (but not as extreme) manner, the RBF
+    kernel only considers the values of the pixels, rather than the higher-level patterns,
+    when comparing two images, which leads to inferior predictive performance.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/13-07.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 13.7 The covariance between handwritten digits computed by the RBF kernel.
+    Because it only looks at the pixel values, the RBF kernel doesn’t produce appropriate
+    covariances.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 13.2.4 Training a GP on image data
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: By using the wrong metric for similarity, RBF confuses which of points B and
+    C is the one correlated to point A, which, as we see next, leads to poor results
+    when training a GP. We once again use the MNIST dataset, this time extracting
+    1,000 data points to make up the training set and another 500 points as the test
+    set. Our data preparation and learning workflow is summarized in figure 13.8,
+    the distinct steps of which we go through in detail.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/13-08.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 13.8 Flowchart of the case study of GP learning on MNIST. We extract
+    1,000 data points to make up the training set and another 500 points as the test
+    set.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, we import PyTorch and torchvision—the latter of which is an extension
+    of PyTorch that manages computer-vision–related functionalities and datasets,
+    such as MNIST. From torchvision, we import the modules `datasets` and `transforms`,
+    which help us download and manipulate the MNIST data, respectively:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In the second data preparation step, we again use the object that transforms
+    the images to PyTorch tensors (which is the data structure that GPs implemented
+    in GPyTorch can process) and normalizes the pixel values. This normalization is
+    done by subtracting the pixel values by 0.1307 (the mean of the data) and dividing
+    the values by 0.3081 (the standard deviation of the data). This normalization
+    is considered common practice for the MNIST dataset, and more details on this
+    step can be found in PyTorch’s official forum discussion ([http://mng.bz/BmBr](http://mng.bz/BmBr)):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Transforms the data to PyTorch tensors
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Normalizes the tensors
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This transformation object stored in `transform` can now be passed to a call
+    to any torchvision dataset initialization, and the transformations (conversion
+    to PyTorch tensors and normalization) will be applied to our data. We initialize
+    the MNIST dataset with this transformation object as follows. Note that we create
+    the dataset twice, once setting `train` `=` `True` to create the training set
+    and once setting `train` `=` `False` for the test set:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Downloads and imports the training set
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Downloads and imports the test set
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As the last step of data preparation, we extract the first 1,000 data points
+    from the training set and 500 points from the test set. We do this by accessing
+    from the dataset objects `dataset1` and `dataset2`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `data` attribute to obtain the features, the pixel values making up the
+    image for each data point
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The `targets` attribute to obtain the labels, the values of the handwritten
+    digits:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Gets the first 1,000 points in the training set
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Gets the first 500 points in the test set
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We also implement a simple GP model with a constant mean and an RBF kernel
+    with an output scale:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ A constant mean function
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ An RBF covariance function with an output scale
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Makes an MVN distribution as the prediction for input x
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note The `forward()` method of a GPyTorch GP model was first discussed in section
+    2.4.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Then, we initialize our GP and train it on the 1,000-point training set, using
+    gradient descent with the Adam optimizer. This code will optimize the values of
+    the hyperparameters of the GP (e.g., the mean constant and the length and output
+    scale) so that we achieve a high marginal likelihood of the data we observe:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Declares the likelihood function and the GP model
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Declares the gradient descent algorithm and the loss function
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Enables training mode
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ Runs five hundred iterations of gradient descent
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ Enables prediction mode
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note Refer to section 2.3.2 for a discussion of how gradient descent optimizes
+    the likelihood of the data we observe—that is, how gradient descent trains a GP.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Finally, to see how well our model performs on the test set, we compute the
+    average absolute difference between the GP’s prediction and the ground truth (the
+    value of label of each data point). This metric is often called the *mean absolute
+    error*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note The typical metric for the MNIST dataset is the percentage of the test
+    set that the model predicts correctly (that is, the accuracy), which is the norm
+    for a classification problem. As we are using this dataset to simulate a regression
+    problem, the mean absolute error is appropriate.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This is done by comparing the mean predictions against the true labels stored
+    in `test_y`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: This output means that, on average, the GP’s prediction for the value of the
+    digit depicted in an image is off by almost 3\. This performance is quite low,
+    given that there are only 10 values to learn in this task. This result highlights
+    regular GP models' incapability of dealing with structured data, such as images.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 13.3 Using neural networks to process complex structured data
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The root cause of our GP’s inferior performance, as we have seen, is that the
+    kernels aren’t equipped to process the complex structure of the input data, leading
+    to poor covariance calculation. The RBF kernel specifically has a simple form
+    that only accounts for the difference in numeric values between two inputs. In
+    this section, we learn to address this problem by using a neural network to process
+    structured data, before feeding that processed data to a GP’s mean function and
+    kernel.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 13.3.1 Why use neural networks for modeling?
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: We noted at the beginning of the book that neural networks aren’t great at making
+    uncertainty-calibrated predictions, especially when data is expensive to obtain.
+    (This is the whole reason why GPs are used in BayesOpt.) However, what neural
+    networks are good at is learning complex structures. This flexibility is a result
+    of having multiple layers of computation (specifically, matrix multiplication)
+    in a neural network, as illustrated in figure 13.9.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/13-09.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 13.9 A neural network is a collection of layered computations. By chaining
+    multiple layers of computations together, a neural network can model complex functions
+    well.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In a neural network, each layer corresponds to a matrix multiplication whose
+    output is then put through a nonlinear activation function. By having many such
+    layers chained together in one forward pass, the input of the network can be processed
+    and manipulated in a flexible manner. The end result is that a neural network
+    can model complex functions well. For a thorough explanation of neural networks
+    and their usage, refer to François Chollet’s excellent book, *Deep Learning with
+    Python, Second Edition* (Manning, 2021)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/13-09-unnumb-1.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: The flexibility that neural networks possess can help us tackle the problem
+    described in the previous section. If a GP’s kernel, such as the RBF kernel, cannot
+    process complex data structures well, we could leave that job to a neural network
+    and only feed the processed input to the GP’s kernel. This procedure is visualized
+    in figure 13.10, where the input *x* first goes through the neural network layers
+    before being passed to the mean function and the kernel of the GP.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/13-10.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 13.10 Combining a neural network with a GP. The neural network processes
+    the structured data input *x* first and then feeds the output to the mean function
+    and the kernel of the GP.
+  prefs: []
+  type: TYPE_NORMAL
+- en: While the end result is still an MVN distribution, the input of the mean function
+    and the kernel is now the *processed input* produced by a neural network. This
+    approach is promising because with its flexible modeling capability, the neural
+    network will be able to extract the important features from the structured input
+    data (which is important in terms of providing information for the similarity
+    calculation) and boil them down to numerical values that are amenable to the GP’s
+    kernel.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Definition The neural network is often called the *feature extractor* of the
+    combined model because the network *extracts* features that are conducive to GP
+    modeling from the structured data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this way, we can take advantage of a neural network’s flexible learning,
+    while maintaining the ability to make uncertainty-calibrated predictions with
+    a GP. It’s the best of both worlds! Further, training this combined model follows
+    the same procedure of training a regular GP: we define our loss function, which
+    is the negative log likelihood, and use gradient descent to find the values for
+    our hyperparameters that best explain our data (by minimizing the loss). Instead
+    of optimizing only the mean constant and the length and output scales, we now
+    additionally optimize the weights of the neural networks. In the next subsection,
+    we see that implementing this learning procedure with GPyTorch requires minimal
+    changes from what we have been doing in previous chapters.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note This combined framework is a method of *dynamically learning* how to process
+    structured data, purely from our training dataset. Previously, we only used a
+    fixed kernel that processed data the same way across multiple applications. Here,
+    we learn “on the fly” the best way to process our input data unique to the task
+    at hand. This is because the weights of the neural network are optimized with
+    respect to the training data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 13.3.2 Implementing the combined model in GPyTorch
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Finally, we now implement this framework and apply it to our MNIST dataset.
+    Here, defining our model class is more involved, as we need to implement the neural
+    network and hook it into the GP model class. Let’s tackle the first part—implementing
+    the neural network—first. We design a simple neural network with the architecture
+    in figure 13.11\. This network has four layers with 1,000, 5,000, 50, and 2 nodes,
+    respectively, as indicated in the figure. This is a common architecture for the
+    MNIST dataset.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/13-11.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 13.11 The architecture of the neural network to be implemented. It has
+    four layers and produces an array of size two for each input data point.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note We need to pay attention to the size of the last layer (2), which denotes
+    the dimensionality of the processed output to be fed into the mean function and
+    the kernel of the GP. By setting the size of this layer to 2, we aim to learn
+    a representation of the images that exists in a two-dimensional space. Values
+    other than 2 can also be used, but we opt for 2 here for the purpose of visualization.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We implement this architecture using the `Linear()` and `ReLU()` classes from
+    PyTorch. Here, each layer of our network is implemented as a `torch.nn.Linear`
+    module with the appropriate size, as defined by figure 13.11\. Each module is
+    also coupled with a `torch.nn.ReLU` activation function module, which implements
+    the nonlinear transformation mentioned earlier. This is illustrated in figure
+    13.12, which annotates each component of the network architecture with the corresponding
+    code that implements it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/13-12.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 13.12 The architecture of the neural network to be implemented and the
+    corresponding PyTorch code. Each layer is implemented with `torch.nn.Linear` and
+    each activation function with `torch.nn.ReLU`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'By using the convenient `add_module()` method, we are implicitly defining the
+    logic of the `forward()` method of our neural network model. We implement the
+    model with the `LargeFeatureExtractor` class next. This class passes its input
+    `x` sequentially through the layers we implement in the `__init__()` method, which
+    takes in `data_dim`, the dimensionality of the input data. In our case, this number
+    is 28 × 28 = 784, which we compute with `train_x.size(-1)`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ The dimensionality of the data
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ The first layer of the network
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ The second layer
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❹ The third layer
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❺ The fourth layer
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❻ Initializes the network
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, we discuss the combined model, which is a GP model class that makes use
+    of `feature_extractor`, the neural network feature extractor we just initialized.
+    We implement its `__init__()` method first, which comprises several components:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The covariance module is wrapped around by a `gpytorch.kernels.GridInterpolationKernel`
+    object, which offers computational speedup for our mid-sized training set of 1,000
+    points. We declare the number of dimensions of the input data to be two, as that
+    is the dimensionality of the output produced by the feature extractor.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The feature extractor itself is the `feature_extractor` variable we declared
+    earlier.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The output of the feature extractor could take on extreme values (negative or
+    positive infinity) if the weights of the neural network are badly initialized.
+    To address this, we scale these output values to the range between –1 and 1, using
+    the `gpytorch.utils.grid.ScaleToBounds` module.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'The `__init__()` method is implemented as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ An RBF kernel with two dimensions with computational speedup
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ The neural network feature extractor
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ A module to scale the neural network’s output to reasonable values
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In our `forward()` method, we bring all of these components together. First,
+    we use our neural network feature extractor to process the input. We then feed
+    the processed input to the mean and covariance modules of our GP model. In the
+    end, we still end up with an MVN distribution as what the `forward()` method returns:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Scaled output of the neural network feature extractor
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Creates an MVN distribution object from the processed input
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Finally, to train this combined model using gradient descent, we declare the
+    following objects. Here, in addition to the regular GP hyperparameters, such as
+    the mean constant and the length and output scales, we also want to optimize the
+    weights of our neural network feature extractor, which are stored in `model.feature_extractor.parameters()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ The likelihood function, the GP model, and the loss function are the same
+    as before.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ The gradient descent optimizer Adam now needs to optimize the weights of the
+    feature extractor and the GP’s hyperparameters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'And with that, we are ready to run gradient descent the same way as before:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Enables training mode
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Runs 500 iterations of gradient descent
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❸ Enables prediction mode
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note As a reminder, when training a GP, we need to enable training mode for
+    both the model and the likelihood (using `model.train()` and `likelihood.train()`).
+    After training and before making predictions, we then need to enable prediction
+    mode (with `model.eval()` and `likelihood .eval()`).
+  prefs: []
+  type: TYPE_NORMAL
+- en: We have now trained the GP model combined with a neural network feature extractor.
+    Before we make our predictions on the test set using this model, we can take a
+    peek inside the model and see whether the neural network feature extractor has
+    learned to process our data well. Remember that each image is transformed into
+    a two-element array by the feature extractor. So, we can pass our training data
+    through this feature extractor and visualize the output using a scatter plot.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note Training this combined model takes more time than training a regular GP.
+    This is because we now have many more parameters to optimize. However, as we see
+    shortly, this cost is well worth it, as we achieve a much higher performance gain.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this scatter plot, if we see points with the same label (that is, images
+    depicting the same digit) cluster together, that will be an indication that the
+    feature extractor was able to effectively learn from data. Again, we do this by
+    passing the training data through the feature extractor the same way that data
+    is processed in the `forward()` method of the model class:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Here, `extracted_features` is a 1,000-by-2 PyTorch tensor that stores the two-dimensional
+    extracted features of the 1,000 data points in our training set. To visualize
+    this tensor in a scatter plot, we use `plt.scatter()` from the Matplotlib library,
+    making sure each label corresponds to a color:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: ❶ Filters the data points with a specific label
+  prefs: []
+  type: TYPE_NORMAL
+- en: ❷ Creates a scatter plot for the current data points, which share the same color
+  prefs: []
+  type: TYPE_NORMAL
+- en: This code produces figure 13.13, although your result might vary, depending
+    on the library versions and the system your code runs on. Just as we expected,
+    data points of the same label cluster around one another. This means our neural
+    network feature extractor is successfully grouping points with the same label
+    together. After being processed by the network, two images of the same label become
+    two points that are close to each other in a two-dimensional plane, which will
+    then have a high covariance if computed by the RBF kernel. This is exactly what
+    we wanted our feature extractor to help us do!
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/13-13.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 13.13 Features extracted from the MNIST dataset by a neural network.
+    Not only do data points of the same label cluster together, but there is also
+    a label gradient across the plot: going from the bottom to the top, the value
+    of the label increases.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Another interesting aspect of figure 13.13 is that there is a clear gradient
+    with respect to the label value: going from the bottom to the top cluster, the
+    value of the corresponding label gradually increases from 0 to 9\. This is a great
+    feature to have in a feature extractor, as it indicates our model has found a
+    smooth representation of the MNIST images that respects the label values.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/13-13-unnumb-2.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'For example, consider the comparison in figure 13.14, where the left panel
+    shows figure 13.13 and the right panel shows a random swapping of the labels of
+    the same scatter plot, making the features “rougher.” By “rough,” we mean that
+    the label values jump around erratically: the bottom cluster contains the 0s,
+    some of the clusters in the middle correspond to 7s and 9s, and the top cluster
+    contains the 5s. In other words, the trend of the labels with rough features is
+    not monotonic, making it more difficult to train a GP.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](../../OEBPS/Images/13-14.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 13.14 A comparison between the smooth extracted features from figure
+    13.13 (left) and a random swapping of the labels, making the features less smooth
+    (right). The smooth features are easier to learn with a GP than the rough features.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'So, it seems that the neural network is doing a good job extracting useful
+    features from images. To see whether this actually leads to better predictive
+    performance, we again compute the mean absolute error (MAE):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: This result tells us that on average, our prediction is off by 0.85; this is
+    a significant improvement from the vanilla GP we had in the previous section,
+    whose MAE was roughly 2.7\. This improvement illustrates the superior performance
+    of the combined model, which stems from the flexible modeling capability of neural
+    networks.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As we said at the beginning, this framework doesn’t only apply to handwritten
+    digits but also to various types of structured data that a neural network can
+    learn from, including other types of images and graph structures, such as molecules
+    and proteins. All we need to do is define an appropriate DL architecture that
+    extracts features from these structured data, which are then passed to the GP’s
+    mean function and kernel.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This concludes chapter 12\. Throughout this chapter, we have learned about the
+    difficulty of learning from structured data, such as images, where common kernels
+    cannot effectively compute covariances between data points. By attaching a neural
+    network feature extractor in front of a GP, we learn to transform this structured
+    data into a form that the GP’s kernel can then process. The end result is a combined
+    model that can flexibly learn from structured data but still produces probabilistic
+    predictions with uncertainty quantification.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Structured data is data whose features need to satisfy constraints, such as
+    being an integer or being nonnegative, and cannot be treated as continuous, real-valued
+    data. Examples include data from common applications, such as images in computer
+    vision and protein structures in drug discovery.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Structured data poses a challenge to common kernels for GPs. This is because
+    these kernels only consider the numerical values of input data, which may be poor
+    predictive features.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A kernel using the wrong features to compute covariances could lead to low-quality
+    predictions from the resulting GP. Using the wrong features is particularly common
+    with structured data.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: For image data specifically, the raw values of the pixels are not an informative
+    feature. A kernel that computes covariances using the raw pixel values can lead
+    to a low-quality GP.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Having multiple layers of nonlinear computation, neural networks are effective
+    at learning complex functions and can extract features from structured data. By
+    using a neural network to extract continuous, real-valued features from structured
+    data, a GP can still learn effectively.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In combining a neural network with a GP, we dynamically learn a way to process
+    data that is dedicated to the problem at hand. This flexibility allows this model
+    to generalize to many kinds of structured data.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: It’s important to scale the output of a neural network to a small range before
+    passing it to a GP. In doing this, we avoid extreme values that could result from
+    a badly initialized neural network feature extractor.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The representation learned from a neural network feature extractor exhibits
+    a smooth gradient with respect to the labels. This smooth gradient makes the extracted
+    features more amenable to learning with a GP.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
