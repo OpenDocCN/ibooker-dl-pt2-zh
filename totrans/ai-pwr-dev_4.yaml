@@ -1,0 +1,1182 @@
+- en: 4 Building Software with GitHub Copilot
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter covers
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Developing the core of our system using Copilot
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Refactoring to apply patterns
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Integrating hexagonal architecture
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Incorporating event-driven principles
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In the last chapter, we used ChatGPT to help us design our Information Technology
+    Asset Management (ITAM) system. Now, with the design firmly in hand, we begin
+    to build out this application, starting with the Domain model. The Domain model
+    is the core of our system. It represents the classes that will be applying and
+    enforcing our business rules. We will be using GitHub Copilot extensively in this
+    chapter. The most important takeaway from this chapter is that by using a Large
+    Language Models helps to illuminate the unknown unknowns, that is the non-obvious,
+    the arcane, or the hidden complexity in the systems that we build. It makes the
+    hard things easier and the seemingly impossible, possible.
+  prefs: []
+  type: TYPE_NORMAL
+- en: One additional note, this chapter is code heavy. It is a nigh certainty that
+    your code will not exactly match the code presented in this chapter. Instead of
+    dwelling on this fact, accept it. Try to understand why these differences exist.
+    Observe if altering your prompt modifies the result, and if it does, in what ways?
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.1 Laying the Foundation
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'In the first section of this chapter, we are going to lay the foundation for
+    the rest of our application. We begin with the core of our application: the domain
+    model. The domain model should contain the unvarnished business rules and responsibilities
+    of our application, free from the outside world, focusing solely on business logic
+    and workflows. As you can see from figure 4.1, the domain sits at the heart of
+    our application. This is no coincidence, given that it is the heart of the application.
+    We will return to this figure throughout this chapter as we deepen our understanding
+    of and appreciation for hexagonal architecture.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 4.1 A traditional visualization of hexagonal architecture, in which the
+    domain, or business logic, sits in the middle.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![A diagram of a network Description automatically generated](images/04image002.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Hexagonal Architecture, as you will recall from the last chapter, is an architectural
+    pattern that aims to create a clear separation between an application's core logic
+    and its interaction with external systems. This principle is clearly on display
+    in the previous figure.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.1.1 Expressing our domain model
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Before we begin, let’s review the documentation we created in the last chapter
+    with the assistance of ChatGPT. This documentation will provide us with a template
+    for implementation. As we should know by now, we will not mindlessly implement
+    every aspect of the code and documentation that ChatGPT provide. Doing so might
+    inadvertently lead to a design that is brittle and hard to change, insecure, or
+    incomplete.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 4.2 The domain object model that ChatGPT produced for us, highlighting
+    the relationships between the classes
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](images/04image003.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'If we drill into the methods and fields for the `Asset` class we created last
+    chapter, we note two things: First, this differs from the `Asset` class we created
+    in Chapter 2\. And second, ChatGPT suggested that we have a constructor that takes
+    all of the attributes for this class; however, it also added mutator methods –
+    the “setters” – for all the attributes.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 4.3 The Asset class created by us with the assistance of ChatGPT. It
+    includes a fulsome constructor and mutator methods for each attribute
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](images/04image004.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 4.1.2 Favoring immutability
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Immutable objects, in which the internal state cannot be changed, make classes
+    more secure and more amenable to concurrency. Should two or more threads access
+    the same object, we do not need to synchronize access; the state will almost certainly
+    be the same for both threads. Therefore, we will favor the constructor-based value
+    injection over mutator methods. When we code this class, we will not add the mutators.
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, we will pull the `purchase_date` field up from Hardware. This field is
+    shared between all Assets (we will not be discussing cases in which Assets are
+    leased in this book;) therefore, the `purchase_date` field should belong in the
+    parent class.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, we will need to add a few additional fields that are not present in our
+    design from the last chapter: cost, `useful_life`, and salvage value. These fields
+    will be necessary for the correct calculation of *depreciation*. You might remember
+    that depreciation is an accounting method used to allocate the cost of an asset
+    over its useful life. You should notice that the terms cost and useful life appears
+    within that definition. Thus, these fields are required. In addition, the salvage
+    value is the amount of money a business, department, or company can expect to
+    get from selling the asset at the end of its useful life. This field is essential
+    in some depreciation calculations; therefore, we will add it to our class.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Next, create a package called domain/model, add a file called asset.py, and
+    then add the following prompt to the beginning of this file.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.1 A prompt to have GitHub Copilot create our `Asset` class
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: As you tab through the file to have GitHub Copilot auto-generate the code for
+    you, you might notice that it will create the mutator despite we explicitly instructed
+    not to do that. For this and many other reasons (as we will see throughout this
+    chapter), you must remain vigilant and mindful as you code. Of course, you can
+    signal your intent, but these tools might override your desires in how the tool
+    constructs code. Additionally, you might notice that it uses the `@dataclasses`
+    decorator.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Decorator Design Pattern
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: The Decorator Design Pattern is a structural design pattern that allows you
+    to add new or modify existing behavior to an object dynamically without changing
+    the existing class. This is done by wrapping the existing object in the decorating
+    object.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.1.3 Decorating our favorite classes
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This decorator auto-generates common methods for Python (equals, string representation,
+    amongst others). A data class is a class that is primarily used to store data
+    and does not have much behavior. In Python, data classes were introduced in Python
+    3.7 as a utility to make classes that are mainly used to store data cleaner and
+    more efficient. This is opposed to a user defined class whose purpose can be mixed
+    (that is data and behavior). Using a data class in this context is useful in that
+    you can avoid boilerplate code for construction, representation, and comparison
+    of objects.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Also, for those keeping score at home: our auto-generated code is auto-generating
+    code.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.2 The code that GitHub Copilot created in response to our prompt
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `__post_init__()` method will run after the constructor and enforce that
+    none of the parameters are null (‘None’ in Python parlance). Coding defensively
+    this way will ensure that you values cannot change after initialization. Of course,
+    you are free to add additional validations as well, such as acceptable values
+    for the status of the category. However, should you wish to enforce values in
+    that matter, it would be better to do that by making them proper classes or use
+    the Enum class.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Next, let’s review the Hardware class in the Mermaid diagram that we created
+    in the last chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 4.4 The Hardware class that we drafted with the aid of ChatGPT. Note
+    that it does not have any accessor methods
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](images/04image005.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'There are several items to note from this diagram: it contains neither accessor,
+    nor mutator methods. We will need to add accessor methods to our prompt.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now that we have reviewed and assessed what methods and attributes we need in
+    our Hardware class, we should build it. Create a file called `hardware.py` in
+    the domain directory. At the beginning of this file add the prompt in Listing
+    4.3.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.3 A prompt to have GitHub Copilot create our `Hardware` class
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: The post constructor code and accessor methods are not included in code listing
+    4.4 for brevity’s sake. However, they should be automatically added to your file.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.4 The definition of the `Hardware` class
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: Next, given that it was referenced in the Asset class, let’s add the `FundingDetails`
+    class next. First, however, let’s review the class diagram. Notice one thing,
+    the `lines_of_business` dictionary, which we will rename to `department_allocations,`
+    uses a string as the key. We should change this to be an actual `Department`.
+    This is another reminder that we must actively monitor the generated code and
+    make decisions as to how to best implement the project.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 4.5 The FundingDetails class that we drafted with the aid of ChatGPT.
+    We will want to change the lines of business dict (renamed to department_allocations)
+    to use a Department as the key
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](images/04image006.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: We will want to make two additional edits to this class. We will want to include
+    the Asset in the constructor. This will allow us access to the fields needed for
+    calculating depreciations, as previously mentioned. Additionally, we will want
+    to include a depreciation rate in the constructor. This is used for declining
+    depreciation but not straight-line depreciation. We could set the value of this
+    field in the specific deprecation constructor or using a mutator method, but for
+    now, we will add it to the `FundingDetails` class. The updated prompt, including
+    the updated field name, to create the `FundingDetails` class is listed in 4.5.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.5 A prompt to have GitHub Copilot create our `FundingDetails` class
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'There is nothing surprising within the generated class: the code establishes
+    the internal attributes and sets them via the constructor. After the constructor
+    has finished, it will check that all attributes are None.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.6 The `FundingDetails` class, omitting the post constructor and the
+    accessor methods
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: The final class that we will generate in this chapter will be the `DepreciationStrategy`.
+    In the last chapter we were briefly introduced to the `DepreciationStrategy` class.
+    What was not mentioned at the time, is that this class would employ a new design
+    pattern, the strategy pattern.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Strategy Design Pattern
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: The Strategy Design Pattern is a behavioral design pattern that lets you define
+    a family of algorithms, encapsulate each one as an object, and make them interchangeable.
+    The idea behind the Strategy Pattern is to define a common interface for a group
+    of algorithms so that they're interchangeable, despite having potentially very
+    different implementations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.1.4 Adapting a strategy for depreciation.
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Before we attempt to create the `DepreciationStrategy` cllass, let’s review
+    the class diagram that we created last chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 4.6 The interface class DepreciationStrategy defines the functionality
+    to calculate the depreciation of our assets within our domain model. There are
+    four concrete classes representing how we can depreciate the asset.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![Graphical user interface, text, application Description automatically generated](images/04image007.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: The implementations of this class contain substantial hidden complexity. Without
+    given Copilot very specific instructions on how the calculations are to be performed,
+    Copilot will not come up with the correct algorithms.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.7 An incomplete and inexact prompt to get Copilot to create the `DepreciationStrategies`
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: This prompt will return methods that, at first sight, appear correct. However,
+    they are not. For example, if we examine the straight-line depreciation method,
+    we see that it neither includes the salvage value in the calculation nor uses
+    the useful life.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.8 An incorrect implementation of straight-line depreciation
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: We should update the prompt with the actual formulas for the depreciation methods
+    to correct this. Thankfully, we do not have to provide the exact syntax, but merely
+    the calculations. Copilot will translate our algorithms to validate Python code.
+    The updated prompt is in listing 4.9.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.9 An accurate prompt includes the correct calculations for our depreciation
+    methods.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note that we can use pseudocode. Copilot will handle the rest.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.10 The output from our prompt featuring the correct calculates for
+    our depreciation methods.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: Many other classes are left undefined. Therefore, you should feel free to practice
+    perfecting your prompt engineering by implementing the missing classes. For example,
+    you may want to add `Organizations`, `MaintenanceSchedule`, `Address`, `UsageStatistics`,
+    `User`, `Role`, and `Warranty`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next section, we will work with Copilot to apply patterns to our code,
+    starting with a familiar one.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.2 Weaving Patterns, Patterns, Patterns
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In the following section, we will enrich our domain model with commonly used
+    design patterns. Design patterns are common solutions to recurring design problems
+    in software development. They represent best practices and can be used to speed
+    up the development process by providing a set of proven solutions to certain problems.
+    Design patterns are not ready-to-use code snippets but rather general guides on
+    how to solve a particular problem in a way that is flexible and can be reused
+    across different projects.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.2.1 Paying a visit to our department
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The first pattern that we will revisit is the *Visitor*. As you may recall from
+    Chapter 3, you use the Visitor pattern to add new behavior to or change the existing
+    behavior of a given class. First, let’s look at how it was modeled in the last
+    chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 4.7 The DepartmentVIsitor interface (updated to use the new name, previously
+    it was called LineOfBusinessVisitor). This class “visits” both hardware and software,
+    holding the total cost and depreciation internally.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![Graphical user interface, text, application, email Description automatically
+    generated](images/04image008.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Let’s design a prompt to have Copilot generate an implementation of our `Vistor`
+    pattern. `DepartmentVisitor`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.11 The prompt to have Copilot create a `Vistor`, which visits our
+    `Asset`
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: Copilot generates the straightforward implementation of this class.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.12 The `Vistor` implementation
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 4.2.2 Creating objects in a factory (pattern)
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The *Factory* pattern is another creation pattern that allows you to abstract
+    away some of the details of the object that you are attempting to create. In our
+    Information Technology Asset Management system, we have two types of `Assets`
+    (currently): `Hardware` and `Software`. Each of these objects have attributes
+    that are idiosyncratic to themselves. One effect of this is that our application
+    does not need to know the specifics of the concrete class (Hardware for example).
+    From the application’s perspective, it just gets an instance of `Asset` with additional
+    fields. Let’s have a look as to how to get Copilot to create a Factory for us.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.13 The prompt to have Copilot create an `AssetFactory` class for us
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: This prompt is one of the most detailed that we have encountered. As our needs
+    get more and more niche, our prompts will naturally become more meticulous. We
+    will examine this code is some detail, starting with the `new` method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.14 The resulting code for our `AssetFactory` class, containing two
+    embedded Factories
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: The new method will determine which of the specific Factories it will need to
+    call, based upon the asset_type parameter. Additionally, it keeps track of the
+    number of assets that it has created, ensuring that the identifier (“id” field)
+    will allows be unique. Otherwise, if the identifier creation was pushed down to
+    the specific Factory object, then we would get duplciate keys.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: This implementation is not thread safe. Access to the id fields should be synchronized.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.15 The embedded `HardwareAssetFactory` class
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: The new method of the `HardwareAssetFactory` class is relatively straightforward.
+    This method accepts the parameters from the `AssetFactory` and attempts to resolve
+    the `DepreciationStrategy`, and sets some sensible defauls.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.16 The embedded `SoftwareAssetFactory` class
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `SoftwareAssetFactory` class is nearly identical to the `HardwareAssetFactory`
+    class. So much so that it likely has a smell, and you might find yourself with
+    the urge to refactor, since this does appear to violate the DRY principle (Don’t
+    Repeat Yourself).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There is in fact an easier way to handle this de-duplication. In order to do
+    this, we will look at our next design pattern: the *Builder* pattern.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The Builder Pattern
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: The Builder Pattern is a creational design pattern provides a fluent API for
+    the creation of objects by providing step by step instructions on how to create
+    said object.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.2.3 Instructing the system on how to build
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'First, we will write a prompt to have Copilot create our builders: one for
+    the Asset and one for the `FundingDetails`. We will have the Builder know that
+    if the `asset_type` is hardware then it should return an instance of `Hardware`.
+    The same for `Software`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.17 Prompt to create the `AssetBuilder` and the `FundingDetailsBuilder`
+    classes
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: One thing to note is that all of the values need to be stored in local variables;
+    otherwise, we would encounter post initialization exceptions. The generated code
+    for the `AssetBuilder` is in the following figure. The import statements and the
+    accessor methods have been omitted for the sake of brevity.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.18 The corresponding `AssetBuilder` classes
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: Next, we will examine the `build()` method of the `AssetBuilder` class. This
+    method will use the category field to return the correct which subclass of `Asset`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.19 The build() method for the `AssetBuilder` classes
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: We can now have a look at the `FundingDetailsBuilder`. This class will closely
+    resemble the `AssetBuilder`, only without the polymorphic `build()` method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.20 The `FundingDetailsBuilder` classes
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: The class’s `build()` method implementation is fairly straightforward; it only
+    returns an instance of the `FundingDetails` object after applying the parameters
+    to the constructor.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.21 The `build()` method of the `FundingDetailsBuilder` classes
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: Next, let’s extract the `_get_depreciation_strategy` method from the `AssetFactory`
+    class, consolidating the logic of mapping the name of the depreciation strategy
+    to an instance of the `DepreciationStrategy`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.22 The updated `build()` method of the `FundingDetailsBuilder` classes
+    that includes the mapping from the str to the `DepreciationStrategy`
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now that we have written the Builders, we can modify the `AssetFactory` to use
+    them.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A Pattern Hiding in Plain Sight: The Adapter'
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: The Adapter Pattern is a structural design pattern that allows one to bridge
+    the gap between the target interface and a class with an incompatible interface.
+    For example, in our case, we could have formalized the interface for `str` ->
+    `DepreciationStrategy` in an adapter called `StringDepreciationStrategyAdapter`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We will update the prompt in the `AssetFactory` class to use the new Builders
+    to construct the instances of `Asset` and `FundingDetails`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.23 The prompt to update the `AssetFactory` class to use the `AssetBuilder`
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: Using the new Builders will drastically reduce this class's code volume. For
+    example, the `new` method is now only eight lines long (as formatted in Microsoft
+    VS Code).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.24 The prompt to update the `AssetFactory` class to use the `AssetBuilder`
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: 4.2.4 Observing changes
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Next, we are going to apply the Observer Pattern to our Information Technology
+    Asset Management system. This pattern’s real value will become more obvious in
+    the next chapter, but we will sow the seeds here.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The Observer Pattern
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: The Observer Pattern is a behavioral pattern in which the Subject class reports
+    certain state changes to Observer classes via notifications. The pattern is useful
+    in User Interfaces and event-driven systems.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We will create a new class called `AssetManager` in the directory service. The
+    `AssetManager` class will be responsible to interacting with the outside world
+    (more on this in the next section). We will use the prompt in Listing 4.22 to
+    instruct Copilot as to how to define this class.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.25 A simple prompt to create an `AssetManager`
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: Our current implementation of `AssetManager` uses a list to track the lifecycle
+    of the `Assets` that it manages. The `AssetManager` supports all of the CRUD (Create,
+    Read, Update, and Delete) operations of `Assets`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.26 The implementation of the `AssetManager`
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: We will update our prompt to add notifications to our `AssetManager` class.
+    Right now, we will not assign any Observers. We will save that for next chapter,
+    when we start to deal with data flow.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.27 The updated prompt to apply the Observer Patter to the `AssetManager`
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: In response to our prompt, if we recreate the entirety of the class, Copilot
+    will add the notification framework on which we will eventually expand.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.28 The updated `AssetManager` definition with notifications enabled
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We will see two more patterns in the next section of this chapter: the Singleton
+    Pattern and the Repository Pattern. However, before we see them, we will need
+    to set up a Controller to interact with our system. That takes us to the usage
+    of Ports and Adapters.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.3 Plugging in Ports and Adapters
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Our Information Technology Asset Management system is beginning to come together;
+    the core business model has been built out. We have applied patterns to make the
+    code more concise, readable, and maintainable. There is, however, one glaring
+    deficiency: How do we interact with it? That is the subject of this section. In
+    this section, we will continue to deepen our investigation into hexagonal architecture.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.3.1 Hexagonal architecture in review
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: As you might recall hexagonal architecture is an approach to designing software
+    that emphasizes the separation of the core business logic from the external services.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The business logic can be thought of as the "brain" of the application. It
+    contains all the important rules and constructs that the application will need
+    to guarantee the correctness of the program. In this analogy, then, the external
+    services would be your "hands" or "eyes". They allow interactions with the outside
+    world: user interfaces, database, etc.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Hexagonal architecture separates the main program logic from the outside parts
+    like buttons, screens, and databases. It makes it easy to change those outside
+    parts without changing the main program. It does this by using "ports" that define
+    how the outside parts can interact with the main program, and "adapters" that
+    make those interactions happen in a concrete way.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This approach makes it easier to change and evolve the application over time.
+    If a change needs to be made to one of the external systems, the application’s
+    core should be unaffected. You would only need to update the adapter. The following
+    diagram illustrates this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 4.8 A more conceptual visualization of hexagonal architecture in action.
+    Notice that the Core is segregated from the rest of the system and is only interacted
+    with via Ports.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](images/04image009.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 4.3.2 Driving our application
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: We will begin by building out a driver of the system. A driver is a system external
+    to the context boundary of the application that sends requests to the system and,
+    optionally, receives responses from the application; a conventional example being
+    a REST call from a web browser to a REST controller.
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, we will add a REST controller to our Information Technology Asset Management
+    system. The REST controller will expose the functionality provided by the `AssetManager`
+    class. We will create a directory called infrastructure/API, in which we will
+    create a file called `asset_controller.py`. At the beginning of this file add
+    the following prompt.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.29 The prompt to create a REST controller to expose the functionality
+    of `AssetManager`
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: Given that we did not specify the path to use, it is possible that Copilot will
+    produce inconsistent or invalid paths with the routes. This was what was output
+    in VS Code, using the prompt above. More of a preference than a standard, but
+    the URLs should be plural.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.30 The generated code’s route is “asset” rather than “assets”
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: You might elect to manually update the code to reflect your path preference.
+    Above all, though, ensure that it is consistent across the various methods. The
+    first listing will show us how to initialize all of the services that we will
+    need to run the application.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.31 Updated `AssetController` code to reflect consistent routes
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: Next, we will see how the routes have been defined and their methods get used.
+    The first two routes define how we will access our `Asset` objects. The first
+    GET request will get all `Assets` that we currently have in the system. In the
+    real world, we would include convenience features such as pagination and sorting.
+    However, given the limited number of entries in the system currently, we shall
+    forgo this. The next GET method will get a specific `Asset` by its identifier.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.32 The `AssetController` methods to access `Assets`
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: The final set of routes define how we will create, update, and remove `Assets`
+    from our system. Note, that we are not doing “soft” deletes, which would just
+    set a flag and this Asset would not be returned upon subsequent queries.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.33 The `AssetController` methods to modify and delete `Assets`
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: You should note within that class that there are simplified representations
+    of the `Asset` class called, not coincidently, `AssetIn` and `AssetOut`. You could
+    define those classes within the `AssetController` or you could add a separate
+    class and define them there. In the reference implementation for this book, they
+    are defined in a file called `asset_model.py`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.34 The prompt to define the `AssetIn` and `AssetOut` classes
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: With the prompt defined at the beginning of the file, we should get code generated
+    by Copilot that is similar to the code in listing 4.35.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.35 The classes `AssetIn` and `AssetOut` in `asset_model.py`
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: We could, optionally, add another layer of abstraction between the `AssetController`
+    and the `AssetManager`. One might consider during so might be hexagonal architecture
+    in extremis, but there are few challenges in Computer Science that cannot be resolved
+    by adding one more layer of abstraction. We will add a Port that will be used
+    to interface with the `AssetController`. Let’s create a prompt for the class `AssetRestPort`
+    and have Copilot generate the code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.36 A prompt to create the `AssetRestPort`
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: This prompt instructs Copilot to create an interface that we will implement
+    shortly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.37 Complete source code for `AssetRestPort`
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: Next, we will implement this Port with an Adapter that will be used to interaact
+    with the Controller to further abstract the components. We would be able to swap
+    out this Adapter with another, should we want to turn this into a command line
+    application, for example. The prompt for the Adapter is as follows.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.38 A prompt to create the `AssetRestAdapter`
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: There are two important elements to this prompt. The first is that it implements
+    the Port interface that we had previously defined. The second is that it takes
+    the `AssetManager` and wraps its functionality.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.39 The source code for AssetRestAdapter
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'All that is left to do is to update the `AssetController` to remove the direct
+    invocation of the AssetManager methods by the `AssetController`, and rather have
+    the `AssetController` invoke the methods of the Adapter, which in turn invokes
+    the methods of the `AssetManager`. The key takeaway from the Ports and Adapters
+    pattern is that it abstracts the interaction between the driving parts of the
+    system, in this case the REST API, and the driven application: the business model
+    and core of our system: the `AssetManager`. To make this more explicit and as
+    a little preview, we will shortly modify this class yet again to add the Port
+    to the constructor.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.40 Updated code for `AssetController` which uses the `AssetRestAdapter`
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: As previously mentioned, we will modify the `AssetController` to remove all
+    direct references to the AssetManager. Our current `AssetController`, while it
+    does not directly invoke any AssetManager methods, does hold an indirect reference
+    to the `AssetManger`, as the AssetManager is constructed in the `AssetController`.
+    Doing so will further insulate the AssetManager from the changes of the drivers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.3.3 Accessing our data and persisting our changes
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Abstractions in software are not merely an academic matter. These abstractions
+    allow one flexibility in how one can satisfy the requirements and make changes
+    easier to make. They can hide complexity, encapsulating behavior behind seemingly
+    simple interfaces. This will bring us to our next pattern: the *Repository Pattern*.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The Repository Pattern
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: The Repository pattern is a design pattern that helps manage data by creating
+    a separate place to handle tasks like getting, saving, updating, and deleting
+    data. It connects the data source (like a database or file) to the rest of the
+    application, keeping data access code apart from other code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In our ITAM project, the Repository Pattern will allow us to present a greatly
+    simplified interface, masking the complexity of, in this case, our data access.
+    From the perspective of the Repository or the AssetManager for that matter, our
+    data access layer is just a series of methods. Behind the scenes it might be a
+    REST API, a Redis cache, MongoDb, a file, or a database of any flavor. Let’s create
+    a prompt that will set up our generic data access layer, using the Repository
+    Pattern.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.41 The prompt to create our generic data access layer
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: With this prompt, Copilot should have everything it is needs to establish the
+    contract by which all implementations will honor and behave. Let’s examine the
+    code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.42 The code for the `BaseRepository` which will function as our generic
+    data access layer
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Copilot introduced a Generic type, allowing for some typing hints when it comes
+    time to implement. If we express that the type should be an `Asset`, then the
+    method signature would demonstrate this. Our first attempt at an implementation
+    will be an in-memory data store. This will allow us to perform an end-to-end test
+    of all of our system. It also nicely demonstrates why abstractions are useful.
+    Before long, we will add another implementation that uses Postgres. But first,
+    the prompt:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.43 The prompt to an in-memory data store for testing purposes
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Our in-memory implemenation will use a simple list in which to store the `Assets`.
+    We will be able to perform all CRUD operations. Additionally, Copilot will add
+    in the typing hints for us: letting others know that it should accept and return
+    Assets. That is what is meant by `BaseRepository`[`Asset`]: this is an implementation
+    of a `BaseRepository` whose Generic Type is Asset.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.44 The code for the `InMemoryAssetRepository`
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: Finally, we will update the `AssetManager` to delegate the CRUD operations of
+    the `Assets` to a `BaseRepository` instance (`_repository`). The full source code
+    is below, including the prompt, located at the beginning of the file.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.45 The updated prompt and code for the `AssetManager` to use the `InMemoryAssetRepository`
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE44]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'At this point, we have a core business domain that is untouched directly by
+    our system. We have ports by which requests can come in. We also have ports by
+    which we can store the data (at least while the system is running). We should
+    be able to test the system end-to-end, by running it and POST-ing request to the
+    creation end point, and the reading from the GET end points. Once we have confirmed
+    that the system works end-to-end, we can now tackle the issue that our data is
+    only persisted in memory; we can now hook up an actual database. In order to do
+    this, we introduce the final pattern of this chapter: the *Singleton*. The Singleton,
+    conceptually, is very simple to grok; there should only ever be one instance of
+    it running. The Singleton is good for many use cases: logging, caching, configuration
+    settings, or a database connection manager.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The Singleton Pattern
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: The Singleton pattern is a design pattern that ensures a class has only one
+    instance and provides a global access point to that instance. It is used when
+    you want to have a single object shared across different parts of your program,
+    instead of creating multiple instances of the same class.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.3.4 Centralizing (and externalizing) our data access
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: We will ask Copilot to create a Singleton class for us to manage our database's
+    connections. Since we never want to hard code usernames or passwords (or any connection
+    details for that matter) in our source code, not only because it is inherently
+    less secure, but the details will likely differ depending on the environment (DEV
+    versus QA versus PROD). We will therefore ask Copilot to accept these values as
+    environmental variables and configure the connections using these values.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.46 A prompt to create the Singleton `DatabaseConnection` class
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE45]'
+  prefs: []
+  type: TYPE_PRE
+- en: We have asked Copilot to employ SQLAlchemy, an Object Relational Mapping (ORM)
+    tool, to perform the actions against the database. Copilot will adroitly assemble
+    our source code. The `@staticmethod` keyword will create a method that belongs
+    to class rather than the instance of the class. This keyword is used to get the
+    instance of the `DatabaseConnection` class. Since a static method cannot modify
+    the instance data, it can be used to ensure that only one instance of this class
+    is ever running, and thus is a Singleton. The constructor initializes the connection
+    to the database using string interpolation using environment variables.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.47 A prompt to create the Singleton `DatabaseConnection` class
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE46]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now that now get a connection to our database, we will need to create a repository
+    that will use this connection to store and retrieve our Asset objects. We will
+    create a class called `SQLAlchemyAssetRepository`. This name very explicitly states
+    what it is and how it does it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.48 A prompt and code to the `SQLAlchemyAssetRepository` class
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE47]'
+  prefs: []
+  type: TYPE_PRE
+- en: Next, we will refactor the `AssetController` to allow us to pass in the `AssetRestPort`.
+    By doing this, we can swap out the driven aspect of our application. This refactor
+    will further abstract the driver from the business core.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.49 The updated `AssetController` class which exposes the routes rather
+    than using the method decorators
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE48]'
+  prefs: []
+  type: TYPE_PRE
+- en: We can now consolidate the initialization logic of our application into the
+    `main.py` file. This is the big payoff. Our system will have layering, facilitating
+    the swapping out of the components are needed or as requirements change.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 4.50 The finalized version of the `main.py` class, in which we wire
+    our application together
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE49]'
+  prefs: []
+  type: TYPE_PRE
+- en: Congratulations, we now have a running system, which is persisting data to our
+    database.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 4.4 Summary
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The Decorator Design Pattern is a structural design pattern that allows you
+    to add new or modify existing behavior to an object dynamically without changing
+    the existing class. This is done by wrapping the current object in the decorating
+    object.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Visitor pattern to add new behavior to or change the existing behavior of a
+    given class.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The Factory pattern is another creation pattern that allows you to abstract
+    away some of the details of the object that you are attempting to create.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The Builder Pattern is a creational design pattern provides a fluent API for
+    the creation of objects by providing step by step instructions on how to create
+    said object.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The Adapter Pattern is a structural design pattern that allows one to bridge
+    the gap between the target interface and a class with an incompatible interface.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The Observer Pattern is a behavioral pattern in which the Subject class reports
+    certain state changes to Observer classes via notifications.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Hexagonal architecture separates the main program logic from the outer parts
+    like buttons, screens, and databases. It makes changing outer parts easy without
+    changing the main program.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The Repository pattern is a design pattern that helps manage data by creating
+    a separate place to handle tasks like getting, saving, updating, and deleting
+    data. It connects the data source (like a database or file) to the rest of the
+    application, keeping data access code apart from other code.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The Singleton pattern is a design pattern that ensures a class has only one
+    instance and provides a global access point to that instance. It is used when
+    you want to have a single object shared across different parts of your program
+    instead of creating multiple instances of the same class.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL

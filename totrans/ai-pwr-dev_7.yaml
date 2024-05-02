@@ -1,0 +1,705 @@
+- en: 7 Coding Infrastructure and Managing Deployments
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter covers
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Creating a Dockerfile with the assistance of Copilot
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Drafting your infrastructure as code using Large Language Models
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Managing Docker images with a container registry
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Harnessing the power of Kubernetes
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Releasing your code effortlessly using GitHub Actions
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: There is nothing more demoralizing that having an application sit unused. For
+    this reason, fast-tracking a well-tested application to production is the stated
+    goal of every competent developer. Since we spent the last chapter testing our
+    product, it is now ready for launch.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This chapter will focus on that pivotal moment of transitioning from development
+    to product launch. During this critical phase understanding deployment strategies
+    and best practices becomes essential to ensuring a successful product launch.
+  prefs: []
+  type: TYPE_NORMAL
+- en: With our application successfully secured and tested, it's time to shift our
+    attention toward launching the product. To this end, we will leverage the powerful
+    capabilities of Large Language Models (LLMs) to explore various deployment options
+    tailored to cloud infrastructure.
+  prefs: []
+  type: TYPE_NORMAL
+- en: By harnessing the power of LLMs and embracing their deployment options and methodologies,
+    we can confidently navigate the complex landscape of launching our product, delivering
+    a robust and scalable solution to our customers while leveraging the benefits
+    of cloud computing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, we will develop deployment files for Docker. We will explore how to create
+    Docker images and define deployment files. Additionally, we will discuss best
+    practices for containerizing our application and achieving seamless deployment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Next, we will leverage Terraform to define our infrastructure as code and automate
+    the deployment of Elastic Compute Cloud (EC2) instances on AWS. We will demonstrate
+    how to write Terraform scripts to provision and deploy our application on EC2
+    instances, ensuring consistent and reproducible infrastructure setups.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Then, we will utilize LLMs to deploy our application onto Kubernetes (AWS EKS/ECS).
+    We will have GitHub Copilot create the appropriate Kubernetes deployment files
+    to streamline our deployment process and efficiently manage our application's
+    lifecycle. Given the relative simplicity of our application, we will not need
+    a Kubernetes package manager such as Helm. However, as the complexities and dependencies
+    of services grow, you may want to explore it as one option. Thankfully, Copilot
+    can write Helm charts for you as well!
+  prefs: []
+  type: TYPE_NORMAL
+- en: Bottom of FormLastly, we will briefly showcase migrating from local to automated
+    deployments using GitHub Actions. We can automate our build and deployment processes
+    by integrating LLMs with this widespread continuous integration and delivery (CI/CD)
+    tool, ensuring faster and more efficient deployments.
+  prefs: []
+  type: TYPE_NORMAL
+- en: NOTE
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: While this chapter will use AWS as our cloud provider, the principles and practices
+    covered in this chapter can be adapted and applied to other cloud platforms and
+    even on-premises infrastructure without virtualization (bare metal), allowing
+    us to adapt and scale our product deployment strategy as our business needs evolve.
+    You will find that by employing LLMs and using infrastructure as code, you can
+    (partially) mitigate the vendor lock-in that is very common to cloud platforms.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You should note that if you choose to deploy this (or any application) to AWS,
+    then there will be a cost associated with your activity. AWS and most cloud providers
+    give you free trials to learn their platforms (Google Cloud Platform and Azure
+    for example), but once those credits have expired, you might get hit with a rather
+    unexpectedly large bill. If you decide to follow along in this chapter, you should
+    set threshold alerts for an amount you can comfortably afford. Section 1.9 of
+    Andreas Wittig and Michael Wittig’s *Amazon Web Services in Action, Third Edition*,
+    March 2023, Manning Publishing, is an excellent resource for setting up such a
+    billing notification alert.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.1 Building a Docker image and “deploying” it locally
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: As you may remember from Chapter 6, Docker is a containerization platform that
+    allows one to run applications with little or no installation of an application
+    (outside of Docker) in the traditional sense. Unlike a virtual machine, which
+    simulates an entire operating system, a container shares the host system's kernel
+    (the core part of the operating system) and uses the host system's operating system's
+    capabilities, while isolating the application processes and file systems from
+    the host. This allows you to run multiple isolated applications on a single host
+    system, each with its own environment and resource limits. The following diagram
+    should give you a sense of the relationship between the Docker runtime and the
+    host.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 7.1 Docker makes use of the host’s operating system while isolating each
+    of the containers. his makes Docker containers lightweight compared to virtual
+    machines, as they do not require a full OS to run.
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '![](images/ch-07__image002.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: One of the more exciting features, from a production readiness perspective,
+    is that Docker makes it easier to run applications that can self-heal in some
+    sense. If they fail or fall over at runtime, you can configure them to restart
+    without intervention. In this section, we will use Copilot to create the file
+    (called a Dockerfile) from which we will build our *Docker image*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Docker Images
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: Docker images are like blueprints for Docker containers. They are portable,
+    including all the dependencies (libraries, environment variables, code, etc.)
+    required for the application to run.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Running Docker instances are called Docker containers. Given their lightweight
+    nature, you can run multiple containers on a single host without issue. We can
+    do this because the containerization technology shares the OS kernel, operating
+    in an isolated user space.
+  prefs: []
+  type: TYPE_NORMAL
+- en: NOTE
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: Originally, your author wanted to use AWS CodeWhisperer as the LLM for this
+    chapter. It seemed logical, given the intended cloud platform. However, at the
+    time of this writing, AWS CodeWhisperer only supports programming in a programming
+    language. It does not have facilities for infrastructure as code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We will begin with the following prompt to have Copilot draft the Dockerfile
+    for us.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'You might be left with an empty file (other than this comment). Support for
+    infrastructure as code is ever-evolving (not unlike the LLM ecosystem, in general).
+    According to Copilot Chat, GitHub Copilot is capable of creating a Dockerfile
+    for you; however, you will have to goad it with the following steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the `Dockerfile`, type `FROM python:` and wait for Copilot to suggest a version
+    of Python to use. Select the version you want to use.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Type `WORKDIR /app` to set the working directory for the container.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Type `COPY . /app` to copy the contents of your project into the container.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Type `RUN pip install --trusted-host pypi.python.org -r requirements.txt` to
+    install the dependencies for your project.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Type `EXPOSE 8080` to expose port 8080 for the container.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Type `CMD ["python", "main.py"]` to specify the command to run when the container
+    starts.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Alternatively, you might want to copy and paste the same prompt that you had
+    previously written into the Dockerfile into Copilot Chat prompt window. Copilot
+    Chat will give you the desired content for the Dockerfille.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 7.1 The contents of the Dockerfile to build the Docker image and prepare
+    it for its runtime lifecycle
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: With a Dockerfile, we will build an image for deploying and running our application.
+    We can enter the following command to build our application (run from the directory
+    where the Dockerfile lives, and do not forget the trailing dot). You will need
+    internet access to download the dependencies and create the image.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: Building a Docker image can run for a few seconds to a few minutes, depending
+    on which images and packages are installed on your system and your Internet connection
+    speed. Your patience will soon be rewarded, as you will shortly have an application
+    you can install nearly anywhere from the lowliest commodity hardware to the most
+    oversized hardware offered by your favorite cloud provider. Before running it
+    anywhere, however, you should try to get it running locally. Should you forget
+    the command, Copilot Chat will happily and helpfully assist.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'You can confirm that your Docker container is running by issuing this command
+    at the command line: `docker ps | grep itam`. You should see the running instance.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.2 Standing up infrastructure by Copiloting Terraform
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Using a Docker image on your computer is useful when creating and testing an
+    app. But when it comes time to launch your application, we will need a machine
+    with a little more heft than our local computers. In this section, we'll use GitHub
+    Copilot to help us set up and control our AWS infrastructure by having Copilot
+    write the requisite deployment descriptors for an infrastructure-as-code tool
+    called Terraform. Terraform is made by HashiCorp and lets us write what we want
+    our infrastructure to look like using a domain-specific language (DSL). This DSL
+    saves us from understanding all the complexities and intricacies that each cloud
+    service provider uses to provision hardware. Additionally, it allows us to store
+    and version our infrastructure using infrastructure as code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To start, we want to create a file called `ec2.tf`, add the prompt to inform
+    Copilot that we intend for this to be a Terraform file and how we want our infrastructure
+    stood up. You may notice that Copilot needs us to enter the first word of a given
+    line before it can be cajoled to continue.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 7.2 An example of a Terraform file, including instance size and instructions
+    on how it should be built and configured
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'You may find that Copilot skipped over one small but crucial detail: Copilot
+    did not provide code for installing and provisioning Docker. Given that Docker
+    is required for running our application, we will need to correct this oversight.
+    If fact, you may need to update the file manually to include the command to install
+    Docker, thusly:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Copilot should produce a complete Terraform file that resembles the content
+    of Listing 7.3\. Likely, the code is not exactly matching this Listing, but that
+    should be fine so long as it contains the key features: namely, the provider,
+    the instance, the script to add the Docker daemon, the keypair, and the security
+    group.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 7.3 Complete listing the Terraform file to create the smallest EC2 instance
+    available
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: If you are using the default Virtual Private Cloud (VPC), then the `vpc_id`
+    entry on line 35 is not strictly necessary. While you will find many of the default
+    configurations and conventions chosen by the AWS team to make sense, if you have
+    more stricter security requirements, or if you to know everything about your infrastructure
+    and assume nothing, then you might consider setting up a new VPC from scratch,
+    using Terraform. You will want to change the key pair entry on line 21 to be a
+    key pair to which you have access.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Once you have completed this file satisfactorily, you should run the `terraform
+    init` command. The `terraform init` command initializes a new or existing Terraform
+    working directory. This command downloads and installs the required provider plugins
+    and modules specified in your configuration files. This command gets everything
+    ready to go.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Next, you will have Terraform explain the changes that it intends to make. You
+    do this with the `terraform plan` command. The `terraform plan` command creates
+    an execution plan for your infrastructure changes. This command shows you what
+    changes Terraform will make to your infrastructure when you apply your configuration
+    files. The plan will show you which resources will be created, modified, or destroyed,
+    and any other changes that will be made to your infrastructure.
+  prefs: []
+  type: TYPE_NORMAL
+- en: NOTE
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: 'You may get the error when running terraform plan for the first time “Error:
+    configuring Terraform AWS Provider: no valid credential sources for Terraform
+    AWS Provider found.” You get this error because Terraform attempts to connect
+    to AWS but cannot supply AWS with proper credentials. To address this issue, you
+    will need to create (or edit) the file called ~/.aws/credentials and add your
+    ITAM AWS Access Key ID and AWS Secret Access Key credentials. More details can
+    be found in section **4.2.2 Configuring the CLI** of *Amazon Web Services in Action,
+    Third Edition* for full details on how to accomplish this correctly.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Finally, to apply the Terraform changes, you would use the `terraform apply`
+    command. Terraform will then read the configuration files in the current directory
+    and apply any changes to your infrastructure. If you have made any changes to
+    your configuration files since the last time you ran `terraform apply`, for example,
+    if we need to start up a new database instance or change the size of your EC2,
+    then Terraform will show you a preview of the changes that will be made and prompt
+    you to confirm before applying the changes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Were you to apply these changes, then in a manner of minutes, you would have
+    a brand new EC2 instance running in your VPC. However, this is only one-half of
+    the equation. Having computing power at your fingertips is fantastic; however,
+    you need something to apply this power. We could use this EC2 to run our Information
+    System Asset Management system in this case. The following section will briefly
+    demonstrate transferring a locally built image to another machine.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.3 Moving a Docker Image around (the hard way)
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'First, we will export a Docker image from our local machines and load it onto
+    a remote machine. We will use the commands `docker save` and `load to accomplish
+    this`. You can use the `docker save` command on your local machine to save the
+    image to a tar archive. The following command will save the image to a tar archive
+    named <`image-name>.tar`: `docker save -o <image-name>.tar <image-name>:<tag>.`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, you can transfer the tar archive to the remote machine using a file transfer
+    protocol such as SCP or SFTP. You can use the docker load command on the remote
+    machine to load the image from the tar archive: `docker load -i <image-name>.tar.`
+    This will load the image into the local Docker image cache on the remote machine.
+    Once the image has been loaded, you may use the `docker run` command to start
+    the image and run the Docker container, as you did after you built it. Further,
+    you could then add this image to your Docker compose file, in which you have the
+    Postgres database and Kafka instances.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: NOTE
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: The previous treatment of Terraform is heavily abridged. When you are ready
+    to get serious with Terraform, your go-to resource should be Scott Winkler’s *Terraform
+    in Action* (May 2021, Manning Publishing).
+  prefs: []
+  type: TYPE_NORMAL
+- en: This section examined how to package up our images and load them on remote hosts.
+    While this is easily scriptable, with the advent of container registries, it is
+    now easier than ever to manage deployments without slinging them all around the
+    internet. In the next section, we will explore one such tool Amazon’s Elastic
+    Container Registry (ECR).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.4 Moving a Docker Image around (the easy way)
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Docker images, the blueprints for our containers, are a fundamental building
+    block of containerized applications. Managing them correctly ensures that we maintain
+    clean, efficient, and organized development and deployment workflows. Amazon ECR
+    serves as a fully-managed Docker container registry that makes it easy for developers
+    to store, manage, and deploy Docker container images.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, let’s dive into pushing Docker images to ECR. This process is vital
+    to making your images accessible for use and deployment. We''ll walk through setting
+    up your local environment, authenticating with ECR, and pushing your image. Before
+    we can move our image to ECR, we must create a repository to house said image.
+    This can be done from the AWS Management Console or as we will do shortly, use
+    the AWS Command Line Interface (CLI). The command to create a new repository for
+    our image is: `aws ecr create-repository --repository-name itam`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, we will want to tag our Docker image with the ECR repository URL and
+    the image name. We may want to call it latest or use semantic versioning. Tagging
+    will allow us to easily roll back or forward versions of our system. We would
+    tag our application image to latest using the following command: `docker tag itam:latest
+    123456789012.dkr.ecr.us-west-2.amazonaws.com/itam:latest.`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Then, we will need to authenticate Docker to the ECR registry using the `aws
+    ecr get-login-password` command. This will generate a Docker login command that
+    you can use to authenticate Docker to the registry. The command to login is `aws
+    ecr get-login-password --region us-west-2 | docker login --username AWS --password-stdin
+    123456789012.dkr.ecr.us-west-2.amazonaws.com`
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Finally, we will push the Docker image to the ECR registry using the `docker
+    push` command. We would do that thusly: `docker push 123456789012.dkr.ecr.us-west-2.amazonaws.com/itam:latest`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Once our image is in our registry, our deployment options have greatly increased.
+    We could, for example, write a bash script that will log on to our EC2 instance
+    and perform a docker pull to download and run the image on that EC2\. Alternately,
+    we may want to adopt a more bullet-proof deployment pattern. In the next section,
+    we're going to walk through the process of setting up and launching our application
+    on a powerful cloud service called Elastic Kubernetes Service (EKS). EKS is a
+    managed Kubernetes service provided by AWS (Amazon Web Services). Let's dive in!Top
+    of FormBottom of Form
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.5 Deploying our application on to AWS Elastic Kubernetes Service (EKS)
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Kubernetes confers many benefits over simply running Docker images on EC2 instances.
+    For one, managing and scaling our application becomes considerably more straightforward
+    with Kubernetes. Also, with Kubernetes, we do not have to spend a lot of additional
+    time thinking about what our infrastructure should look like. Plus, thanks to
+    its automatic management of the lifecycles of its images, known as pods, our application
+    will essentially be self-healing. This means that if something goes wrong, Kubernetes
+    can automatically fix it, keeping our application running smoothly at all times.
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, we will need a deployment descriptor written in YAML (Yet Another Markup
+    Language or YAML Ain’t Markup Language, depending on who you ask), which will
+    describe the state we want our Information Technology Asset Management system
+    to be in at all times. This file (typically called deployment.yaml) will provide
+    the template against which Kubernetes will compare the current, running system
+    against and make corrections as needed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 7.4 A Kubernetes deployment file for the Information Technology Asset
+    Management system
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: This will not work, however. Kubernetes will not be able to find the image that
+    we reference in the deployment descriptor file. To correct this, we will need
+    to tell Kubernetes to use our newly minted ECR. Thankfully, this is not as challenging
+    as it may sound. We just have to update the image entry in our file to point to
+    the ECR image, as well as grant EKS permissions to access ECR (okay maybe it is
+    a little trickier, but it is manageable).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, update the deployment yaml to use the ECR image. It would resemble this:
+    `image: 123456789012.dkr.ecr.us-west-2.amazonaws.com/itam:latest.` Then, we would
+    need to define a policy for EKS to use. We would then apply the policy using either
+    the AWS CLI or the IAM Management Console. While applying the policy is (slightly)
+    outside of the scope of this book, you could use Copilot to define this policy.
+    The resulting policy would resemble the following listing.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 7.5 An IAM policy to allow EKS to pull images from ECR
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: Once the EKS can pull down the image from ECR, you will see a Pod start to run.
+    However, you would not have any way to access this Pod externally. We would need
+    to create a Service. In Kubernetes, a Service is an abstraction that defines a
+    logical set of Pods (the smallest and simplest unit in the Kubernetes object model
+    that you create or deploy) and a policy to access them.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Services enable communication between different parts of an application and
+    between different applications. They help distribute network traffic and load
+    balance by exposing the Pods to the network and to other Pods within Kubernetes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 7.6 A Kubernetes services file to enable external access for our application
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: Kubernetes is responsible for routing all requests from this ingress through
+    the service to the running pods, irrespective of what host they are running on.
+    This allows for seamless fallover. Kubernetes expects things to fail. It banks
+    on it. As a result, many of the best practices in distributed systems are baked
+    into Kubernetes. Getting to Kube is a significant first step to having a reliable,
+    highly available system. In the next section, we will examine how to ease the
+    burden of getting our application onto Kubernetes repeatably and continuously.
+    We will look at building out a small deployment pipeline using GitHub actions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.6 Setting up a Continuous Integration/Continuous Deployment pipeline in GitHub
+    Actions
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: If releasing is hard, then it will not be done often. This limits our ability
+    to add value to the application and thus to our stakeholders. However, automating
+    the deployment process significantly reduces the time to release. This allows
+    for more frequent releases, accelerating the pace of development and enabling
+    faster delivery of features to users. Continuous Integration/Continuous Deployment
+    (CI/CD) pipelines limit the risk associated with deployment. By making smaller,
+    more frequent updates, any issues that arise can be isolated and fixed quickly,
+    minimizing the potential impact on the end users. These pipelines facilitate seamless
+    integration of code changes and expedite deployment, simplifying the software
+    release process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: GitHub Actions allows us to construct customized CI/CD pipelines directly within
+    our GitHub repositories. This makes the development workflow more efficient and
+    enables the automation of various steps, freeing us to focus on coding rather
+    than the logistics of integration and deployment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This section provides a concise introduction to setting up a CI/CD pipeline
+    using GitHub Actions and GitHub Copilot. Please note that this will not be a comprehensive
+    guide but a survey that introduces the potential benefits and general workflow.
+    This should serve as a primer, giving you an insight into how these tools can
+    be used to optimize your software development process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, we will create a file in our project in the path: .`github/workflows.`
+    Note the leading dot. We can call this file `itam.yaml` or whatever you desire.
+    On the first line of this file, add the following prompt: # Create a GitHub Actions
+    workflow that builds the ITAM application on every merge to the main branch and
+    deploys it to EKS.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: NOTE
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '`: Like` many of the infrastructure-related tasks that we have put to Copilot
+    in this chapter, Copilot needs a lot of assistance in creating this file for us.
+    We need to be aware of the structure of this file and how to begin every line.
+    It would make sense in cases such as this one to ask ChatGPT or Copilot Chat to
+    build the file for us.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 7.7 The beginning of our GitHub Actions file, which we use to build
+    and deploy our application
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: The build job will first check out the code from our GitHub repository. It uses
+    the code written in the module actions/checkout version 2\. Similarly, it will
+    next, grab the EKS command line interface and configure the credentials to connect
+    to EKS. You will note that the AWS access key and secret are values that are automatically
+    passed into the application. GitHub Actions uses a built-in secret management
+    system to store sensitive data such as API keys, passwords, or certificates. This
+    system is integrated into the GitHub platform and allows you to add, remove, or
+    update secrets (and other sensitive data) at both the repository and organization
+    level. Secrets are encrypted before they're stored and are not shown in logs or
+    available for download. They're only exposed as environment variables to the GitHub
+    Actions runner, making it a secure way to handle sensitive data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Likewise, you can create environmental parameters and use them in your Actions.
+    For example, look at the variable `ECR_REGISTRY`. This variable is created using
+    the output from the `login-ecr` function. In this case, you would still need to
+    hardcode the Elastic Container Registry (ECR) in your Actions file. However, you
+    would want to do this because of consistency and the need to only manage it in
+    one place in the file. Most of these steps should seem familiar to you as we have
+    used them throughout the chapter. That is the magic of automation: it does it
+    for you.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 7.8 The build and deploy steps of our GitHub Actions file
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: The final part of the file logs into AWS ECR. The steps in the Actions file
+    invoke this section. Upon completion, it will return the output to the calling
+    function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Listing 7.9 A beginning of our GitHub Actions file to build and deploy our application
+    to EKS
+  prefs:
+  - PREF_H5
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: In conclusion, exploring Code-as-Infrastructure has enabled us to understand
+    its vital role in any project and how it can be better managed through code. Tools
+    like Terraform provide streamlined solutions for managing infrastructure, while
+    GitHub's code-centric features aid in maintaining the overall workflow.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Introducing Continuous Integration and Continuous Deployment (CI/CD) pipelines,
+    primarily through platforms like GitHub Actions, highlights the importance of
+    automating the software delivery process. Automating such processes increases
+    the speed and reliability of the software development life cycle and minimizes
+    the chances of human errors.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The journey of managing infrastructure as code is ever-evolving, with new tools
+    and practices emerging. It requires a constant learning and adaptation mindset.
+    This chapter has given you a glimpse of the benefits and possibilities.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 7.7 Summary
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The transition from application development to product launch: Discusses the
+    process from when an application is ready for production to when it is made live.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Deployment strategies and best practices for cloud infrastructure: Details
+    on how to set up your cloud infrastructure and the recommended guidelines to achieve
+    optimal performance.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Use of Docker for containerizing applications: It explains how Docker can bundle
+    an application and its dependencies into a single object, making it easy to deploy
+    and manage.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Introduction to Terraform for infrastructure as code: Describes how Terraform
+    enables you to use code to manage your infrastructure, thereby increasing efficiency
+    and reducing errors.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Management of application deployment via Kubernetes: Discuss how Kubernetes
+    simplifies containerized applications'' deployment, scaling, and management.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Adaptation of methods to different cloud platforms or on-premises infrastructure:
+    Explain how the methods discussed in the book can be adapted for use on different
+    cloud platforms or on-premises deployments.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'GitHub Copilot''s role in creating Dockerfiles and Terraform files: Discusses
+    how GitHub Copilot, an AI-powered code assistant, can help you create Docker and
+    Terraform files more efficiently and accurately.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Exporting Docker image from local to remote machine: Explains the steps to
+    move a Docker image from your local machine to a remote server.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Deployment on AWS''s Elastic Kubernetes Service (EKS): Discusses how to deploy
+    a containerized application on AWS EKS, a managed Kubernetes service.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Creation of Kubernetes YAML deployment descriptors: Details how to write a
+    Kubernetes deployment descriptor in YAML format, which describes the desired state
+    for your deployment.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Formation of Kubernetes services for network traffic distribution and communication:
+    Explain how to create Kubernetes services, which abstract how you communicate
+    with and route traffic to your pods.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Pushing Docker image to Amazon''s Elastic Container Registry (ECR): Describes
+    how to upload your Docker images to ECR, a fully managed Docker container registry
+    provided by AWS.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Migration from local to automated deployments using GitHub Actions: Discusses
+    how to automate your deployment process using GitHub Actions, a CI/CD platform.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
