@@ -18,5 +18,5 @@
 +   [第十四章：总结、结论和展望](dl-js_22.md)
 +   [附录 A：安装 tfjs-node-gpu 及其依赖项](dl-js_23.md)
 +   [附录 B：TensorFlow.js 中张量和操作的快速教程](dl-js_26.md)
-+   [第十四章：练习](dl-js_31.md)
-+   [第十五章：术语表](dl-js_32.md)
++   [练习](dl-js_31.md)
++   [术语表](dl-js_32.md)

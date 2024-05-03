@@ -18,7 +18,7 @@
 
 艺术创作的一个重要部分是简单的模式识别和技术技能。而这恰恰是许多人觉得不那么吸引人甚至可以舍弃的部分。这就是 AI 发挥作用的地方。我们的感知模式，我们的语言和我们的艺术作品都具有统计结构。学习这种结构是深度学习算法擅长的。机器学习模型可以学习图像、音乐和故事的统计*潜在空间*，然后可以从这个空间中*采样*，创建具有与模型在训练数据中见过的相似特征的新艺术作品。当然，这样的采样本身几乎不是艺术创作的行为。这只是一种纯粹的数学操作：算法没有基于人类生活、人类情感或我们对世界的经验；相反，它是从一个与我们的经验几乎没有共同之处的经验中学习的。只有我们作为人类观众的解释才能赋予模型生成的东西意义。但在一个技艺精湛的艺术家手中，算法生成可以被引导变得有意义和美丽。潜在空间采样可以成为赋予艺术家力量的画笔，增强我们的创造能力，并扩展我们可以想象的空间。更重要的是，它可以通过消除对技术技能和实践的需求使艺术创作更加容易，建立起一种纯粹表达的新媒介，将艺术与工艺分开。
 
-Iannis Xenakis，电子音乐和算法音乐的开创者，于 1960 年代在将自动化技术应用于音乐作曲的背景下美妙地表达了这一想法：^(1)
+Iannis Xenakis，电子音乐和算法音乐的开创者，于 1960 年代在将自动化技术应用于音乐作曲的背景下美妙地表达了这一想法：¹
 
 > *从繁琐的计算中解脱出来，作曲家能够将自己专注于新音乐形式提出的一般问题，并在修改输入数据的值时探索这种形式的每个角落。例如，他可以测试从独奏家到室内乐队再到大型管弦乐队的所有器乐组合。在电子计算机的帮助下，作曲家成为一种飞行员：他按下按钮，输入坐标，并监督着一艘在声音空间中航行的宇宙飞船的控制，穿越他曾经只能将其看作是遥远梦想的声音星座和星系。*
 
@@ -576,7 +576,7 @@ callbacks = list(text_gen_callback))
 
 ## 12.2 DeepDream
 
-*DeepDream* 是一种艺术图像修改技术，它使用了卷积神经网络学习到的表示。它最初由谷歌在 2015 年夏季发布，使用了 Caffe 深度学习库来实现（这是在 TensorFlow 的首次公开发布几个月前）。^(3) 它很快就因为能够生成迷幻图片而成为互联网的轰动，这些图片充满了算法幻觉的工件、鸟类羽毛和狗眼——这是因为 DeepDream convnet 是在 ImageNet 上训练的，那里狗品种和鸟类物种的数量远远超过其他物种。
+*DeepDream* 是一种艺术图像修改技术，它使用了卷积神经网络学习到的表示。它最初由谷歌在 2015 年夏季发布，使用了 Caffe 深度学习库来实现（这是在 TensorFlow 的首次公开发布几个月前）。³ 它很快就因为能够生成迷幻图片而成为互联网的轰动，这些图片充满了算法幻觉的工件、鸟类羽毛和狗眼——这是因为 DeepDream convnet 是在 ImageNet 上训练的，那里狗品种和鸟类物种的数量远远超过其他物种。
 
 ![图片](img/f0414-01.jpg)
 
@@ -1000,7 +1000,7 @@ tf$io$write_file("dream.png", .)➒
 
 ## 12.3 神经风格迁移
 
-除了 DeepDream，深度学习驱动的图像修改的另一个重要发展是*神经风格迁移*，由 Leon Gatys 等人在 2015 年夏天引入。^(4) 神经风格迁移算法自原始引入以来经历了许多改进，并产生了许多变体，并且已经应用到许多智能手机照片应用中。为简单起见，本节重点介绍了原始论文中描述的公式。
+除了 DeepDream，深度学习驱动的图像修改的另一个重要发展是*神经风格迁移*，由 Leon Gatys 等人在 2015 年夏天引入。⁴ 神经风格迁移算法自原始引入以来经历了许多改进，并产生了许多变体，并且已经应用到许多智能手机照片应用中。为简单起见，本节重点介绍了原始论文中描述的公式。
 
 神经风格迁移包括将参考图像的风格应用到目标图像上，同时保留目标图像的内容。图 12.9 展示了一个例子。
 
@@ -1498,7 +1498,7 @@ GANs 和 VAEs 是学习图像表示的潜在空间的两种不同策略，各自
 
 ### 12.4.3 变分自编码器
 
-变分自编码器是由 Kingma 和 Welling 在 2013 年 12 月^5 以及 Rezende、Mohamed 和 Wierstra 在 2014 年 1 月^6 同时发现的一种生成模型，特别适用于通过概念向量进行图像编辑的任务。它们是对自编码器的现代化改进（自编码器是一种旨在将输入编码到低维潜在空间中，然后再进行解码的网络类型），将深度学习的思想与贝叶斯推理混合起来。
+变分自编码器是由 Kingma 和 Welling 在 2013 年 12 月⁵ 以及 Rezende、Mohamed 和 Wierstra 在 2014 年 1 月⁶ 同时发现的一种生成模型，特别适用于通过概念向量进行图像编辑的任务。它们是对自编码器的现代化改进（自编码器是一种旨在将输入编码到低维潜在空间中，然后再进行解码的网络类型），将深度学习的思想与贝叶斯推理混合起来。
 
 一个经典的图像自编码器会将图像通过编码器模块映射到潜在向量空间中，然后通过解码器模块将其解码回与原始图像具有相同维度的输出（见图 12.16）。然后，通过使用*与输入图像相同的图像*作为目标数据进行训练，意味着自编码器学习重建原始输入。通过对代码（编码器的输出）施加各种限制，可以让自编码器学习更多或更少有趣的数据的潜在表示。最常见的情况是限制代码为低维和稀疏（大多数为零），在这种情况下，编码器充当将输入数据压缩为更少信息位的方式。
 
@@ -1888,7 +1888,7 @@ interpolate = FALSE)
 
 ## 12.5 生成对抗网络简介
 
-生成对抗网络（GANs）由 Goodfellow 等人于 2014 年提出，^(7) 是学习图像潜在空间的替代方法，与 VAEs 相比。它们通过强制生成的图像在统计上几乎无法与真实图像区分开来，从而使得生成的合成图像相当逼真。
+生成对抗网络（GANs）由 Goodfellow 等人于 2014 年提出，⁷ 是学习图像潜在空间的替代方法，与 VAEs 相比。它们通过强制生成的图像在统计上几乎无法与真实图像区分开来，从而使得生成的合成图像相当逼真。
 
 理解 GAN 的一种直观方式是想象一位赝造者试图制作一幅假的毕加索画。起初，赝造者在这个任务上并不在行。他把一些假画和真正的毕加索画混在一起，然后把它们展示给一个艺术品经销商。艺术品经销商为每幅画作进行真伪鉴别，并给赝造者反馈，告诉他什么因素使一幅画看起来像毕加索的作品。赝造者回到自己的工作室准备一些新的伪品。随着时间的推移，赝造者在模仿毕加索的风格方面变得越来越能胜任，而经销商在识别伪品方面也变得越来越熟练。最终，他们手里有了一些极好的假毕加索作品。
 
@@ -2386,16 +2386,16 @@ callbacks = callback_gan_monitor(num_img = 10, latent_dim = latent_dim)
 
 +   VAE 和 GAN 是学习图像潜在空间的模型，然后可以通过从潜在空间中抽样来构想全新的图像。潜在空间中的概念向量甚至可以用于图像编辑。
 
-1.  ^(1) Iannis Xenakis, “Musiques formelles: nouveaux principes formels de composition musicale,” *La Revue musicale* 特刊, 第 253–254 号 (1963).
+1.  ¹ Iannis Xenakis, “Musiques formelles: nouveaux principes formels de composition musicale,” *La Revue musicale* 特刊, 第 253–254 号 (1963).
 
-1.  ^(2) Alex Graves, “Generating Sequences with Recurrent Neural Networks,” arXiv (2013), [`arxiv.org/abs/1308.0850`](https://arxiv.org/abs/1308.0850).
+1.  ² Alex Graves, “Generating Sequences with Recurrent Neural Networks,” arXiv (2013), [`arxiv.org/abs/1308.0850`](https://arxiv.org/abs/1308.0850).
 
-1.  ^(3) Alexander Mordvintsev, Christopher Olah, 和 Mike Tyka, “DeepDream: A Code Example for Visualizing Neural Networks,” Google Research Blog, 2015 年 7 月 1 日, [`mng.bz/xXlM`](http://mng.bz/xXlM).
+1.  ³ Alexander Mordvintsev, Christopher Olah, 和 Mike Tyka, “DeepDream: A Code Example for Visualizing Neural Networks,” Google Research Blog, 2015 年 7 月 1 日, [`mng.bz/xXlM`](http://mng.bz/xXlM).
 
-1.  ^(4) Leon A. Gatys, Alexander S. Ecker, and Matthias Bethge, “艺术风格的神经算法,” arXiv (2015), [`arxiv.org/abs/1508.06576`](https://arxiv.org/abs/1508.06576).
+1.  ⁴ Leon A. Gatys, Alexander S. Ecker, and Matthias Bethge, “艺术风格的神经算法,” arXiv (2015), [`arxiv.org/abs/1508.06576`](https://arxiv.org/abs/1508.06576).
 
-1.  ^(5) Diederik P. Kingma 和 Max Welling，“自动编码变分贝叶斯,” arXiv (2013), [`arxiv.org/abs/1312.6114`](https://arxiv.org/abs/1312.6114).
+1.  ⁵ Diederik P. Kingma 和 Max Welling，“自动编码变分贝叶斯,” arXiv (2013), [`arxiv.org/abs/1312.6114`](https://arxiv.org/abs/1312.6114).
 
-1.  ^(6) Danilo Jimenez Rezende, Shakir Mohamed, and Daan Wierstra, “深度生成模型中的随机反向传播和近似推断,” arXiv (2014), [`arxiv.org/abs/1401.4082`](https://arxiv.org/abs/1401.4082).
+1.  ⁶ Danilo Jimenez Rezende, Shakir Mohamed, and Daan Wierstra, “深度生成模型中的随机反向传播和近似推断,” arXiv (2014), [`arxiv.org/abs/1401.4082`](https://arxiv.org/abs/1401.4082).
 
-1.  ^(7) Ian Goodfellow 等人，“生成对抗网络,” arXiv (2014), [`arxiv.org/abs/1406.2661`](https://arxiv.org/abs/1406.2661).
+1.  ⁷ Ian Goodfellow 等人，“生成对抗网络,” arXiv (2014), [`arxiv.org/abs/1406.2661`](https://arxiv.org/abs/1406.2661).
