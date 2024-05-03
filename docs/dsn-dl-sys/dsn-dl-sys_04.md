@@ -363,7 +363,7 @@ $ docker run --name training-service -v \
 
 注意 本节仅包含运行示例服务所需的主要步骤和关键命令。因此，可以清晰地演示概念，而不需要冗长的代码页和执行输出。如果您想在本节运行实验，请按照 orca3/MiniAutoML 存储库中的 “Distributed trainer training demo”（[github.com/orca3/MiniAutoML/blob/main/training-service/distributed_trainer_demo.md](http://github.com/orca3/MiniAutoML/blob/main/training-service/distributed_trainer_demo.md)）文档中的说明进行操作。
 
-一旦训练服务容器正在运行，我们就可以提交一个训练 gRPC 请求。尽管服务现在在 Kubernetes 后端运行，但训练 API 仍然保持不变。与我们发送给 Docker 后端演示的训练请求（请参见第 3.3.1 节）相比，请求有效负载中仅添加了一个额外参数 — `PARALLEL_INSTANCES=3`。这告诉训练服务创建一个包含三个工作节点的分布式训练组来训练模型。如果我们将此参数设置为 1，则是单设备训练请求。查看以下代码片段以提交一个包含三个并行实例的分布式训练请求（`scripts/ts-004-start-parallel-run.sh` `1`）：
+一旦训练服务容器正在运行，我们就可以提交一个训练 gRPC 请求。尽管服务现在在 Kubernetes 后端运行，但训练 API 仍然保持不变。与我们发送给 Docker 后端演示的训练请求（请参见第 3.3.1 节）相比，请求有效负载中仅添加了一个额外参数 — `PARALLEL_INSTANCES=3`。这告诉训练服务创建一个包含三个工作节点的分布式训练组来训练模型。如果我们将此参数设置为 1，则是单设备训练请求。查看以下代码片段以提交一个包含三个并行实例的分布式训练请求（`scripts/ts-004-start-parallel-run.sh 1`）：
 
 ```py
 # submit a distributed training request
@@ -393,7 +393,7 @@ training.TrainingService/GetTrainingStatus
 
 ❶ 提供作业 ID 以查询状态
 
-除了查询训练服务 API 以获取作业执行状态外，我们还可以在 Kubernetes 中检查训练进度。使用 Kubernetes 命令`kubectl` `get` `all`，我们可以看到在本地 Kubernetes 环境中创建了三个工作 Pod。其中一个是主工作 Pod，另外两个是普通工作 Pod。还创建了一个 Kubernetes 服务对象 `intent-classification-1-master-service` 用于主工作 Pod，它使主 Pod 和工作 Pod 之间具有网络连接性。代码段如下：
+除了查询训练服务 API 以获取作业执行状态外，我们还可以在 Kubernetes 中检查训练进度。使用 Kubernetes 命令`kubectl get all`，我们可以看到在本地 Kubernetes 环境中创建了三个工作 Pod。其中一个是主工作 Pod，另外两个是普通工作 Pod。还创建了一个 Kubernetes 服务对象 `intent-classification-1-master-service` 用于主工作 Pod，它使主 Pod 和工作 Pod 之间具有网络连接性。代码段如下：
 
 ```py
 # check Kubernetes resources status. 

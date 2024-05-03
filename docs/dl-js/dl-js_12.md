@@ -69,7 +69,7 @@ model.summary();
 
 > ³
 > 
-> 在这个模型中，你可能没有看到*激活*层类型。激活层是仅对输入执行激活函数（如 relu 和 softmax）的简单层。假设你有一个具有默认（线性）激活的稠密层；在其上叠加一个激活层等同于使用具有非默认激活的稠密层。这就是我们在 第四章 中的例子所做的。但是有时也会看到前一种风格。在 TensorFlow.js 中，你可以通过以下代码获取这样的模型拓扑：`const` `model` `=` `tf.sequential();` `model.add(tf.layers.dense({untis:` `5,` `inputShape})); model.add(tf.layers.activation({activation: 'relu'})）。
+> 在这个模型中，你可能没有看到*激活*层类型。激活层是仅对输入执行激活函数（如 relu 和 softmax）的简单层。假设你有一个具有默认（线性）激活的稠密层；在其上叠加一个激活层等同于使用具有非默认激活的稠密层。这就是我们在 第四章 中的例子所做的。但是有时也会看到前一种风格。在 TensorFlow.js 中，你可以通过以下代码获取这样的模型拓扑：`const model = tf.sequential(); model.add(tf.layers.dense({untis: 5, inputShape})); model.add(tf.layers.activation({activation: 'relu'})）。
 
 ##### 图 5.2\. MNIST 图像识别和迁移学习卷积神经网络的打印摘要
 

@@ -613,7 +613,7 @@ public void updateDataset(CreateCommitRequest request) {
 
 数据集获取方法的定义
 
-首先，让我们看一下 gRPC 服务方法定义（`grpc-contract/src/main/proto/` `data_management.proto`）中的两个数据集获取方法——`PrepareTrainingDataset` 和 `FetchTrainingDataset`。
+首先，让我们看一下 gRPC 服务方法定义（`grpc-contract/src/main/proto/ data_management.proto`）中的两个数据集获取方法——`PrepareTrainingDataset` 和 `FetchTrainingDataset`。
 
 列表 2.9 训练数据集获取服务定义
 

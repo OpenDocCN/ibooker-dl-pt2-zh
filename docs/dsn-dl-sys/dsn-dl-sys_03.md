@@ -150,7 +150,7 @@ docker run --name training-service -v
   ➥ orca3/services:latest training-service.jar
 ```
 
-在启动训练服务 Docker 容器后，我们可以发送一个 gRPC 请求来启动模型训练执行（`scripts/ts-002-start-run.sh` `<dataset` `id>`）。请参见以下示例 gRPC 请求。
+在启动训练服务 Docker 容器后，我们可以发送一个 gRPC 请求来启动模型训练执行（`scripts/ts-002-start-run.sh <dataset id>`）。请参见以下示例 gRPC 请求。
 
 图 3.1 调用训练服务 API：提交训练作业
 
@@ -177,7 +177,7 @@ training.TrainingService/Train
 
 ❸ 训练超参数
 
-一旦作业成功提交，我们就可以使用从 `train` API 返回的作业 ID 来查询训练执行的进度（`scripts/ts-003-check-run.sh` `<job` `id>`）；请参见以下示例：
+一旦作业成功提交，我们就可以使用从 `train` API 返回的作业 ID 来查询训练执行的进度（`scripts/ts-003-check-run.sh <job id>`）；请参见以下示例：
 
 ```py
 grpcurl -plaintext \
@@ -270,7 +270,7 @@ message GetTrainingStatusResponse {
 
 接收培训请求
 
-首先，一个新的培训请求将被添加到作业等待队列中，并分配一个作业 ID 供将来参考；参见代码(`training-service/src/main/` `java/org/orca3/miniAutoML/training/TrainingService.java`)如下。
+首先，一个新的培训请求将被添加到作业等待队列中，并分配一个作业 ID 供将来参考；参见代码(`training-service/src/main/ java/org/orca3/miniAutoML/training/TrainingService.java`)如下。
 
 3.3 提交培训请求的实现代码
 
@@ -571,9 +571,9 @@ artifact = orca3_utils.create_artifact(config.MODEL_BUCKET,
 
 一种可能的方法是在数据库中定义算法名称和训练代码映射，添加一些 API 来管理这个映射。建议的 API 可以是 
 
-+   `createAlgorithmMapping(string` `algorithmName,` `string` `image,` `string` `version)` 
++   `createAlgorithmMapping(string algorithmName, string image, string version)` 
 
-+   `updateAlgorithmVersion(string` `algorithmName,` `string` `image,` `string` `version)`
++   `updateAlgorithmVersion(string algorithmName, string image, string version)`
 
 如果数据科学家想要添加新的算法类型，他们可以调用`createAlgorithmMapping` API 来向训练服务注册新的训练图像和新的算法名称。我们的用户只需要在训练请求中使用这个新的算法名称即可使用这个新的算法开始模型训练。 
 

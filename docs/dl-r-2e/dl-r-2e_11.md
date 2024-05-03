@@ -62,7 +62,7 @@
 
 [列表 8.3 在 MNIST 图像上训练卷积神经网络](https://example.org)
 
-`c(c(train_images, train_labels), c(test_images, test_labels))` `%<—%`
+`c(c(train_images, train_labels), c(test_images, test_labels)) %<—%`
 
 `dataset_mnist()`
 

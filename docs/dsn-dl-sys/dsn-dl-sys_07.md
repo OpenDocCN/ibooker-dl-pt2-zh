@@ -38,7 +38,7 @@
 
 列表 7.1 显示了如何在本地机器上运行示例预测服务。以下脚本首先运行后端预测器，然后运行前端服务。
 
-注意设置预测服务有点繁琐；我们需要运行元数据和艺术品存储服务，并准备好模型。为了清晰地演示这个想法，列表 7.1 强调了主要的设置步骤。要使模型服务在您的本地机器上工作，请完成附录 A 中的实验（A.2 节），然后使用代码 `./scripts/lab-004-model-serving.sh` `{run_id}` `{document}` 发送模型预测请求。
+注意设置预测服务有点繁琐；我们需要运行元数据和艺术品存储服务，并准备好模型。为了清晰地演示这个想法，列表 7.1 强调了主要的设置步骤。要使模型服务在您的本地机器上工作，请完成附录 A 中的实验（A.2 节），然后使用代码 `./scripts/lab-004-model-serving.sh {run_id} {document}` 发送模型预测请求。
 
 列表 7.1 启动预测服务
 
@@ -144,7 +144,7 @@ document is hello world                  ❸
 
 前端服务模型服务代码演示
 
-以下代码清单突出了图 7.2 中提到的预测工作流的核心实现。你也可以在 `src/main/` `java/org/orca3/miniAutoML/prediction/PredictionService.java` 找到完整的实现。
+以下代码清单突出了图 7.2 中提到的预测工作流的核心实现。你也可以在 `src/main/ java/org/orca3/miniAutoML/prediction/PredictionService.java` 找到完整的实现。
 
 7.2 前端服务预测工作流
 
@@ -366,7 +366,7 @@ public String predict(GetArtifactResponse artifact, String document) {
 
 预测 API
 
-意图预测器有一个 API — `PredictorPredict`（见代码列表 7.7）。它接受两个参数，`runId` 和 `document`。`runId` 是模型 ID，`document` 是一个文本字符串。你可以在 `grpc-contract/src/main/proto/` `prediction_service.proto` 中找到完整的 gRPC 合同。
+意图预测器有一个 API — `PredictorPredict`（见代码列表 7.7）。它接受两个参数，`runId` 和 `document`。`runId` 是模型 ID，`document` 是一个文本字符串。你可以在 `grpc-contract/src/main/proto/ prediction_service.proto` 中找到完整的 gRPC 合同。
 
 列表 7.7 意图预测器 gRPC 接口
 
@@ -983,7 +983,7 @@ TensorFlow Serving 提供以下特点：
 
 TensorFlow Serving 模型文件。
 
-TensorFlow Serving 要求模型以 SavedModel ([`mng.bz/9197`](http://mng.bz/9197)) 格式保存。我们可以使用 `tf.saved_model.save(model,` `save_path)` API 来实现这个目的。一个保存的模型是一个包含了序列化签名和运行它们所需的状态的目录，包括变量值和词汇表。例如，一个保存的模型目录有两个子目录，`assets` 和 `variables`，以及一个文件，`saved_model.pb`。
+TensorFlow Serving 要求模型以 SavedModel ([`mng.bz/9197`](http://mng.bz/9197)) 格式保存。我们可以使用 `tf.saved_model.save(model, save_path)` API 来实现这个目的。一个保存的模型是一个包含了序列化签名和运行它们所需的状态的目录，包括变量值和词汇表。例如，一个保存的模型目录有两个子目录，`assets` 和 `variables`，以及一个文件，`saved_model.pb`。
 
 assets 文件夹包含了 TensorFlow 图使用的文件，比如用于初始化词汇表的文本文件。variables 文件夹包含了训练检查点。`saved_model.pb` 文件存储了实际的 TensorFlow 程序，或者说模型，以及一组命名的签名，每个签名标识了一个接受张量输入并产生张量输出的函数。
 
@@ -1400,7 +1400,7 @@ spec:
 
 图 7.15 在带有元数据存储的预测服务中模型提供服务
 
-在图 7.15 中，数据科学家首先在元数据存储中将模型 A，版本 1.0.0 注册到模型 A，版本`PROD`。然后在模型查找表中，（`Model` `A，` `PROD)` 记录更改为指向实际的模型对象记录（`ModelA，` `version:` `1.0.0)`。因此，当用户在预测服务中调用`/predict/ModelA/PROD`时，他们实际上是在调用`/predict/ModelA/1.0.0`。
+在图 7.15 中，数据科学家首先在元数据存储中将模型 A，版本 1.0.0 注册到模型 A，版本`PROD`。然后在模型查找表中，（`Model A， PROD)` 记录更改为指向实际的模型对象记录（`ModelA， version: 1.0.0)`。因此，当用户在预测服务中调用`/predict/ModelA/PROD`时，他们实际上是在调用`/predict/ModelA/1.0.0`。
 
 接下来，当预测服务收到一个模型版本等于`STG`或`PROD`的预测请求时，服务将在元数据存储中搜索查找表，并使用实际的模型版本，即已注册到`PROD`的版本，来下载模型文件。在图 7.15 中，预测服务将为`/ModelA/PROD`的请求加载模型`ModelA, version:` 1.0.0，并为`/ModelA/STG`的请求加载模型`ModelA, version:` 1.1.0。
 

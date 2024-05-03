@@ -454,7 +454,7 @@ predictive_mean = predictive_distribution.mean
 
 另外，我们想显示 95% 置信区间。从数学上讲，这可以通过提取预测协方差矩阵Σ的对角元素来完成（请记住，这些元素表示单个方差σ²），取这些值的平方根以计算标准差σ，并计算 *μ* ± 1.96σ 的置信区间范围。
 
-幸运的是，当我们使用 GP 时，计算 95% 置信区间是一个常见的操作，所以 GPyTorch 提供了一个方便的辅助方法，称为 `confidence_` `region()`，我们可以直接从 MVN 分布对象中调用该方法：
+幸运的是，当我们使用 GP 时，计算 95% 置信区间是一个常见的操作，所以 GPyTorch 提供了一个方便的辅助方法，称为 `confidence_ region()`，我们可以直接从 MVN 分布对象中调用该方法：
 
 ```py
 predictive_lower, predictive_upper =

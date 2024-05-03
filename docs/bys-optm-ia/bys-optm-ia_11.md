@@ -291,11 +291,11 @@ if feasible_flag:
 
 上述代码完成了我们的约束 BayesOpt 循环。我们只需要声明我们要用来解决约束优化问题的 BayesOpt 策略。我们使用在第 8.2 节中讨论的约束 EI 策略，使用 BoTorch 类`ConstrainedExpectedImprovement`。该类需要一些重要参数：
 
-+   `model` - `ModelListGP(utility_model,` `cost_model)`-目的函数的 GP 模型列表（在我们的例子中是`utility_model`）和定义约束的函数（在我们的例子中是`cost_model`）。我们使用 BoTorch 的`models`模块中的`model_list_gp_regression.ModelListGP`类来创建此列表。
++   `model` - `ModelListGP(utility_model, cost_model)`-目的函数的 GP 模型列表（在我们的例子中是`utility_model`）和定义约束的函数（在我们的例子中是`cost_model`）。我们使用 BoTorch 的`models`模块中的`model_list_gp_regression.ModelListGP`类来创建此列表。
 
 +   `objective_index` - model 列表`model`中模型目标函数的索引。由于`utility_model`是我们传递给`ModelListGP`的第一个 GP，所以在我们的例子中该索引为 0。
 
-+   `constraints` — 将定义约束函数的每个函数的索引映射到存储约束的下限和上限的两元素列表的字典。如果一个约束没有下限或上限，我们使用 `None` 代替实际数值。我们的示例要求与 `cost_model` 对应的成本最大为 0，因此我们设置 `constraints={1:` `[None,` `0]}`。
++   `constraints` — 将定义约束函数的每个函数的索引映射到存储约束的下限和上限的两元素列表的字典。如果一个约束没有下限或上限，我们使用 `None` 代替实际数值。我们的示例要求与 `cost_model` 对应的成本最大为 0，因此我们设置 `constraints={1: [None, 0]}`。
 
 +   `best_f` — 当前可行的最佳解决方案，如果我们找到至少一个可行点，则为 `train_utility[train_cost <= 0].max()`，否则为默认值 -2。
 

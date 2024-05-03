@@ -286,7 +286,7 @@ Hyperopt ([`hyperopt.github.io/hyperopt/#getting-started`](http://hyperopt.githu
 
 首先，我们创建一个目标函数，基本上是实际训练代码的包装函数，但从`args`变量中读取超参数值。其次，我们为选定的超参数定义搜索空间。第三，我们选择一个 HPO 算法，该算法从搜索空间中选择超参数值，并将它们传递给目标函数以启动优化过程。列表 5.1 实现了这个场景。
 
-在这个例子中，我们想确定哪个分类器能够产生最佳的模型准确性，因此我们选择在三个候选项中优化`classifier_type`超参数：`naive_bayes`、`svm`和`dtree`。你可能还注意到每个分类器都有自己的值搜索空间，比如对于`svm`分类器，有`hp.lognormal('svm_rbf_width',` `0,` `1)`。在`fmin`函数中（在步骤 3 中），我们将 TPE 指定为 HPO 算法，最大试验数为 10，并将目标函数和搜索空间作为必需参数传入。
+在这个例子中，我们想确定哪个分类器能够产生最佳的模型准确性，因此我们选择在三个候选项中优化`classifier_type`超参数：`naive_bayes`、`svm`和`dtree`。你可能还注意到每个分类器都有自己的值搜索空间，比如对于`svm`分类器，有`hp.lognormal('svm_rbf_width', 0, 1)`。在`fmin`函数中（在步骤 3 中），我们将 TPE 指定为 HPO 算法，最大试验数为 10，并将目标函数和搜索空间作为必需参数传入。
 
 列表 5.1 Hyperopt 入门
 
@@ -482,7 +482,7 @@ dfs = analysis.trial_dataframes
 
 图 5.12 Ray Tune 在一组机器上运行分布式 HPO
 
-首先，我们用命令`"ray``` `up` `tune-cluster.yaml"`建立了一个 Ray 集群；`tune-cluster.yaml`是一个声明集群计算资源的集群配置。然后，我们运行以下命令将 HPO 代码从本地机器提交到集群的 head 节点：`"ray` `submit` `tune-cluster.yaml` `tune_ script.py` `--start` `--` `--ray-address={server_address}"`。接下来，Ray 分配资源，将 HPO 代码复制到服务器，并启动分布式执行。更多详情，请参见“Tune Distributed Experiments” ([`mng.bz/71QQ`](http://mng.bz/71QQ))。
+首先，我们用命令`"ray  up tune-cluster.yaml"`建立了一个 Ray 集群；`tune-cluster.yaml`是一个声明集群计算资源的集群配置。然后，我们运行以下命令将 HPO 代码从本地机器提交到集群的 head 节点：`"ray submit tune-cluster.yaml tune_ script.py --start -- --ray-address={server_address}"`。接下来，Ray 分配资源，将 HPO 代码复制到服务器，并启动分布式执行。更多详情，请参见“Tune Distributed Experiments” ([`mng.bz/71QQ`](http://mng.bz/71QQ))。
 
 除了分布式 HPO 执行，Ray Tune 还支持单次试验的分布式训练，自动检查点管理和 TensorBoard 日志记录。这些功能为 Ray Tune 增添了巨大的价值，因为它们具有高容错性和简单的故障排除能力。
 

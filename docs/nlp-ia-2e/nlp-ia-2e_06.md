@@ -1233,7 +1233,7 @@ IlliniBoard.com           Vocab(count:1481047, index:1518953)
 Illini_Bluffs              Vocab(count:2636947, index:363053)
 ```
 
-请注意，复合词和常见的 *n*-gram 用下划线字符（"_"）连接在一起。还请注意，键值映射中的“值”是一个包含词的索引位置的 `gensim` `Vocab` 对象，因此您可以检索 Word2Vec 向量，但还包括它在 Google 新闻语料库中出现的次数。
+请注意，复合词和常见的 *n*-gram 用下划线字符（"_"）连接在一起。还请注意，键值映射中的“值”是一个包含词的索引位置的 `gensim Vocab` 对象，因此您可以检索 Word2Vec 向量，但还包括它在 Google 新闻语料库中出现的次数。
 
 正如你之前所看到的，如果你想检索特定词的 300-D 向量，你可以在这个 `KeyedVectors` 对象上使用方括号 `*getitem*` 任何词或 *n*-gram：
 

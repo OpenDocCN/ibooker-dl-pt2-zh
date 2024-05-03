@@ -463,7 +463,7 @@ Argo Workflows 中最基本的概念是工作流程和模板。工作流程对�
 
 在代码清单 9.2 中，我们看到了一个四步顺序工作流程：`check-new-data` -> `transform_data` -> `save-into-db` -> `notify-data-science-team`。每个步骤都可以引用一个模板，并且步骤通过工件（文件）传递参数。例如，`check-new-data`引用了`data-checker`模板，该模板定义了用于检查是否有新数据的 Docker 镜像。`data-checker`模板还声明了步骤输出——新到达的数据文件路径——将被保存到`/tmp/data_paths.txt`作为其输出值。
 
-接下来，步骤`transform_data`将`check-new-data`的输出绑定到 data-converter 模板的输入。这就是变量在步骤和模板之间移动的方式。一旦您提交了工作流程——例如，`argo` `submit` `-n` `argo` `sample_workflow.yaml`——您可以使用 Argo Workflows UI 或以下命令来查看工作流运行的详细信息：
+接下来，步骤`transform_data`将`check-new-data`的输出绑定到 data-converter 模板的输入。这就是变量在步骤和模板之间移动的方式。一旦您提交了工作流程——例如，`argo submit -n argo sample_workflow.yaml`——您可以使用 Argo Workflows UI 或以下命令来查看工作流运行的详细信息：
 
 ```py
 # list all the workflows
@@ -639,7 +639,7 @@ Metaflow 提供以下关键功能：
 
 +   *ML 的可用性设计* — Metaflow 将原型设计和生产视为同等重要。它提供了一组统一的 API 来抽象基础设施，因此相同的代码可以在原型环境和生产环境中运行而无需任何更改。
 
-+   *无缝扩展性*—Metaflow 集成了 Kubernetes 和 AWS Batch，允许用户轻松定义所需的计算资源，并可以并行执行任意数量的工作流步骤。例如，通过对步骤函数应用像`@batch(cpu=1,` `memory=500)`这样的注解，Metaflow 将与 AWS Batch 合作分配所需的资源来计算此步骤。
++   *无缝扩展性*—Metaflow 集成了 Kubernetes 和 AWS Batch，允许用户轻松定义所需的计算资源，并可以并行执行任意数量的工作流步骤。例如，通过对步骤函数应用像`@batch(cpu=1, memory=500)`这样的注解，Metaflow 将与 AWS Batch 合作分配所需的资源来计算此步骤。
 
 局限性
 

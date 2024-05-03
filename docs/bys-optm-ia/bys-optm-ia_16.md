@@ -86,7 +86,7 @@ plt.scatter(                                ❷
 
 ❷ 为训练数据制作散点图
 
-在这里，如果模型是一个 VGP（如果 `variational` 设置为 `True`），那么我们会用较低的不透明度绘制训练数据（通过设置 `alpha` `=` `0.1`），使它们看起来更透明。这样我们可以更清楚地绘制后面学习到的 VGP 的代表性点。
+在这里，如果模型是一个 VGP（如果 `variational` 设置为 `True`），那么我们会用较低的不透明度绘制训练数据（通过设置 `alpha = 0.1`），使它们看起来更透明。这样我们可以更清楚地绘制后面学习到的 VGP 的代表性点。
 
 GP 所做的预测随后在第三步中以实线均值线和阴影 95% CI 区域的形式显示：
 
@@ -160,7 +160,7 @@ plt.legend();
 
 ### 12.1.2 训练常规 GP
 
-我们现在准备在这个数据集上实现并训练一个 GP 模型。首先，我们实现 GP 模型类，其具有常数函数（`gpytorch.means` `.ConstantMean` 的一个实例）作为其均值函数，以及具有输出尺度的 RBF 核函数（使用 `gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel())` 实现）作为其协方差函数：
+我们现在准备在这个数据集上实现并训练一个 GP 模型。首先，我们实现 GP 模型类，其具有常数函数（`gpytorch.means .ConstantMean` 的一个实例）作为其均值函数，以及具有输出尺度的 RBF 核函数（使用 `gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel())` 实现）作为其协方差函数：
 
 ```py
 class GPModel(gpytorch.models.ExactGP):
@@ -231,7 +231,7 @@ likelihood.eval()                                                  ❺
 
 一个将 GP 扩展到大型数据集的方法，本章不重点讨论，是使用图形处理单元（GPU）。GPU 通常用于并行化矩阵乘法并加速训练神经网络。
 
-同样的原则也适用于此处，而 GPyTorch 通过遵循 PyTorch 的语法将 GP 训练简化到了 GPU 上（通过在对象上调用 `cuda()` 方法）。具体来说，我们调用 `train_x` `=` `train_x.cuda()` 和 `train_y` `=` `train_y.cuda()` 将我们的数据放到 GPU 上，然后调用 `model` `=` `model.cuda()` 和 `likelihood` `=` `likelihood.cuda()` 将 GP 模型和其似然放到 GPU 上。
+同样的原则也适用于此处，而 GPyTorch 通过遵循 PyTorch 的语法将 GP 训练简化到了 GPU 上（通过在对象上调用 `cuda()` 方法）。具体来说，我们调用 `train_x = train_x.cuda()` 和 `train_y = train_y.cuda()` 将我们的数据放到 GPU 上，然后调用 `model = model.cuda()` 和 `likelihood = likelihood.cuda()` 将 GP 模型和其似然放到 GPU 上。
 
 您可以在 GPyTorch 的文档中找到有关此主题的更多详细信息，链接地址为 [`mng.bz/lW8B`](http://mng.bz/lW8B)。
 
@@ -407,7 +407,7 @@ for epoch in range(2):                        ❶
 
 +   *变分分布* `variational_distribution` *变量是* `CholeskyVariationalDistribution` *类的一个实例，在初始化期间接受诱导点的数量。* *变分分布是 VGP 的核心。*
 
-+   *变分策略* `variational_strategy` *变量是* `VariationalStrategy` *类的一个实例。它接受一组诱导点以及变分分布。我们将* `learn_inducing_locations` `=` `True` *以便在训练过程中学习这些诱导点的最佳位置。如果将此变量设置为* `False`，*则传递给* `__init__()` *的点（存储在* `inducing` *中）将用作诱导点：*
++   *变分策略* `variational_strategy` *变量是* `VariationalStrategy` *类的一个实例。它接受一组诱导点以及变分分布。我们将* `learn_inducing_locations = True` *以便在训练过程中学习这些诱导点的最佳位置。如果将此变量设置为* `False`，*则传递给* `__init__()` *的点（存储在* `inducing` *中）将用作诱导点：*
 
 ```py
 class ApproximateGPModel(gpytorch.models.ApproximateGP):             ❶
@@ -783,7 +783,7 @@ likelihood.eval()                          ❹
 
 1.  验证训练 VGP 所需的时间是否少于训练 GP 的时间。对于计时功能，您可以使用`time.time()`来记录每个模型训练的开始和结束时间，或者您可以使用`tqdm`库来跟踪训练持续时间，就像我们一直在使用的代码一样。
 
-解决方案包含在`CH11/02` `-` `Exercise.ipynb`笔记本中。
+解决方案包含在`CH11/02 - Exercise.ipynb`笔记本中。
 
 ## 摘要
 

@@ -513,7 +513,7 @@ tSNE 是广泛流行的算法之一。它用于研究区域的拓扑，但单个
 
 ![06_15](img/06_15.png)
 
-一个这样的数据集可能是 Pavia 大学数据集。这个数据集是由 ROSIS 传感器在意大利北部的 Pavia 获取的。数据集的详细信息如下，并且可以从（`www.ehu.eus/ccwintco/uploads/e/ee/PaviaU.mat` `www.ehu.eus/ccwintco/uploads/5/50/PaviaU_gt.mat`）下载。
+一个这样的数据集可能是 Pavia 大学数据集。这个数据集是由 ROSIS 传感器在意大利北部的 Pavia 获取的。数据集的详细信息如下，并且可以从（`www.ehu.eus/ccwintco/uploads/e/ee/PaviaU.mat www.ehu.eus/ccwintco/uploads/5/50/PaviaU_gt.mat`）下载。
 
 在此数据集中，光谱波段为 103，HIS 尺寸为 610*340 像素，包含 9 类。这种类型的数据可以用于作物分析、矿物检查和勘探等。由于此数据包含有关地质图案的信息，因此对于科学目的非常有用。在开发任何图像识别解决方案之前，我们必须减少此数据集的维度数量。此外，如果维度数量较大，计算成本将会更高。因此，显然应该有较少的代表性维度数量。以下显示了一些示例波段。建议您下载数据集（也已在 git Hub repo 中检入）并在数据集上使用各种降维技术以减少维度数量。
 

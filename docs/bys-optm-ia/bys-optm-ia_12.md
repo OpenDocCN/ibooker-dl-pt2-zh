@@ -510,7 +510,7 @@ policy = qMultiFidelityMaxValueEntropy(
 
 注意：在我们当前的多保真设置中，用于查询位置的搜索空间仍然是连续的，但用于查询的函数选择是离散的。换句话说，我们的搜索空间是混合的。幸运的是，BoTorch 为混合搜索空间提供了类似的辅助函数：`optimize_acqf_mixed`。
 
-除了`optimize_acqf`通常接受的参数外，新的辅助函数`optimize_acqf_mixed`还有一个`fixed_features_list`参数，它应该是一个字典列表，每个字典将`train_x_`的一个离散列的索引映射到列包含的可能值。在我们的情况下，我们只有一个离散列，即包含相关值的最后一列，因此我们使用`[{1:` `cost.item()}` `for` `cost` `in` `fidelities]`作为`fixed_features_list`参数。此外，我们通常传递给辅助函数的`bounds`变量现在也需要包含相关值的边界。总的来说，我们使用以下方式优化我们的多保真 MES 获取分数：
+除了`optimize_acqf`通常接受的参数外，新的辅助函数`optimize_acqf_mixed`还有一个`fixed_features_list`参数，它应该是一个字典列表，每个字典将`train_x_`的一个离散列的索引映射到列包含的可能值。在我们的情况下，我们只有一个离散列，即包含相关值的最后一列，因此我们使用`[{1: cost.item()} for cost in fidelities]`作为`fixed_features_list`参数。此外，我们通常传递给辅助函数的`bounds`变量现在也需要包含相关值的边界。总的来说，我们使用以下方式优化我们的多保真 MES 获取分数：
 
 ```py
 from botorch.optim.optimize import optimize_acqf_mixed
@@ -577,9 +577,9 @@ BayesOpt 社区中常见的进展度量标准是当前给出最高后验均值�
 
 总的来说，我们用以下辅助策略制定后验均值最大化器度量标准，其中包装策略接受`PosteriorMean`的一个实例，并且我们将其他参数指定如下：
 
-+   *搜索空间的维度是* `d` `=` `2`—我们的实际搜索空间是一维的，并且还有一个附加维度用于相关值（即查询的保真度）。
++   *搜索空间的维度是* `d = 2`—我们的实际搜索空间是一维的，并且还有一个附加维度用于相关值（即查询的保真度）。
 
-+   *要在优化期间固定的维度的索引,* `columns` `=` `[1]` *及其固定值* `values` `=` `[1]`—由于我们只想找到对应于目标函数、即高保真函数的后验均值最大化器，我们指定第二列（索引`1`）始终应为值 1：
++   *要在优化期间固定的维度的索引,* `columns = [1]` *及其固定值* `values = [1]`—由于我们只想找到对应于目标函数、即高保真函数的后验均值最大化器，我们指定第二列（索引`1`）始终应为值 1：
 
 ```py
 from botorch.acquisition.fixed_feature
@@ -734,7 +734,7 @@ next_x, acq_val = optimize_acqf(...)                                    ❸
 
 接下来执行以下步骤：
 
-1.  对于我们的目标函数，我们使用名为 `Branin` 的二维函数，它是优化的常见测试函数，就像 Forrester 函数一样。BoTorch 提供了 Branin 的多保真度版本，因此我们使用 `from` `botorch.test_functions.multi_fidelity` `import` `AugmentedBranin` 将其导入到我们的代码中。为了方便起见，我们使用以下代码对该函数的域和输出进行缩放，这使 `objective` 成为我们评估查询时要调用的函数：
+1.  对于我们的目标函数，我们使用名为 `Branin` 的二维函数，它是优化的常见测试函数，就像 Forrester 函数一样。BoTorch 提供了 Branin 的多保真度版本，因此我们使用 `from botorch.test_functions.multi_fidelity import AugmentedBranin` 将其导入到我们的代码中。为了方便起见，我们使用以下代码对该函数的域和输出进行缩放，这使 `objective` 成为我们评估查询时要调用的函数：
 
     ```py
     problem = AugmentedBranin()                              ❶
@@ -764,7 +764,7 @@ next_x, acq_val = optimize_acqf(...)                                    ❸
 
 1.  从 Sobol 序列中抽取的候选人数设置为 5,000，并且在使用辅助函数优化给定策略的获取分数时，使用 100 次重启和 500 个原始样本。
 
-1.  重新定义助手函数 `get_final_recommendation`，以便为我们的二维目标函数设置适当的参数：`d` `=` `3` 和 `columns` `=` `[2]`。
+1.  重新定义助手函数 `get_final_recommendation`，以便为我们的二维目标函数设置适当的参数：`d = 3` 和 `columns = [2]`。
 
 1.  运行多保真度最大值熵搜索策略及其单保真度版本的优化问题，并使用练习 1 中描述的方法绘制每个策略的平均优化进展和误差线。注意，在为单保真度策略创建包装器策略时，参数 `d` 和 `columns` 需要与上一步骤中设置的方式相同。验证多保真度策略的表现优于单保真度策略。
 
