@@ -7,6 +7,7 @@
 +   [R 深度学习第二版](docs/dl-r-2e/README.md)
 +   [深度学习系统设计](docs/dsn-dl-sys/README.md)
 +   [GPT3：使用大型语言模型构建创新的自然语言处理产品](docs/gpt3-bd-invt-nlp-prod-llm/README.md)
++   [AI 内部原理](docs/insd-ai/README.md)
 +   [生产中的大语言模型（MEAP）](docs/llm-prod/README.md)
 +   [大规模 MLOps 工程](docs/mlops-engi-scl/README.md)
 +   [自然语言处理实战第二版（MEAP）](docs/nlp-ia-2e/README.md)
