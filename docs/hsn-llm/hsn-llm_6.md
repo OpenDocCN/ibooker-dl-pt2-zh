@@ -1,4 +1,4 @@
-# 第七章\. 创建文本嵌入模型
+# 第七章： 创建文本嵌入模型
 
 文本嵌入模型是许多强大自然语言处理应用的基础。它们为赋能已经令人印象深刻的技术（如文本生成模型）奠定了基础。在本书中，我们已经在多种应用中使用了嵌入模型，如监督分类、无监督分类、语义搜索，甚至为像 ChatGPT 这样的文本生成模型提供记忆。
 
@@ -44,7 +44,7 @@
 
 ###### 图 7-4\. 对比学习旨在教导嵌入模型文档是否相似或不相似。对比学习通过向模型展示一定程度上相似或不相似的文档组来实现。
 
-另一个看待对比学习的方法是通过解释的性质。一个很好的例子是一个记者问一个抢劫犯“你为什么抢银行”，他回答“因为那里有钱。”^(1) 尽管这个回答在事实上是正确的，但问题的意图并不是问他为什么特定地抢银行，而是问他为什么会抢劫。这被称为对比解释，指的是理解一个特定案例，“为什么 P”与其他选择相比，“为什么 P 而不是 Q？”^(2) 在这个例子中，问题可以有多种解读，可能最好的方式是提供一个替代选择：“你为什么抢银行（P）而不是遵守法律（Q）？”。
+另一个看待对比学习的方法是通过解释的性质。一个很好的例子是一个记者问一个抢劫犯“你为什么抢银行”，他回答“因为那里有钱。”¹ 尽管这个回答在事实上是正确的，但问题的意图并不是问他为什么特定地抢银行，而是问他为什么会抢劫。这被称为对比解释，指的是理解一个特定案例，“为什么 P”与其他选择相比，“为什么 P 而不是 Q？”² 在这个例子中，问题可以有多种解读，可能最好的方式是提供一个替代选择：“你为什么抢银行（P）而不是遵守法律（Q）？”。
 
 理解问题的替代方案的重要性同样适用于嵌入如何通过对比学习来学习。通过向模型展示相似和不相似的文档对，它开始学习什么使得事物相似/不相似，更重要的是，为什么。
 
@@ -66,7 +66,7 @@
 
 交叉编码器允许同时将两个句子传递给变换器网络，以预测这两个句子的相似程度。它通过在原始架构中添加一个分类头来实现，能够输出相似度分数。然而，当你想在 10,000 个句子的集合中找到最高配对时，计算数量迅速增加。这将需要 n·(n−1)/2 = 49 995 000 次推理计算，从而产生显著的开销。此外，交叉编码器通常不生成嵌入，如图 7-6 所示。
 
-解决这个开销的方法是通过平均其输出层或使用[CLS]标记从 BERT 模型生成嵌入。然而，这显示出其效果不如简单地平均词向量，例如 GloVe.^(3)
+解决这个开销的方法是通过平均其输出层或使用[CLS]标记从 BERT 模型生成嵌入。然而，这显示出其效果不如简单地平均词向量，例如 GloVe.³
 
 ![交叉编码器的架构。两个句子被拼接，用 SEP 标记分隔，并同时输入模型。它输出的是输入句子之间的相似度分数，而不是嵌入。](img/creating_text_embedding_models_249519_06.png)
 
@@ -236,7 +236,7 @@ evaluator = EmbeddingSimilarityEvaluator.from_input_examples(samples)
 
 ## 深入评估
 
-一个好的嵌入模型不仅仅是 STSB 基准测试上的好成绩！正如我们之前看到的，GLUE 基准测试有许多任务可以评估我们的嵌入模型。然而，还有许多其他基准可以评估嵌入模型。为了统一这个评估过程，开发了大规模文本嵌入基准（MTEB）^(4)。这个 MTEB 涵盖了 8 个嵌入任务，涉及 58 个数据集和 112 种语言。
+一个好的嵌入模型不仅仅是 STSB 基准测试上的好成绩！正如我们之前看到的，GLUE 基准测试有许多任务可以评估我们的嵌入模型。然而，还有许多其他基准可以评估嵌入模型。为了统一这个评估过程，开发了大规模文本嵌入基准（MTEB）⁴。这个 MTEB 涵盖了 8 个嵌入任务，涉及 58 个数据集和 112 种语言。
 
 为了公开比较最新的嵌入模型，创建了一个[排行榜](https://huggingface.co/spaces/mteb/leaderboard)，列出了各个嵌入模型在所有任务中的得分。
 
@@ -329,7 +329,7 @@ cosine_model.fit(train_objectives=[(train_dataloader, train_loss)], epochs=1, wa
 
 ### 多重负面排名损失
 
-多重负面排名（MNR^(5))损失，通常被称为 InfoNCE^(6)或 NTXentLoss^(7)，是一种原则上仅使用正句对的损失。
+多重负面排名（MNR⁵)损失，通常被称为 InfoNCE⁶或 NTXentLoss⁷，是一种原则上仅使用正句对的损失。
 
 例如，你可能会有问题/答案、图像/图像标题、论文标题/论文摘要等的对。这些对的优点在于我们可以确信它们是难得的正对。在 MNR 损失中（图 7-10），负对是通过将一个正对与另一个正对混合而构造的。在论文标题和摘要的例子中，你会通过将论文的标题与完全不同的摘要组合来生成负对。这些负对称为批内负对。
 
@@ -438,7 +438,7 @@ model.fit(train_objectives=[(train_dataloader, train_loss)], epochs=1, warmup_st
 
 训练或微调这些嵌入模型的一个缺点是，它们通常需要大量的训练数据。这些模型中的许多在超过十亿对句子上进行训练。提取如此多的句子对以适应你的用例通常是不可行的，因为在许多情况下，只有很少的数据可用。
 
-幸运的是，有一种方法可以增强你的数据，以便在只有少量标注数据可用时，可以对嵌入模型进行微调。这个过程称为增强型 SBERT。^(8)
+幸运的是，有一种方法可以增强你的数据，以便在只有少量标注数据可用时，可以对嵌入模型进行微调。这个过程称为增强型 SBERT。⁸
 
 在此过程中，我们旨在增强少量标注数据，使其可以用于常规训练。它利用慢而更准确的交叉编码器架构（BERT）来增强和标注更大数量的输入对。这些新标注的对随后用于微调双编码器（SBERT）。
 
@@ -538,7 +538,7 @@ model.fit(train_objectives=[(dataloader, loss)], epochs=1, warmup_steps=200, sho
 
 要创建嵌入模型，通常需要标记数据。然而，并不是所有现实世界的数据集都带有我们可以使用的完整标签。我们会寻找无需预先确定标签的技术进行模型训练——无监督学习。
 
-创建或微调嵌入模型的无监督技术通常表现不如其监督版本。存在许多方法，如简单对比学习句子嵌入（SimCSE）^(9)、对比张力（CT）^(10)、基于变换器的去噪自编码器（TSDAE）^(11)以及生成伪标记（GPL）^(12)。
+创建或微调嵌入模型的无监督技术通常表现不如其监督版本。存在许多方法，如简单对比学习句子嵌入（SimCSE）⁹、对比张力（CT）¹⁰、基于变换器的去噪自编码器（TSDAE）¹¹以及生成伪标记（GPL）¹²。
 
 我们将讨论两种方法，TSDAE 和 GPL，甚至可以在后续进行组合。
 
@@ -721,29 +721,29 @@ gpl.train(
 
 在本章中，我们探讨了通过对比学习创建和微调嵌入模型，这是训练此类模型最重要的组成部分之一。通过无监督和有监督技术，我们能够创建针对我们数据集调优的嵌入模型。
 
-^(1) Alan Garfinkel. “解释的形式：重新思考社会理论中的问题。” (1981)。
+¹ Alan Garfinkel. “解释的形式：重新思考社会理论中的问题。” (1981)。
 
-^(2) Tim Miller. “对比解释：结构模型方法”。*知识工程评论* 36 (2021): e14。
+² Tim Miller. “对比解释：结构模型方法”。*知识工程评论* 36 (2021): e14。
 
-^(3) Jeffrey Pennington, Richard, Socher, 和 Christopher D, Manning. “Glove: 全局词向量表示。” 收录于 *2014 年自然语言处理实证方法会议论文集 (EMNLP)* (pp. 1532–1543). 2014。
+³ Jeffrey Pennington, Richard, Socher, 和 Christopher D, Manning. “Glove: 全局词向量表示。” 收录于 *2014 年自然语言处理实证方法会议论文集 (EMNLP)* (pp. 1532–1543). 2014。
 
-^(4) Muennighoff, Niklas, Nouamane, Tazi, Loïc, Magne, 和 Nils, Reimers. “MTEB: 大规模文本嵌入基准”。*arXiv 预印本 arXiv:2210.07316* (2022)。
+⁴ Muennighoff, Niklas, Nouamane, Tazi, Loïc, Magne, 和 Nils, Reimers. “MTEB: 大规模文本嵌入基准”。*arXiv 预印本 arXiv:2210.07316* (2022)。
 
-^(5) Matthew Henderson, Rami, Al-Rfou, Brian, Strope, Yun-Hsuan, Sung, László, Lukacs, Ruiqi, Guo, Sanjiv, Kumar, Balint, Miklos, 和 Ray, Kurzweil. “智能回复的高效自然语言响应建议。” *arXiv 预印本 arXiv:1705.00652* (2017)。
+⁵ Matthew Henderson, Rami, Al-Rfou, Brian, Strope, Yun-Hsuan, Sung, László, Lukacs, Ruiqi, Guo, Sanjiv, Kumar, Balint, Miklos, 和 Ray, Kurzweil. “智能回复的高效自然语言响应建议。” *arXiv 预印本 arXiv:1705.00652* (2017)。
 
-^(6) Oord, Aaron van den, Yazhe, Li, 和 Oriol, Vinyals. “使用对比预测编码的表示学习”。*arXiv 预印本 arXiv:1807.03748* (2018)。
+⁶ Oord, Aaron van den, Yazhe, Li, 和 Oriol, Vinyals. “使用对比预测编码的表示学习”。*arXiv 预印本 arXiv:1807.03748* (2018)。
 
-^(7) Ting Chn, Simon, Kornblith, Mohammad, Norouzi, 和 Geoffrey, Hinton. “用于对比学习视觉表示的简单框架。” 收录于 *国际机器学习会议* (pp. 1597–1607). 2020。
+⁷ Ting Chn, Simon, Kornblith, Mohammad, Norouzi, 和 Geoffrey, Hinton. “用于对比学习视觉表示的简单框架。” 收录于 *国际机器学习会议* (pp. 1597–1607). 2020。
 
-^(8) Thakur, Nandan, Nils, Reimers, Johannes, Daxenberger, 和 Iryna, Gurevych. “增强的 sbert: 提升双编码器用于成对句子评分任务的数据增强方法”。*arXiv 预印本 arXiv:2010.08240* (2020)。
+⁸ Thakur, Nandan, Nils, Reimers, Johannes, Daxenberger, 和 Iryna, Gurevych. “增强的 sbert: 提升双编码器用于成对句子评分任务的数据增强方法”。*arXiv 预印本 arXiv:2010.08240* (2020)。
 
-^(9) Gao, Tianyu, Xingcheng Yao 和 Danqi Chen. “Simcse: 简单对比学习句子嵌入”。*arXiv 预印本 arXiv:2104.08821* (2021)。
+⁹ Gao, Tianyu, Xingcheng Yao 和 Danqi Chen. “Simcse: 简单对比学习句子嵌入”。*arXiv 预印本 arXiv:2104.08821* (2021)。
 
-^(10) Janson, Sverker, Evangelina Gogoulou, Erik Ylipäa, Amaru Cuba Gyllensten 和 Magnus Sahlgren. “语义重调与对比张力。” 在 *国际学习表征会议, 2021*。2021。
+¹⁰ Janson, Sverker, Evangelina Gogoulou, Erik Ylipäa, Amaru Cuba Gyllensten 和 Magnus Sahlgren. “语义重调与对比张力。” 在 *国际学习表征会议, 2021*。2021。
 
-^(11) Kexin Wang, Nils Reimers 和 Iryna Gurevych. “Tsdae: 使用基于变换器的顺序去噪自编码器进行无监督句子嵌入学习”。*arXiv 预印本 arXiv:2104.06979* (2021)。
+¹¹ Kexin Wang, Nils Reimers 和 Iryna Gurevych. “Tsdae: 使用基于变换器的顺序去噪自编码器进行无监督句子嵌入学习”。*arXiv 预印本 arXiv:2104.06979* (2021)。
 
-^(12) Kexin Wang, Nandan Thakur, Nils Reimers 和 Iryna Gurevych. “Gpl: 生成伪标签用于无监督领域适应的密集检索”。*arXiv 预印本 arXiv:2112.07577* (2021)。
+¹² Kexin Wang, Nandan Thakur, Nils Reimers 和 Iryna Gurevych. “Gpl: 生成伪标签用于无监督领域适应的密集检索”。*arXiv 预印本 arXiv:2112.07577* (2021)。
 
 # 作者介绍
 

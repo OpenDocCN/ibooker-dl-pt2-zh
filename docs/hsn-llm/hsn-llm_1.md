@@ -1,4 +1,4 @@
-# 第二章\. 语义搜索
+# 第二章： 语义搜索
 
 搜索是第一个被广泛采用的“大语言模型”（LLM）应用之一。在开创性论文[BERT：用于语言理解的深度双向变换器预训练](https://arxiv.org/abs/1810.04805)发布几个月后，谷歌宣布它在使用此模型来增强谷歌搜索，并且它[代表了](https://blog.google/products/search/search-language-understanding-bert/)“搜索历史上最大的飞跃之一”。微软必应也[表示](https://azure.microsoft.com/en-us/blog/bing-delivers-its-largest-improvement-in-search-experience-using-azure-gpus/)“从今年四月开始，我们使用大型变换器模型为我们的必应客户带来了过去一年最大的质量改进”。
 
