@@ -1,0 +1,1465 @@
+- en: Chapter 6\. Tokens & Token Embeddings
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Embeddings are a central concept to using large language models (LLMs), as you’ve
+    seen over and over in part one of the book. They also are central to understanding
+    how LLMs work, how they’re built, and where they’ll go in the future.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The majority of the embeddings we’ve looked at so far are *text embeddings*,
+    vectors that represent an entire sentence, passage, or document. [Figure 6-1](#fig_1__the_difference_between_text_embeddings_one_vect)
+    shows this distinction.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![  The difference between text embeddings  one vector for a sentence or paragraph  and
+    token embeddings  one vector per word or token .](assets/tokens_token_embeddings_963889_01.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 6-1\. The difference between text embeddings (one vector for a sentence
+    or paragraph) and token embeddings (one vector per word or token).
+  prefs:
+  - PREF_H6
+  type: TYPE_NORMAL
+- en: In this chapter, we begin to discuss token embeddings in more detail. Chapter
+    2 discussed tasks of token classification like Named Entity Recognition. In this
+    chapter, we look more closely at what tokens are and the tokenization methods
+    used to power LLMs. We will then go beyond the world of text and see how these
+    concepts of token embeddings empower LLMs that can understand images and data
+    modes (other than text, for example video, audio...etc). LLMs that can process
+    modes of data in addition to text are called *multi-modal* models. We will then
+    delve into the famous word2vec embedding method that preceded modern-day LLMs
+    and see how it’s extending the concept of token embeddings to build commercial
+    recommendation systems that power a lot of the apps you use.
+  prefs: []
+  type: TYPE_NORMAL
+- en: LLM Tokenization
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: How tokenizers prepare the inputs to the language model
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Viewed from the outside, generative LLMs take an input prompt and generate a
+    response, as we can see in [Figure 6-2](#fig_2__high_level_view_of_a_language_model_and_its_inpu).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![  High level view of a language model and its input prompt.](assets/tokens_token_embeddings_963889_02.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 6-2\. High-level view of a language model and its input prompt.
+  prefs:
+  - PREF_H6
+  type: TYPE_NORMAL
+- en: 'As we’ve seen in Chapter 5, instruction-tuned LLMs produce better responses
+    to prompts formulated as instructions or questions. At the most basic level of
+    the code, let’s assume we have a generate method that hits a language model and
+    generates text:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Generation:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: Let us look closer into that generation process to examine more of the steps
+    involved in text generation. Let’s start by loading our model and its tokenizer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: We can then proceed to the actual generation. Notice that the generation code
+    always includes a tokenization step prior to the generation step.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: Looking at this code, we can see that the model does not in fact receive the
+    text prompt. Instead, the tokenizers processed the input prompt, and returned
+    the information the model needed in the variable input_ids, which the model used
+    as its input.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s print input_ids to see what it holds inside:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: This reveals the inputs that LLMs respond to. A series of integers as shown
+    in [Figure 6-3](#fig_3__a_tokenizer_processes_the_input_prompt_and_prepa). Each
+    one is the unique ID for a specific token (character, word or part of word). These
+    IDs reference a table inside the tokenizer containing all the tokens it knows.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![  A tokenizer processes the input prompt and prepares the actual input into
+    the language model  a list of token ids.](assets/tokens_token_embeddings_963889_03.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 6-3\. A tokenizer processes the input prompt and prepares the actual
+    input into the language model: a list of token ids.'
+  prefs:
+  - PREF_H6
+  type: TYPE_NORMAL
+- en: 'If we want to inspect those IDs, we can use the tokenizer’s decode method to
+    translate the IDs back into text that we can read:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Which prints:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This is how the tokenizer broke down our input prompt. Notice the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The first token is the token with ID #1, which is <s>, a special token indicating
+    the beginning of the text'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Some tokens are complete words (e.g., *Write*, *an*, *email*)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Some tokens are parts of words (e.g., *apolog*, *izing*, *trag*, *ic*)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Punctuation characters are their own token
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Notice how the space character does not have its own token. Instead, partial
+    tokens (like ‘izing’ and ‘ic') have a special hidden character at their beginning
+    that indicate that they’re connected with the token that precedes them in the
+    text.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: There are three major factors that dictate how a tokenizer breaks down an input
+    prompt. First, at model design time, the creator of the model chooses a tokenization
+    method. Popular methods include Byte-Pair Encoding (BPE for short, widely used
+    by GPT models), WordPiece (used by BERT), and SentencePiece (used by LLAMA). These
+    methods are similar in that they aim to optimize an efficient set of tokens to
+    represent a text dataset, but they arrive at it in different ways.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Second, after choosing the method, we need to make a number of tokenizer design
+    choices like vocabulary size, and what special tokens to use. More on this in
+    the “Comparing Trained LLM Tokenizers” section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Thirdly, the tokenizer needs to be trained on a specific dataset to establish
+    the best vocabulary it can use to represent that dataset. Even if we set the same
+    methods and parameters, a tokenizer trained on an English text dataset will be
+    different from another trained on a code dataset or a multilingual text dataset.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In addition to being used to process the input text into a language model, tokenizers
+    are used on the output of the language model to turn the resulting token ID into
+    the output word or token associated with it as [Figure 6-4](#fig_4__tokenizers_are_also_used_to_process_the_output_o)
+    shows.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![  Tokenizers are also used to process the output of the model by converting
+    the output token ID into the word or token associated with that ID.](assets/tokens_token_embeddings_963889_04.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 6-4\. Tokenizers are also used to process the output of the model by
+    converting the output token ID into the word or token associated with that ID.
+  prefs:
+  - PREF_H6
+  type: TYPE_NORMAL
+- en: Word vs. Subword vs. Character vs. Byte Tokens
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The tokenization scheme we’ve seen above is called subword tokenization. It’s
+    the most commonly used tokenization scheme but not the only one. The four notable
+    ways to tokenize are shown in [Figure 6-5](#fig_5__there_are_multiple_methods_of_tokenization_that).
+    Let’s go over them:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Word tokens
+  prefs: []
+  type: TYPE_NORMAL
+- en: This approach was common with earlier methods like Word2Vec but is being used
+    less and less in NLP. Its usefulness, however, led it to be used outside of NLP
+    for use cases such as recommendation systems, as we’ll see later in the chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![  There are multiple methods of tokenization that break down the text to
+    different sizes of components  words  subwords  characters  and bytes .](assets/tokens_token_embeddings_963889_05.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 6-5\. There are multiple methods of tokenization that break down the
+    text to different sizes of components (words, subwords, characters, and bytes).
+  prefs:
+  - PREF_H6
+  type: TYPE_NORMAL
+- en: One challenge with word tokenization is that the tokenizer becomes unable to
+    deal with new words that enter the dataset after the tokenizer was trained. It
+    also results in a vocabulary that has a lot of tokens with minimal differences
+    between them (e.g., apology, apologize, apologetic, apologist). This latter challenge
+    is resolved by subword tokenization as we’ve seen as it has a token for '*apolog**',*
+    and then suffix tokens (e.g., *'-y*', '*-**ize*', '*-etic*', '-*ist*') that are
+    common with many other tokens, resulting in a more expressive vocabulary.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Subword Tokens
+  prefs: []
+  type: TYPE_NORMAL
+- en: This method contains full and partial words. In addition to the vocabulary expressivity
+    mentioned earlier, another benefit of the approach is its ability to represent
+    new words by breaking the new token down into smaller characters, which tend to
+    be a part of the vocabulary.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When compared to character tokens, this method benefits from the ability to
+    fit more text within the limited context length of a Transformer model. So with
+    a model with a context length of 1024, you may be able to fit three times as much
+    text using subword tokenization than using character tokens (sub word tokens often
+    average three characters per token).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Character Tokens
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is another method that is able to deal successfully with new words because
+    it has the raw letters to fall-back on. While that makes the representation easier
+    to tokenize, it makes the modeling more difficult. Where a model with subword
+    tokenization can represent “play” as one token, a model using character-level
+    tokens needs to model the information to spell out “p-l-a-y” in addition to modeling
+    the rest of the sequence.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Byte Tokens
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'One additional tokenization method breaks down tokens into the individual bytes
+    that are used to represent unicode characters. Papers like [CANINE: Pre-training
+    an Efficient Tokenization-Free Encoder for Language Representation](https://arxiv.org/abs/2103.06874)
+    outline methods like this which are also called “tokenization free encoding”.
+    Other works like [ByT5: Towards a token-free future with pre-trained byte-to-byte
+    models](https://arxiv.org/abs/2105.13626) show that this can be a competitive
+    method.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'One distinction to highlight here: some subword tokenizers also include bytes
+    as tokens in their vocabulary to be the final building block to fall back to when
+    they encounter characters they can’t otherwise represent. The GPT2 and RoBERTa
+    tokenizers do this, for example. This doesn’t make them tokenization-free byte-level
+    tokenizers, because they don’t use these bytes to represent everything, only a
+    subset as we’ll see in the next section.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tokenizers are discussed in more detail in [Suhas’ book]
+  prefs: []
+  type: TYPE_NORMAL
+- en: Comparing Trained LLM Tokenizers
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'We’ve pointed out earlier three major factors that dictate the tokens that
+    appear within a tokenizer: the tokenization method, the parameters and special
+    tokens we use to initialize the tokenizer, and the dataset the tokenizer is trained
+    on. Let’s compare and contrast a number of actual, trained tokenizers to see how
+    these choices change their behavior.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We’ll use a number of tokenizers to encode the following text:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This will allow us to see how each tokenizer deals with a number of different
+    kinds of tokens:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Capitalization
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Languages other than English
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Emojis
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Programming code with its keywords and whitespaces often used for indentation
+    (in languages like python for example)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Numbers and digits
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Let’s go from older to newer tokenizers and see how they tokenize this text
+    and what that might say about the language model. We’ll tokenize the text, and
+    then print each token with a gray background color.
+  prefs: []
+  type: TYPE_NORMAL
+- en: bert-base-uncased
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Tokenization method: WordPiece, introduced in [Japanese and Korean voice search](https://static.googleusercontent.com/media/research.google.com/ja//pubs/archive/37842.pdf)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Vocabulary size: 30522'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Special tokens: ‘unk_token’: ''[UNK]'''
+  prefs: []
+  type: TYPE_NORMAL
+- en: '’sep_token’: ''[SEP]'''
+  prefs: []
+  type: TYPE_NORMAL
+- en: '‘pad_token’: ''[PAD]'''
+  prefs: []
+  type: TYPE_NORMAL
+- en: '‘cls_token’: ''[CLS]'''
+  prefs: []
+  type: TYPE_NORMAL
+- en: '‘mask_token’: ''[MASK]'''
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Tokenized text:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'With the uncased (and more popular) version of the BERT tokenizer, we notice
+    the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The newline breaks are gone, which makes the model blind to information encoded
+    in newlines (e.g., a chat log when each turn is in a new line)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: All the text is in lower case
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The word “capitalization” is encoded as two subtokens capital ##ization . The
+    ## characters are used to indicate this token is a partial token connected to
+    the token the precedes it. This is also a method to indicate where the spaces
+    are, it is assumed tokens without ## before them have a space before them.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The emoji and Chinese characters are gone and replaced with the [UNK] special
+    token indicating an “unknown token”.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: bert-base-cased
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Tokenization method: WordPiece'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Vocabulary size: 28,996'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Special tokens: Same as the uncased version'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Tokenized text:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: The cased version of the BERT tokenizer differs mainly in including upper-case
+    tokens.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Notice how “CAPITALIZATION” is now represented as eight tokens: CA ##PI ##TA
+    ##L ##I ##Z ##AT ##ION'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Both BERT tokenizers wrap the input within a starting [CLS] token and a closing
+    [SEP] token. [CLS] and [SEP] are utility tokens used to wrap the input text and
+    they serve their own purposes. [CLS] stands for Classification as it’s a token
+    used at times for sentence classification. [SEP] stands for Separator, as it’s
+    used to separate sentences in some applications that require passing two sentences
+    to a model (For example, in the rerankers in chapter 3, we would use a [SEP] token
+    to separate the text of the query and a candidate result).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: gpt2
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Tokenization method: BPE, introduced in [Neural Machine Translation of Rare
+    Words with Subword Units](https://arxiv.org/abs/1508.07909)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Vocabulary size: 50,257'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Special tokens: <|endoftext|>'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Tokenized text:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: English and CAP ITAL IZ ATION
+  prefs: []
+  type: TYPE_NORMAL
+- en: � � � � � �
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'show _ t ok ens False None el if == >= else :'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Four spaces : " " Two tabs : " "'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 12 . 0 * 50 = 600
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'With the GPT-2 tokenizer, we notice the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The newline breaks are represented in the tokenizer
+  prefs: []
+  type: TYPE_NORMAL
+- en: Capitalization is preserved, and the word “CAPITALIZATION” is represented in
+    four tokens
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The 🎵 蟠characters are now represented into multiple tokens each. While we see
+    these tokens printed as the � character, they actually stand for different tokens.
+    For example, the 🎵 emoji is broken down into the tokens with token ids: 8582,
+    236, and 113\. The tokenizer is successful in reconstructing the original character
+    from these tokens. We can see that by printing tokenizer.decode([8582, 236, 113]),
+    which prints out 🎵'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The two tabs are represented as two tokens (token number 197 in that vocabulary)
+    and the four spaces are represented as three tokens (number 220) with the final
+    space being a part of the token for the closing quote character.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs:
+  - PREF_H6
+  type: TYPE_NORMAL
+- en: What is the significance of white space characters? These are important for
+    models that understand or generate code. A model that uses a single token to represent
+    four consecutive white space characters can be said to be more tuned to a python
+    code dataset. While a model can live with representing it as four different tokens,
+    it does make the modeling more difficult as the model needs to keep track of the
+    indentation level. This is an example of where tokenization choices can help the
+    model improve on a certain task.
+  prefs: []
+  type: TYPE_NORMAL
+- en: google/flan-t5-xxl
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Tokenization method: SentencePiece, introduced in [SentencePiece: A simple
+    and language independent subword tokenizer and detokenizer for Neural Text Processing](https://arxiv.org/pdf/1808.06226.pdf)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Vocabulary size: 32,100'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Special tokens:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '- ‘unk_token’: ''<unk>'''
+  prefs: []
+  type: TYPE_NORMAL
+- en: '- ‘pad_token’: ''<pad>'''
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Tokenized text:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'English and CA PI TAL IZ ATION <unk> <unk> show _ to ken s Fal s e None e l
+    if = = > = else : Four spaces : " " Two tab s : " " 12\. 0 * 50 = 600 </s>'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The FLAN-T5 family of models use the sentencepiece method. We notice the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: No newline or whitespace tokens, this would make it challenging for the model
+    to work with code.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The emoji and Chinese characters are both replaced by the <unk> token. Making
+    the model completely blind to them.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: GPT-4
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Tokenization method: BPE'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Vocabulary size: a little over 100,000'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Special tokens:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: <|endoftext|>
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Fill in the middle tokens. These three tokens enable the GPT-4 capability of
+    generating a completion given not only the text before it but also considering
+    the text after it. This method is explained in more detail in the paper [Efficient
+    Training of Language Models to Fill in the Middle](https://arxiv.org/abs/2207.14255).
+    These special tokens are:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: <|fim_prefix|>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <|fim_middle|>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <|fim_suffix|>
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Tokenized text:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The GPT-4 tokenizer behaves similarly with its ancestor, the GPT-2 tokenizer.
+    Some differences are:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The GPT-4 tokenizer represents the four spaces as a single token. In fact, it
+    has a specific token to every sequence of white spaces up until a list of 83 white
+    spaces.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The python keyword elif has its own token in GPT-4\. Both this and the previous
+    point stem from the model’s focus on code in addition to natural language.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The GPT-4 tokenizer uses fewer tokens to represent most words. Example here
+    include ‘CAPITALIZATION’ (two tokens, vs. four) and ‘tokens’ (one token vs. three).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: bigcode/starcoder
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Tokenization method:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Vocabulary size: about 50,000'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Special tokens:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '''<|endoftext|>'''
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'FIll in the middle tokens:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '''<fim_prefix>'''
+  prefs: []
+  type: TYPE_NORMAL
+- en: '''<fim_middle>'''
+  prefs: []
+  type: TYPE_NORMAL
+- en: '''<fim_suffix>'''
+  prefs: []
+  type: TYPE_NORMAL
+- en: '''<fim_pad>'''
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When representing code, managing the context is important. One file might make
+    a function call to a function that is defined in a different file. So the model
+    needs some way of being able to identify code that is in different files in the
+    same code repository, while making a distinction between code in different repos.
+    That’s why starcoder uses special tokens for the name of the repository and the
+    filename:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '''<filename>'''
+  prefs: []
+  type: TYPE_NORMAL
+- en: '''<reponame>'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '''<gh_stars>'''
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The tokenizer also includes a bunch of the special tokens to perform better
+    on code. These include:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '''<issue_start>'''
+  prefs: []
+  type: TYPE_NORMAL
+- en: '''<jupyter_start>'''
+  prefs: []
+  type: TYPE_NORMAL
+- en: '''<jupyter_text>'''
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Paper: [StarCoder: may the source be with you!](https://arxiv.org/abs/2305.06161)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Tokenized text:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: This is an encoder that focuses on code generation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Similarly to GPT-4, it encodes the list of white spaces as a single token
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A major difference here to everyone we’ve seen so far is that each digit is
+    assigned its own token (so 600 becomes 6 0 0). The hypothesis here is that this
+    would lead to better representation of numbers and mathematics. In GPT-2, for
+    example, the number 870 is represented as a single token. But 871 is represented
+    as two tokens (8 and 71). You can intuitively see how that might be confusing
+    to the model and how it represents numbers.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: facebook/galactica-1.3b
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The galactica model described in [Galactica: A Large Language Model for Science](https://arxiv.org/abs/2211.09085)
+    is focused on scientific knowledge and is trained on many scientific papers, reference
+    materials, and knowledge bases. It pays extra attention to tokenization that makes
+    it more sensitive to the nuances of the dataset it’s representing. For example,
+    it includes special tokens for citations, reasoning, mathematics, Amino Acid sequences,
+    and DNA sequences.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Tokenization method:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Vocabulary size: 50,000'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Special tokens:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: <s>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <pad>
+  prefs: []
+  type: TYPE_NORMAL
+- en: </s>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <unk>
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'References: Citations are wrapped within the two special tokens:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[START_REF]'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[END_REF]'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'One example of usage from the paper is:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Recurrent neural networks, long short-term memory [START_REF]Long Short-Term
+    Memory, Hochreiter[END_REF]
+  prefs: []
+  type: TYPE_NORMAL
+- en: Step-by-Step Reasoning -
+  prefs: []
+  type: TYPE_NORMAL
+- en: <work> is an interesting token that the model uses for chain-of-thought reasoning.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Tokenized text:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: The Galactica tokenizer behaves similar to star coder in that it has code in
+    mind. It also encodes white spaces in the same way - assigning a single token
+    to sequences of whitespace of different lengths. It differs in that it also does
+    that for tabs, though. So from all the tokenizers we’ve seen so far, it’s the
+    only one that’s assigned a single token to the string made up of two tabs ('\t\t')
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We can now recap our tour by looking at all these examples side by side:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| bert-base-uncased |'
+  prefs: []
+  type: TYPE_TB
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: '|'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| bert-base-cased |'
+  prefs: []
+  type: TYPE_TB
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: '|'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| gpt2 |'
+  prefs: []
+  type: TYPE_TB
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: '|'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| google/flan-t5-xxl |'
+  prefs: []
+  type: TYPE_TB
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: '|'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| GPT-4 |'
+  prefs: []
+  type: TYPE_TB
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: '|'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| bigcode/starcoder |'
+  prefs: []
+  type: TYPE_TB
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: '|'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| facebook/galactica-1.3b |'
+  prefs: []
+  type: TYPE_TB
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: '|'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| meta-llama/Llama-2-70b-chat-hf |'
+  prefs: []
+  type: TYPE_TB
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: '|'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Notice how there’s a new tokenizer added in the bottom. By now, you should be
+    able to understand many of its properties by just glancing at this output. This
+    is the tokenizer for LLaMA2, the most recent of these models.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tokenizer Properties
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The preceding guided tour of trained tokenizers showed a number of ways in
+    which actual tokenizers differ from each other. But what determines their tokenization
+    behavior? There are three major groups of design choices that determine how the
+    tokenizer will break down text: The tokenization method, the initialization parameters,
+    and the dataset we train the tokenizer (but not the model) on.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tokenization methods
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: As we’ve seen, there are a number of tokenization methods with Byte-Pair Encoding
+    (BPE), WordPiece, and SentencePiece being some of the more popular ones. Each
+    of these methods outlines an algorithm for how to choose an appropriate set of
+    tokens to represent a dataset. A great overview of all these methods can be found
+    in the Hugging Face [Summary of the tokenizers page](https://huggingface.co/docs/transformers/tokenizer_summary).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tokenizer Parameters
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'After choosing a tokenization method, an LLM designer needs to make some decisions
+    about the parameters of the tokenizer. These include:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Vocabulary size
+  prefs: []
+  type: TYPE_NORMAL
+- en: How many tokens to keep in the tokenizer’s vocabulary? (30K, 50K are often used
+    vocabulary size values, but more and more we’re seeing larger sizes like 100K)
+  prefs: []
+  type: TYPE_NORMAL
+- en: Special tokens
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'What special tokens do we want the model to keep track of. We can add as many
+    of these as we want, especially if we want to build LLM for special use cases.
+    Common choices include:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Beginning of text token (e.g., <s>)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: End of text token
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Padding token
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Unknown token
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: CLS token
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Masking token
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Aside from these, the LLM designer can add tokens that help better model the
+    domain of the problem they’re trying to focus on, as we’ve seen with Galactica’s
+    <work> and [START_REF] tokens.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Capitalization
+  prefs: []
+  type: TYPE_NORMAL
+- en: In languages such as English, how do we want to deal with capitalization? Should
+    we convert everything to lower-case? (Name capitalization often carries useful
+    information, but do we want to waste token vocabulary space on all caps versions
+    of words?). This is why some models are released in both cased and uncased versions
+    (like [Bert-base cased](https://huggingface.co/bert-base-cased) and the more popular
+    [Bert-base uncased](https://huggingface.co/bert-base-uncased)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: The Tokenizer Training Dataset
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Even if we select the same method and parameters, tokenizer behavior will be
+    different based on the dataset it was trained on (before we even start model training).
+    The tokenization methods mentioned previously work by optimizing the vocabulary
+    to represent a specific dataset. From our guided tour we’ve seen how that has
+    an impact on datasets like code, and multilingual text.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For code, for example, we’ve seen that a text-focused tokenizer may tokenize
+    the indentation spaces like this (We’ll highlight some tokens in yellow and green):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Which may be suboptimal for a code-focused model. Code-focused models instead
+    tend to make different tokenization choices:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: These tokenization choices make the model’s job easier and thus its performance
+    has a higher probability of improving.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A more detailed tutorial on training tokenizers can be found in the [Tokenizers
+    section of the Hugging Face course](https://huggingface.co/learn/nlp-course/chapter6/1?fw=pt).
+    and in [Natural Language Processing with Transformers, Revised Edition](https://www.oreilly.com/library/view/natural-language-processing/9781098136789/).
+  prefs: []
+  type: TYPE_NORMAL
+- en: A Language Model Holds Embeddings for the Vocabulary of its Tokenizer
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: After a tokenizer is initialized, it is then used in the training process of
+    its associated language model. This is why a pre-trained language model is linked
+    with its tokenizer and can’t use a different tokenizer without training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The language model holds an embedding vector for each token in the tokenizer’s
+    vocabulary as we can see in [Figure 6-6](#fig_6__a_language_model_holds_an_embedding_vector_assoc).
+    In the beginning, these vectors are randomly initialized like the rest of the
+    model’s weights, but the training process assigns them the values that enable
+    the useful behavior they’re trained to perform.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![  A language model holds an embedding vector associated with each token in
+    its tokenizer.](assets/tokens_token_embeddings_963889_06.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 6-6\. A language model holds an embedding vector associated with each
+    token in its tokenizer.
+  prefs:
+  - PREF_H6
+  type: TYPE_NORMAL
+- en: Creating Contextualized Word Embeddings with Language Models
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Now that we’ve covered token embeddings as the input to a language model, let’s
+    look at how language models can *create* better token embeddings. This is one
+    of the main ways of using language models for text representation that empowers
+    applications like named-entity recognition or extractive text summarization (which
+    summarizes a long text by highlighting to most important parts of it, instead
+    of generating new text as a summary).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![  Language models produce contextualized token embeddings that improve on
+    raw  static token embeddings](assets/tokens_token_embeddings_963889_07.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 6-7\. Language models produce contextualized token embeddings that improve
+    on raw, static token embeddings
+  prefs:
+  - PREF_H6
+  type: TYPE_NORMAL
+- en: Instead of representing each token or word with a static vector, language models
+    create contextualized word embeddings (shown in [Figure 6-7](#fig_7__language_models_produce_contextualized_token_emb))
+    that represent a word with a different token based on its context. These vectors
+    can then be used by other systems for a variety of tasks. In addition to the text
+    applications we mentioned in the previous paragraph, these contextualized vectors,
+    for example, are what powers AI image generation systems like Dall-E, Midjourney,
+    and Stable Diffusion, for example.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Code Example: Contextualized Word Embeddings From a Language Model (Like BERT)'
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Let’s look at how we can generate contextualized word embeddings, the majority
+    of this code should be familiar to you by now:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: This code downloads a pre-trained tokenizer and model, then uses them to process
+    the string “Hello world”. The output of the model is then saved in the output
+    variable. Let’s inspect that variable by first printing its dimensions (we expect
+    it to be a multi-dimensional array).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The model we’re using here is called DeBERTA v3, which at the time of writing,
+    is one of the best-performing language models for token embeddings while being
+    small and highly efficient. It is described in the paper [DeBERTaV3: Improving
+    DeBERTa using ELECTRA-Style Pre-Training with Gradient-Disentangled Embedding
+    Sharing](https://openreview.net/forum?id=sE7-XhLxHA).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This prints out:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: We can ignore the first dimension and read this as four tokens, each one embedded
+    in 384 values.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'But what are these four vectors? Did the tokenizer break the two words into
+    four tokens, or is something else happening here? We can use what we’ve learned
+    about tokenizers to inspect them:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Which prints out:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: Which shows that this particular tokenizer and model operate by adding the [CLS]
+    and [SEP] tokens to the beginning and end of a string.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Our language model has now processed the text input. The result of its output
+    is the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: This is the raw output of a language model. The applications of large language
+    models build on top of outputs like this.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We can recap the input tokenization and resulting outputs of a language model
+    in [Figure 6-8](#fig_8__a_language_model_operates_on_raw_static_embeddi). Technically,
+    the switch from token IDs into raw embeddings is the first step that happens inside
+    a language model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![  A language model operates on raw  static embeddings as its input and produces
+    contextual text embeddings.](assets/tokens_token_embeddings_963889_08.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 6-8\. A language model operates on raw, static embeddings as its input
+    and produces contextual text embeddings.
+  prefs:
+  - PREF_H6
+  type: TYPE_NORMAL
+- en: A visual like this is essential for the next chapter when we start to look at
+    how Transformer-based LLMs work under the hood.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Word Embeddings
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Token embeddings are useful even outside of large language models. Embeddings
+    generated by pre-LLM methods like Word2Vec, Glove, and Fasttext still have uses
+    in NLP and beyond NLP. In this section, we’ll look at how to use pre-trained Word2Vec
+    embeddings and touch on how the method creates word embeddings. Seeing how Word2Vec
+    is trained will prime you for the chapter on contrastive training. Then in the
+    following section, we’ll see how those embeddings can be used for recommendation
+    systems.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using Pre-trained Word Embeddings
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Let’s look at how we can download pre-trained word embeddings using the [Gensim](https://radimrehurek.com/gensim/)
+    library
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Here, we’ve downloaded the embeddings of a large number of words trained on
+    wikipedia. We can then explore the embedding space by seeing the nearest neighbors
+    of a specific word, ‘king’ for example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Which outputs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: The Word2vec Algorithm and Contrastive Training
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The word2vec algorithm described in the paper [Efficient Estimation of Word
+    Representations in Vector Space](https://arxiv.org/abs/1301.3781) is described
+    in detail in [The Illustrated Word2vec](https://jalammar.github.io/illustrated-word2vec/).
+    The central ideas are condensed here as we build on them when discussing one method
+    for creating embeddings for recommendation engines in the following section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Just like LLMs, word2vec is trained on examples generated from text. Let’s say
+    for example, we have the text "*Thou shalt not make a machine in the likeness
+    of a human mind*" from the *Dune* novels by Frank Herbert. The algorithm uses
+    a sliding window to generate training examples. We can for example have a window
+    size two, meaning that we consider two neighbors on each side of a central word.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The embeddings are generated from a classification task. This task is used to
+    train a neural network to predict if words appear in the same context or not.
+    We can think of this as a neural network that takes two words and outputs 1 if
+    they tend to appear in the same context, and 0 if they do not.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the first position for the sliding window, we can generate four training
+    examples as we can see in [Figure 6-9](#fig_9__a_sliding_window_is_used_to_generate_training_ex).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![  A sliding window is used to generate training examples for the word2vec
+    algorithm to later predict if two words are neighbors or not.](assets/tokens_token_embeddings_963889_09.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 6-9\. A sliding window is used to generate training examples for the
+    word2vec algorithm to later predict if two words are neighbors or not.
+  prefs:
+  - PREF_H6
+  type: TYPE_NORMAL
+- en: In each of the produced training examples, the word in the center is used as
+    one input, and each of its neighbors is a distinct second input in each training
+    example. We expect the final trained model to be able to classify this neighbor
+    relationship and output 1 if the two input words it receives are indeed neighbors.
+  prefs: []
+  type: TYPE_NORMAL
+- en: These training examples are visualized in [Figure 6-10](#fig_10__each_generated_training_example_shows_a_pair_of).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![  Each generated training example shows a pair of neighboring words.](assets/tokens_token_embeddings_963889_10.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 6-10\. Each generated training example shows a pair of neighboring words.
+  prefs:
+  - PREF_H6
+  type: TYPE_NORMAL
+- en: If, however, we have a dataset of only a target value of 1, then a model can
+    ace it by output 1 all the time. To get around this, we need to enrich our training
+    dataset with examples of words that are not typically neighbors. These are called
+    negative examples and are shown in [Figure 6-11](#fig_11__we_need_to_present_our_models_with_negative_exam).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![  We need to present our models with negative examples  words that are not
+    usually neighbors. A better model is able to better distinguish between the positive
+    and negative examples.](assets/tokens_token_embeddings_963889_11.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 6-11\. We need to present our models with negative examples: words that
+    are not usually neighbors. A better model is able to better distinguish between
+    the positive and negative examples.'
+  prefs:
+  - PREF_H6
+  type: TYPE_NORMAL
+- en: 'It turns out that we don’t have to be too scientific in how we choose the negative
+    examples. A lot of useful models are result from simple ability to detect positive
+    examples from randomly generated examples (inspired by an important idea called
+    Noise Contrastive Estimation and described in [Noise-contrastive estimation: A
+    new estimation principle for unnormalized statistical models](https://proceedings.mlr.press/v9/gutmann10a/gutmann10a.pdf)).
+    So in this case, we get random words and add them to the dataset and indicate
+    that they are not neighbors (and thus the model should output 0 when it sees them.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'With this, we’ve seen two of the main concepts of word2vec ([Figure 6-12](#fig_12__skipgram_and_negative_sampling_are_two_of_the_ma)):
+    Skipgram - the method of selecting neighboring words and negative sampling - adding
+    negative examples by random sampling from the dataset.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![  Skipgram and Negative Sampling are two of the main ideas behind the word2vec
+    algorithm and are useful in many other problems that can be formulated as token
+    sequence problems.](assets/tokens_token_embeddings_963889_12.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 6-12\. Skipgram and Negative Sampling are two of the main ideas behind
+    the word2vec algorithm and are useful in many other problems that can be formulated
+    as token sequence problems.
+  prefs:
+  - PREF_H6
+  type: TYPE_NORMAL
+- en: We can generate millions and even billions of training examples like this from
+    running text. Before proceeding to train a neural network on this dataset, we
+    need to make a couple of tokenization decisions, which, just like we’ve seen with
+    LLM tokenizers, include how to deal with capitalization and punctuation and how
+    many tokens we want in our vocabulary.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We then create an embedding vector for each token, and randomly initialize them,
+    as can be seen in [Figure 6-13](#fig_13__a_vocabulary_of_words_and_their_starting_random).
+    In practice, this is a matrix of dimensions vocab_size x embedding_dimensions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![  A vocabulary of words and their starting  random  uninitialized embedding
+    vectors.](assets/tokens_token_embeddings_963889_13.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 6-13\. A vocabulary of words and their starting, random, uninitialized
+    embedding vectors.
+  prefs:
+  - PREF_H6
+  type: TYPE_NORMAL
+- en: 'A model is then trained on each example to take in two embedding vectors and
+    predict if they’re related or not. We can see what this looks like in [Figure 6-14](#fig_14__a_neural_network_is_trained_to_predict_if_two_wo):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![  A neural network is trained to predict if two words are neighbors. It updates
+    the embeddings in the training process to produce the final  trained embeddings.](assets/tokens_token_embeddings_963889_14.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 6-14\. A neural network is trained to predict if two words are neighbors.
+    It updates the embeddings in the training process to produce the final, trained
+    embeddings.
+  prefs:
+  - PREF_H6
+  type: TYPE_NORMAL
+- en: Based on whether its prediction was correct or not, the typical machine learning
+    training step updates the embeddings so that the next the model is presented with
+    those two vectors, it has a better chance of being more correct. And by the end
+    of the training process, we have better embeddings for all the tokens in our vocabulary.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This idea of a model that takes two vectors and predicts if they have a certain
+    relation is one of the most powerful ideas in machine learning, and time after
+    time has proven to work very well with language models. This is why we’re dedicating
+    chapter XXX to go over this concept and how it optimizes language models for specific
+    tasks (like sentence embeddings and retrieval).
+  prefs: []
+  type: TYPE_NORMAL
+- en: The same idea is also central to bridging modalities like text and images which
+    is key to AI Image generation models. In that formulation, a model is presented
+    with an image and a caption, and it should predict whether that caption describes
+    this image or not.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Embeddings for Recommendation Systems
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: The concept of token embeddings is useful in so many other domains. In industry,
+    it’s widely used for recommendation systems, for example.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Recommending songs by embeddings
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In this section we’ll use the Word2vec algorithm to embed songs using human-made
+    music playlists. Imagine if we treated each song as we would a word or token,
+    and we treated each playlist like a sentence. These embeddings can then be used
+    to recommend similar songs which often appear together in playlists.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The [dataset](https://www.cs.cornell.edu/~shuochen/lme/data_page.html) we’ll
+    use was collected by Shuo Chen from Cornell University. The dataset contains playlists
+    from hundreds of radio stations around the US. [Figure 6-15](#fig_15__for_song_embeddings_that_capture_song_similarity)
+    demonstrates this dataset.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![  For song embeddings that capture song similarity we ll use a dataset made
+    up of a collection of playlists  each containing a list of songs.](assets/tokens_token_embeddings_963889_15.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 6-15\. For song embeddings that capture song similarity we’ll use a dataset
+    made up of a collection of playlists, each containing a list of songs.
+  prefs:
+  - PREF_H6
+  type: TYPE_NORMAL
+- en: Let’s demonstrate the end product before we look at how it’s built. So let’s
+    give it a few songs and see what it recommends in response.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s start by giving it Michael Jackson’s *Billie Jean*, the song with ID
+    #3822.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: '| id | title | artist |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 4181 | Kiss | Prince & The Revolution |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 12749 | Wanna Be Startin’ Somethin’ | Michael Jackson |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 1506 | The Way You Make Me Feel | Michael Jackson |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 3396 | Holiday | Madonna |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 500 | Don’t Stop ‘Til You Get Enough | Michael Jackson |'
+  prefs: []
+  type: TYPE_TB
+- en: That looks reasonable. Madonna, Prince, and other Michael Jackson songs are
+    the nearest neighbors.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s step away from Pop and into Rap, and see the neighbors of 2Pac’s California
+    Love:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: '| id | title | artist |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 413 | If I Ruled The World (Imagine That) (w\/ Lauryn Hill) | Nas |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 196 | I’ll Be Missing You | Puff Daddy & The Family |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 330 | Hate It Or Love It (w\/ 50 Cent) | The Game |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 211 | Hypnotize | The Notorious B.I.G. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 5788 | Drop It Like It’s Hot (w\/ Pharrell) | Snoop Dogg |'
+  prefs: []
+  type: TYPE_TB
+- en: Another quite reasonable list!
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: That takes a minute or two to train and results in embeddings being calculated
+    for each song that we have. Now we can use those embeddings to find similar songs
+    exactly as we did earlier with words.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Which outputs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: And that is the list of the songs whose embeddings are most similar to song
+    2172\. See the jupyter notebook for the code that links song ids to their names
+    and artist names.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this case, the song is:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Resulting in recommendations that are all in the same heavy metal and hard
+    rock genre:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| id | title | artist |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 11473 | Little Guitars | Van Halen |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 3167 | Unchained | Van Halen |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 5586 | The Last In Line | Dio |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 5634 | Mr. Brownstone | Guns N’ Roses |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 3094 | Breaking The Law | Judas Priest |'
+  prefs: []
+  type: TYPE_TB
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this chapter, we have covered LLM tokens, tokenizers, and useful approaches
+    to use token embeddings beyond language models.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tokenizers are the first step in processing the input to a LLM -- turning text
+    into a list of token IDs.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Some of the common tokenization schemes include breaking text down into words,
+    subword tokens, characters, or bytes
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A tour of real-world pre-trained tokenizers (from BERT to GPT2, GPT4, and other
+    models) showed us areas where some tokenizers are better (e.g., preserving information
+    like capitalization, new lines, or tokens in other languages) and other areas
+    where tokenizers are just different from each other (e.g., how they break down
+    certain words).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Three of the major tokenizer design decisions are the tokenizer algorithm (e.g.,
+    BPE, WordPiece, SentencePiece), tokenization parameters (including vocabulary
+    size, special tokens, capitalization, treatment of capitalization and different
+    languages), and the dataset the tokenizer is trained on.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Language models are also creators of high-quality contextualized token embeddings
+    that improve on raw static embeddings. Those contextualized token embeddings are
+    what’s used for tasks including NER, extractive text summarization, and span classification.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Before LLMs, word embedding methods like word2vec, Glove and Fasttext were popular.
+    They still have some use cases within and outside of language processing.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The Word2Vec algorithm relies on two main ideas: Skipgram and Negative Sampling.
+    It also uses contrastive training similar to the one we’ll see in the contrastive
+    training chapter.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Token embeddings are useful for creating and improving recommender systems as
+    we’ve seen in the music recommender we’ve built from curated song playlists.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
